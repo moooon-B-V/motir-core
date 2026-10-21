@@ -10,7 +10,7 @@ import { Spinner } from '@/components/ui/Spinner';
 
 /** The card chrome panel 9's two states share. */
 export const MONITORING_STATE_CARD =
-  'flex flex-col items-center gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-card) px-7 py-10 text-center';
+  'flex flex-col items-center gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-card) px-(--spacing-card-padding) py-10 text-center';
 
 export function MonitoringLoading({ label }: { label: string }) {
   return (

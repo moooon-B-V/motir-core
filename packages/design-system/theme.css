@@ -287,6 +287,57 @@
   --font-mono-tail: monospace;
 }
 
+/* The DENSITY STEPS (MOTIR-8901; the vocabulary is MOTIR-2336's approved
+   decision, Option 1). A surface's own padding / height is a SCALE, not one
+   value, so each step is DERIVED from the base token it scales: the name is
+   the step's pixel value in the reference style (warm-editorial, whose bases
+   are the @theme ones above), and the value is that base multiplied by
+   N / <reference px> and rounded to a whole pixel. Under warm-editorial every
+   step is exactly N px; a denser or roomier style moves the base and every step
+   follows it, with no per-style declaration to keep in sync.
+
+   ⚠️ TWO SELECTORS, ON PURPOSE. A custom property is substituted where it is
+   DECLARED, not where it is used. A rule on `:root` alone would resolve
+   `var(--spacing-control-x)` once, against the root's value, and hand that
+   frozen length to a nested `[data-style]` subtree (a scoped /tokens tile, a
+   style preview) that overrides the base — the same hazard
+   `--width-rail-chrome` records above. Listing `[data-style]` beside `:root`
+   re-declares every step on each scope that carries its own bases, so it
+   re-resolves there.
+
+   The `[data-style]` blocks are deliberately NOT edited: a step is never
+   written per style. A step is added by ONE line here, and only when at least
+   three real sites need it. Button, input, icon-button, kbd and tooltip tokens
+   carry no steps. */
+:root,
+[data-style] {
+  --spacing-card-padding-16: round(nearest, calc(var(--spacing-card-padding) * 16 / 24), 1px);
+  --spacing-card-padding-12: round(nearest, calc(var(--spacing-card-padding) * 12 / 24), 1px);
+  --spacing-card-padding-8: round(nearest, calc(var(--spacing-card-padding) * 8 / 24), 1px);
+  --spacing-card-padding-4: round(nearest, calc(var(--spacing-card-padding) * 4 / 24), 1px);
+
+  --spacing-control-x-16: round(nearest, calc(var(--spacing-control-x) * 16 / 10), 1px);
+  --spacing-control-x-12: round(nearest, calc(var(--spacing-control-x) * 12 / 10), 1px);
+  --spacing-control-x-8: round(nearest, calc(var(--spacing-control-x) * 8 / 10), 1px);
+  --spacing-control-x-6: round(nearest, calc(var(--spacing-control-x) * 6 / 10), 1px);
+  --spacing-control-x-4: round(nearest, calc(var(--spacing-control-x) * 4 / 10), 1px);
+  --spacing-control-x-2: round(nearest, calc(var(--spacing-control-x) * 2 / 10), 1px);
+
+  --spacing-control-y-8: round(nearest, calc(var(--spacing-control-y) * 8 / 6), 1px);
+  --spacing-control-y-4: round(nearest, calc(var(--spacing-control-y) * 4 / 6), 1px);
+  --spacing-control-y-2: round(nearest, calc(var(--spacing-control-y) * 2 / 6), 1px);
+
+  --spacing-chip-x-8: round(nearest, calc(var(--spacing-chip-x) * 8 / 10), 1px);
+  --spacing-chip-x-6: round(nearest, calc(var(--spacing-chip-x) * 6 / 10), 1px);
+  --spacing-chip-x-4: round(nearest, calc(var(--spacing-chip-x) * 4 / 10), 1px);
+  --spacing-chip-x-2: round(nearest, calc(var(--spacing-chip-x) * 2 / 10), 1px);
+
+  --height-control-28: round(nearest, calc(var(--height-control) * 28 / 36), 1px);
+  --height-control-32: round(nearest, calc(var(--height-control) * 32 / 36), 1px);
+  --height-control-40: round(nearest, calc(var(--height-control) * 40 / 36), 1px);
+  --height-control-48: round(nearest, calc(var(--height-control) * 48 / 36), 1px);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    TIER 1 — Dark mode color overrides
    Activated when [data-theme="dark"] is set on <html> (by the init
@@ -3856,6 +3907,10 @@
   --el-chart-surplus: var(--color-success); /* fill where resolved > created */
   --el-chart-age: var(--color-warning); /* average-age bar (8.8.13 — aging backlog) */
   --el-chart-resolution: var(--color-info); /* resolution-time bar (8.8.13 — throughput) */
+  --el-chart-workload-assigned: var(--color-primary); /* workload: assigned segment (MOTIR-8925) */
+  --el-chart-workload-unassigned: var(
+    --color-accent-teal
+  ); /* workload: unassigned-by-reporter segment */
   /* Sprint CYCLE GRAPH series (Story 8.14 — Linear scope-vs-completed). A
      collision-free --el-chart-cycle-* family: the bare --el-chart-completed /
      -started / -target names are taken (velocity / old burndown), so reusing

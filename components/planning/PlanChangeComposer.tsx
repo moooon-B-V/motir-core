@@ -395,7 +395,7 @@ export function PlanChangeComposer({
       ) : running !== null ? (
         <div
           data-testid="plan-change-running-bar"
-          className="mb-2 flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+          className="mb-2 flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
         >
           <Spinner size="sm" aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate text-xs text-(--el-text-secondary)">
@@ -418,7 +418,7 @@ export function PlanChangeComposer({
       {awaitingQuestion !== null ? (
         <div
           data-testid="plan-change-awaiting"
-          className="mb-2 flex items-start gap-2 rounded-(--radius-card) bg-(--el-warning-surface) px-3 py-2 text-(--el-warning-text)"
+          className="mb-2 flex items-start gap-2 rounded-(--radius-card) bg-(--el-warning-surface) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-(--el-warning-text)"
         >
           <MessageCircleQuestionMark className="size-4 shrink-0" aria-hidden="true" />
           <div className="min-w-0 flex-1">

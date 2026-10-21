@@ -405,7 +405,13 @@ export const apiTokensService = {
       // Throttle the last-used touch: skip the write inside the window.
       const lastUsed = row.lastUsedAt?.getTime();
       if (lastUsed === undefined || now.getTime() - lastUsed >= LAST_USED_THROTTLE_MS) {
-        await apiTokenRepository.touchLastUsed(row.id, now, tx);
+        // A revoke deletes the row, so one that commits between the lookup above and
+        // this touch leaves nothing to stamp: the token is gone, which is a 401 — not
+        // the P2025 an unmapped 500 would be (the CLI's close racing a Cancel,
+        // MOTIR-8885).
+        if ((await apiTokenRepository.touchLastUsed(row.id, now, tx)) === 0) {
+          throw new InvalidApiTokenError();
+        }
       }
       const { grant, unrecognised } = expandStoredGrant(row.scopes, { projectId: row.projectId });
       if (unrecognised.length > 0) {

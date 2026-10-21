@@ -133,7 +133,7 @@ export function StalePlanNotice({
       <div
         role="status"
         data-testid="planning-stale-plan"
-        className="flex min-w-0 flex-col gap-2 rounded-(--radius-card) bg-(--el-tint-yellow) px-3 py-2 text-sm text-(--el-text-strong)"
+        className="flex min-w-0 flex-col gap-2 rounded-(--radius-card) bg-(--el-tint-yellow) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)"
       >
         <p className="flex items-start gap-2">
           <RefreshCw className="mt-0.5 size-3.5 flex-none" aria-hidden />

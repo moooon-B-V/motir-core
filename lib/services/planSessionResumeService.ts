@@ -24,6 +24,8 @@ import { planChangeSessionsService } from '@/lib/services/planChangeSessionsServ
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { MotirAiBadRequestError } from '@/lib/ai/errors';
+import { releaseUnresumableAttempt } from '@/lib/services/planSessionEndService';
 
 // RESUMING A FAILED PLANNING SESSION (Story MOTIR-7905 · MOTIR-7916; `agent-authored-plans.md`
 // AMENDMENT 23's 2026-10-09 sub-amendment).
@@ -51,6 +53,8 @@ interface ResumeTarget {
   sessionId: string;
   planId: string;
   failedJobId: string;
+  /** The plan's starter (MOTIR-8741) — whose language the resumed walk speaks. */
+  starterUserId: string | null;
 }
 
 /**
@@ -98,6 +102,9 @@ async function precheck(pctx: ProjectContext, sessionId: string): Promise<Resume
     if (state !== 'failed' || !session.failedJobId) {
       throw new SessionNotFailedError(session.id);
     }
+    // motir-ai said this attempt has nothing to continue from (MOTIR-9121): its targets were
+    // released when the failure was recorded, and the next turn plans again.
+    if (session.failureResumable === false) throw new PlanNotResumableError(session.id);
     const plan = await planRepository.findLatestForResume(session.id, tx);
     if (!plan || plan.status !== 'generating' || plan.sourceJobId !== session.failedJobId) {
       // Neither read takes a lock and the isolation is read committed, so a concurrent
@@ -118,7 +125,12 @@ async function precheck(pctx: ProjectContext, sessionId: string): Promise<Resume
       }
       throw new PlanNotResumableError(session.id);
     }
-    return { sessionId: session.id, planId: plan.id, failedJobId: session.failedJobId };
+    return {
+      sessionId: session.id,
+      planId: plan.id,
+      failedJobId: session.failedJobId,
+      starterUserId: plan.createdById,
+    };
   });
 }
 
@@ -148,6 +160,7 @@ async function bindWithin(
     throw new ResumeAlreadyStartedError(fresh.id, fresh.lastJobId);
   }
   if (fresh.failedJobId !== target.failedJobId) throw new PlanNotResumableError(fresh.id);
+  if (fresh.failureResumable === false) throw new PlanNotResumableError(fresh.id);
   const plan = await planRepository.findById(target.planId, workspaceId, tx);
   if (!plan || plan.status !== 'generating' || plan.sourceJobId !== target.failedJobId) {
     throw new PlanNotResumableError(fresh.id);
@@ -160,6 +173,40 @@ async function bindWithin(
   }
   await planChangeSessionRepository.clearFailure(fresh.id, tx);
   await planTargetLockService.refreshForSessionWithin(fresh.id, now, tx);
+}
+
+/**
+ * motir-ai's refusal of a resume whose failed job carries no settled conversation
+ * (`withResumedConversation`, a `validation_error` → {@link MotirAiBadRequestError}). The
+ * refusal shares its problem code with every other bad request, so its detail is what names
+ * it — the one place core reads motir-ai's words, and only to recognise a refusal that a
+ * failure recorded before `failureResumable` existed can still meet.
+ */
+function isNothingToResumeRefusal(err: unknown): boolean {
+  return err instanceof MotirAiBadRequestError && /no settled conversation/.test(err.message);
+}
+
+/**
+ * Record the refused failure as not resumable and release its attempt (MOTIR-9121), under
+ * the plan lock then the session lock — the bind's own order — and only while the failure is
+ * still the one the Resume judged. A concurrent end, a newer attempt or a re-pointed plan
+ * leaves everything as it is.
+ */
+async function markUnresumable(pctx: ProjectContext, target: ResumeTarget): Promise<void> {
+  const marked = await withWorkspaceServiceContext(pctx.workspaceId, async (tx) => {
+    if (!(await planRepository.lockById(target.planId, tx))) return false;
+    if (!(await planChangeSessionRepository.lockById(target.sessionId, tx))) return false;
+    const plan = await planRepository.findById(target.planId, pctx.workspaceId, tx);
+    if (!plan || plan.status !== 'generating' || plan.sourceJobId !== target.failedJobId) {
+      return false;
+    }
+    return planChangeSessionRepository.markFailureUnresumable(
+      target.sessionId,
+      target.failedJobId,
+      tx,
+    );
+  });
+  if (marked) await releaseUnresumableAttempt(target.sessionId, pctx.workspaceId);
 }
 
 async function bind(pctx: ProjectContext, target: ResumeTarget, jobId: string): Promise<void> {
@@ -231,6 +278,7 @@ async function precheckAutomatic(input: {
     if (sessionWaitingState(session) !== 'failed' || !session.failedJobId) {
       return { ok: false, reason: 'not_failed' };
     }
+    if (session.failureResumable === false) return { ok: false, reason: 'not_resumable' };
     if (session.autoResumeCount >= AUTO_RESUMES_PER_SESSION) {
       return { ok: false, reason: 'bound_spent' };
     }
@@ -247,7 +295,12 @@ async function precheckAutomatic(input: {
     if (!project) return { ok: false, reason: 'not_resumable' };
     return {
       ok: true,
-      target: { sessionId: session.id, planId: plan.id, failedJobId: session.failedJobId },
+      target: {
+        sessionId: session.id,
+        planId: plan.id,
+        failedJobId: session.failedJobId,
+        starterUserId: plan.createdById,
+      },
       starterCtx: {
         userId: session.createdById,
         workspaceId: input.workspaceId,
@@ -281,6 +334,7 @@ async function attemptAutomatic(
       target.planId,
       target.failedJobId,
       starterCtx,
+      target.starterUserId,
     ));
   } catch (err) {
     const code = (err as { code?: unknown } | null)?.code;
@@ -333,12 +387,27 @@ export const planSessionResumeService = {
     const target = await precheck(pctx, sessionId);
     // Side effect OUTSIDE any transaction. Its typed errors (out of credits, unreachable, a
     // motir-ai refusal of the resume) propagate with nothing written: the failure record and the
-    // plan are exactly as they were.
-    const { jobId } = await aiPlanEditsService.submitResume(
-      target.planId,
-      target.failedJobId,
-      pctx,
-    );
+    // plan are exactly as they were — save ONE refusal, below.
+    let jobId: string;
+    try {
+      ({ jobId } = await aiPlanEditsService.submitResume(
+        target.planId,
+        target.failedJobId,
+        pctx,
+        target.starterUserId,
+      ));
+    } catch (err) {
+      // NOTHING TO CONTINUE FROM (MOTIR-9121): motir-ai refuses a resume of a job that failed
+      // before its conversation settled, and it will refuse every later one too. A failure
+      // recorded before motir-ai said so up front reaches it only here, so this refusal leaves
+      // the session where the up-front verdict would have — not resumable, its attempt
+      // released — rather than offering the same refused Resume again.
+      if (isNothingToResumeRefusal(err)) {
+        await markUnresumable(pctx, target);
+        throw new PlanNotResumableError(target.sessionId);
+      }
+      throw err;
+    }
     await bind(pctx, target, jobId);
     const session = await planChangeSessionsService.getById(pctx, target.sessionId);
     return { jobId, planId: target.planId, session };

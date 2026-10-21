@@ -244,7 +244,7 @@ describe('the closed enums are the ADR vocabulary, exactly', () => {
     ]);
   });
 
-  it('DispatchEventKind — six run-scoped, seventeen card-or-run-scoped', () => {
+  it('DispatchEventKind — six run-scoped, eighteen card-or-run-scoped', () => {
     const kinds = Object.keys(DispatchEventKind);
     expect(kinds).toEqual([
       'run_opened',
@@ -276,10 +276,13 @@ describe('the closed enums are the ADR vocabulary, exactly', () => {
       'unbuildable_reported',
       // A review run's verdict (MOTIR-6821) — server-written by the verdict route.
       'review_verdict',
+      // A run's discrepancy record (MOTIR-8655) — server-written by the discrepancy service,
+      // in the same transaction as the card comment.
+      'discrepancy_recorded',
       // One step the AGENT says it is about to take (MOTIR-7450,
       // `agent-reported-runs.md` §3) — written only through `report_action`.
       'agent_action',
     ]);
-    expect(kinds).toHaveLength(24);
+    expect(kinds).toHaveLength(25);
   });
 });

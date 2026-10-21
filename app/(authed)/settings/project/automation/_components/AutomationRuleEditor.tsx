@@ -387,7 +387,7 @@ export function AutomationRuleEditor({
                 type="button"
                 disabled={atActionCap}
                 onClick={() => setActions((cur) => [...cur, emptyActionDraft('transition')])}
-                className={`inline-flex items-center gap-1.5 rounded-(--radius-control) px-1 py-0.5 text-[13px] font-medium focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none ${
+                className={`inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-2) text-[13px] font-medium focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none ${
                   atActionCap
                     ? 'cursor-default text-(--el-text-faint)'
                     : 'text-(--el-link) hover:underline'

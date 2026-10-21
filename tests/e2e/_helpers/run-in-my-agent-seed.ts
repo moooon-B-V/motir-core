@@ -122,10 +122,11 @@ export async function createAgent(
   page: Page,
   seed: RunInMyAgentSeed,
   name: string,
+  profileId = 'claude',
 ): Promise<string> {
   const res = await api(page, 'POST', `/api/projects/${seed.projectIdentifier}/instances`, {
     name,
-    profileId: 'claude',
+    profileId,
   });
   expect(res.status, JSON.stringify(res.json)).toBe(201);
   const { instance } = res.json as { instance: { id: string } };

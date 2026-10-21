@@ -16,6 +16,7 @@ import {
   isBodyAboveFieldMoveAdvisory,
   isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
+  isUnderAuthoredAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
 import {
@@ -94,6 +95,12 @@ function summarize(
   const selfBlocking = advisories.filter(isSelfBlockingDesignAdvisory);
   const bodyAbove = advisories.filter(isBodyAboveFieldMoveAdvisory);
   const blockerCounts = advisories.filter(isBlockerCountAdvisory);
+  const underAuthored = advisories.filter(isUnderAuthoredAdvisory);
+  if (underAuthored.length > 0) {
+    lines.push(
+      'Advisory (NOT a blocker — the claim stands): this card is UNDER-AUTHORED — no acceptance criteria and no sizing, type or executor. Work out what "done" means from its description and say so in the pull request.',
+    );
+  }
   for (const a of blockerCounts) {
     lines.push(
       `Advisory (NOT a blocker — the claim stands): this card claims "${a.claim}" (${a.claimedCount}), but its graph holds ${a.blockerCount} blocked_by edge${a.blockerCount === 1 ? '' : 's'}. Check which side is stale before relying on the list.`,
@@ -240,6 +247,7 @@ export async function runClaimNextReady(
         id: item.id,
         identifier: item.key,
         descriptionMd: item.descriptionMd,
+        kind: item.kind,
         // The ORDERING exemption's inputs (MOTIR-2175) — already on the ready row.
         type: item.type,
         executor: item.executor,

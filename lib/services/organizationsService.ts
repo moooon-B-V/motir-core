@@ -8,6 +8,7 @@ import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
+import { resolveRecipientLocale } from '@/lib/services/emailRecipientLocale';
 import { withOrgContext } from '@/lib/organizations/context';
 import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
 import { enqueueScaledTrackerSeatSync } from '@/lib/billing/seatSync';
@@ -1049,6 +1050,7 @@ async function notifyOwnershipTransferred(input: {
             previousOwnerName: previousOwner.name,
             newOwnerName: newOwner.name,
             settingsUrl,
+            locale: await resolveRecipientLocale({ userId: recipient.id }),
           },
         });
       } catch (err) {

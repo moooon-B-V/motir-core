@@ -34,6 +34,7 @@ import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import { GrillMeControl } from '@/components/planning/GrillMeControl';
 import { SharpenThread } from '@/components/planning/SharpenThread';
 import { useGrillOptIn } from '@/components/planning/useGrillOptIn';
+import { grillFailedAfterHandoff } from '@/lib/planning/grillHandoff';
 import { useGrillSession } from '@/components/planning/useGrillSession';
 import { StalePlanNotice } from '@/components/planning/StalePlanNotice';
 import { PlanActRecord, runningBarLine } from '@/components/planning/PlanActRecord';
@@ -62,7 +63,9 @@ import {
   type PlanApproveProgressView,
 } from '@/components/planning/PlanApproveProgress';
 import type { PlanGateView } from '@/lib/planning/planGateView';
-import type { PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
+import type { PlanningSeedGuideDTO, PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
+import { GuideOriginCard } from '@/components/planning/GuideOriginCard';
+import { GUIDE_OFFER_CLOSED } from '@/lib/planning/guideOfferClosed';
 import { claimPickAutoSend } from '@/lib/planning/pickAutoSend';
 import {
   dispositionMarkerFor,
@@ -151,10 +154,9 @@ const MODE_LEAD_KEY: Record<PlanningMode, string> = {
 };
 
 /** The originating DETAIL wins over the mode's generic line when one was carried
- *  (a work item, a repo) — both resolve to the `contextual` mode. */
+ *  (a work item) — both resolve to the `contextual` mode. */
 function leadKey(launch: PlanningLaunch): string {
   if (launch.itemKey) return 'lead.contextualItem';
-  if (launch.repoKey) return 'lead.conventionRefine';
   return MODE_LEAD_KEY[launch.mode];
 }
 
@@ -231,6 +233,12 @@ export interface PlanChangeRailProps {
    * opener. Absent on every other launch.
    */
   followUp?: PlanningSeedPickDTO | null;
+  /**
+   * THE *FROM A GUIDE* FRAMING (design MOTIR-8686 sheet 9; MOTIR-8693): the conversation
+   * is the planner a guide's re-plan offer started. The chip, the lead and the *From a
+   * guide* card say so. Composed from the pick's follow-up framing; absent otherwise.
+   */
+  guideOrigin?: PlanningSeedGuideDTO | null;
   state: PlanChangeConversationState;
   /** The indexed proposal — the rail MIRRORS the canvas bar's counts. */
   index: PlanChangeDiffIndex;
@@ -347,6 +355,7 @@ export function PlanChangeRail({
   onAutoSend,
   initialDraftCaret,
   followUp = null,
+  guideOrigin = null,
   state,
   index,
   targets,
@@ -538,7 +547,8 @@ export function PlanChangeRail({
   // No starters while the rail HOLDS A SEED (design MOTIR-6206 sheet 2): the seed
   // is the start. Cleared, the rail is an ordinary item re-plan again. A pick's
   // follow-up never shows them: its first turn is the start, sent for the person.
-  const holdsSeed = (Boolean(initialDraft) && draft.trim() !== '') || followUp !== null;
+  const holdsSeed =
+    (Boolean(initialDraft) && draft.trim() !== '') || followUp !== null || guideOrigin !== null;
   const showStarters = userTurns.length === 0 && !busy && state.phase !== 'loading' && !holdsSeed;
   // An ITEM re-plan opens by ASKING (MOTIR-910 / design panels 2 + 4 + 5): the
   // composer is pre-focused and prompts for what's wrong, and what the user types
@@ -683,6 +693,17 @@ export function PlanChangeRail({
       </div>
     ) : null;
   const tGrill = useTranslations('sharpen.question');
+  const tGrillMarkers = useTranslations('sharpen.markers');
+  // GRILL ME FAILED, AND THE RUN HANDED OFF ANYWAY (MOTIR-8781): the thread is drawn only
+  // in the conversation phase, and the plan run leaves that phase at once, so a grilling
+  // whose turn failed (or never opened) would otherwise be invisible — the person turned
+  // it on, was never asked, and the plan was written without them. Say so, once.
+  const grillFailedNotice = grillFailedAfterHandoff({
+    writing,
+    on: grillOptIn.on,
+    session: grill.session,
+    error: grill.error,
+  });
   const composerPlaceholder = heldBlocks
     ? ts('refused.placeholder', { key: held.target })
     : grillQuestion
@@ -758,7 +779,11 @@ export function PlanChangeRail({
           {t('railLabel')}
         </span>
         <Pill tone="neutral" className="ml-auto" data-testid="planning-mode-chip">
-          {followUp ? t('mode.followUp') : t(MODE_LABEL_KEY[launch.mode])}
+          {guideOrigin
+            ? t('guideSeed.chip')
+            : followUp
+              ? t('mode.followUp')
+              : t(MODE_LABEL_KEY[launch.mode])}
         </Pill>
         {restartable ? (
           <RestartControl
@@ -918,19 +943,26 @@ export function PlanChangeRail({
             blank screen; only the conversation is empty (design panel 6). */}
         <Bubble role="assistant">
           <span>
-            {followUp
-              ? launch.itemKey
-                ? t('lead.followUp', { choice: followUp.choiceKey, item: launch.itemKey })
-                : t('lead.followUpProject', { choice: followUp.choiceKey, project: projectName })
-              : t(leadKey(launch), {
-                  project: projectName,
-                  item: launch.itemKey ?? '',
-                  repo: launch.repoKey ?? '',
-                })}
+            {guideOrigin
+              ? t('guideSeed.lead', {
+                  target: launch.itemKey ?? '',
+                  guided: guideOrigin.guidedKey,
+                })
+              : followUp
+                ? launch.itemKey
+                  ? t('lead.followUp', { choice: followUp.choiceKey, item: launch.itemKey })
+                  : t('lead.followUpProject', { choice: followUp.choiceKey, project: projectName })
+                : t(leadKey(launch), {
+                    project: projectName,
+                    item: launch.itemKey ?? '',
+                  })}
           </span>{' '}
-          <span>{followUp ? tc('openerFollowUp', { label: followUp.label }) : tc('opener')}</span>
+          {guideOrigin ? null : (
+            <span>{followUp ? tc('openerFollowUp', { label: followUp.label }) : tc('opener')}</span>
+          )}
         </Bubble>
         {followUp ? <FollowUpCard pick={followUp} /> : null}
+        {guideOrigin ? <GuideOriginCard guide={guideOrigin} /> : null}
 
         {/* REFUSED IN PLACE (AMENDMENT 23 §4; MOTIR-7633 sheet 5): another
             person's session or plan holds the card. Nothing was sent. */}
@@ -1078,6 +1110,11 @@ export function PlanChangeRail({
             onRetry={grill.retry}
           />
         ) : null}
+        {grillFailedNotice ? (
+          <Bubble role="assistant" testId="grill-handoff-failed">
+            {tGrillMarkers(grill.error === 'outOfCredits' ? 'handoffNoCredit' : 'handoffFailed')}
+          </Bubble>
+        ) : null}
         {conversing ? (
           <Bubble role="assistant" testId="plan-conversation-phase">
             {tp('handoff.conversing')}
@@ -1207,7 +1244,7 @@ export function PlanChangeRail({
             ) : (
               <div
                 data-testid="plan-change-review"
-                className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-accent) px-3 py-2"
+                className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-accent) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
               >
                 <span className="text-xs font-semibold text-(--el-text-strong)">
                   {tc('nothingSavedYet')}
@@ -1306,7 +1343,7 @@ export function PlanChangeRail({
           <p
             role="alert"
             data-testid="planning-failed-closed"
-            className="rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)"
+            className="rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)"
           >
             {tc('error.failedClosed')}
           </p>
@@ -1328,7 +1365,7 @@ export function PlanChangeRail({
             <ol
               aria-live="polite"
               data-testid="planning-carry-moving"
-              className="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+              className="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
             >
               <li className="flex items-start gap-2 text-xs text-(--el-text)">
                 <Spinner size="sm" aria-hidden="true" />
@@ -1358,12 +1395,30 @@ export function PlanChangeRail({
           <AlsoWaitingPlan session={state.session} />
         ) : null}
         {/* A failure beside a waiting plan (situation 2; MOTIR-7941): ONE current failure line, an
-            open composer, no Resume — the next turn continues the session. */}
+            open composer, no Resume — the next turn continues the session. With NO plan waiting
+            it is an attempt motir-ai cannot resume (MOTIR-9121): the same line says the next
+            message plans again. */}
         {failure && !awaitsResume ? (
-          <WaitingPlanFailureLine failure={failure} again={failedAgain} />
+          <WaitingPlanFailureLine
+            failure={failure}
+            again={failedAgain}
+            planAgain={!state.session?.waitingPlan}
+          />
+        ) : null}
+
+        {state.errorCode === GUIDE_OFFER_CLOSED && !ended ? (
+          // The offer closed under the send (declined, replaced, or a scope it does not
+          // fit): said in place, nothing retried, and no Try again to press (MOTIR-8693).
+          <p
+            role="alert"
+            className="rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)"
+          >
+            {t('guideSeed.offerClosed')}
+          </p>
         ) : null}
 
         {state.errorCode &&
+        state.errorCode !== GUIDE_OFFER_CLOSED &&
         !ended &&
         (failure === null || isTurnRefusal(state.errorCode)) &&
         state.errorCode !== 'timedOut' &&
@@ -1371,7 +1426,7 @@ export function PlanChangeRail({
           <div className="flex flex-col items-start gap-2">
             <p
               role="alert"
-              className="rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)"
+              className="rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)"
             >
               {tc(errorKey(state.errorCode))}
             </p>
@@ -2187,14 +2242,21 @@ export function Bubble({
             • `min-w-0` is what lets the flex item shrink at all, so the break
               happens inside the bubble instead of widening it past the rail.
 
-          ASSISTANT bubbles are untouched: they render Markdown through
-          `MarkdownView`, which blocks its own paragraphs. Only the user bubble
-          renders raw typed text. */}
+          ⚠️ THE ASSISTANT BUBBLE TAKES `min-w-0` + `wrap-anywhere` TOO
+          (MOTIR-8725). It renders Markdown through `MarkdownView`, so it needs
+          no `whitespace-pre-wrap` — but blocking its own paragraphs never made
+          it fit the rail. Without `min-w-0` this flex item kept `min-width:
+          auto`, grew to the min-content of its widest token (an inline `code`
+          span, a URL, an outcome line's chip) and pushed the guide's log into
+          a sideways scroll. `wrap-anywhere` inherits into the prose and the
+          inline code; a code BLOCK is `white-space: pre`, which it does not
+          reach, so a block still scrolls inside its own frame
+          (`CopyableCodeBlock`). */}
       <div
         className={
           isUser
-            ? 'min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm whitespace-pre-wrap text-(--el-accent-text) wrap-anywhere'
-            : `rounded-(--radius-card) px-3 py-2 text-sm ${BUBBLE_FILL[tone]}`
+            ? 'min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm whitespace-pre-wrap text-(--el-accent-text) wrap-anywhere'
+            : `min-w-0 rounded-(--radius-card) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm wrap-anywhere ${BUBBLE_FILL[tone]}`
         }
       >
         {label ? (
@@ -2309,7 +2371,7 @@ function GatedReviewBlock({
     return (
       <div
         data-testid="plan-change-review"
-        className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) px-3 py-2"
+        className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
       >
         <p role="alert" className="text-xs font-medium text-(--el-text)">
           {decidedFirstLines.title}
@@ -2343,7 +2405,7 @@ function GatedReviewBlock({
   return (
     <div
       data-testid="plan-change-review"
-      className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-accent) px-3 py-2"
+      className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-accent) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
     >
       <span className="text-xs font-semibold text-(--el-text-strong)">{tc('nothingSavedYet')}</span>
       {view.kind === 'seeOnly' ? (
@@ -2416,7 +2478,7 @@ function FollowUpCard({ pick }: { pick: PlanningSeedPickDTO }) {
   return (
     <div
       data-testid="pick-followup-card"
-      className="rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-3 py-2"
+      className="rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
     >
       <p className="text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase">
         {t('followUpCard.label')}

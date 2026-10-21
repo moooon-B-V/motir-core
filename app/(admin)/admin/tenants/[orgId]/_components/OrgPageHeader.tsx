@@ -35,7 +35,7 @@ export async function OrgPageHeader({
     <>
       <Link
         href={backHref}
-        className="inline-flex items-center gap-1 self-start rounded-(--radius-input) px-2 py-1 font-sans text-sm text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+        className="inline-flex items-center gap-1 self-start rounded-(--radius-input) px-(--spacing-control-x-8) py-(--spacing-control-y-4) font-sans text-sm text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
       >
         <ArrowLeft aria-hidden className="h-4 w-4" />
         {t('orgPage.back')}

@@ -377,7 +377,7 @@ function FailureCallout({
           {failure === 'disabled' ? (
             <Link
               href={AI_PLANNING_SETTINGS_HREF}
-              className="inline-flex h-(--height-btn-sm) items-center rounded-(--radius-btn) border border-(--el-button-border) bg-(--el-page-bg) px-3 text-xs font-semibold text-(--el-text-secondary) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              className="inline-flex h-(--height-btn-sm) items-center rounded-(--radius-btn) border border-(--el-button-border) bg-(--el-page-bg) px-(--spacing-control-x-12) text-xs font-semibold text-(--el-text-secondary) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             >
               {t('aiPlan.offLink')}
             </Link>
@@ -385,7 +385,7 @@ function FailureCallout({
           {failure === 'credits' ? (
             <Link
               href={TOP_UP_HREF}
-              className="inline-flex h-(--height-btn-sm) items-center rounded-(--radius-btn) border border-(--el-button-border) bg-(--el-page-bg) px-3 text-xs font-semibold text-(--el-text-secondary) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              className="inline-flex h-(--height-btn-sm) items-center rounded-(--radius-btn) border border-(--el-button-border) bg-(--el-page-bg) px-(--spacing-control-x-12) text-xs font-semibold text-(--el-text-secondary) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             >
               {t('aiPlan.topUp')}
             </Link>

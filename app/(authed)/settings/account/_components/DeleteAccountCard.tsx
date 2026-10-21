@@ -114,8 +114,8 @@ export async function DeleteAccountCard({
                 6) — the blocking org, which need not be the active one, so the
                 link names it (`?org=`). Ownership moves only by transfer since
                 MOTIR-6307; there is no "another owner" to add. */}
-            <div className="mt-3 flex items-center gap-2.5 rounded-(--radius-input) border border-(--el-border) p-3">
-              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)">
+            <div className="mt-3 flex items-center gap-2.5 rounded-(--radius-input) border border-(--el-border) p-(--spacing-control-x-12)">
+              <span className="inline-flex h-(--height-control-28) w-7 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)">
                 <Building2 aria-hidden className="h-[15px] w-[15px]" />
               </span>
               <span className="min-w-0 flex-1">

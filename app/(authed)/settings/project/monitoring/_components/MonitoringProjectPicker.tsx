@@ -212,7 +212,7 @@ function PickerDialog({
           <Modal.Body className="gap-3">
             <div
               role="alert"
-              className="flex items-start gap-2.5 rounded-(--radius-card) bg-(--el-warning-surface) px-3.5 py-3 font-sans text-sm text-(--el-warning-text)"
+              className="flex items-start gap-2.5 rounded-(--radius-card) bg-(--el-warning-surface) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12) font-sans text-sm text-(--el-warning-text)"
             >
               <TriangleAlert
                 className="mt-0.5 size-4 flex-none text-(--el-warning)"
@@ -276,7 +276,7 @@ function PickerDialog({
             ) : visible.length === 0 ? (
               <p className="font-sans text-sm text-(--el-text-secondary)">{t('noMatch')}</p>
             ) : (
-              <ul className="flex flex-col rounded-(--radius-card) border border-(--el-border) bg-(--el-card) p-1">
+              <ul className="flex flex-col rounded-(--radius-card) border border-(--el-border) bg-(--el-card) p-(--spacing-card-padding-4)">
                 {visible.map((project) => {
                   const id = project.externalId;
                   const outcome = outcomes.get(id);

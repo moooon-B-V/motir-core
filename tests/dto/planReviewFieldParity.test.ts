@@ -88,6 +88,18 @@ function interfaceKeys(file: string, name: string): Set<string> {
  */
 const REVIEW_HALF_OWED_BY: Readonly<Record<string, string>> = {};
 
+/**
+ * Proposed fields that are NOT a field of the card at all, so no reviewer decides
+ * on them and no op disposition applies — each with the reason. Not a ratchet:
+ * a key belongs here only when it is metadata ABOUT other fields.
+ */
+const NOT_A_CARD_FIELD: Readonly<Record<string, string>> = {
+  languages:
+    'MOTIR-8743 — the language each text field was WRITTEN in, a statement ABOUT the ' +
+    'title / bodies / steps beside it. Approve records it on their language columns; the ' +
+    'story adds no review surface for it (it detects and translates nothing).',
+};
+
 describe('PlanReviewItemDto ⟷ PlanItemProposedFields parity', () => {
   const proposed = interfaceKeys('lib/dto/plans.ts', 'PlanItemProposedFields');
   const review = interfaceKeys('lib/dto/planReview.ts', 'PlanReviewItemDto');
@@ -97,7 +109,9 @@ describe('PlanReviewItemDto ⟷ PlanItemProposedFields parity', () => {
   // reviewer, which is the whole point: if a field is worth materializing onto
   // the created work item, it is worth showing before it is created.
   it('every proposed field a reviewer decides on is carried by the review model', () => {
-    const missing = [...proposed].filter((k) => !review.has(k) && !(k in REVIEW_HALF_OWED_BY));
+    const missing = [...proposed].filter(
+      (k) => !review.has(k) && !(k in REVIEW_HALF_OWED_BY) && !(k in NOT_A_CARD_FIELD),
+    );
     expect({ missing }).toEqual({ missing: [] });
   });
 
@@ -292,13 +306,13 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
     },
     todos: {
       addOnly:
-        'AMENDMENT 14 D2 — a `modify` patch carries NO `todos` (`patchSchema` declares none and ' +
-        '`applyModify` writes only PLAN_ITEM_PATCH_KEYS), so on any op but `add` there is no ' +
-        'proposed side at all. And the target side must NOT be substituted for it the way the ' +
-        "MOTIR-4143 rail fields substitute theirs: a committed card's list is a person's " +
-        'PROGRESS — ticked rows — so reporting it here would show work somebody already did on ' +
-        'the surface that says what approve will WRITE, which is the one confusion this whole ' +
-        'story exists to remove.',
+        'AMENDMENT 27 (MOTIR-8668, overturning AMENDMENT 14 D2) — a `modify` patch MAY carry ' +
+        '`todos` now, and it REPLACES the list, so the review shows it as a `todos` CHANGE row ' +
+        '(`buildChanges`: the live count with its ticked count → the new steps). The peek field ' +
+        'stays `add`-only all the same: the target side must NOT be substituted for it the way ' +
+        "the MOTIR-4143 rail fields substitute theirs, because a committed card's list is a " +
+        "person's PROGRESS — ticked rows — and reporting it here would show work somebody " +
+        'already did on the surface that says what approve will WRITE.',
     },
     planningProvenance: {
       addOnly:
@@ -320,7 +334,7 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
     // cannot reach the review model without somebody answering this question —
     // and a disposition for a field that no longer exists cannot linger.
     const undispositioned = [...proposed].filter(
-      (k) => !(k in OP_AXIS) && !(k in REVIEW_HALF_OWED_BY),
+      (k) => !(k in OP_AXIS) && !(k in REVIEW_HALF_OWED_BY) && !(k in NOT_A_CARD_FIELD),
     );
     const stale = Object.keys(OP_AXIS).filter((k) => !proposed.has(k));
     expect({ undispositioned, stale }).toEqual({ undispositioned: [], stale: [] });
@@ -534,7 +548,11 @@ describe('PlanItemPatch edge carriers ⟷ planReviewService', () => {
 // accident, months later. `motir-ai`'s `MODIFY_PATCH_KEYS` is this same
 // instrument one boundary over, and is what this mirrors.
 describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
-  const declared = interfaceKeys('lib/dto/plans.ts', 'PlanItemPatch');
+  // `languages` (MOTIR-8743) annotates the text keys and is outside the constant
+  // by design — the same exclusion `_planItemPatchKeysAreExhaustive` names.
+  const declared = new Set(
+    [...interfaceKeys('lib/dto/plans.ts', 'PlanItemPatch')].filter((k) => !(k in NOT_A_CARD_FIELD)),
+  );
 
   /**
    * What the review surface does with each patch key: the change row it produces,
@@ -563,6 +581,7 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
     estimateMinutes: { row: 'estimateMinutes' },
     // A leaf's DIFFICULTY (MOTIR-6133 carries it, MOTIR-6137 renders it).
     difficulty: { row: 'difficulty' },
+    todos: { row: 'todos' },
     // The two this bug was filed about.
     targetRepo: { row: 'targetRepo' },
     // The SET spellings of the SAME axis (bug MOTIR-4904) land on the same row.

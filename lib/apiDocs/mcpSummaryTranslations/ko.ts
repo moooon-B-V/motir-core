@@ -208,6 +208,12 @@ export const ko: McpSummaryTranslations = {
     source:
       "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
   },
+  get_coding_convention: {
+    summary:
+      '저장소 하나의 코딩 규칙 전문 — 파생된 것인지 사람이 편집한 것인지와 버전을 함께 제공. 그 저장소의 변경이 따르는 내용.',
+    source:
+      "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
+  },
   get_design: {
     summary:
       '디자인 작업 항목 하나의 승인된 디자인과 그 파일에 대한 단기 링크 — 없는 경우에는 다섯 가지 이유 중 어느 것인지를 알려 줍니다.',
@@ -233,9 +239,9 @@ export const ko: McpSummaryTranslations = {
   },
   get_project_state: {
     summary:
-      '프로젝트의 계획 사전 조건 — established, code connected, indexed, repo set — 을 계획하기 전에 확인합니다.',
+      '프로젝트의 계획 사전 조건 — established, code connected, indexed, repo set — 과 조직의 콘텐츠 언어를 계획하기 전에 확인합니다.',
     source:
-      "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
+      "A project's planning preconditions — established, code connected, indexed, repo set — and its organisation's content language, before you plan.",
   },
   get_work_item: {
     summary:
@@ -384,6 +390,12 @@ export const ko: McpSummaryTranslations = {
       '계획자 세션이 진행 중인 단계(settle, lay, author)를 보고하거나 종료합니다 — 생성 중인 계획에 대한 참고용 진행 신호입니다.',
     source:
       'Report the step a planner session is on (settle, lay, author) or end it — an advisory progress signal on a generating plan.',
+  },
+  record_run_discrepancy: {
+    summary:
+      'HOW만 잘못된 계획으로 작업 항목을 빌드한 러너가 계획과 다르게 빌드한 내용을 기록합니다 — 작업 항목 댓글과 실행 기록이 남고, 확인됩니다.',
+    source:
+      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
   },
   report_unbuildable_target: {
     summary:

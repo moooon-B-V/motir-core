@@ -855,7 +855,7 @@ export const projectRepoRepository = {
     projectId: string,
     workspaceId: string,
     tx: Prisma.TransactionClient,
-  ): Promise<Array<{ owner: string; providerRepoId: string }>> {
+  ): Promise<Array<{ owner: string; name: string; providerRepoId: string }>> {
     const rows = await tx.projectRepo.findMany({
       where: {
         projectId,
@@ -863,12 +863,12 @@ export const projectRepoRepository = {
         state: { in: [...ESTABLISHED_PROJECT_REPO_STATES] },
         NOT: { githubRepoId: null },
       },
-      select: { githubRepo: { select: { owner: true, repoId: true } } },
+      select: { githubRepo: { select: { owner: true, name: true, repoId: true } } },
       orderBy: { position: 'asc' },
     });
     return rows
       .map((row) => row.githubRepo)
-      .filter((repo): repo is { owner: string; repoId: string } => repo !== null)
-      .map((repo) => ({ owner: repo.owner, providerRepoId: repo.repoId }));
+      .filter((repo): repo is { owner: string; name: string; repoId: string } => repo !== null)
+      .map((repo) => ({ owner: repo.owner, name: repo.name, providerRepoId: repo.repoId }));
   },
 };

@@ -235,6 +235,7 @@
     "noteShowLess": "Show less",
     "field_description": "Description",
     "field_explanation": "Explanation",
+    "field_todos": "Steps",
     "field_links": "Dependencies",
     "field_parent": "Parent",
     "field_targetRepo": "Repository",
@@ -1735,7 +1736,8 @@
       "unknown": "Unknown",
       "unestablished": "Not created",
       "excluded": "Skipped",
-      "delivered_without_change_request": "Shipped without a PR"
+      "delivered_without_change_request": "Shipped without a PR",
+      "delivered_by_child": "Delivered by a child"
     }
   },
   "comments": {
@@ -1971,6 +1973,7 @@
       "components": "Components",
       "aiPlanning": "AI planning",
       "hostedAgent": "Hosted agent",
+      "translation": "Translation",
       "rules": "Rules",
       "repositories": "Repositories",
       "monitoring": "Monitoring",
@@ -3872,6 +3875,61 @@
         "factKeptBy": "Kept"
       }
     },
+    "translation": {
+      "title": "Translation",
+      "pageDescription": "How members who read in different languages see this project's work content.",
+      "card": {
+        "title": "Auto-translate",
+        "subtitle": "Let every member read this project's work in their own language, and still see the original."
+      },
+      "switch": {
+        "label": "Auto-translate work content"
+      },
+      "hint": {
+        "off": "Off. Work content shows as written, and a <b>Translate</b> button on each work item page translates that one work item when a member asks.",
+        "on": "On. Every member reads work content in their own interface language without pressing anything, and <b>Show original</b> is always one press away."
+      },
+      "saving": "Saving…",
+      "flipError": "Couldn't turn auto-translate {to, select, on {on} other {off}}. Nothing was changed.",
+      "retry": "Try again",
+      "loadFailed": "Couldn't load this setting.",
+      "effects": {
+        "title": "What readers get",
+        "page": "Work item pages and quick views show every field in the reader's language: the title, description, explanation and each to-do.",
+        "lists": "Lists, boards, the backlog, sprints, the roadmap, ready and triage show titles in the reader's language, with a <b>Show original</b> switch on each view.",
+        "original": "Agents, the API and emails always receive the original text, and editing always opens the original."
+      },
+      "cost": "Each field is translated once per language and kept, so a later reader of the same text pays nothing, and text already in the reader's language is never sent. Translation spends your organization's AI credits at the model's cost plus 50%. <link>Usage & cost</link>",
+      "noCredit": {
+        "body": "<b>Translation needs AI credits.</b> Work content shows as written until credit is added. Nothing is billed.",
+        "add": "Add credits",
+        "askAdmin": "An organization owner or admin can add them."
+      },
+      "readOnly": "Read-only",
+      "readOnlyNote": "Only a project admin can change auto-translate.",
+      "readOnlyValue": {
+        "on": "Auto-translate is on for this project. Work content shows in each member's own language.",
+        "off": "Auto-translate is off for this project. Work content shows as written."
+      },
+      "value": {
+        "on": "On",
+        "off": "Off"
+      },
+      "history": {
+        "title": "Change history",
+        "subtitle": "Who turned auto-translate on or off, and when.",
+        "col": {
+          "who": "Who",
+          "change": "Change",
+          "when": "When"
+        },
+        "row": "{who} changed auto-translate from {from} to {to} on {when}.",
+        "unknownActor": "A former member",
+        "empty": "No changes yet. Auto-translate has never been changed on this project.",
+        "capped": "Showing the {shown} most recent of {total} changes.",
+        "failed": "<b>Couldn't load the change history.</b> The setting above is unchanged."
+      }
+    },
     "hostedAgent": {
       "title": "Hosted agent",
       "pageDescription": "Which model a hosted run uses. Run hosted preselects it from the work item’s difficulty; whoever starts the run can still pick another.",
@@ -3899,7 +3957,11 @@
       "savedTitle": "Hosted agent settings saved",
       "savedDesc": "New hosted runs use these models.",
       "errorTitle": "Couldn’t save",
-      "saveError": "Your hosted agent settings weren’t saved. Please try again."
+      "saveError": "Your hosted agent settings weren’t saved. Please try again.",
+      "autoFix": {
+        "label": "Fix a red pull request in the work item's own agent.",
+        "help": "When a pull request goes red and the work item's last run was in an agent that is signed in and up, Motir starts the fix in that agent. Off — the default — nothing starts on its own."
+      }
     },
     "connectedApps": {
       "title": "Connected apps",
@@ -4157,6 +4219,7 @@
         "bugs": "Where this project's bugs are filed is managed by project admins. Ask an admin if the destination needs changing.",
         "ai-planning": "AI planning for this project — its cadence — is configured by project admins. Ask an admin if it needs changing.",
         "hosted-agent": "Which model a hosted run uses is shown to people who can start a hosted run on this project. Ask a project admin if you need to see it.",
+        "translation": "Whether this project's work content is translated for each reader is shown to people who can read the project's work items. Ask a project admin if you need to see it.",
         "automation": "Project automation is managed by project admins. Ask an admin if you need a rule changed.",
         "monitoring": "This project's error-monitor connection is managed by people who can manage integrations. Ask a project admin if Sentry needs connecting or reconnecting."
       }
@@ -4690,7 +4753,13 @@
       "velocityTableCaption": "Velocity — committed vs completed {statistic} per sprint. Average completed: {average}.",
       "velocityTableSprint": "Sprint",
       "notFound": "This sprint report isn't available.",
-      "backToBacklog": "Back to backlog"
+      "backToBacklog": "Back to backlog",
+      "sprintLabel": "Sprint",
+      "activeGroup": "Active",
+      "completedGroup": "Completed",
+      "sprintSearch": "Search sprints…",
+      "noSprintsTitle": "No sprints to report on yet",
+      "noSprintsBody": "Start a sprint from the backlog and its report shows here."
     },
     "aiPlan": {
       "cta": "Plan sprints with Motir",
@@ -5053,7 +5122,16 @@
       "chartDesc": "Created vs resolved per {period} over the last {count} buckets. Created {created} total versus resolved {resolved} total; the difference is shaded red where the backlog grows and green where the team catches up.",
       "tableCaption": "Created vs resolved per period (per-period counts).",
       "tableCaptionCumulative": "Created vs resolved per period (cumulative running totals).",
-      "subWindow": "last {days} days"
+      "subWindow": "last {days} days",
+      "chartFormLabel": "Chart",
+      "formLine": "Line",
+      "formBars": "Bars",
+      "seriesLabel": "Series",
+      "seriesLocked": "At least one series stays on.",
+      "subCreatedOnly": "Created only",
+      "subResolvedOnly": "Resolved only",
+      "chartDescBars": "Created and resolved per {period} over the last {count} buckets, as bars. Created {created} total versus resolved {resolved} total.",
+      "chartDescSingle": "{series} per {period} over the last {count} buckets, {total} in total."
     },
     "distribution": {
       "title": "Status distribution",
@@ -5077,7 +5155,18 @@
       "noSprintsBody": "Start a sprint from the backlog to see its sprint graph."
     },
     "velocity": {
-      "title": "Velocity chart"
+      "title": "Velocity chart",
+      "endingAtLabel": "Ending at",
+      "endingAtHint": "A completed sprint. Blank = the latest.",
+      "latest": "Latest completed",
+      "latestNamed": "Latest completed — {name}",
+      "endingAtSearch": "Search sprints…",
+      "countLabel": "Sprints",
+      "countFewer": "Fewer sprints",
+      "countMore": "More sprints",
+      "countHint": "3 to 52 · default 7.",
+      "rangeSubLine": "{project} · {from} – {to}",
+      "chartLoading": "Loading the velocity chart"
     },
     "controls": {
       "periodLabel": "Period",
@@ -5134,13 +5223,20 @@
       "xPoints": "Story points (open)",
       "xCount": "Work items (open)",
       "unassigned": "Unassigned",
-      "chartDesc": "Open {measure} per assignee, ranked: {breakdown}. Total {total} across {count} unresolved work items.",
-      "tableCaption": "Open (unresolved) work per assignee — story points and work-item count.",
+      "chartDesc": "Open {measure}, ranked by person over the chosen period: {breakdown}. Total {total} across {count} work items.",
+      "tableCaption": "Open work per person over the chosen period — assigned, unassigned and reported by them, and the total, for the active measure.",
       "tableAssignee": "Assignee",
       "tablePoints": "Story points",
       "tableIssues": "Work items",
       "emptyTitle": "No open work assigned yet",
-      "emptyBody": "Every unresolved work item is unassigned, or there's no open work. Pick another scope."
+      "emptyBody": "Every unresolved work item is unassigned, or there's no open work. Pick another scope.",
+      "legendAssigned": "Assigned",
+      "legendUnassigned": "Unassigned — reported by",
+      "tableAssigned": "Assigned",
+      "tableUnassigned": "Unassigned (reported)",
+      "tableTotal": "Total",
+      "subWindow": "last {days} days",
+      "chartDescPerson": "{name} {total} ({assigned} assigned, {unassigned} unassigned and reported)"
     },
     "statistic": {
       "kind": "Type",
@@ -5151,6 +5247,45 @@
       "sprint": "Sprint",
       "label": "Label",
       "component": "Component"
+    },
+    "help": {
+      "hide": "Hide help text",
+      "show": "Show help text",
+      "regionLabel": "About this report",
+      "whatLabel": "What it shows.",
+      "howLabel": "How to read it.",
+      "burndown": {
+        "what": "How the sprint's scope, completed and started work move from its start to its end, with a target line and a Today marker.",
+        "how": "Completed rising toward Scope means the sprint is on track. A Scope line that climbs after the start is scope creep; a Completed line that lags the Target is behind."
+      },
+      "velocity": {
+        "what": "The story points a team committed to against the points it completed, sprint by sprint.",
+        "how": "Compare the two bars in each sprint. Steady completed bars show a reliable pace you can plan the next sprint against; pick an earlier sprint to look back from there."
+      },
+      "sprintReport": {
+        "what": "A finished or running sprint on one page: what was completed, what was not, what was added after it started, and its sprint graph.",
+        "how": "Start with completed against not completed, then read the work added mid-sprint. Use the picker under the title to switch sprint."
+      },
+      "createdVsResolved": {
+        "what": "How many work items were created and how many were resolved in each period.",
+        "how": "When the created bar is taller than the resolved bar the backlog is growing; when it is shorter the team is catching up. Use the series switches to look at one of them alone."
+      },
+      "distribution": {
+        "what": "How the project's work items split across the values of one field, such as status, type or assignee.",
+        "how": "The wider a slice, the more work items carry that value. Change the statistic to cut the same work another way."
+      },
+      "averageAge": {
+        "what": "The average number of days the unresolved work items had been open at the end of each period.",
+        "how": "A line that keeps rising means work is being left open. Compare it with the window average to see whether the latest period is unusual."
+      },
+      "resolutionTime": {
+        "what": "The average number of days it took to resolve the work items resolved in each period.",
+        "how": "A falling line means work is being finished faster. Periods are counted by resolution date, so an old item resolved today raises today's period."
+      },
+      "workload": {
+        "what": "The open work each person holds over a chosen period, counted in story points or work items. Work with no assignee is counted under its reporter.",
+        "how": "The longest bars are the people carrying the most open work. Look for a very uneven spread before assigning more."
+      }
     }
   },
   "dashboards": {
@@ -6278,8 +6413,11 @@
       "stateDrawing": "Drawing on credits",
       "statePaused": "CI paused",
       "stateNothing": "Nothing to bill",
+      "stateInternal": "Internal",
       "usedLabel": "Minutes used this month",
       "usedOfPool": "{used} of {pool} minutes",
+      "internalUsed": "{used} minutes",
+      "internalNote": "This organization is Motir's own: no included minutes, no credits drawn and no charge. The minutes are recorded so the team can see what its CI runners cost. The count runs on the calendar month.",
       "minutesLeft": "{left} minutes left",
       "minutesOver": "{over} minutes over",
       "creditsDrawn": "{credits} credits drawn",
@@ -7171,6 +7309,43 @@
               "body": "Nothing was booted and nothing was charged. Fix on the hosted agent works again once the organization has credits — or repair it from your terminal."
             }
           }
+        },
+        "myAgent": {
+          "lead": "Fix it in your own agent: <b>{agent}</b>, the agent this work item's last run used.",
+          "door": {
+            "label": "Fix in my agent",
+            "starting": "Starting the fix…",
+            "why": "The fix runs in the same agent on the same branch, so it starts from the run's own context instead of a blank one."
+          },
+          "fixing": {
+            "by": "<b>{name}</b> started a fix in <b>{agent}</b> <when></when> — <run>{label}</run>.",
+            "byYou": "You started a fix in <b>{agent}</b> <when></when> — <run>{label}</run>.",
+            "why": "One fix at a time: this run holds the repair until it ends, so a second fix cannot start over it."
+          },
+          "refused": {
+            "busy": {
+              "title": "Not started — a fix is already running on this work item.",
+              "body": "<b>{name}</b> started it <when></when> — <run>{label}</run>. Nothing was started and nothing was charged.",
+              "bodyYou": "You started it <when></when> — <run>{label}</run>. Nothing was started and nothing was charged."
+            },
+            "signedOut": {
+              "title": "Not started — <b>{agent}</b> is signed out.",
+              "body": "Sign <b>{agent}</b> in, then press Fix in my agent again. <link>Open the agent</link> to sign in with <cmd>{cmd}</cmd>. Nothing was started and nothing was charged."
+            }
+          },
+          "fellBack": {
+            "notice": "<b>{agent}</b> could not resume this work item's run session, so the fix started a new session on the same branch (<b>{branch}</b>)."
+          },
+          "settled": {
+            "notice": "This work item's pull requests are green now, so no fix was started."
+          },
+          "gaveUp": {
+            "note": "The last fix in <b>{agent}</b> gave up after {attempts, plural, one {1 attempt} other {# attempts}} <when></when>. Fix in my agent can be pressed again.",
+            "noteNoCount": "The last fix in <b>{agent}</b> gave up <when></when>. Fix in my agent can be pressed again."
+          },
+          "modal": {
+            "lead": "This run ended with a red pull request. Fix it in the same agent, without copying the failure into a new one."
+          }
         }
       },
       "continue": {
@@ -7288,11 +7463,13 @@
         "delivered": "Delivered",
         "unestablished": "Not created",
         "excluded": "Skipped",
-        "delivered_without_change_request": "Shipped without a PR"
+        "delivered_without_change_request": "Shipped without a PR",
+        "delivered_by_child": "Delivered by a child"
       },
       "repositoryNotCreated": "Repository not created yet",
       "repositorySkipped": "Skipped for this project",
       "shippedWithoutPullRequest": "Shipped without a pull request",
+      "deliveredByChildPullRequest": "Delivered by a child work item’s pull request",
       "unlinkAria": "Remove the link to {target}",
       "unlinkConfirmBefore": "Remove the link to",
       "unlinkConfirmAfter": "? The pull request isn’t touched on GitHub — only the link.",
@@ -7544,7 +7721,9 @@
         "aria": "Open {key}, the work item this conversation re-plans",
         "pickLabel": "Follow-up to <mono>{key}</mono>",
         "chose": "chose {label}",
-        "pickAria": "Open {key}, the choice this conversation is the follow-up to (chose {label})"
+        "pickAria": "Open {key}, the choice this conversation is the follow-up to (chose {label})",
+        "guideLabel": "From the guide on <mono>{key}</mono>",
+        "guideAria": "Open {key}, the work item Motir AI was guiding you through when it offered this re-plan"
       },
       "end": {
         "failed": "Closed · the attempt failed · {time}",
@@ -7809,7 +7988,6 @@
       "replan": "Opened to change {project}'s existing plan.",
       "contextual": "Opened in context on {project}.",
       "contextualItem": "Opened in the context of {item}.",
-      "conventionRefine": "Opened to refine {repo}'s coding convention.",
       "roadmap": "Opened from the roadmap.",
       "followUp": "Opened to plan the follow-up to {choice}, on {item}.",
       "followUpProject": "Opened on {project} to plan the follow-up to {choice}."
@@ -7974,6 +8152,16 @@
     "followUpCard": {
       "label": "Follow-up to a choice"
     },
+    "guideSeed": {
+      "chip": "from a guide",
+      "lead": "Opened on {target} from Motir AI’s guide on {guided}.",
+      "card": "From a guide",
+      "cardBy": "Confirmed by {who} · {when}",
+      "justNow": "just now",
+      "you": "you",
+      "status": "Planning",
+      "offerClosed": "This re-plan offer is no longer open. Go back to the guide to see where it stands."
+    },
     "guide": {
       "openedFrom": "Opened from {key}",
       "reading": "Reading {key} and its to-do list…",
@@ -8005,7 +8193,8 @@
       "errors": {
         "notManual": "Motir AI guides a person through manual work, and this work item is for an agent, so there is nothing to guide here.",
         "closed": "This work item is done or archived, so there is nothing left to guide.",
-        "forbidden": "You need permission to edit this work item and to plan with Motir AI to be guided through it."
+        "forbidden": "You need permission to edit this work item and to plan with Motir AI to be guided through it.",
+        "offerClosed": "This offer was already decided, so it can’t be changed. Reload the work item to see where it stands."
       },
       "youTicked": "You ticked step {n} on the list",
       "youUnticked": "You unticked step {n} on the list",
@@ -8060,6 +8249,32 @@
         "typeText": "Text",
         "typeMarkdown": "Markdown",
         "typeFile": "File"
+      },
+      "offer": {
+        "label": "Re-plan request",
+        "target": "Aimed at",
+        "targetElsewhere": "The re-plan starts on {key}, not on this work item.",
+        "resolved": "{done} is done, so the re-plan starts on {open}.",
+        "noTarget": "There is no open work item to re-plan from.",
+        "confirm": "Confirm",
+        "confirming": "Starting…",
+        "openSession": "Open the planning session",
+        "decline": "Decline",
+        "declining": "Declining…",
+        "showAll": "Show all",
+        "showLess": "Show less",
+        "confirmHelp": "Opens Motir AI planning on {key} with this request sent. It spends credits.",
+        "declineHelp": "Closes this offer. Nothing is planned.",
+        "replaced": "Replaced by a newer offer",
+        "started": "Re-plan started",
+        "startedBy": "Confirmed · {when}",
+        "declined": "Declined",
+        "declinedBy": "Declined · {when}",
+        "recorded": "Recorded on the work item",
+        "resumeAt": "Guide me through will pick up at step {n}.",
+        "walkStopped": "The walk is stopped.",
+        "cannotPlan": "You can’t start planning here — ask someone who can, or share this request.",
+        "noAi": "Motir AI isn’t set up here, so planning can’t start. You can still share this request."
       }
     },
     "restart": {
@@ -8082,7 +8297,9 @@
       "onlyStarter": "Only {name} or a project manager can resume this.",
       "onlyStarterAnon": "Only the person who started this or a project manager can resume it.",
       "failureLine": "Your last change to this plan could not be made · {when}",
-      "failureLineAgain": "Your last change could not be made again · {when}"
+      "failureLineAgain": "Your last change could not be made again · {when}",
+      "failureLinePlanAgain": "This attempt could not be continued · {when}. Your next message plans it again.",
+      "failureLinePlanAgainAgain": "This attempt could not be continued again · {when}. Your next message plans it again."
     },
     "grill": {
       "control": {
@@ -8096,6 +8313,11 @@
         },
         "hint": "Your next message starts the grilling."
       }
+    },
+    "follow": {
+      "following": "Following the planner",
+      "resume": "Follow the planner",
+      "resumedAnnouncement": "Following the planner again"
     }
   },
   "codeHealth": {
@@ -8182,13 +8404,40 @@
       }
     },
     "convention": {
+      "versionEdited": "v{version} · edited",
+      "bylineDerived": "Derived from the code",
+      "bylineEdited": "Edited by {name} · {date}",
+      "bylineEditedUnknown": "Edited by a team member · {date}",
+      "edit": "Edit",
+      "writeFirst": "Write the convention",
+      "editFieldLabel": "Convention (Markdown)",
+      "editingVersion": "Editing v{version}",
+      "saveCreates": "Saving creates v{next}. {count} / {max} characters.",
+      "editHelper": "Every new prompt for this repository reads the saved text. A newer derived version never replaces it.",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saving": "Saving…",
+      "saveFailed": "Couldn’t save the convention. Your text is still here — try again.",
+      "tooLong": "The convention is over {max} characters. Shorten it to save.",
+      "blank": "Write something to save.",
+      "conflictTitle": "Someone saved a newer version",
+      "conflictBody": "{name} saved v{latest} on {date} while you were editing v{base}. Your changes have not been saved.",
+      "conflictLoadTheirs": "Load their version",
+      "conflictKeepMine": "Keep mine as a copy",
+      "conflictCopyLabel": "Your text — copy it, then load theirs",
+      "conflictCopyHint": "Read-only copy. Loading their version closes this editor.",
+      "copy": "Copy to clipboard",
+      "pendingTitle": "A newer version was derived from the code",
+      "pendingBody": "A re-audit on {date} produced a derived version. It is not in use — the text below is. Nothing changes unless you edit.",
+      "pendingCompare": "Compare side by side",
+      "pendingInUse": "In use · v{version} edited",
+      "pendingWaiting": "Waiting · derived",
+      "emptyWriteBody": "No convention rules have been derived yet for this repo. Write the first version here, or wait for Motir to derive one from your code.",
       "emptyTitle": "No convention yet",
       "emptyDescription": "Motir derives a coding convention from your code once a repo is connected. Review it here.",
       "defaultRepo": "Code",
       "noRules": "No convention rules have been derived yet for this repo.",
       "versionDerived": "v{version} · derived",
-      "bannerDerivedTitle": "Derived from your code — auto-used",
-      "bannerDerivedBody": "This convention is derived from your codebase and injected into every prompt for new code. To refine it, use the Refine with Motir entry above to open the AI chat.",
       "provenanceTitle": "Rule provenance",
       "provenanceLegend": "Adopted — your code already does this, we documented it. Proposed — your code was silent or inconsistent, a clean-code default placed here.",
       "provenance": {
@@ -8494,7 +8743,12 @@
       "answeredGroup": "Already answered by your project",
       "answeredMeta": "Motir read your code and your work items",
       "discoveryStep": "A few questions",
-      "directionGroup": "Your direction"
+      "directionGroup": "Your direction",
+      "subtitle": "Indexing and importing run in the background. Enter Motir whenever you like.",
+      "background": "In the background · {detail}",
+      "backgroundInProgress": "In progress",
+      "backgroundQueued": "Queued",
+      "backgroundFailed": "Failed"
     },
     "common": {
       "back": "Back",
@@ -8576,6 +8830,58 @@
         "installation_not_accessibleHint": "Your GitHub user can't see this installation, so nothing was linked. An owner of the GitHub account can give you access.",
         "not_configuredTitle": "GitHub isn't set up on this deployment",
         "not_configuredHint": "This Motir deployment has no GitHub App yet, so GitHub can't be connected from here. Whoever runs the deployment can set it up."
+      },
+      "existing": {
+        "title": "Your GitHub accounts with the Motir App",
+        "hint": "The Motir App is already installed on these accounts. Pick one to connect its repositories here. You do not need to install again.",
+        "loading": "Looking for your GitHub accounts…",
+        "typeUser": "Personal account",
+        "typeOrg": "GitHub organisation",
+        "linkedHere": "Already linked to this organisation",
+        "pickCta": "Choose repositories",
+        "pickAria": "Choose repositories from {login}",
+        "installAnotherCta": "Install on another account",
+        "installAnotherHint": "Use this if the account you want is not listed.",
+        "loadErrorTitle": "We could not read your GitHub accounts",
+        "loadErrorHint": "Nothing was changed. Try again, or install on another account.",
+        "retryCta": "Try again",
+        "identity": {
+          "title": "Sign in with GitHub to find your installations.",
+          "hint": "Motir only checks which accounts the Motir App is installed on and which of them you can reach. You can skip this and install on a new account instead.",
+          "cta": "Sign in with GitHub",
+          "skipCta": "Skip and install instead",
+          "declinedHint": "GitHub did not sign you in, so nothing was changed. Try again, or skip and install instead."
+        },
+        "picker": {
+          "heading": "Repositories in {login}",
+          "hint": "Choose the repositories this organisation connects. Nothing is connected until you confirm.",
+          "fromInstallHint": "You chose an account the Motir App is already installed on. Choose which of its repositories this organisation connects.",
+          "loading": "Loading repositories…",
+          "available": "Available",
+          "connectedHere": "Connected here",
+          "connectedElsewhere": "Connected to another organisation",
+          "connectedElsewhereHint": "This repository can't be chosen here.",
+          "selectedCount": "{count, plural, one {# repository selected} other {# repositories selected}}",
+          "confirmCta": "{count, plural, one {Connect # repository} other {Connect # repositories}}",
+          "backCta": "Back to accounts",
+          "nothingLeftTitle": "Nothing left to connect from this account",
+          "nothingLeftHint": "Every repository here is already connected, to this organisation or to another one. To offer more, add repositories to the installation on GitHub.",
+          "nothingLeftCta": "Add repositories on GitHub"
+        },
+        "outcome": {
+          "linkedTitle": "Repositories connected",
+          "linkedHint": "Motir can now read the repositories you chose. Nothing else from this account was connected.",
+          "takenTitle": "A repository was taken while you were choosing",
+          "takenHint": "Another organisation connected {repos}. Nothing was connected. The list is updated, so choose again.",
+          "notAccessibleTitle": "You can no longer reach that account",
+          "notAccessibleHint": "GitHub no longer lets you see this installation, so it is removed from the list. Ask an owner of the GitHub account for access, or install on another account.",
+          "notAdminTitle": "Only an organisation admin can link an existing installation",
+          "notAdminHint": "Ask an admin of this organisation to link it, or install on another account yourself.",
+          "selectionRequiredTitle": "Choose at least one repository",
+          "selectionRequiredHint": "Nothing was connected. Tick the repositories you want, then confirm.",
+          "notVisibleTitle": "A repository is no longer in this installation",
+          "notVisibleHint": "Nothing was connected. The list is updated, so choose again."
+        }
       }
     },
     "index": {
@@ -8588,7 +8894,9 @@
       "perRepo": "Per repository",
       "state": {
         "indexed": "Indexed",
-        "queued": "Queued"
+        "queued": "Queued",
+        "indexing": "In progress",
+        "failed": "Failed"
       },
       "callout": "Motir derives your conventions + a code-health check (and any plan) from the whole project, so it needs every repo indexed — Next stays disabled until every repository finishes.",
       "completeTitle": "Code graph built",
@@ -8598,11 +8906,13 @@
     "import": {
       "eyebrow": "Optional · Import & plan",
       "heading": "Bring in your existing backlog",
-      "body": "Already tracking work in Jira, Linear, GitHub, Plane or a CSV? Import it into this project — you'll review a dry-run preview before anything is written. Skip this if you have no backlog to bring in.",
+      "body": "Import from Jira, Linear or Plane, or enter Motir and do it later. An import keeps going in the background.",
       "reconcile": "When you then generate a plan, Motir reconciles the two so nothing is duplicated.",
       "skip": "Skip import",
       "bodyInline": "Already tracking work in Jira, Linear, GitHub, Plane or a CSV? Bring it in right here. You review a dry-run preview before anything is written. Skip this if you have no backlog to bring in.",
-      "continue": "Continue"
+      "continue": "Continue",
+      "running": "Importing from {source} · {done} work items so far",
+      "runningBody": "This keeps going in the background. You don't have to wait for it."
     },
     "decision": {
       "eyebrow": "Set up complete",
@@ -8628,6 +8938,26 @@
       "readyTitle": "Your first plan is ready",
       "readyBody": "{count, plural, one {# item is} other {# items are}} drafted for {project}. Nothing is final until you approve it.",
       "readyCta": "Review your plan"
+    },
+    "indexing": {
+      "doneTitle": "Indexed {repos}",
+      "repoCount": "{count, plural, one {# repository} other {# repositories}}",
+      "aggregateTail": "{done} of {total} done",
+      "failedTail": "{count} failed",
+      "detailBody": "This keeps going in the background. You can enter Motir now; nothing waits for it to finish.",
+      "rowFailed": "Motir couldn't index this repository. Nothing you've done is lost.",
+      "checkConnection": "Check the connection",
+      "close": "Close",
+      "retrying": "Trying again…",
+      "refusedNotConnected": "This repository isn't connected to the project any more. Check the connection, then try again.",
+      "refusedTooLarge": "This repository is too large for Motir to index.",
+      "retryError": "Motir couldn't start that again. Try once more in a moment.",
+      "importHeading": "Work items import",
+      "importProgress": "{done} so far"
+    },
+    "enter": {
+      "cta": "Enter Motir",
+      "hint": "Indexing and any import keep going after you enter."
     }
   },
   "repositorySet": {
@@ -9250,6 +9580,7 @@
         "token_expired": "its connection to the AI provider expired",
         "prompt_too_large": "the plan's context was too large for the model",
         "job_failed": "the planning job failed",
+        "stalled": "the plan stopped making progress",
         "internal": "something went wrong on our side"
       },
       "refusal": {
@@ -9334,7 +9665,8 @@
       "navPlanningLessons": "Planning lessons",
       "navIdeas": "Ideas",
       "navEnterpriseRequests": "Enterprise requests",
-      "navRunModels": "Hosted-run models"
+      "navRunModels": "Hosted-run models",
+      "navFleetSettings": "Fleet settings"
     },
     "nav": {
       "overview": "Overview",
@@ -9514,7 +9846,11 @@
             }
           },
           "fleet": {
-            "stop": "Stopped the fleet containers"
+            "stop": "Stopped the fleet containers",
+            "org_ci": {
+              "enable": "Turned fleet CI on",
+              "disable": "Turned fleet CI off"
+            }
           },
           "enterprise_request": {
             "transition": "Moved an Enterprise request"
@@ -11441,6 +11777,186 @@
         "notFound": "This idea no longer exists. Someone deleted it while you had the page open.",
         "failed": "Something went wrong, so nothing was changed. Try again."
       }
+    },
+    "fleetSettings": {
+      "breadcrumb": "Operations · Fleet settings",
+      "title": "Fleet settings",
+      "subtitle": "Where a superadmin decides whose CI runs on Motir's own machines. Every change asks for a reason and is written to the audit log.",
+      "empty": "No project offers fleet CI — no meta-org project has a private repository in a connected org.",
+      "setting": {
+        "title": "Run Motir's private repositories' CI on the fleet",
+        "pair": "Project {project} · GitHub organisation {org}",
+        "superadminOnly": "Superadmin only",
+        "explanation": "When on, every CI job in Motir's private repositories on {org} requests the {label} label and runs on the shared {fleet} machines, attributed to moooon B.V. When off, they run on GitHub-hosted runners. No workflow file changes either way."
+      },
+      "state": {
+        "on": "On",
+        "off": "Off"
+      },
+      "action": {
+        "turnOn": "Turn on",
+        "turnOff": "Turn off"
+      },
+      "blocked": "Can't turn on until every condition is met.",
+      "offNeverBlocked": "Turning off never waits on readiness.",
+      "meta": {
+        "lastChanged": "Last changed",
+        "changedBy": "by {email}, {when} — “{reason}”",
+        "neverChanged": "Never changed",
+        "auditLink": "Audit log",
+        "variable": "GitHub variable",
+        "repositories": "Repositories"
+      },
+      "variable": {
+        "present": "{name} = {value} on {org} (private repositories) — new jobs request the fleet.",
+        "absent": "{name} is not set on {org} — jobs fall back to GitHub-hosted runners.",
+        "unknown": "Couldn't read {name} on {org} — GitHub answered HTTP {status}.",
+        "unreachable": "Couldn't read {name} on {org} — GitHub could not be reached."
+      },
+      "drift": {
+        "onAbsent": {
+          "title": "Stored on, but GitHub disagrees.",
+          "body": "{name} is not set on {org}, so new jobs still run on GitHub-hosted runners. Turn the setting off and on again to write it."
+        },
+        "offPresent": {
+          "title": "Stored off, but GitHub disagrees.",
+          "body": "{name} is still set on {org}, so new jobs still request the fleet. Turn the setting on and off again to remove it."
+        }
+      },
+      "repositories": {
+        "count": "{count, plural, one {# private repository} other {# private repositories}}, read at runtime from project {project}'s private repositories on {org}"
+      },
+      "monitoringLine": "Motir's machines appear under moooon B.V. in Monitoring › Fleet",
+      "onCallout": {
+        "title": "Motir's CI is on the fleet.",
+        "link": "Open Monitoring › Fleet"
+      },
+      "degraded": {
+        "title": "Not ready while on.",
+        "body": "New jobs will queue until this is fixed or the setting is turned off."
+      },
+      "readiness": {
+        "title": "Readiness",
+        "subtitle": "Nine conditions, in the order a job meets them. A condition that couldn't be checked counts as not met.",
+        "ready": "Ready",
+        "readySub": "All {count} conditions met",
+        "notReady": "Not ready — {count, plural, one {# condition} other {# conditions}} not met",
+        "unmetCount": "{count} unmet",
+        "unknownCount": "{count} couldn't be checked",
+        "checked": "Checked {when}",
+        "checkedAgain": "Checked again {when}",
+        "recheck": "Check again"
+      },
+      "mark": {
+        "met": "Met",
+        "unmet": "Not met",
+        "unknown": "Couldn't check"
+      },
+      "cond": {
+        "kill_switch": {
+          "label": "Fleet kill switch"
+        },
+        "app_installed": {
+          "label": "App installed"
+        },
+        "app_runner_permission": {
+          "label": "App permission: Self-hosted runners"
+        },
+        "app_variables_permission": {
+          "label": "App permission: Variables (write)"
+        },
+        "workflow_job_subscription": {
+          "label": "workflow_job delivery"
+        },
+        "app_repositories": {
+          "label": "App reaches the repositories"
+        },
+        "delivery_attributable": {
+          "label": "Jobs attributed to project {project}"
+        },
+        "runner_group": {
+          "label": "Runner group"
+        },
+        "image_coverage": {
+          "label": "Image coverage"
+        }
+      },
+      "why": {
+        "kill_switch_engaged": "The fleet kill switch is engaged ({variable}=0), so no fleet machine boots. An operator unsets or raises it.",
+        "app_not_installed": "The motir-studio App is not installed on {org}. An owner of {org} installs it.",
+        "app_suspended": "The motir-studio App on {org} has been suspended since {date}. An owner of {org} unsuspends it.",
+        "permission_missing": "The motir-studio App on {org} holds {permission}: none, and needs write. An owner of {org} accepts the permission request.",
+        "permission_insufficient": "The motir-studio App on {org} holds {permission}: {granted}, and needs write. An owner of {org} accepts the permission request.",
+        "not_subscribed": "The App is not subscribed to workflow_job events, so GitHub never tells Motir a job is queued. Whoever administers the motir-studio App subscribes it in the App's settings.",
+        "repositories_not_granted": "The App's installation on {org} does not reach {repositories}. An owner of {org} adds them to the installation's repository access.",
+        "no_private_repositories": "Project {project} has no private repository in {org}, so there is nothing for the fleet to run.",
+        "not_attributable": "A queued job from {repositories} would not be attributed to project {project}, so it would stay queued until GitHub expires it. Reconnect the repository to the project so its mirror row is current.",
+        "no_runner_group": "Project {project} has no runner group in {org}. An operator runs {script} --project {project}.",
+        "sync_pending": "The project's runner group in {org} is out of sync with its repositories. An operator runs {script} --project {project}.",
+        "jobs_not_runnable": "{count, plural, one {# job} other {# jobs}} can't run on the fleet runner image yet. Whoever maintains the fleet image adds the missing tool; a job that needs another operating system stays unrunnable until it leaves the private set.",
+        "not_inventoried": "{repositories} {count, plural, one {is} other {are}} not in the fleet job inventory, so nobody has checked the runner image can run {count, plural, one {its} other {their}} jobs. Whoever maintains the inventory re-runs it.",
+        "inventory_stale": "The workflows of {repositories} changed after the fleet job inventory measured them. Whoever maintains the inventory re-runs it.",
+        "read_failed": "Couldn't check this: GitHub answered HTTP {status}. Counts as not met until a check succeeds.",
+        "read_unreachable": "Couldn't check this: GitHub could not be reached. Counts as not met until a check succeeds.",
+        "read_failedNoStatus": "Couldn't check this. Counts as not met until a check succeeds.",
+        "app_not_readable": "Can't be checked until the motir-studio App is installed and readable on {org}."
+      },
+      "jobs": {
+        "missing": "{repo} · {workflow} · {job} — missing {tools}",
+        "cannotHost": "{repo} · {workflow} · {job} — can't be hosted: {reason}",
+        "more": "+{count} more",
+        "scope": "This covers the inventoried image built from main, not the image production boots."
+      },
+      "confirm": {
+        "onTitle": "Turn on fleet CI for {org}?",
+        "onBody": "Off → On. Every new CI job in {count, plural, one {# repository} other {# repositories}} will run on the fleet and be charged to moooon B.V.'s pool: {repositories}. Jobs already running finish where they started.",
+        "offTitle": "Turn off fleet CI for {org}?",
+        "offBody": "On → Off. New jobs go back to GitHub-hosted runners; jobs already running on the fleet finish there. Turning off never waits on readiness.",
+        "reasonLabel": "Reason — required, written to the audit log",
+        "reasonPlaceholderOn": "Why are you turning this on?",
+        "reasonPlaceholderOff": "Why are you turning this off?",
+        "reasonHint": "Shown to any operator reading this change later. “Testing” on its own answers nothing.",
+        "reasonHintEmpty": "The button stays disabled until a reason is typed — the same rule the server applies.",
+        "cancel": "Cancel",
+        "confirmOn": "Turn on",
+        "confirmOff": "Turn off"
+      },
+      "refused": {
+        "reasonMissing": "Not turned {direction}: a reason is required, and it is written to the audit log with this change. Nothing changed.",
+        "alreadyOn": "Already on — nothing changed.",
+        "alreadyOff": "Already off — nothing changed.",
+        "alreadyBody": "Another superadmin changed it first, so nothing was written and no audit row was added.",
+        "githubStatus": "Not turned {direction}: GitHub refused to {operation} {name} on {org} (HTTP {status}).",
+        "githubUnreachable": "Not turned {direction}: GitHub could not be reached to {operation} {name} on {org}.",
+        "nothingChanged": "Nothing changed: the setting and the GitHub variable are as they were.",
+        "notReady": "Not turned on: the fleet stopped being ready after this page loaded.",
+        "notReadyList": "Not met now: {conditions}. Nothing changed. The readiness below has been checked again.",
+        "notPermitted": "Not changed: only a superadmin can change this setting.",
+        "targetUnknown": "Not changed: this project and organisation are no longer offered this setting. Reload the page.",
+        "failed": "Not turned {direction}: something went wrong. Reload the page to see the setting as it is now."
+      },
+      "done": {
+        "on": "Turned on. New jobs request the fleet from now on.",
+        "off": "Turned off. New jobs go back to GitHub-hosted runners."
+      },
+      "direction": {
+        "on": "on",
+        "off": "off"
+      },
+      "operation": {
+        "read": "read",
+        "set": "set",
+        "delete": "delete"
+      },
+      "permission": {
+        "organization_self_hosted_runners": "Self-hosted runners",
+        "organization_actions_variables": "Variables"
+      },
+      "unavailable": {
+        "title": "Couldn't load the fleet setting",
+        "body": "The setting or its readiness could not be read, so no state is shown and no switch is offered. This is a read error — nothing has changed, and no value is guessed.",
+        "retry": "Retry"
+      }
     }
   },
   "legal": {
@@ -11886,6 +12402,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "Run",
     "searchLabel": "Search this run",
     "gloss": "what the agent did",
@@ -11961,8 +12479,9 @@
     "sectionPast": "Past runs",
     "noneRunning": "Nothing is running.",
     "nonePast": "No run has finished yet.",
-    "colCommand": "Command",
-    "colScope": "Scope",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, one {and # more work item} other {and # more work items}}",
     "colAgent": "Agent",
     "colStarted": "Started",
     "colStatus": "Status",
@@ -12010,6 +12529,10 @@
       "expired": {
         "title": "Past the retention window",
         "body": "Log bodies are deleted 30 days after a run. This one’s have been."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12023,6 +12546,8 @@
       "approvedFor": "approved for {key}",
       "materialized": "{count, plural, one {# proposal} other {# proposals}} materialized",
       "bugFiled": "Bug filed",
+      "discrepancy": "Built differently",
+      "discrepancyPoints": "{count, plural, one {# point} other {# points}}",
       "open": "Open →"
     },
     "scope": {
@@ -12348,7 +12873,10 @@
       "progressAria": "{done} of {total} steps done",
       "progressAllDone": "{total} of {total} steps done",
       "door": "Guide me through"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "Add repository",
@@ -12514,6 +13042,8 @@
         "subject_gone": "What this question asked about is gone, so this question was withdrawn.",
         "no_longer_manual": "The work item is no longer manual work, so this question was withdrawn.",
         "closed_without_decision": "The work item was closed without anyone marking it done, so this question was withdrawn.",
+        "not_ready": "The work item is blocked by other work, so this question was withdrawn until it can be started.",
+        "replanned": "The work item was re-planned, so this question was withdrawn.",
         "unknown": "This question was withdrawn. The reason was not recorded."
       },
       "causeByKind": {
@@ -14237,7 +14767,9 @@
       "completed": "That's everything I needed to ask.",
       "nothingToAsk": "I have nothing to ask — this is clear enough to plan. I'm writing the plan now.",
       "stopped": "You stopped the grilling.",
-      "stoppedNoAnswer": "You stopped the grilling before any answer. Nothing was written."
+      "stoppedNoAnswer": "You stopped the grilling before any answer. Nothing was written.",
+      "handoffFailed": "Grill me couldn't ask its questions, so the plan is being written without them. Your request stands as you wrote it.",
+      "handoffNoCredit": "Grill me needs AI credit to ask its questions, so the plan is being written without them."
     },
     "summary": {
       "title": "What you settled",
@@ -14266,6 +14798,8 @@
     "translate": "Translate",
     "translating": "Translating…",
     "showOriginal": "Show original",
+    "originalIn": "Original in {language}",
+    "originalNotRecorded": "Original language not recorded",
     "showTranslation": "Show translation",
     "retry": "Retry",
     "hintInto": "into {language}",
@@ -14298,5 +14832,18 @@
     "liveFailedCount": "{n, plural, one {# field couldn’t be translated.} other {# fields couldn’t be translated.}}",
     "liveNoCredits": "Translation needs AI credits.",
     "liveEdited": "{field} was edited and translated again."
+  },
+  "titleTranslation": {
+    "addCredit": "Add credit",
+    "liveDone": "Titles translated",
+    "liveFailed": "Some titles could not be translated",
+    "liveNoCredit": "Titles are shown in their original language: no credit left",
+    "livePending": "Translating titles…",
+    "marked": "Translated",
+    "markedFrom": "Translated from {language}",
+    "noCredit": "Titles stay in their original language because your organization has no credit left.",
+    "pendingMark": "Translating",
+    "showOriginal": "Show original",
+    "showTranslation": "Show translation"
   }
 }

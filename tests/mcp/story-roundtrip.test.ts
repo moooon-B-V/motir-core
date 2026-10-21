@@ -230,14 +230,21 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       // to MCP_TOOL_NAMES without an entry here fails the suite by construction.
       expect(Object.keys(argFor).sort()).toEqual([...MCP_TOOL_NAMES].sort());
 
-      // Three tools are SELF-SCOPED — they act only within the CALLER's own
+      // Four tools are SELF-SCOPED — they act only within the CALLER's own
       // workspace and take no cross-tenant resource key, so they are
       // structurally incapable of reaching A's data: `whoami` returns the
       // caller's own identity, `list_projects` (MOTIR-1879) the caller's own
       // workspace's projects, and `complete_session` matches a session branch
       // inside the caller's (empty) workspace → a no-op, not a 404. The
       // 404-not-403 denial applies to every RESOURCE-TARGETING tool.
-      const SELF_SCOPED = new Set<McpToolName>(['whoami', 'list_projects', 'complete_session']);
+      // `get_section_sets` (MOTIR-9029) is a product contract, the same for every tenant: it
+      // reads no tenant data at all, so there is nothing for it to deny.
+      const SELF_SCOPED = new Set<McpToolName>([
+        'whoami',
+        'list_projects',
+        'complete_session',
+        'get_section_sets',
+      ]);
 
       const client = await connect(nonMemberToken);
       for (const name of MCP_TOOL_NAMES) {
@@ -565,6 +572,8 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         get_project_state: { projectKey: 'PROD' },
         // MOTIR-7793 — a project with no repository set: `repos: []`, no boundary call.
         get_code_health: { projectKey: 'PROD' },
+        // MOTIR-9083 — no repository set, so `repo_not_in_project`, a named non-error.
+        get_coding_convention: { projectKey: 'PROD', repo: 'motir-core' },
         // MOTIR-7861 — no repository set, so `repo_not_in_project`: a named,
         // non-error outcome answered before any host call.
         read_file: { projectKey: 'PROD', repo: 'motir-core', path: 'README.md' },
@@ -577,6 +586,8 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // project; the three writes are `work_item:edit`-gated, and a folder id that
         // names nothing is a not-found, never a scope denial.
         list_folders: { projectKey: 'PROD' },
+        // MOTIR-9029 — the project-less section registry read: it executes for any token holding `project:browse`.
+        get_section_sets: {},
         create_folder: { projectKey: 'PROD', name: 'scoped folder' },
         update_folder: { projectKey: 'PROD', folderId: 'fld_scoped', name: 'scoped rename' },
         delete_folder: { projectKey: 'PROD', folderId: 'fld_scoped' },
@@ -585,6 +596,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         get_page: { projectKey: 'PROD', pageId: 'page_scoped' },
         create_page: { projectKey: 'PROD', markdown: 'scoped page' },
         update_page: { projectKey: 'PROD', pageId: 'page_scoped', markdown: 'x', revision: 1 },
+        rename_page: { projectKey: 'PROD', pageId: 'page_scoped', title: 'x' },
         publish_decision_page: { key: item1, pageId: 'page_scoped' },
         get_work_item: { key: item1 },
         get_design: { key: item1 },
@@ -632,6 +644,12 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
           projectKey: 'PROD',
           targetKey: item1,
           reason: 'scoped report',
+        },
+        // MOTIR-8657 — the caller's OWN item. Gated on `work_item:edit`, so the
+        // read-only-token loop asserts it is REFUSED at the scope gate.
+        record_run_discrepancy: {
+          key: item1,
+          points: [{ planAsked: 'scoped', built: 'scoped', why: 'scoped' }],
         },
         open_plan_session: { projectKey: 'PROD' },
         append_plan_turn: { projectKey: 'PROD', body: 'scoped turn' },

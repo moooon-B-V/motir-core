@@ -111,8 +111,13 @@ test('a VIEWER meets no control that writes, and every disabled one says why', a
   await expect(main(page).getByTestId(`backlog-row-actions-${seed.itemKey}`)).toHaveCount(0);
   await expect(main(page).getByTestId(`backlog-row-check-${seed.itemKey}`)).toHaveCount(0);
 
-  // ── The rail: no door onto a room that refuses the Viewer ──────────────────
-  await expect(rail(page).getByRole('link', { name: 'Settings', exact: true })).toHaveCount(0);
+  // ── The rail: the one door opens on the one room a Viewer may read ─────────
+  // (MOTIR-7738 · MOTIR-8830: the Translation room is a read view for anyone who
+  // can browse the project; every administrative room still refuses the Viewer.)
+  await expect(rail(page).getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute(
+    'href',
+    '/settings/project/translation',
+  );
 });
 
 test('a MEMBER keeps every edit, each confirmed by its response and the persisted value', async ({

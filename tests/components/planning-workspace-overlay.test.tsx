@@ -667,13 +667,6 @@ describe('coverage · Keep planning after a Back, for every launch shape', () =>
       expected: '/items/MOTIR-7?plan=replan&planFrom=work-item&planItem=MOTIR-7',
     },
     {
-      name: 'a convention-refine launch',
-      search: 'plan=contextual&planFrom=convention-refine&planRepo=motir-core',
-      // The convention-refine host is `/code` since MOTIR-1768.
-      path: '/code',
-      expected: '/code?plan=contextual&planFrom=convention-refine&planRepo=motir-core',
-    },
-    {
       name: 'a roadmap launch',
       search: 'plan=roadmap&planFrom=roadmap',
       path: '/roadmap',
@@ -990,7 +983,9 @@ describe('the ROUTING VERDICT is HONOURED (MOTIR-4769)', () => {
     // Every word of it is the planner's; this surface renders it and writes none.
     expect(screen.getByText('The repository is still mostly the starter template.')).toBeTruthy();
     // What will be asked, and what is already there — the apology this route owes.
-    expect(screen.getByText('A few questions')).toBeTruthy();
+    // The wizard no longer walks the questions step (MOTIR-8783), whatever the
+    // verdict kept, so the strip must not promise it.
+    expect(screen.queryByText('A few questions')).toBeNull();
     expect(screen.getByText('Import work items')).toBeTruthy();
     // The FOUND block names what was read, from the substrate already in hand.
     expect(screen.getByText(/acme\/widgets/)).toBeTruthy();

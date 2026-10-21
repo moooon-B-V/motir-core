@@ -347,6 +347,7 @@ export type PlanSessionFailureReasonDto =
   | 'token_expired'
   | 'prompt_too_large'
   | 'job_failed'
+  | 'stalled'
   | 'internal';
 
 /** A failed attempt waiting to resume — see {@link PlanChangeSessionDto.failure}. */
@@ -525,4 +526,18 @@ export interface PlanSessionRestartResultDto {
   outcome: 'restarted';
   endedSessionId: string;
   session: PlanChangeSessionDto;
+}
+
+/**
+ * Whether the viewer may START planning from a guide's re-plan offer (Story
+ * MOTIR-8684 · MOTIR-8694), read once per guide-door response. The door itself
+ * asserts `ai:plan` before it answers (`requireGuidableCard`), so a viewer who
+ * reads this has the permission and only `ai_not_configured` can withhold it;
+ * `no_permission` is the other member of the closed set the client switches on.
+ * A server refusal at the start remains the authority: this only decides whether
+ * Confirm is DRAWN.
+ */
+export interface GuidePlanningAccessDto {
+  canPlan: boolean;
+  reason: 'no_permission' | 'ai_not_configured' | null;
 }

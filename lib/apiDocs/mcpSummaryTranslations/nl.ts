@@ -211,6 +211,12 @@ export const nl: McpSummaryTranslations = {
     source:
       "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
   },
+  get_coding_convention: {
+    summary:
+      'De codeconventie van één repository in zijn geheel, afgeleid of door een persoon bewerkt, met de versie – wat een wijziging in die repository volgt.',
+    source:
+      "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
+  },
   get_design: {
     summary:
       'Het GOEDGEKEURDE ontwerp van één ontwerp-werkitem, met kortlevende links naar de bestanden — of welke van de vijf redenen er is waarom er geen is.',
@@ -237,9 +243,9 @@ export const nl: McpSummaryTranslations = {
   },
   get_project_state: {
     summary:
-      'De planningsvoorwaarden van een Project — vastgelegd, code gekoppeld, geïndexeerd, repository ingesteld — voordat je plant.',
+      'De planningsvoorwaarden van een Project — vastgelegd, code gekoppeld, geïndexeerd, repository ingesteld — en de inhoudstaal van de organisatie, voordat je plant.',
     source:
-      "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
+      "A project's planning preconditions — established, code connected, indexed, repo set — and its organisation's content language, before you plan.",
   },
   get_work_item: {
     summary:
@@ -389,6 +395,12 @@ export const nl: McpSummaryTranslations = {
       'Meld de stap waarop een planner-sessie zit (settle, lay, author) of beëindig hem — een adviserend voortgangssignaal op een Plan dat wordt gegenereerd.',
     source:
       'Report the step a planner session is on (settle, lay, author) or end it — an advisory progress signal on a generating plan.',
+  },
+  record_run_discrepancy: {
+    summary:
+      'Een runner die een werkitem bouwde via een plan dat alleen in het HOE klopte niet, legt vast wat hij anders bouwde — een opmerking op het werkitem en een runregistratie, bevestigd.',
+    source:
+      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
   },
   report_unbuildable_target: {
     summary:

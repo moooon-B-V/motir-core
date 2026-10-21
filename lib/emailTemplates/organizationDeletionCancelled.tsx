@@ -36,7 +36,7 @@ function OrganizationDeletionCancelledEmail(
 ) {
   const { t } = props;
   return (
-    <EmailLayout preview={t('preview', values(props))} footer={t('footer')}>
+    <EmailLayout locale={props.locale} preview={t('preview', values(props))} footer={t('footer')}>
       <Text style={para}>{t('greeting', values(props))}</Text>
       <Text style={para}>{t('lede', values(props))}</Text>
       <Text style={para}>{t('detail')}</Text>

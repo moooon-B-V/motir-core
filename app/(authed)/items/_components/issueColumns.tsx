@@ -1,3 +1,4 @@
+import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { EpicNotPublicPill } from '@/components/issues/EpicNotPublicPill';
 import type { ReactNode } from 'react';
 import type { useTranslations } from 'next-intl';
@@ -81,11 +82,11 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
           <span className="shrink-0 font-mono text-xs text-(--el-text-identifier)">
             {r.identifier}
           </span>
-          <span
+          <SurfaceTitle
+            id={r.id}
+            title={r.title}
             className={`${r.childrenHidden ? 'min-w-20' : 'min-w-0'} flex-1 truncate text-(--el-text) group-hover:underline`}
-          >
-            {r.title}
-          </span>
+          />
           {/* A Visitor's PRIVATE epic (MOTIR-6648; design MOTIR-6641) — the row
               stays, marked, with its children withheld and no drill. The title
               keeps a floor and the pill gives way to its lock on a narrow

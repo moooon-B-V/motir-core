@@ -1368,11 +1368,11 @@ three files is written first.
 | **`plan`**        | **the presence switch AND the mode.** Its presence is what opens the overlay — one `has('plan')` test, the way `?run=` and `?peek=` each own one word. Total: an unrecognised value degrades to `project`, never an error                                                                                                                                                                                                                                                                                                           | `project` · `generation` · `replan` · `contextual` · `roadmap`             | the overlay                           |
 | **`planFrom`**    | the ORIGIN kind. It is what decides which of the two below may be READ, so a hand-edited `?planFrom=roadmap&planItem=X` cannot smuggle a target                                                                                                                                                                                                                                                                                                                                                                                     | `project` · `work-item` · `roadmap` · `convention-refine` · `refused-gate` | the overlay · the rail's opening line |
 | **`planItem`**    | the ANCHOR's work-item key. Written **only** when `planFrom=work-item`; the overlay hands it to `GET /api/work-items/planning-anchor` (MOTIR-4727)                                                                                                                                                                                                                                                                                                                                                                                  | `MOTIR-<n>`                                                                | the overlay                           |
-| **`planRepo`**    | the repository key. Written **only** when `planFrom=convention-refine`                                                                                                                                                                                                                                                                                                                                                                                                                                                              | a repo key                                                                 | the overlay                           |
 | **`planSession`** | a SESSION's id — reopens that planning conversation by id, the window notwithstanding (MOTIR-6019's published design, §19.8; built by MOTIR-6024). Read only when `plan` is present and `planFrom` is `project` or `work-item`                                                                                                                                                                                                                                                                                                      | a session id                                                               | the overlay                           |
 | **`planVia`**     | the ENTRANCE a named session was reopened from, so the rail's reopened line tells the truth (MOTIR-6033's landed design — `design/ai-planning/design-notes.md` Part XXII §22.2; built by MOTIR-6037). Read only with `planSession`; absent, or any other value, means the Plans page                                                                                                                                                                                                                                                | `plans` · `approvals`                                                      | the rail's reopened line              |
 | **`planGate`**    | a REFUSED GATE's id — opens the SEEDED re-plan (story MOTIR-6068; MOTIR-6206's design, § _The SEEDED re-plan_ → _The ADDRESS_; built by MOTIR-6210). Written **only** when `planFrom=refused-gate`, as `plan=replan&planFrom=refused-gate&planGate=<id>`; the overlay hands it to `GET /api/approval-gates/{id}/planning-seed` (MOTIR-6208). The gate's id and nothing else — never the reason, never a title                                                                                                                       | a gate id                                                                  | the overlay                           |
 | **`planStart`**   | START THE CONVERSATION — the overlay SENDS the anchor's start turn (`Plan <KEY>`, `planningWorkspace.startTurn.plan`) once, for the person, as the thread's first message (story MOTIR-5266; MOTIR-7875's design, `design/ready/design-notes.md` § _Expand starts a planning conversation_; built by MOTIR-7973). Written **only** when `planFrom=work-item` with `planItem` and no `planSession`, and read only there. After the first turn the host REPLACES it with `planSession=<id>`, so a reload resumes and never asks again | `1`                                                                        | the overlay                           |
+| **`planOffer`**   | a GUIDE RE-PLAN OFFER's turn id — opens the planner SEEDED from the offer (story MOTIR-8684; the sheet 9 surface above; built by MOTIR-8693). Written **only** when `planFrom=guide-offer`, as `plan=contextual&planFrom=guide-offer&planOffer=<turnId>`; the overlay hands it to `GET /api/ai/guide/offer/{turnId}/planning-seed` (MOTIR-8692). The offer's turn id and nothing else — never the request text, a key or a title                                                                                                    | a guide turn id                                                            | the overlay                           |
 
 **Why the mode rides on `plan` rather than on a fifth name.** The overlay needs ONE parameter
 whose mere presence means _open_, exactly as `?run=` and `?peek=` do; the mode is already total
@@ -1386,7 +1386,7 @@ the launcher module WRITES and PARSES them, the overlay READS them off `useSearc
 retiring `/planning` forward REWRITES the old `mode` / `from` / `item` / `repo` onto them.
 Renaming one is a change to this section first.
 
-**Close strips exactly these eight (four until MOTIR-6024 added `planSession`, five until MOTIR-6037 added `planVia`, six until MOTIR-6210 added `planGate`, seven until MOTIR-7973 added `planStart`) — nine with the `planReturned` marker — and leaves every other parameter byte-identical** — that is what
+**Close strips exactly these eight (four until MOTIR-6024 added `planSession`, five until MOTIR-6037 added `planVia`, six until MOTIR-6210 added `planGate`, seven until MOTIR-7973 added `planStart`, eight until MOTIR-8693 added `planOffer`, nine until MOTIR-9090 retired `planRepo` with the convention launcher) — nine with the `planReturned` marker — and leaves every other parameter byte-identical** — that is what
 makes "back to exactly where you were" true of a filtered, scrolled list rather than only of a
 bare route. `withPlanningOverlay('/roadmap?item=MOTIR-12', …)` keeps `item=MOTIR-12`;
 `withoutPlanningOverlay` of the result returns it unchanged, with no dangling `?`.
@@ -3223,6 +3223,13 @@ would leave a reader to work out that they are the same surface.
 ---
 
 ## ⭐ The canvas ARRIVES INSIDE the node being planned — the target's children, in both phases (MOTIR-6159, 2026-09-24)
+
+> **Superseded in part by `design/ai-planning/design-notes.md` Part XXVIII (MOTIR-8591, 2026-10-15).**
+> On the planning overlay while a plan is `generating`, § _The person who NAVIGATED FIRST_ (never move
+> after the reader navigated, and the _Plan is in {identifier} · Go there_ offer) is replaced by _follow
+> while on; the person's navigation turns following off; Follow the planner asks again_. The FOLLOW-MOVE's
+> transition, reduced-motion form and announcement below are REUSED unchanged by every driven move.
+> Outside `generating` this section stands as written.
 
 **Asset:** `planning-workspace--arrival.mock.html` — a **DELTA**, eight panels, holding only what
 changes.
@@ -6461,3 +6468,82 @@ the story's en + zh criterion holds with no new key.
 - Any implementation: no component, hook or stylesheet is changed by this card.
 - A cue in the List view (still none, §26.18).
 - A new door: the overlay is opened exactly as `planning-workspace.mock.html` draws.
+
+## ⭐ The guide's re-plan offer — the wrong-card turn, Confirm and Decline, and the planning Confirm opens (MOTIR-8686, 2026-10-15)
+
+**Story MOTIR-8684. A DELTA.** It amends the shipped **Guide me through** rail (MOTIR-7462's published result, with the deltas of MOTIR-7482 and MOTIR-7810) and composes the SENT seed of `planning-workspace--pick-seed.mock.html` revision 3 (§ _The picked option planned_) and the running bar of `plan-change-run-live.mock.html` state A. It edits none of them. The mock is **`design/ai-chat/guide-replan-offer.mock.html`**; its stylesheet is lifted verbatim from the pick-seed mock with a token-only `.ro-*` block appended. The behaviour drawn is the decision MOTIR-8685 (published as a Motir page; it amends A3.9 (b) of `docs/decisions/guide-turn-files.md`), its table _The target-wrong verdict, in full after this decision_; this section invents none. The access path is the shipped one (`?plan=guide&planFrom=guide&planItem=<KEY>` from the card's door or the Waiting-on-you row); no door is drawn.
+
+### What changes, in one sentence
+
+The guide's wrong-card turn used to end in a bare stop (a comment on the card). It now ends in an **offer block**: the request the guide wrote, the target it chose, **Confirm** and **Decline**. A wrong _step_ is still corrected in place with no offer (sheet 8, drawn once for contrast).
+
+### The states (the mock's sheets)
+
+1. **Undecided** — the guide's plain-words message (_{KEY} is wrong, so I can't guide you any further._ plus the reason), no step card. Under it the offer block: label, the request in full (clamped with _Show all_ when long), the target as a work-item chip with a one-line note when it is not the guided card, **Confirm** (primary), **Decline** (secondary), and one line saying what each does. Confirm's line says it **sends the request and spends credits**. The canvas keeps the list, the current step no longer marked, and a quiet note that the walk is stopped. The composer stays usable.
+2. **Revised / resolved forward / no target** — a newer offer collapses the earlier one to _Replaced by a newer offer_ with no buttons; only the latest offer has Confirm. A done or cancelled target shows the nearest not-done ancestor and says why. When every ancestor is done the offer shows the request and the line, has **no Confirm**, keeps Decline.
+3. **Confirming / confirmed / confirmed on an open session** — the wait is on the button only (spinner, disabled, Decline disabled). Confirmed reads **Re-plan started**, who and when, and links _Open the planning session_ (returns, sends nothing). When a session is already open on the target the button is **Open the planning session** from the start and the confirmed state links to the same one.
+4. **Declined / resumed** — **Declined**, who and when, no buttons; the rail's existing _Recorded on the card_ line; a line that Guide me through resumes at step N. Pressed again, the rail picks up at the first unticked step with the declined offer above it.
+5. **Cannot plan / out of credits** — no `ai:plan` and Motir AI not configured each get their own line and **no Confirm** (Decline stays). Out of credits composes the shipped paywall (`AiPaywall triggeredOutOfCredits`) in the rail's own slot; nothing starts and the offer stays undecided.
+6. **Reload** — one conversation with a replaced, a declined and a confirmed offer, in order, light and dark. Each renders from the record alone.
+7. **Dark, and the narrow fall-back** — the undecided, confirmed and declined offers in dark; the undecided offer at the rail floor (`--rail-floor`, 352px).
+8. **Stale step, for contrast** — unchanged shipped behaviour.
+9. **What Confirm opens** — see below.
+
+### Primitives and tokens, per element
+
+| Element              | Primitive                          | Colour                                                                                    | Shape                                     |
+| -------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Offer block          | `Card`-like panel                  | `--el-surface` fill, `--el-border`; quiet (decided/replaced) `--el-surface-soft`          | `--radius-card`, `--spacing-card-padding` |
+| Label                | caption                            | `--el-text-secondary`                                                                     | —                                         |
+| Request text         | quoted panel                       | `--el-surface-soft` fill, `--el-border-soft`, ink `--el-text` / `--el-text-strong`        | `--radius-input`, `--spacing-input-x`     |
+| Target chip          | shipped item-link chip             | `--el-chip-bg`, `--el-chip-border`, `--el-text`, title `--el-text-secondary`              | `--radius-badge`, `--spacing-chip-x/y`    |
+| Notes and help lines | caption                            | `--el-text-secondary` (never `--el-text-muted` on a surface, never `--el-text-faint`)     | —                                         |
+| Confirm / Decline    | `Button` primary / secondary, `sm` | the shipped variants                                                                      | `--radius-btn`, `--height-btn-sm`         |
+| Decided state        | `Pill`                             | `--el-tint-mint` for Re-plan started, `--el-chip-bg` for Declined; ink `--el-text-strong` | `--radius-badge`                          |
+| Cannot-plan line     | callout                            | `--el-text`, left rule `--el-border-strong`                                               | —                                         |
+| Paywall              | the shipped `AiPaywall`            | `--el-tint-rose`, `--el-text-strong`                                                      | `--radius-card`                           |
+| Canvas strip         | list                               | `--el-surface-soft`, tick `--el-success`, current step `--el-tint-yellow`                 | `--radius-control`                        |
+
+No raw hue, no `--color-*`, no `--el-danger-text`. The appearance of the offer is a 160 ms fade and 4 px rise; under `prefers-reduced-motion` it is simply present (the end state). Keyboard focus order is: request's _Show all_ → **Confirm** → **Decline** → the composer; both buttons take the shipped focus ring.
+
+### What Confirm opens (sheet 9)
+
+The planner, STARTED on the target, with the guide's request already **sent** as turn 1: the opener lead, a pinned **From a guide** card (the guided card's key and title, a `Planning` status pill in `--el-tint-lavender`, who confirmed and when), the sent bubble, the _Sent to Motir AI_ marker, the act rows and the running bar (`Stop`); then, once answered, the planner's first answer with the composer idle. The mode chip reads **from a guide** (never _in context_, never _plan change_). **No pre-filled unsent composer and no Send step.** The guided card's status reads **Planning** wherever the started surface shows it (canvas node, anchor chip); the plan's card hold (MOTIR-6017) is what keeps it there.
+
+### Copy (en + zh) and who owns the keys
+
+| Key                        | en                                                                                     | zh                                                             | Owner         |
+| -------------------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------- |
+| `guide.offer.label`        | Re-plan request                                                                        | 重新规划请求                                                   | rail card     |
+| `guide.offer.stop`         | {KEY} is wrong, so I can’t guide you any further.                                      | {KEY} 本身有问题，我没法继续带你往下做了。                     | rail card     |
+| `guide.offer.target`       | Aimed at                                                                               | 目标                                                           | rail card     |
+| `guide.offer.targetParent` | Its parent, {KEY}, because {why}.                                                      | 它的上级 {KEY}，因为{why}。                                    | rail card     |
+| `guide.offer.resolved`     | {DONE} is done, so the re-plan starts on {OPEN}.                                       | {DONE} 已完成，所以重新规划从 {OPEN} 开始。                    | rail card     |
+| `guide.offer.noTarget`     | There is no open work item to re-plan from.                                            | 没有可以作为起点的未完成工作项。                               | rail card     |
+| `guide.offer.confirm`      | Confirm                                                                                | 确认                                                           | rail card     |
+| `guide.offer.confirming`   | Starting…                                                                              | 正在开始…                                                      | rail card     |
+| `guide.offer.openSession`  | Open the planning session                                                              | 打开规划会话                                                   | rail card     |
+| `guide.offer.decline`      | Decline                                                                                | 拒绝                                                           | rail card     |
+| `guide.offer.showAll`      | Show all                                                                               | 展开全部                                                       | rail card     |
+| `guide.offer.confirmHelp`  | Opens Motir AI planning on {KEY} with this request sent. It spends credits.            | 在 {KEY} 上打开 Motir AI 规划，并发送此请求。会消耗额度。      | rail card     |
+| `guide.offer.declineHelp`  | Closes this offer. Nothing is planned.                                                 | 关闭此提议，不会规划任何内容。                                 | rail card     |
+| `guide.offer.replaced`     | Replaced by a newer offer                                                              | 已被更新的提议取代                                             | rail card     |
+| `guide.offer.started`      | Re-plan started                                                                        | 已开始重新规划                                                 | rail card     |
+| `guide.offer.startedBy`    | Confirmed by {WHO} · {WHEN}                                                            | 由 {WHO} 确认 · {WHEN}                                         | rail card     |
+| `guide.offer.declined`     | Declined                                                                               | 已拒绝                                                         | rail card     |
+| `guide.offer.declinedBy`   | Declined by {WHO} · {WHEN}                                                             | 由 {WHO} 拒绝 · {WHEN}                                         | rail card     |
+| `guide.offer.recorded`     | Recorded on the card                                                                   | 已记录在卡片上                                                 | rail card     |
+| `guide.offer.resumeAt`     | Guide me through will pick up at step {N}.                                             | 再次点击“带我完成”会从第 {N} 步继续。                          | rail card     |
+| `guide.offer.walkStopped`  | The walk is stopped.                                                                   | 引导已停止。                                                   | rail card     |
+| `guide.offer.cannotPlan`   | You can’t start planning here — ask someone who can, or share this request.            | 你无法在这里开始规划——请联系有权限的人，或把此请求分享给他们。 | rail card     |
+| `guide.offer.noAi`         | Motir AI isn’t set up here, so planning can’t start. You can still share this request. | 这里还没有配置 Motir AI，无法开始规划。你仍可以分享此请求。    | rail card     |
+| `guide.started.chip`       | from a guide                                                                           | 来自引导                                                       | overlay start |
+| `guide.started.lead`       | Opened on {TARGET} from Motir AI’s guide on {GUIDED}.                                  | 已在 {TARGET} 上打开，来自 Motir AI 对 {GUIDED} 的引导。       | overlay start |
+| `guide.started.card`       | From a guide                                                                           | 来自引导                                                       | overlay start |
+| `guide.started.cardBy`     | Confirmed by {WHO} · {WHEN}                                                            | 由 {WHO} 确认 · {WHEN}                                         | overlay start |
+
+The rail card ([MOTIR-8694](motir:cmv9rgb2x0012hvoitmc5h93e)) owns the `guide.offer.*` keys; the overlay start ([MOTIR-8693](motir:cmv9rgb1r0010hvoicrs2f58w)) owns the `guide.started.*` keys. The request text itself is **data the guide wrote**, never catalogue copy.
+
+### Cites
+
+The decision MOTIR-8685, its table by concern: **the turn** and **the offer** (sheet 1), **revision** (sheet 2), **a finished target** (sheet 2: resolved forward, no target), **Confirm** (sheets 3 and 9: sent once, spends credits), **Decline** (sheet 4: nothing planned, no gate decided), **coming back** (sheets 3, 4 and 6: the confirmed link, the open-session case, resume after Decline), **cannot plan** (sheet 5), **the card's status** (sheet 9: Planning only on Confirm), **reload** (sheet 6), and the **trigger** (sheet 8, a stale step, unchanged). Composes: MOTIR-7462 / 7482 / 7810 (published results), `planning-workspace--pick-seed.mock.html` revision 3, `plan-change-run-live.mock.html` state A, the shipped `AiPaywall`.

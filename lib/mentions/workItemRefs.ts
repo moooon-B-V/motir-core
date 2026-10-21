@@ -32,6 +32,41 @@ import { escapeRegExp } from '@/lib/utils/regexp';
 export const WORKITEM_TOKEN_RE = /\[[^\]\[]*\]\(motir:([A-Za-z0-9_-]+)\)/g;
 
 /**
+ * {@link WORKITEM_TOKEN_RE} with the LABEL captured too (MOTIR-9007): group 1 =
+ * the bracket label, group 2 = the work-item id. The same token, matched the
+ * same way — the label class keeps the `[`-excluding shape for the MOTIR-4202
+ * reason above. Read by the mislabelled-link advisory, which compares what a
+ * link SAYS with what it OPENS.
+ */
+export const WORKITEM_LINK_RE = /\[([^\]\[]*)\]\(motir:([A-Za-z0-9_-]+)\)/g;
+
+/** One `[label](motir:<id>)` link as written: the label a reader sees and the id it opens. */
+export interface WorkItemLink {
+  label: string;
+  id: string;
+}
+
+/**
+ * Extract every work-item link from a body — one per distinct (label, id) pair
+ * in first-seen order. Unlike {@link parseWorkItemTokenIds} the label is kept, so
+ * two links to one id under different labels are two entries.
+ */
+export function parseWorkItemLinks(text: string): WorkItemLink[] {
+  const links: WorkItemLink[] = [];
+  const seen = new Set<string>();
+  for (const match of text.matchAll(WORKITEM_LINK_RE)) {
+    const label = match[1] as string;
+    const id = match[2] as string;
+    const dedupeKey = `${id}\u0000${label}`;
+    if (!seen.has(dedupeKey)) {
+      seen.add(dedupeKey);
+      links.push({ label, id });
+    }
+  }
+  return links;
+}
+
+/**
  * A well-formed `motir:` href: the id is the cuid character set, non-empty —
  * mirrors WORKITEM_TOKEN_RE's payload group, and the render layer's
  * WORKITEM_HREF_RE (lib/markdown/render.tsx).

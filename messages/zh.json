@@ -235,6 +235,7 @@
     "noteShowLess": "收起",
     "field_description": "描述",
     "field_explanation": "说明",
+    "field_todos": "步骤",
     "field_links": "依赖关系",
     "field_parent": "父级",
     "field_targetRepo": "目标仓库",
@@ -1735,7 +1736,8 @@
       "unknown": "未知",
       "unestablished": "尚未创建",
       "excluded": "已跳过",
-      "delivered_without_change_request": "未经 PR 交付"
+      "delivered_without_change_request": "未经 PR 交付",
+      "delivered_by_child": "由子工作项交付"
     }
   },
   "comments": {
@@ -1971,6 +1973,7 @@
       "components": "模块",
       "aiPlanning": "AI规划",
       "hostedAgent": "托管智能体",
+      "translation": "翻译设置",
       "rules": "规则",
       "repositories": "代码仓库",
       "monitoring": "监控",
@@ -3872,6 +3875,61 @@
         "factKeptBy": "已保留"
       }
     },
+    "translation": {
+      "title": "翻译设置",
+      "pageDescription": "使用不同语言的成员如何阅读此项目的工作内容。",
+      "card": {
+        "title": "自动翻译",
+        "subtitle": "让每位成员用自己的语言阅读此项目的工作内容，同时仍可查看原文。"
+      },
+      "switch": {
+        "label": "自动翻译工作内容"
+      },
+      "hint": {
+        "off": "已关闭。工作内容按原文显示，每个工作项页面上的<b>翻译</b>按钮会在成员需要时翻译该工作项。",
+        "on": "已开启。每位成员无需任何操作，即可用自己的界面语言阅读工作内容，<b>显示原文</b>始终一键可达。"
+      },
+      "saving": "正在保存…",
+      "flipError": "无法{to, select, on {开启} other {关闭}}自动翻译。未做任何更改。",
+      "retry": "重试",
+      "loadFailed": "无法加载此设置。",
+      "effects": {
+        "title": "读者将获得",
+        "page": "工作项页面和快速查看会用读者的语言显示每个字段：标题、描述、说明和每个待办事项。",
+        "lists": "列表、看板、待办事项库、Sprint、路线图、就绪和分诊视图会用读者的语言显示标题，每个视图都有<b>显示原文</b>开关。",
+        "original": "智能体、API 和邮件始终收到原文，编辑时也始终打开原文。"
+      },
+      "cost": "每个字段每种语言只翻译一次并保存，因此之后阅读同一文本的人无需付费，已是读者语言的文本也不会被发送。翻译会按模型成本加 50% 消耗贵组织的 AI 额度。<link>用量与费用</link>",
+      "noCredit": {
+        "body": "<b>翻译需要 AI 额度。</b>在添加额度之前，工作内容按原文显示，不会产生任何费用。",
+        "add": "添加额度",
+        "askAdmin": "组织所有者或管理员可以添加。"
+      },
+      "readOnly": "只读",
+      "readOnlyNote": "只有项目管理员可以更改自动翻译。",
+      "readOnlyValue": {
+        "on": "此项目已开启自动翻译。工作内容以每位成员自己的语言显示。",
+        "off": "此项目已关闭自动翻译。工作内容按原文显示。"
+      },
+      "value": {
+        "on": "开启",
+        "off": "关闭"
+      },
+      "history": {
+        "title": "更改记录",
+        "subtitle": "谁开启或关闭了自动翻译，以及时间。",
+        "col": {
+          "who": "谁",
+          "change": "更改",
+          "when": "时间"
+        },
+        "row": "{who}于 {when} 将自动翻译从{from}改为{to}。",
+        "unknownActor": "已离开的成员",
+        "empty": "暂无更改。此项目的自动翻译从未更改过。",
+        "capped": "显示最近 {shown} 条，共 {total} 条更改。",
+        "failed": "<b>无法加载更改记录。</b>上方的设置保持不变。"
+      }
+    },
     "hostedAgent": {
       "title": "托管智能体",
       "pageDescription": "托管运行使用哪个模型。“托管运行”会根据工作项的难度预选模型；发起运行的人仍可以选择其他模型。",
@@ -3899,7 +3957,11 @@
       "savedTitle": "托管智能体设置已保存",
       "savedDesc": "新的托管运行将使用这些模型。",
       "errorTitle": "无法保存",
-      "saveError": "你的托管智能体设置未保存，请重试。"
+      "saveError": "你的托管智能体设置未保存，请重试。",
+      "autoFix": {
+        "label": "在工作项自己的智能体中修复未通过的拉取请求。",
+        "help": "当拉取请求的检查未通过，且该工作项上一次运行所在的智能体已登录并在线时，Motir 会在该智能体中启动修复。关闭（默认）时，不会自动启动任何修复。"
+      }
     },
     "connectedApps": {
       "title": "已连接的应用",
@@ -4157,6 +4219,7 @@
         "bugs": "本项目缺陷的归档位置由项目管理员管理。如需更改，请联系管理员。",
         "ai-planning": "本项目的 AI 规划——其节奏——由项目管理员配置。如需调整，请联系管理员。",
         "hosted-agent": "托管运行使用哪个模型，只向能在此项目上发起托管运行的人显示。如需查看，请联系项目管理员。",
+        "translation": "此项目工作内容是否为每位读者翻译，仅向可以查看项目工作项的人显示。如需查看，请联系项目管理员。",
         "automation": "项目自动化由项目管理员管理。如需修改规则，请联系管理员。",
         "monitoring": "本项目的错误监控连接由可管理集成的成员负责。如需连接或重新连接 Sentry，请联系项目管理员。"
       }
@@ -4690,7 +4753,13 @@
       "velocityTableCaption": "速率 — 每个Sprint的承诺与已完成{statistic}。平均完成：{average}。",
       "velocityTableSprint": "Sprint",
       "notFound": "此 Sprint 报告不可用。",
-      "backToBacklog": "返回待办列表"
+      "backToBacklog": "返回待办列表",
+      "sprintLabel": "Sprint",
+      "activeGroup": "进行中",
+      "completedGroup": "已完成",
+      "sprintSearch": "搜索 Sprint…",
+      "noSprintsTitle": "尚无可报告的 Sprint",
+      "noSprintsBody": "从待办列表开始一个 Sprint，其报告将显示在这里。"
     },
     "aiPlan": {
       "cta": "用Motir规划Sprint",
@@ -5053,7 +5122,16 @@
       "chartDesc": "最近 {count} 个区间内每{period}的新建与解决对比。新建共 {created}，已解决共 {resolved}；积压增加处填充红色，团队追赶处填充绿色。",
       "tableCaption": "每个周期的新建与解决（各周期计数）。",
       "tableCaptionCumulative": "每个周期的新建与解决（累计总数）。",
-      "subWindow": "最近 {days} 天"
+      "subWindow": "最近 {days} 天",
+      "chartFormLabel": "图表",
+      "formLine": "折线",
+      "formBars": "柱状",
+      "seriesLabel": "数据系列",
+      "seriesLocked": "至少保留一个数据系列。",
+      "subCreatedOnly": "仅新建",
+      "subResolvedOnly": "仅已解决",
+      "chartDescBars": "最近 {count} 个区间内每{period}的新建与解决，以柱状图显示。新建共 {created}，已解决共 {resolved}。",
+      "chartDescSingle": "最近 {count} 个区间内每{period}的{series}，共 {total}。"
     },
     "distribution": {
       "title": "状态分布",
@@ -5077,7 +5155,18 @@
       "noSprintsBody": "从待办开始一个 Sprint 即可查看其 Sprint 图表。"
     },
     "velocity": {
-      "title": "速度图"
+      "title": "速度图",
+      "endingAtLabel": "截止于",
+      "endingAtHint": "选择一个已完成的 Sprint。留空则为最近一个。",
+      "latest": "最近已完成",
+      "latestNamed": "最近已完成 — {name}",
+      "endingAtSearch": "搜索 Sprint…",
+      "countLabel": "Sprint 数",
+      "countFewer": "减少 Sprint",
+      "countMore": "增加 Sprint",
+      "countHint": "3 至 52 · 默认 7。",
+      "rangeSubLine": "{project} · {from} – {to}",
+      "chartLoading": "正在加载速度图"
     },
     "controls": {
       "periodLabel": "周期",
@@ -5134,13 +5223,20 @@
       "xPoints": "故事点（未完成）",
       "xCount": "工作项（未完成）",
       "unassigned": "未分配",
-      "chartDesc": "按负责人排名的未完成{measure}：{breakdown}。共 {total}，分布于 {count} 个未解决工作项。",
-      "tableCaption": "按负责人统计的未完成（未解决）工作——故事点与工作项数。",
+      "chartDesc": "所选时间段内按人员排名的未完成{measure}：{breakdown}。共 {total}，分布于 {count} 个工作项。",
+      "tableCaption": "所选时间段内每人的未完成工作——已分配、未分配但由其创建的数量，以及当前度量下的合计。",
       "tableAssignee": "负责人",
       "tablePoints": "故事点",
       "tableIssues": "工作项",
       "emptyTitle": "尚无已分配的未完成工作",
-      "emptyBody": "每个未解决工作项均未分配，或没有未完成工作。请选择其他范围。"
+      "emptyBody": "每个未解决工作项均未分配，或没有未完成工作。请选择其他范围。",
+      "legendAssigned": "已分配",
+      "legendUnassigned": "未分配 — 按创建人",
+      "tableAssigned": "已分配",
+      "tableUnassigned": "未分配（创建人）",
+      "tableTotal": "合计",
+      "subWindow": "最近 {days} 天",
+      "chartDescPerson": "{name} {total}（已分配 {assigned}，未分配但由其创建 {unassigned}）"
     },
     "statistic": {
       "kind": "类型",
@@ -5151,6 +5247,45 @@
       "sprint": "Sprint",
       "label": "标签",
       "component": "模块"
+    },
+    "help": {
+      "hide": "隐藏帮助文字",
+      "show": "显示帮助文字",
+      "regionLabel": "关于此报告",
+      "whatLabel": "展示内容。",
+      "howLabel": "阅读方法。",
+      "burndown": {
+        "what": "Sprint 的范围、已完成和已开始的工作从开始到结束如何变化，并带有目标线和今天标记。",
+        "how": "已完成逐步接近范围，说明 Sprint 进展正常。范围线在开始后上升即为范围蔓延；已完成线落后于目标线则说明进度滞后。"
+      },
+      "velocity": {
+        "what": "团队逐个 Sprint 承诺的故事点与实际完成的故事点对比。",
+        "how": "对比每个 Sprint 中的两根柱子。已完成的柱子高度稳定，说明节奏可靠，可据此规划下一个 Sprint；选择更早的 Sprint 即可从那里向前回顾。"
+      },
+      "sprintReport": {
+        "what": "一页展示已结束或进行中的 Sprint：已完成什么、未完成什么、开始后加入了什么，以及它的 Sprint 图表。",
+        "how": "先看已完成与未完成的对比，再查看 Sprint 中途加入的工作。使用标题下方的选择器切换 Sprint。"
+      },
+      "createdVsResolved": {
+        "what": "每个周期内新建了多少工作项、解决了多少工作项。",
+        "how": "新建柱高于已解决柱时，待办列表在增长；低于时，团队正在追赶。使用数据系列开关可单独查看其中一项。"
+      },
+      "distribution": {
+        "what": "项目的工作项按某一字段的取值（如状态、类型或负责人）如何分布。",
+        "how": "扇区越宽，具有该取值的工作项越多。更改统计方式，即可从另一个角度划分同样的工作。"
+      },
+      "averageAge": {
+        "what": "每个周期结束时，未解决工作项已开放的平均天数。",
+        "how": "折线持续上升说明工作被一直搁置。将其与时间窗平均值对比，可判断最近一个周期是否异常。"
+      },
+      "resolutionTime": {
+        "what": "每个周期内已解决的工作项平均耗时多少天才得以解决。",
+        "how": "折线下降说明工作完成得更快。周期按解决日期计算，因此今天解决的旧工作项会拉高今天所在周期。"
+      },
+      "workload": {
+        "what": "所选时间段内每个人手中的未完成工作，以故事点或工作项数计算。没有负责人的工作计入其创建人名下。",
+        "how": "最长的柱子代表承担未完成工作最多的人。分配更多工作前，先留意分布是否极不均衡。"
+      }
     }
   },
   "dashboards": {
@@ -6278,8 +6413,11 @@
       "stateDrawing": "正在扣减额度",
       "statePaused": "CI 已暂停",
       "stateNothing": "无需计费",
+      "stateInternal": "内部",
       "usedLabel": "本月已用分钟数",
       "usedOfPool": "{pool} 分钟中已用 {used}",
+      "internalUsed": "{used} 分钟",
+      "internalNote": "这是 Motir 自己的组织:没有包含的分钟数,不会扣除点数,也不会收费。这些分钟会被记录下来,方便团队了解自己的 CI 运行器的成本。统计按日历月计算。",
       "minutesLeft": "还剩 {left} 分钟",
       "minutesOver": "已超出 {over} 分钟",
       "creditsDrawn": "已扣减 {credits} 额度",
@@ -7165,6 +7303,43 @@
               "body": "没有启动任何机器，也没有产生任何费用。组织有积分后即可再次用托管智能体修复——或者在终端中修复。"
             }
           }
+        },
+        "myAgent": {
+          "lead": "在你自己的智能体中修复：<b>{agent}</b>，即此工作项上一次运行所用的智能体。",
+          "door": {
+            "label": "在我的智能体中修复",
+            "starting": "正在启动修复…",
+            "why": "修复会在同一个智能体、同一个分支上运行，因此从该次运行自己的上下文开始，而不是从空白开始。"
+          },
+          "fixing": {
+            "by": "<b>{name}</b> <when></when>在 <b>{agent}</b> 中启动了修复——<run>{label}</run>。",
+            "byYou": "你<when></when>在 <b>{agent}</b> 中启动了修复——<run>{label}</run>。",
+            "why": "同一时间只运行一个修复：这次运行在结束前一直持有修复，因此无法在它之上再启动第二个修复。"
+          },
+          "refused": {
+            "busy": {
+              "title": "未启动——此工作项上已有一个修复在运行。",
+              "body": "<b>{name}</b> <when></when>启动了它——<run>{label}</run>。没有启动任何东西，也没有产生任何费用。",
+              "bodyYou": "你<when></when>启动了它——<run>{label}</run>。没有启动任何东西，也没有产生任何费用。"
+            },
+            "signedOut": {
+              "title": "未启动——<b>{agent}</b> 已退出登录。",
+              "body": "请先登录 <b>{agent}</b>，然后再次点击“在我的智能体中修复”。<link>打开该智能体</link>，用 <cmd>{cmd}</cmd> 登录。没有启动任何东西，也没有产生任何费用。"
+            }
+          },
+          "fellBack": {
+            "notice": "<b>{agent}</b> 无法恢复此工作项的运行会话，因此修复在同一个分支（<b>{branch}</b>）上启动了新的会话。"
+          },
+          "settled": {
+            "notice": "此工作项的拉取请求现已通过检查，因此没有启动修复。"
+          },
+          "gaveUp": {
+            "note": "<b>{agent}</b> 中上一次修复在尝试 {attempts, plural, other {# 次}}后放弃 <when></when>。可以再次点击“在我的智能体中修复”。",
+            "noteNoCount": "<b>{agent}</b> 中上一次修复已放弃 <when></when>。可以再次点击“在我的智能体中修复”。"
+          },
+          "modal": {
+            "lead": "这次运行以一个未通过检查的拉取请求结束。在同一个智能体中修复它，无需把失败信息复制到新的智能体里。"
+          }
         }
       },
       "continue": {
@@ -7282,11 +7457,13 @@
         "delivered": "已交付",
         "unestablished": "尚未创建",
         "excluded": "已跳过",
-        "delivered_without_change_request": "未经 PR 交付"
+        "delivered_without_change_request": "未经 PR 交付",
+        "delivered_by_child": "由子工作项交付"
       },
       "repositoryNotCreated": "仓库尚未创建",
       "repositorySkipped": "此项目已跳过",
       "shippedWithoutPullRequest": "未经拉取请求交付",
+      "deliveredByChildPullRequest": "由子工作项的拉取请求交付",
       "unlinkAria": "移除与 {target} 的关联",
       "unlinkConfirmBefore": "移除与",
       "unlinkConfirmAfter": " 的关联吗？GitHub 上的拉取请求不会受到影响——只会移除此关联。",
@@ -7538,7 +7715,9 @@
         "aria": "打开 {key}，即此对话重新规划的工作项",
         "pickLabel": "<mono>{key}</mono> 的后续规划",
         "chose": "选择了 {label}",
-        "pickAria": "打开 {key}，这段对话是它的后续规划（选择了 {label}）"
+        "pickAria": "打开 {key}，这段对话是它的后续规划（选择了 {label}）",
+        "guideLabel": "来自对 <mono>{key}</mono> 的引导",
+        "guideAria": "打开 {key}，即 Motir AI 提出此重新规划时正在引导你完成的工作项"
       },
       "end": {
         "failed": "已关闭 · 尝试失败 · {time}",
@@ -7803,7 +7982,6 @@
       "replan": "已打开，用于调整 {project} 的现有计划。",
       "contextual": "已在 {project} 的上下文中打开。",
       "contextualItem": "已在 {item} 的上下文中打开。",
-      "conventionRefine": "已打开，用于完善 {repo} 的编码规范。",
       "roadmap": "已从路线图打开。",
       "followUp": "已在 {item} 上打开，规划 {choice} 的后续工作。",
       "followUpProject": "已在 {project} 上打开，规划 {choice} 的后续工作。"
@@ -7968,6 +8146,16 @@
     "followUpCard": {
       "label": "选择的后续规划"
     },
+    "guideSeed": {
+      "chip": "来自引导",
+      "lead": "已在 {target} 上打开，来自 Motir AI 对 {guided} 的引导。",
+      "card": "来自引导",
+      "cardBy": "由{who}确认 · {when}",
+      "justNow": "刚刚",
+      "you": "你",
+      "status": "规划中",
+      "offerClosed": "此重新规划提议已不再有效。请回到引导查看当前进展。"
+    },
     "guide": {
       "openedFrom": "从 {key} 打开",
       "reading": "正在读取 {key} 及其待办清单…",
@@ -7999,7 +8187,8 @@
       "errors": {
         "notManual": "Motir AI 引导人完成手动工作，而这个工作项是交给智能体的，因此这里没有可引导的内容。",
         "closed": "这个工作项已完成或已归档，没有需要引导的内容了。",
-        "forbidden": "你需要拥有编辑这个工作项以及使用 Motir AI 规划的权限，才能被引导完成它。"
+        "forbidden": "你需要拥有编辑这个工作项以及使用 Motir AI 规划的权限，才能被引导完成它。",
+        "offerClosed": "这个提议已经有结果，无法再更改。请刷新工作项查看最新状态。"
       },
       "youTicked": "你在清单上勾选了第 {n} 步",
       "youUnticked": "你在清单上取消勾选了第 {n} 步",
@@ -8054,6 +8243,32 @@
         "typeText": "文本",
         "typeMarkdown": "Markdown",
         "typeFile": "文件"
+      },
+      "offer": {
+        "label": "重新规划请求",
+        "target": "目标",
+        "targetElsewhere": "重新规划将从 {key} 开始，而不是这个工作项。",
+        "resolved": "{done} 已完成，所以重新规划从 {open} 开始。",
+        "noTarget": "没有可以作为起点的未完成工作项。",
+        "confirm": "确认",
+        "confirming": "正在开始…",
+        "openSession": "打开规划会话",
+        "decline": "拒绝",
+        "declining": "正在拒绝…",
+        "showAll": "展开全部",
+        "showLess": "收起",
+        "confirmHelp": "在 {key} 上打开 Motir AI 规划，并发送此请求。会消耗额度。",
+        "declineHelp": "关闭此提议，不会规划任何内容。",
+        "replaced": "已被更新的提议取代",
+        "started": "已开始重新规划",
+        "startedBy": "已确认 · {when}",
+        "declined": "已拒绝",
+        "declinedBy": "已拒绝 · {when}",
+        "recorded": "已记录在工作项上",
+        "resumeAt": "再次点击“带我完成”会从第 {n} 步继续。",
+        "walkStopped": "引导已停止。",
+        "cannotPlan": "你无法在这里开始规划——请联系有权限的人，或把此请求分享给他们。",
+        "noAi": "这里还没有配置 Motir AI，无法开始规划。你仍可以分享此请求。"
       }
     },
     "restart": {
@@ -8076,7 +8291,9 @@
       "onlyStarter": "只有 {name} 或项目管理员可以继续它。",
       "onlyStarterAnon": "只有发起者或项目管理员可以继续它。",
       "failureLine": "你上一次对这个计划的修改没能完成 · {when}",
-      "failureLineAgain": "你上一次的修改再次没能完成 · {when}"
+      "failureLineAgain": "你上一次的修改再次没能完成 · {when}",
+      "failureLinePlanAgain": "这次尝试无法继续 · {when}。你的下一条消息会重新规划。",
+      "failureLinePlanAgainAgain": "这次尝试再次无法继续 · {when}。你的下一条消息会重新规划。"
     },
     "grill": {
       "control": {
@@ -8090,6 +8307,11 @@
         },
         "hint": "你的下一条消息会开始追问。"
       }
+    },
+    "follow": {
+      "following": "正在跟随规划者",
+      "resume": "跟随规划者",
+      "resumedAnnouncement": "已重新跟随规划者"
     }
   },
   "codeHealth": {
@@ -8176,13 +8398,40 @@
       }
     },
     "convention": {
+      "versionEdited": "v{version} · 已编辑",
+      "bylineDerived": "提取自代码",
+      "bylineEdited": "{name} 编辑于 {date}",
+      "bylineEditedUnknown": "团队成员编辑于 {date}",
+      "edit": "编辑",
+      "writeFirst": "撰写编码规范",
+      "editFieldLabel": "编码规范（Markdown）",
+      "editingVersion": "正在编辑 v{version}",
+      "saveCreates": "保存将创建 v{next}。{count} / {max} 个字符。",
+      "editHelper": "此仓库之后的每条新提示词都会读取已保存的文本。更新的提取版本不会替换它。",
+      "save": "保存",
+      "cancel": "取消",
+      "saving": "正在保存…",
+      "saveFailed": "无法保存编码规范。你的文本仍在此处，请重试。",
+      "tooLong": "编码规范超过 {max} 个字符。请精简后再保存。",
+      "blank": "请输入内容后再保存。",
+      "conflictTitle": "有人保存了更新的版本",
+      "conflictBody": "{name} 于 {date} 保存了 v{latest}，而你正在编辑 v{base}。你的更改尚未保存。",
+      "conflictLoadTheirs": "载入对方的版本",
+      "conflictKeepMine": "将我的内容保留为副本",
+      "conflictCopyLabel": "你的文本——请先复制，再载入对方的版本",
+      "conflictCopyHint": "只读副本。载入对方的版本会关闭此编辑器。",
+      "copy": "复制到剪贴板",
+      "pendingTitle": "已从代码中提取出更新的版本",
+      "pendingBody": "{date} 的重新审计提取出了一个版本。它尚未启用——启用的是下方的文本。除非你编辑，否则不会有任何变化。",
+      "pendingCompare": "并排比较",
+      "pendingInUse": "使用中 · v{version} 已编辑",
+      "pendingWaiting": "待处理 · 已提取",
+      "emptyWriteBody": "此仓库尚未提取出编码规范。可在此撰写第一个版本，或等待 Motir 从你的代码中提取。",
       "emptyTitle": "尚无规范",
       "emptyDescription": "一旦连接了代码仓库，Motir 会从你的代码中提取编码规范，可在此查阅。",
       "defaultRepo": "代码",
       "noRules": "此仓库尚未提取出编码规范。",
       "versionDerived": "v{version} · 已提取",
-      "bannerDerivedTitle": "从你的代码中提取——自动启用",
-      "bannerDerivedBody": "此规范提取自你的代码库，并注入到所有新代码的提示词中。如需改进，请点击上方的「与 Motir 一起完善」打开 AI 对话。",
       "provenanceTitle": "规则来源",
       "provenanceLegend": "已采纳——你的代码已经这样做，我们只是记录下来。建议——你的代码此处缺失或不一致，这是一条已放置的清洁代码默认项。",
       "provenance": {
@@ -8488,7 +8737,12 @@
       "answeredGroup": "你的项目已经回答了",
       "answeredMeta": "Motir 读取了你的代码和工作项",
       "discoveryStep": "几个问题",
-      "directionGroup": "你的方向"
+      "directionGroup": "你的方向",
+      "subtitle": "索引和导入都在后台运行。你随时可以进入 Motir。",
+      "background": "在后台 · {detail}",
+      "backgroundInProgress": "进行中",
+      "backgroundQueued": "排队中",
+      "backgroundFailed": "失败"
     },
     "common": {
       "back": "返回",
@@ -8570,6 +8824,58 @@
         "installation_not_accessibleHint": "你的 GitHub 用户看不到此安装，因此没有关联任何内容。该 GitHub 账号的所有者可以为你开通访问权限。",
         "not_configuredTitle": "此部署尚未设置 GitHub",
         "not_configuredHint": "此 Motir 部署还没有 GitHub App，所以无法在这里连接 GitHub。运行此部署的人可以完成设置。"
+      },
+      "existing": {
+        "title": "已安装 Motir 应用的 GitHub 账号",
+        "hint": "这些账号上已经安装了 Motir 应用。选择一个账号，即可把它的仓库连接到这里，无需重新安装。",
+        "loading": "正在查找你的 GitHub 账号…",
+        "typeUser": "个人账号",
+        "typeOrg": "GitHub 组织",
+        "linkedHere": "已关联到当前组织",
+        "pickCta": "选择仓库",
+        "pickAria": "从 {login} 选择仓库",
+        "installAnotherCta": "安装到其他账号",
+        "installAnotherHint": "如果列表里没有你要的账号，请用这个方式。",
+        "loadErrorTitle": "无法读取你的 GitHub 账号",
+        "loadErrorHint": "没有做任何更改。请重试，或安装到其他账号。",
+        "retryCta": "重试",
+        "identity": {
+          "title": "登录 GitHub，查找你的已安装账号。",
+          "hint": "Motir 只会检查哪些账号已安装 Motir 应用，以及你能访问其中哪些。你也可以跳过，改为安装到新账号。",
+          "cta": "使用 GitHub 登录",
+          "skipCta": "跳过，改为安装",
+          "declinedHint": "GitHub 未完成登录，因此没有做任何更改。请重试，或跳过并改为安装。"
+        },
+        "picker": {
+          "heading": "{login} 中的仓库",
+          "hint": "选择当前组织要连接的仓库。确认之前不会连接任何仓库。",
+          "fromInstallHint": "你选择了一个已安装 Motir 应用的账号。请选择当前组织要连接它的哪些仓库。",
+          "loading": "正在加载仓库…",
+          "available": "可用",
+          "connectedHere": "已连接到当前组织",
+          "connectedElsewhere": "已连接到其他组织",
+          "connectedElsewhereHint": "无法在此处选择这个仓库。",
+          "selectedCount": "{count, plural, other {已选择 # 个仓库}}",
+          "confirmCta": "{count, plural, other {连接 # 个仓库}}",
+          "backCta": "返回账号列表",
+          "nothingLeftTitle": "这个账号已没有可连接的仓库",
+          "nothingLeftHint": "这里的每个仓库都已连接，不是连接到当前组织，就是连接到其他组织。要提供更多仓库，请在 GitHub 上把仓库添加到该安装。",
+          "nothingLeftCta": "在 GitHub 上添加仓库"
+        },
+        "outcome": {
+          "linkedTitle": "仓库已连接",
+          "linkedHint": "Motir 现在可以读取你选择的仓库。这个账号的其他仓库没有被连接。",
+          "takenTitle": "你选择期间有仓库被占用",
+          "takenHint": "其他组织连接了 {repos}。没有连接任何仓库。列表已更新，请重新选择。",
+          "notAccessibleTitle": "你已无法访问该账号",
+          "notAccessibleHint": "GitHub 不再允许你查看这个安装，因此已从列表中移除。请向该 GitHub 账号的所有者申请访问权限，或安装到其他账号。",
+          "notAdminTitle": "只有组织管理员可以关联已有的安装",
+          "notAdminHint": "请让当前组织的管理员来关联，或者你自己安装到其他账号。",
+          "selectionRequiredTitle": "请至少选择一个仓库",
+          "selectionRequiredHint": "没有连接任何仓库。请勾选想要的仓库，然后确认。",
+          "notVisibleTitle": "有仓库已不在这个安装中",
+          "notVisibleHint": "没有连接任何仓库。列表已更新，请重新选择。"
+        }
       }
     },
     "index": {
@@ -8582,7 +8888,9 @@
       "perRepo": "按仓库",
       "state": {
         "indexed": "已索引",
-        "queued": "排队中"
+        "queued": "排队中",
+        "indexing": "进行中",
+        "failed": "失败"
       },
       "callout": "Motir 从整个项目推导编码规范和代码健康检查（以及任何计划），因此需要每个仓库都完成索引——在所有仓库完成前，下一步将保持禁用。",
       "completeTitle": "代码图谱已构建",
@@ -8592,11 +8900,13 @@
     "import": {
       "eyebrow": "可选 · 导入与规划",
       "heading": "导入你现有的工作项",
-      "body": "已经在 Jira、Linear、GitHub、Plane 或 CSV 中跟踪工作项？将其导入此项目——写入前你会先预览试运行结果。没有工作项要导入则跳过。",
+      "body": "从 Jira、Linear 或 Plane 导入，或者先进入 Motir，以后再做。导入会在后台继续进行。",
       "reconcile": "随后生成计划时，Motir 会核对二者，避免重复。",
       "skip": "跳过导入",
       "bodyInline": "已经在 Jira、Linear、GitHub、Plane 或 CSV 中跟踪工作？就在这里导入。写入任何内容之前，你会先查看试运行预览。没有工作项要导入就跳过这一步。",
-      "continue": "继续"
+      "continue": "继续",
+      "running": "正在从 {source} 导入 · 已处理 {done} 个工作项",
+      "runningBody": "它在后台继续运行，你不必等它完成。"
     },
     "decision": {
       "eyebrow": "设置完成",
@@ -8622,6 +8932,26 @@
       "readyTitle": "你的第一份计划已就绪",
       "readyBody": "已为 {project} 起草 {count, plural, other {# 个工作项}}。在你批准之前，一切都不是最终的。",
       "readyCta": "查看你的计划"
+    },
+    "indexing": {
+      "doneTitle": "已索引 {repos}",
+      "repoCount": "{count, plural, other {# 个仓库}}",
+      "aggregateTail": "已完成 {done} / {total}",
+      "failedTail": "{count} 个失败",
+      "detailBody": "它在后台继续运行。你现在就可以进入 Motir，没有任何步骤需要等它完成。",
+      "rowFailed": "Motir 没能索引这个仓库。你已完成的步骤都不会丢失。",
+      "checkConnection": "检查连接",
+      "close": "关闭",
+      "retrying": "正在重试……",
+      "refusedNotConnected": "这个仓库已不再连接到该项目。请先检查连接，再重试。",
+      "refusedTooLarge": "这个仓库太大，Motir 无法为它建立索引。",
+      "retryError": "Motir 没能重新开始。请稍后再试一次。",
+      "importHeading": "工作项导入",
+      "importProgress": "已处理 {done} 个"
+    },
+    "enter": {
+      "cta": "进入 Motir",
+      "hint": "进入之后，索引和导入会继续进行。"
     }
   },
   "repositorySet": {
@@ -9244,6 +9574,7 @@
         "token_expired": "与 AI 服务的连接已过期",
         "prompt_too_large": "计划的上下文对该模型来说过大",
         "job_failed": "规划任务执行失败",
+        "stalled": "规划长时间没有进展",
         "internal": "我们这边出了故障"
       },
       "refusal": {
@@ -9328,7 +9659,8 @@
       "navPlanningLessons": "规划经验",
       "navIdeas": "创意",
       "navEnterpriseRequests": "企业版请求",
-      "navRunModels": "托管运行模型"
+      "navRunModels": "托管运行模型",
+      "navFleetSettings": "集群设置"
     },
     "nav": {
       "overview": "总览",
@@ -9508,7 +9840,11 @@
             }
           },
           "fleet": {
-            "stop": "已停止运行中的容器"
+            "stop": "已停止运行中的容器",
+            "org_ci": {
+              "enable": "已开启集群 CI",
+              "disable": "已关闭集群 CI"
+            }
           },
           "enterprise_request": {
             "transition": "变更了企业版请求的状态"
@@ -11435,6 +11771,186 @@
         "notFound": "此创意已不存在。在你打开页面期间有人将其删除。",
         "failed": "出了点问题，因此没有任何更改。请重试。"
       }
+    },
+    "fleetSettings": {
+      "breadcrumb": "运维 · 集群设置",
+      "title": "集群设置",
+      "subtitle": "超级管理员在此决定谁的 CI 运行在 Motir 自己的机器上。每次更改都需要填写原因，并写入审计日志。",
+      "empty": "没有项目提供集群 CI —— 没有元组织项目在已连接的组织中拥有私有仓库。",
+      "setting": {
+        "title": "在集群上运行 Motir 私有仓库的 CI",
+        "pair": "项目 {project} · GitHub 组织 {org}",
+        "superadminOnly": "仅限超级管理员",
+        "explanation": "开启后，Motir 在 {org} 上的私有仓库中的每个 CI 作业都会请求 {label} 标签，并在共享的 {fleet} 机器上运行，费用计入 moooon B.V.。关闭后，它们在 GitHub 托管的运行器上运行。两种情况下都不会修改任何工作流文件。"
+      },
+      "state": {
+        "on": "开",
+        "off": "关"
+      },
+      "action": {
+        "turnOn": "开启",
+        "turnOff": "关闭"
+      },
+      "blocked": "所有条件都满足之前无法开启。",
+      "offNeverBlocked": "关闭从不等待就绪状态。",
+      "meta": {
+        "lastChanged": "上次更改",
+        "changedBy": "由 {email} 于 {when} 更改 —— “{reason}”",
+        "neverChanged": "从未更改",
+        "auditLink": "审计日志",
+        "variable": "GitHub 变量",
+        "repositories": "仓库"
+      },
+      "variable": {
+        "present": "{org} 上的 {name} = {value}（私有仓库）—— 新作业会请求集群。",
+        "absent": "{org} 上未设置 {name} —— 作业回退到 GitHub 托管的运行器。",
+        "unknown": "无法读取 {org} 上的 {name} —— GitHub 返回 HTTP {status}。",
+        "unreachable": "无法读取 {org} 上的 {name} —— 无法连接到 GitHub。"
+      },
+      "drift": {
+        "onAbsent": {
+          "title": "已存储为开启，但 GitHub 不一致。",
+          "body": "{org} 上未设置 {name}，因此新作业仍在 GitHub 托管的运行器上运行。将此设置关闭后再开启即可写入。"
+        },
+        "offPresent": {
+          "title": "已存储为关闭，但 GitHub 不一致。",
+          "body": "{org} 上仍设置着 {name}，因此新作业仍会请求集群。将此设置开启后再关闭即可移除。"
+        }
+      },
+      "repositories": {
+        "count": "{count, plural, other {# 个私有仓库}}，运行时从项目 {project} 在 {org} 上的私有仓库读取"
+      },
+      "monitoringLine": "Motir 的机器显示在 监控 › 集群 中的 moooon B.V. 名下",
+      "onCallout": {
+        "title": "Motir 的 CI 正在集群上运行。",
+        "link": "打开 监控 › 集群"
+      },
+      "degraded": {
+        "title": "开启状态下未就绪。",
+        "body": "在此情况得到解决或此设置关闭之前，新作业将一直排队。"
+      },
+      "readiness": {
+        "title": "就绪状态",
+        "subtitle": "九个条件，按作业遇到它们的顺序排列。无法检查的条件按未满足计算。",
+        "ready": "就绪",
+        "readySub": "全部 {count} 个条件均已满足",
+        "notReady": "未就绪 —— {count, plural, other {# 个条件}}未满足",
+        "unmetCount": "{count} 个未满足",
+        "unknownCount": "{count} 个无法检查",
+        "checked": "检查于 {when}",
+        "checkedAgain": "已重新检查于 {when}",
+        "recheck": "重新检查"
+      },
+      "mark": {
+        "met": "已满足",
+        "unmet": "未满足",
+        "unknown": "无法检查"
+      },
+      "cond": {
+        "kill_switch": {
+          "label": "集群紧急开关"
+        },
+        "app_installed": {
+          "label": "已安装 App"
+        },
+        "app_runner_permission": {
+          "label": "App 权限：自托管运行器"
+        },
+        "app_variables_permission": {
+          "label": "App 权限：变量（写入）"
+        },
+        "workflow_job_subscription": {
+          "label": "workflow_job 事件投递"
+        },
+        "app_repositories": {
+          "label": "App 可访问这些仓库"
+        },
+        "delivery_attributable": {
+          "label": "作业归属到项目 {project}"
+        },
+        "runner_group": {
+          "label": "运行器组"
+        },
+        "image_coverage": {
+          "label": "镜像覆盖"
+        }
+      },
+      "why": {
+        "kill_switch_engaged": "集群紧急开关已启用（{variable}=0），因此不会启动任何集群机器。由运维人员取消设置或调高该值。",
+        "app_not_installed": "motir-studio App 未安装在 {org} 上。由 {org} 的所有者安装。",
+        "app_suspended": "{org} 上的 motir-studio App 自 {date} 起已被暂停。由 {org} 的所有者解除暂停。",
+        "permission_missing": "{org} 上的 motir-studio App 拥有的 {permission} 权限为：无，需要写入权限。由 {org} 的所有者接受权限请求。",
+        "permission_insufficient": "{org} 上的 motir-studio App 拥有的 {permission} 权限为：{granted}，需要写入权限。由 {org} 的所有者接受权限请求。",
+        "not_subscribed": "该 App 未订阅 workflow_job 事件，因此 GitHub 从不通知 Motir 有作业在排队。由 motir-studio App 的管理者在 App 设置中订阅该事件。",
+        "repositories_not_granted": "该 App 在 {org} 上的安装无法访问 {repositories}。由 {org} 的所有者将它们加入安装的仓库访问范围。",
+        "no_private_repositories": "项目 {project} 在 {org} 中没有私有仓库，因此集群没有可运行的内容。",
+        "not_attributable": "来自 {repositories} 的排队作业不会归属到项目 {project}，因此会一直排队直到 GitHub 将其过期。请将该仓库重新连接到项目，使其镜像行保持最新。",
+        "no_runner_group": "项目 {project} 在 {org} 中没有运行器组。由运维人员运行 {script} --project {project}。",
+        "sync_pending": "该项目在 {org} 中的运行器组与其仓库不同步。由运维人员运行 {script} --project {project}。",
+        "jobs_not_runnable": "{count, plural, other {# 个作业}}暂时无法在集群运行器镜像上运行。由集群镜像的维护者补充缺失的工具；需要其他操作系统的作业在离开私有仓库集合之前一直无法运行。",
+        "not_inventoried": "{repositories} 不在集群作业清单中，因此还没有人确认运行器镜像能运行{count, plural, other {这些仓库的}}作业。由清单的维护者重新运行清单。",
+        "inventory_stale": "{repositories} 的工作流在集群作业清单测量之后发生了变化。由清单的维护者重新运行清单。",
+        "read_failed": "无法检查此项：GitHub 返回 HTTP {status}。在检查成功之前按未满足计算。",
+        "read_unreachable": "无法检查此项：无法连接到 GitHub。在检查成功之前按未满足计算。",
+        "read_failedNoStatus": "无法检查此项。在检查成功之前按未满足计算。",
+        "app_not_readable": "在 motir-studio App 安装于 {org} 且可读取之前无法检查。"
+      },
+      "jobs": {
+        "missing": "{repo} · {workflow} · {job} —— 缺少 {tools}",
+        "cannotHost": "{repo} · {workflow} · {job} —— 无法托管：{reason}",
+        "more": "还有 {count} 个",
+        "scope": "这里覆盖的是从 main 构建并已清点的镜像，而不是生产环境启动的镜像。"
+      },
+      "confirm": {
+        "onTitle": "为 {org} 开启集群 CI？",
+        "onBody": "关 → 开。{count, plural, other {# 个仓库}}中的每个新 CI 作业都将在集群上运行，并计入 moooon B.V. 的额度池：{repositories}。已在运行的作业会在原处完成。",
+        "offTitle": "为 {org} 关闭集群 CI？",
+        "offBody": "开 → 关。新作业回到 GitHub 托管的运行器；已在集群上运行的作业会在集群上完成。关闭从不等待就绪状态。",
+        "reasonLabel": "原因 — 必填，将写入审计日志",
+        "reasonPlaceholderOn": "为什么要开启？",
+        "reasonPlaceholderOff": "为什么要关闭？",
+        "reasonHint": "以后查看此更改的任何运维人员都会看到。仅写“测试”什么也说明不了。",
+        "reasonHintEmpty": "填写原因之前按钮保持禁用 —— 与服务器执行的规则相同。",
+        "cancel": "取消",
+        "confirmOn": "开启",
+        "confirmOff": "关闭"
+      },
+      "refused": {
+        "reasonMissing": "未{direction}：必须填写原因，它会随此更改写入审计日志。没有任何更改。",
+        "alreadyOn": "已经是开启状态 —— 没有任何更改。",
+        "alreadyOff": "已经是关闭状态 —— 没有任何更改。",
+        "alreadyBody": "另一位超级管理员已先行更改，因此没有写入任何内容，也没有添加审计记录。",
+        "githubStatus": "未{direction}：GitHub 拒绝在 {org} 上{operation} {name}（HTTP {status}）。",
+        "githubUnreachable": "未{direction}：无法连接到 GitHub 以在 {org} 上{operation} {name}。",
+        "nothingChanged": "没有任何更改：设置和 GitHub 变量都保持原样。",
+        "notReady": "未开启：此页面加载后集群已不再就绪。",
+        "notReadyList": "当前未满足：{conditions}。没有任何更改。下方的就绪状态已重新检查。",
+        "notPermitted": "未更改：只有超级管理员可以更改此设置。",
+        "targetUnknown": "未更改：此项目和组织已不再提供此设置。请重新加载页面。",
+        "failed": "未{direction}：操作失败。请重新加载页面以查看设置的当前状态。"
+      },
+      "done": {
+        "on": "已开启。从现在起新作业会请求集群。",
+        "off": "已关闭。新作业回到 GitHub 托管的运行器。"
+      },
+      "direction": {
+        "on": "开启",
+        "off": "关闭"
+      },
+      "operation": {
+        "read": "读取",
+        "set": "设置",
+        "delete": "删除"
+      },
+      "permission": {
+        "organization_self_hosted_runners": "自托管运行器",
+        "organization_actions_variables": "变量"
+      },
+      "unavailable": {
+        "title": "无法加载集群设置",
+        "body": "无法读取该设置或其就绪状态，因此不显示任何状态，也不提供开关。这是读取错误 —— 没有任何更改，也不会猜测任何值。",
+        "retry": "重试"
+      }
     }
   },
   "legal": {
@@ -11880,6 +12396,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "调整代理输出面板宽度",
     "title": "运行",
     "searchLabel": "搜索本次运行",
     "gloss": "智能体做了什么",
@@ -11955,8 +12473,9 @@
     "sectionPast": "历史运行",
     "noneRunning": "当前没有正在运行的任务。",
     "nonePast": "还没有已完成的运行。",
-    "colCommand": "命令",
-    "colScope": "范围",
+    "colTarget": "目标",
+    "openRunAria": "打开运行",
+    "targetOthers": "{count, plural, other {另有 # 个工作项}}",
     "colAgent": "智能体",
     "colStarted": "开始时间",
     "colStatus": "状态",
@@ -12004,6 +12523,10 @@
       "expired": {
         "title": "已超过保留期",
         "body": "日志正文会在运行 30 天后删除，这次的已被删除。"
+      },
+      "filtered": {
+        "title": "此工作项暂无日志",
+        "body": "此工作项尚未输出任何内容。取消选择即可查看整次运行。"
       }
     },
     "findings": {
@@ -12017,6 +12540,8 @@
       "approvedFor": "为 {key} 批准",
       "materialized": "已落地 {count, plural, other {# 条提案}}",
       "bugFiled": "已提交缺陷",
+      "discrepancy": "构建方式与计划不同",
+      "discrepancyPoints": "{count, plural, other {# 项差异}}",
       "open": "打开 →"
     },
     "scope": {
@@ -12342,7 +12867,10 @@
       "progressAria": "已完成 {done}/{total} 步",
       "progressAllDone": "已完成 {total}/{total} 步",
       "door": "带我完成"
-    }
+    },
+    "viewList": "列表",
+    "viewCanvas": "画布",
+    "viewSwitchAria": "以此方式查看本次运行的工作项"
   },
   "repositoryPicker": {
     "add": "添加仓库",
@@ -12508,6 +13036,8 @@
         "subject_gone": "此问题针对的内容已不存在，因此该问题已撤回。",
         "no_longer_manual": "该工作项已不再是人工工作，因此该问题已撤回。",
         "closed_without_decision": "该工作项在无人标记完成的情况下被关闭，因此该问题已撤回。",
+        "not_ready": "该工作项因其他工作而受阻，因此在可以开始之前该问题已撤回。",
+        "replanned": "该工作项已重新规划，因此该问题已撤回。",
         "unknown": "该问题已撤回。原因未被记录。"
       },
       "causeByKind": {
@@ -14231,7 +14761,9 @@
       "completed": "我需要问的都问完了。",
       "nothingToAsk": "没有需要问的：这已经足够清楚，可以规划了。我现在开始写计划。",
       "stopped": "你停止了追问。",
-      "stoppedNoAnswer": "你在回答任何一问之前停止了追问。没有写入任何内容。"
+      "stoppedNoAnswer": "你在回答任何一问之前停止了追问。没有写入任何内容。",
+      "handoffFailed": "追问我没能提问，所以计划会在不提问的情况下写出。你的请求保持原样。",
+      "handoffNoCredit": "追问我需要AI额度才能提问，所以计划会在不提问的情况下写出。"
     },
     "summary": {
       "title": "你确定的内容",
@@ -14260,6 +14792,8 @@
     "translate": "翻译",
     "translating": "正在翻译…",
     "showOriginal": "显示原文",
+    "originalIn": "原文语言：{language}",
+    "originalNotRecorded": "未记录原文语言",
     "showTranslation": "显示译文",
     "retry": "重试",
     "hintInto": "译为{language}",
@@ -14267,7 +14801,7 @@
     "hintShowingOriginal": "正在显示原文",
     "hintPartial": "已译为{language} · {n, plural, other {# 个字段无法翻译}}",
     "failedItem": "无法翻译此工作项。未产生任何费用。",
-    "noCredits": "翻译需要 AI 额度。未产生任何费用。",
+    "noCredits": "翻译需要AI额度。未产生任何费用。",
     "noCreditsMember": "组织所有者或管理员可以补充额度。",
     "addCredits": "补充额度",
     "markTranslatedFrom": "译自{language}",
@@ -14290,7 +14824,20 @@
     "liveTranslated": "已译为{language}。",
     "liveShowingOriginal": "正在显示原文。",
     "liveFailedCount": "{n, plural, other {# 个字段无法翻译。}}",
-    "liveNoCredits": "翻译需要 AI 额度。",
+    "liveNoCredits": "翻译需要AI额度。",
     "liveEdited": "{field}已编辑并重新翻译。"
+  },
+  "titleTranslation": {
+    "addCredit": "补充额度",
+    "liveDone": "标题已翻译",
+    "liveFailed": "部分标题无法翻译",
+    "liveNoCredit": "标题以原文语言显示：额度已用完",
+    "livePending": "正在翻译标题…",
+    "marked": "已翻译",
+    "markedFrom": "译自{language}",
+    "noCredit": "你的组织额度已用完，标题将保持原文语言。",
+    "pendingMark": "正在翻译",
+    "showOriginal": "显示原文",
+    "showTranslation": "显示译文"
   }
 }

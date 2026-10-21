@@ -370,7 +370,7 @@ export function SignInCommand({ profileId }: { profileId: string }) {
   const t = useTranslations('runs.agent.command');
   const hint = agentSignInHint(profileId);
   const c = (chunks: ReactNode) => (
-    <code className="rounded-(--radius-badge) bg-(--el-code-bg) px-1 font-mono text-xs whitespace-nowrap text-(--el-code-text)">
+    <code className="rounded-(--radius-badge) bg-(--el-code-bg) px-(--spacing-chip-x-4) font-mono text-xs whitespace-nowrap text-(--el-code-text)">
       {chunks}
     </code>
   );

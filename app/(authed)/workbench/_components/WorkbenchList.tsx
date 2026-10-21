@@ -1,9 +1,14 @@
 'use client';
 
+import {
+  SurfaceTitle,
+  useSurfaceTitleName,
+  useSurfaceTitleResolver,
+} from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Bot } from 'lucide-react';
-import { isValidElement, memo, useId, useMemo, useState } from 'react';
+import { isValidElement, memo, useId, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -16,6 +21,7 @@ import { workbenchTabHref, type WorkbenchTab } from '@/lib/workbench/tab';
 import { HostedModelsProvider } from '@/components/hosted/HostedModelsProvider';
 import { INDENT_PX } from '@/components/ui/TreeTable';
 import { useLiveRows } from './useLiveRows';
+import { useHoldReaderPlace } from './useHoldReaderPlace';
 import { ContextMarker, GroupChevron, GroupCount, GroupSlot } from './WorkbenchGroupRow';
 import { WorkbenchFixLine } from './WorkbenchFixLine';
 import { WorkbenchResumeLine } from './WorkbenchResumeLine';
@@ -212,6 +218,7 @@ function EntryMembers({
   label: string;
 }) {
   const t = useTranslations('workbench');
+  const resolveTitle = useSurfaceTitleResolver();
   const listId = useId();
   const [open, setOpen] = useState(false);
   const { rows, clearedIds } = useHeldMembers(members);
@@ -240,7 +247,7 @@ function EntryMembers({
             >
               <Link
                 href={`/items/${m.identifier}`}
-                aria-label={`${m.identifier} ${m.title}`}
+                aria-label={`${m.identifier} ${resolveTitle(m.id, m.title).name}`}
                 className="absolute inset-0 rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
               />
               <span className="flex min-w-0 items-center gap-2 max-md:flex-wrap max-md:gap-y-0.5">
@@ -248,14 +255,14 @@ function EntryMembers({
                 <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
                   {m.identifier}
                 </span>
-                <span
+                <SurfaceTitle
+                  id={m.id}
+                  title={m.title}
                   className={cn(
                     'min-w-0 truncate text-[12.5px] group-hover/member:underline',
                     held || cleared ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
                   )}
-                >
-                  {m.title}
-                </span>
+                />
                 {m.resumeChange ? <ResumeChangeChip change={m.resumeChange} /> : null}
               </span>
               <span className="hidden min-w-0 items-center md:flex">
@@ -346,6 +353,7 @@ function WorkbenchRowImpl({
   } | null;
 }) {
   const t = useTranslations('workbench');
+  const shownTitleName = useSurfaceTitleName(row.id, row.title);
   const finishedLabel = useFinishedLabel();
   // A CONTEXT head (§ 36.2) is not on the tab: it keeps its Status pill, which says where
   // the container is, and drops what would read as the reader's — role, assignee, CI and a
@@ -355,7 +363,7 @@ function WorkbenchRowImpl({
   const cells = (
     <>
       <div role="cell" className="flex min-w-0 items-center">
-        <RowLink row={row} label={`${row.identifier} ${row.title}`} />
+        <RowLink row={row} label={`${row.identifier} ${shownTitleName}`} />
         <span
           className="flex min-w-0 items-center gap-2"
           // A member sits one tree level in: `TreeTable`'s indent, `/ready`'s `ml-[22px]`.
@@ -373,16 +381,16 @@ function WorkbenchRowImpl({
           <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
             {row.identifier}
           </span>
-          <span
+          <SurfaceTitle
+            id={row.id}
+            title={row.title}
             className={cn(
               'min-w-0 flex-1 truncate group-hover:underline',
               // A HELD row's title goes secondary (§ 30 Panel 3) — still AA on the
               // `--el-surface` hover fill.
               held || context ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
             )}
-          >
-            {row.title}
-          </span>
+          />
           {group?.count}
           {/* THE CI BADGE (MOTIR-5475), in the TITLE cell and in its GLYPH form —
               the same placement and the same shared rule as the `/items` row.
@@ -842,12 +850,29 @@ export function WorkbenchList({
   // would show a card in a tab it is no longer in with nothing to explain why.
   const resetKey = `${tab}:${pagination.page}`;
   const live = useLiveRows(rows, resetKey, (row) => row.id);
-  // The sessions take the SAME held-row rule (§ 35.5): a Resumed entry stays until the next load.
+  // The sessions take § 26's held-row rule for a session that LEFT on its own (ended
+  // elsewhere): it stays until the next load. A session RESUMED here is the exception —
+  // § 37: "the row clears when the attempt starts" (MOTIR-9122). Its Resume asks for a
+  // re-read, and the read that no longer lists it drops it rather than holding it, which
+  // is § 35.5's rule for a gated run, not for a session.
   const liveSessions = useLiveRows(
     planningSessions,
     `${resetKey}:sessions`,
     (entry) => entry.sessionId,
   );
+  const [resumedSessionIds, setResumedSessionIds] = useState<ReadonlySet<string>>(() => new Set());
+  const sessionRows = useMemo(
+    () =>
+      liveSessions.rows.filter(
+        (entry) =>
+          !(liveSessions.heldIds.has(entry.sessionId) && resumedSessionIds.has(entry.sessionId)),
+      ),
+    [liveSessions.rows, liveSessions.heldIds, resumedSessionIds],
+  );
+  const onSessionResumed = (sessionId: string) => {
+    setResumedSessionIds((ids) => new Set(ids).add(sessionId));
+    reread();
+  };
   // THE GROUPED TABS (§ 36.7, § 26 unchanged). The heads above take today's rule: an
   // arrival is marked, a row that leaves is kept in place unmarked until the next load —
   // so a group whose last member left is held WHOLE. The members take the same rule one
@@ -860,11 +885,20 @@ export function WorkbenchList({
   );
   const liveMembers = useLiveRows(memberEntries, resetKey, (entry) => entry.row.id);
   const [expanded, toggleGroup] = useExpandedGroups(rows, resetKey);
+  // THE READER'S PLACE ON A BURST (§ 39 rule 3): a catch-up that lands several
+  // rows above the row in view leaves that row where it was on screen.
+  const listRef = useRef<HTMLDivElement>(null);
+  useHoldReaderPlace(
+    listRef,
+    [...sessionRows.map((e) => e.sessionId), ...live.rows.map((r) => r.id)]
+      .concat(liveMembers.rows.map((e) => e.row.id))
+      .join(','),
+  );
 
   // These tabs hold nothing (see the note above), so `live.rows` empties exactly
   // when the server's does — the branch reads the live set anyway, so the two
   // lists answer *am I empty?* the same way.
-  if (live.rows.length === 0 && liveSessions.rows.length === 0) return <>{empty}</>;
+  if (live.rows.length === 0 && sessionRows.length === 0) return <>{empty}</>;
 
   // CONTINUE HOSTED ON A DEAD-RUN ROW (§ 31, MOTIR-6882). The page makes ONE models
   // request however many rows place the control — and NONE when no row does, so a
@@ -905,21 +939,23 @@ export function WorkbenchList({
   }
   const list = (
     <div
+      ref={listRef}
       data-surface="card"
       className="overflow-hidden rounded-(--radius-card) border border-(--el-border)"
     >
       <div role="table" aria-label={label} className="w-full text-sm">
         {/* The column header is hidden below `md`, where there are no columns
             to head — the stacked row labels itself. */}
-        {liveSessions.rows.length > 0 ? (
+        {sessionRows.length > 0 ? (
           <div role="rowgroup" data-testid="to-resume-sessions">
-            {liveSessions.rows.map((entry) => (
+            {sessionRows.map((entry) => (
               <PlanningSessionResumeEntry
                 key={entry.sessionId}
                 entry={entry}
                 arrived={liveSessions.arrivedIds.has(entry.sessionId)}
                 held={liveSessions.heldIds.has(entry.sessionId)}
                 onSettled={reread}
+                onResumed={onSessionResumed}
               />
             ))}
           </div>

@@ -23,7 +23,7 @@ import {
 } from '@/lib/users/errors';
 import { sendAuthEmail } from '@/lib/auth/authMail';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
-import { currentLocale } from '@/lib/i18n/serverLocale';
+import { resolveRecipientLocale } from '@/lib/services/emailRecipientLocale';
 import { isLocale, type Locale } from '@/lib/i18n/locales';
 import { withUserContext } from '@/lib/workspaces/context';
 import { deletePublicAsset, putPublicAsset } from '@/lib/blob/uploader';
@@ -528,7 +528,9 @@ export const usersService = {
         recipientName: result.recipientName,
         newEmail: result.newEmail,
         confirmUrl: `${resolveBaseUrlTrimmed()}/api/account/confirm-email-change?token=${result.token}`,
-        locale: await currentLocale(),
+        // The new address has no account by construction (EmailTakenError
+        // otherwise), so the language is the requesting user's saved one.
+        locale: await resolveRecipientLocale({ userId }),
       },
     });
 

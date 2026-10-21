@@ -281,7 +281,7 @@ export function IssueFilterBar({
       type="button"
       aria-label={active ? t('filterActiveAria', { count }) : t('filter')}
       className={cn(
-        'inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border px-3 font-sans text-sm hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
+        'inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border px-(--spacing-control-x-12) font-sans text-sm hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
         superseded ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
         active ? 'border-(--el-accent) bg-(--el-tint-lavender)' : 'border-(--el-border)',
       )}
@@ -297,7 +297,7 @@ export function IssueFilterBar({
       {active ? (
         <span
           aria-hidden
-          className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-(--radius-badge) bg-(--el-accent) px-1.5 text-[11px] font-semibold text-(--el-accent-text) tabular-nums"
+          className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-(--radius-badge) bg-(--el-accent) px-(--spacing-chip-x-6) text-[11px] font-semibold text-(--el-accent-text) tabular-nums"
         >
           {count}
         </span>
@@ -344,7 +344,7 @@ export function IssueFilterBar({
               apply(clearFacets(filterRef.current));
             }}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-(--radius-control) px-1 py-0.5 text-sm focus-visible:outline-none',
+              'inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-2) text-sm focus-visible:outline-none',
               active && !superseded
                 ? 'text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)'
                 : 'cursor-default text-(--el-text-faint)',
@@ -369,7 +369,7 @@ export function IssueFilterBar({
               onChange={(e) => onTextChange(e.target.value)}
               placeholder={t('filterFindPlaceholder')}
               aria-label={t('filterByText')}
-              className="h-(--height-control) w-full rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) pr-2.5 pl-8 font-sans text-sm text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              className="h-(--height-control) w-full rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) pr-(--spacing-control-x) pl-8 font-sans text-sm text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             />
           </div>
 
@@ -458,7 +458,7 @@ export function IssueFilterBar({
                 onChange={(e) => setMemberQuery(e.target.value)}
                 placeholder={t('filterSearchMembers')}
                 aria-label={t('filterSearchMembersAria')}
-                className="h-8 w-full rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) pr-2.5 pl-[30px] font-sans text-[13px] text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                className="h-(--height-control-32) w-full rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) pr-(--spacing-control-x) pl-[30px] font-sans text-[13px] text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
               />
             </div>
             <div role="listbox" aria-label={t('assignee')} aria-multiselectable="true">
@@ -500,7 +500,7 @@ export function IssueFilterBar({
           <button
             type="button"
             onClick={editInAdvanced}
-            className="inline-flex items-center gap-1.5 rounded-(--radius-control) px-1 py-0.5 text-[13px] text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            className="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-2) text-[13px] text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >
             <FunnelPlus className="h-3.5 w-3.5" aria-hidden />
             {t('filterEditInAdvanced')}

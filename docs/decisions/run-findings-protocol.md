@@ -808,3 +808,18 @@ prompt.
 - **MOTIR-3982 / MOTIR-3983** — Q5's closing section, in the design and in the surface.
 - **MOTIR-4083** — Q6: the tool-call door, the composed WHAT, the one-shot framing and
   the two-part _once_, in the prompt (MOTIR-4172 shipped the `requirement` argument it uses).
+
+## AMENDMENT — a wrong HOW is built through and recorded, and only a broken WHAT stops (MOTIR-8654, 2026-10-15)
+
+> **Amended 2026-10-15 (Story MOTIR-8651 · MOTIR-8655), by the decision page _A run builds
+> through a wrong HOW — the discrepancy record_ (MOTIR-8654, approved).** This record's
+> opening paragraph says an agent finds _"this card is wrong"_ and that the prompt handles it;
+> Q3 files a bug and the prompt says _"Do not improvise"_. Both are **narrowed**: a run asks
+> ONE question — is the WHAT (the card's outcome and acceptance criteria) unchanged,
+> consistent and reachable by this run alone? **Yes** ⇒ it builds through, and records ONE
+> discrepancy (what the plan asked · what was built · why) through `record_run_discrepancy`;
+> the server writes one card comment and a pointer-only `discrepancy_recorded` finding on the
+> card's open leg (`runDiscrepancyService.recordDiscrepancy`, one per leg). **No** ⇒ it stops
+> exactly as above, and only that branch can file a planning bug. Q5's list of server-written
+> findings gains a fifth member, `discrepancy_recorded`, and `dispatchEventKindSchema` does
+> **not** gain it.

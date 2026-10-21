@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -8,8 +8,13 @@ import {
   LineChart,
   DonutChart,
   DifferenceAreaChart,
+  HBarChart,
   chartColor,
+  fitXTicks,
+  pageChart,
+  pageChartHeight,
 } from '@/components/ui/charts';
+import { linearScale } from '@/components/ui/charts/scale';
 
 // Chart primitives (Subtask 4.6.2) — the reusable token-aware SVG viz layer.
 // These are PURE presentational components: typed data props in, SVG out, no
@@ -672,5 +677,231 @@ describe('no charting library is bundled', () => {
       /recharts|chart\.?js|chartjs|nivo|victory|^d3/.test(k),
     );
     expect(charting).toEqual([]);
+  });
+});
+
+// ── Page mode (Story MOTIR-8919): measured width, thinned labels, hover bands ─
+// The numbers under test are the design's (design/reports/design-notes.md,
+// "Reports refined"): label spacing = chars × 6.3 + 12 px, first/last kept,
+// fewer than 8 labels → angle −45° and re-thin at 16 px.
+
+const dailyTicks = (n: number) =>
+  Array.from({ length: n }, (_, i) => ({
+    value: i,
+    label: `Oct ${String((i % 28) + 1).padStart(2, ' ')}`,
+  }));
+
+function fitAt(n: number, plotWidth: number) {
+  const all = dailyTicks(n);
+  const xScale = linearScale([0, n - 1], [0, plotWidth]);
+  const fit = fitXTicks({ ticks: all, xScale });
+  return { all, xScale, kept: fit.ticks, angle: fit.angle };
+}
+
+describe('fitXTicks (page-mode label thinning)', () => {
+  it.each([1280, 1440, 1920])(
+    '90 daily labels at %ipx keep first + last, never closer than the spacing, flat',
+    (w) => {
+      const { all, xScale, kept, angle } = fitAt(90, w - 64);
+      expect(angle).toBe(0);
+      expect(kept[0]).toBe(all[0]);
+      expect(kept[kept.length - 1]).toBe(all[all.length - 1]);
+      expect(kept.length).toBeGreaterThanOrEqual(pageChart.minLabels);
+      const spacing =
+        Math.max(...all.map((t) => t.label.length)) * pageChart.labelCharWidth + pageChart.labelGap;
+      for (let i = 1; i < kept.length; i++) {
+        expect(xScale(kept[i]!.value) - xScale(kept[i - 1]!.value)).toBeGreaterThanOrEqual(
+          spacing - 1e-6,
+        );
+      }
+    },
+  );
+
+  it('keeps all 7 labels of a short axis, unangled, at 1440', () => {
+    const { all, kept, angle } = fitAt(7, 1440 - 64);
+    expect(kept).toEqual(all);
+    expect(angle).toBe(0);
+  });
+
+  it('angles at −45° and re-thins at 16 px when a narrow plot leaves fewer than 8 flat labels', () => {
+    const { all, xScale, kept, angle } = fitAt(30, 200);
+    expect(angle).toBe(pageChart.angle);
+    expect(kept.length).toBeGreaterThan(4);
+    expect(kept[0]).toBe(all[0]);
+    expect(kept[kept.length - 1]).toBe(all[all.length - 1]);
+    for (let i = 1; i < kept.length; i++) {
+      expect(xScale(kept[i]!.value) - xScale(kept[i - 1]!.value)).toBeGreaterThanOrEqual(
+        pageChart.angledSpacing - 1e-6,
+      );
+    }
+  });
+});
+
+describe('fit="page" charts', () => {
+  let fire: ((w: number) => void) | undefined;
+  beforeEach(() => {
+    fire = undefined;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(cb: (entries: { contentRect: { width: number } }[]) => void) {
+          fire = (w) => cb([{ contentRect: { width: w } }]);
+        }
+        observe() {}
+        disconnect() {}
+        unobserve() {}
+      },
+    );
+  });
+
+  const created = dailyTicks(20).map((t) => ({ x: t.value, y: t.value + 1 }));
+  const resolved = dailyTicks(20).map((t) => ({ x: t.value, y: t.value }));
+  const diffProps = {
+    created,
+    resolved,
+    x: { domain: [0, 19] as [number, number], ticks: dailyTicks(20), title: 'Day' },
+    y: {
+      domain: [0, 21] as [number, number],
+      ticks: [0, 10, 20].map((v) => ({ value: v, label: String(v) })),
+    },
+    description: 'Created vs resolved',
+  };
+
+  it.each([800, 1440, 1920])(
+    'fills a %ipx container: viewBox is the measured width × the viewport height',
+    (w) => {
+      const { container } = render(<DifferenceAreaChart {...diffProps} fit="page" />);
+      act(() => fire?.(w));
+      const h = pageChartHeight(window.innerHeight);
+      expect(container.querySelector('svg')!.getAttribute('viewBox')).toBe(`0 0 ${w} ${h}`);
+    },
+  );
+
+  it('renders at the width prop and the design default height before any measurement is available', () => {
+    vi.stubGlobal('ResizeObserver', undefined);
+    const { container } = render(<DifferenceAreaChart {...diffProps} width={600} fit="page" />);
+    const [, , vw] = container.querySelector('svg')!.getAttribute('viewBox')!.split(' ');
+    expect(vw).toBe('600');
+  });
+
+  it('puts a per-bucket hover title on each band: the full label then every series value', () => {
+    const { container } = render(<DifferenceAreaChart {...diffProps} fit="page" />);
+    const titles = Array.from(container.querySelectorAll('svg rect > title')).map(
+      (t) => t.textContent,
+    );
+    expect(titles).toHaveLength(20);
+    expect(titles[3]).toBe('Oct  4\nCreated: 4\nResolved: 3');
+    expect(
+      container.querySelectorAll('svg rect > title')[0]!.parentElement!.hasAttribute('tabindex'),
+    ).toBe(false);
+  });
+
+  it('BarChart in page mode labels only the bars whose x label survived the fit', () => {
+    const groups = dailyTicks(60).map((t) => ({ label: t.label, values: [t.value] }));
+    const { container } = render(
+      <BarChart
+        series={[{ label: 'Created', color: chartColor.created }]}
+        groups={groups}
+        yTicks={[0, 30, 60].map((v) => ({ value: v, label: String(v) }))}
+        description="bars"
+        fit="page"
+      />,
+    );
+    act(() => fire?.(1440));
+    const xLabels = container.querySelectorAll('svg g[text-anchor] text');
+    const valueLabels = container.querySelectorAll('svg text.font-semibold');
+    expect(valueLabels.length).toBeGreaterThan(0);
+    expect(valueLabels.length).toBeLessThan(60);
+    expect(container.querySelectorAll('svg rect > title')).toHaveLength(60);
+    expect(xLabels.length).toBeGreaterThan(0);
+  });
+
+  it('the data table is unchanged in page mode', () => {
+    const { container } = render(<DifferenceAreaChart {...diffProps} fit="page" />);
+    expect(container.querySelectorAll('table tbody tr')).toHaveLength(20);
+  });
+
+  it('default mode draws no hover bands and no angled labels, at the width/height given', () => {
+    const { container } = render(<DifferenceAreaChart {...diffProps} width={600} height={300} />);
+    expect(container.querySelector('svg')!.getAttribute('viewBox')).toBe('0 0 600 300');
+    expect(container.querySelectorAll('svg rect > title')).toHaveLength(0);
+    expect(container.innerHTML).not.toContain('rotate(-45');
+  });
+
+  const hbar = (fit?: 'page') => (
+    <HBarChart
+      bars={[
+        { label: 'Ada', value: 8, color: chartColor.created },
+        { label: 'Grace', value: 5, color: chartColor.resolved },
+        { label: 'Unassigned', value: 2, color: chartColor.categoricalNone },
+      ]}
+      description="Open work per assignee"
+      dataTable={{ caption: 'Open work', columns: ['Assignee', 'Points'], rows: [] }}
+      fit={fit}
+    />
+  );
+  // TOP_PAD 26 + 3 rows × ROW_HEIGHT 37 + BOTTOM_PAD 26
+  const HBAR_ROWS_HEIGHT = 26 + 3 * 37 + 26;
+
+  it.each([800, 1440, 1920])(
+    'HBarChart in page mode lays out at a %ipx measured width, at the row-formula height',
+    (w) => {
+      const { container } = render(hbar('page'));
+      act(() => fire?.(w));
+      const svg = container.querySelector('svg')!;
+      expect(svg.getAttribute('viewBox')).toBe(`0 0 ${w} ${HBAR_ROWS_HEIGHT}`);
+      expect(svg.getAttribute('height')).toBe(String(HBAR_ROWS_HEIGHT));
+    },
+  );
+
+  it('HBarChart without fit keeps its fixed 600-wide viewBox, whatever the container measures', () => {
+    const { container } = render(hbar());
+    act(() => fire?.(1920));
+    const svg = container.querySelector('svg')!;
+    expect(svg.getAttribute('viewBox')).toBe(`0 0 600 ${HBAR_ROWS_HEIGHT}`);
+    expect(svg.getAttribute('height')).toBeNull();
+    expect(svg.getAttribute('class')).toContain('h-auto');
+  });
+});
+
+describe('HBarChart segments (Story MOTIR-8919)', () => {
+  const dt = { caption: 'c', columns: ['a'], rows: [] };
+  it('without segments draws one rect per bar, exactly as before', () => {
+    const { container } = render(
+      <HBarChart bars={[{ label: 'A', value: 10, color: 'red' }]} description="d" dataTable={dt} />,
+    );
+    expect(container.querySelectorAll('svg rect[fill="red"]')).toHaveLength(1);
+  });
+
+  it('with segments draws one rect per non-zero segment, summing to the bar', () => {
+    const { container } = render(
+      <HBarChart
+        bars={[
+          { label: 'A', value: 10, color: 'red' },
+          {
+            label: 'B',
+            value: 10,
+            color: 'red',
+            segments: [
+              { value: 6, color: 'blue', label: 'one' },
+              { value: 4, color: 'green', label: 'two' },
+              { value: 0, color: 'pink', label: 'zero' },
+            ],
+          },
+        ]}
+        description="d"
+        dataTable={dt}
+      />,
+    );
+    const rects = (c: string) => Array.from(container.querySelectorAll(`svg rect[fill="${c}"]`));
+    expect(rects('pink')).toHaveLength(0);
+    const blue = Number(rects('blue')[0]!.getAttribute('width'));
+    const green = Number(rects('green')[0]!.getAttribute('width'));
+    const whole = Number(rects('red')[0]!.getAttribute('width'));
+    expect(blue + green).toBeCloseTo(whole, 5);
+    expect(Number(rects('green')[0]!.getAttribute('x'))).toBeCloseTo(
+      Number(rects('blue')[0]!.getAttribute('x')) + blue,
+      5,
+    );
   });
 });

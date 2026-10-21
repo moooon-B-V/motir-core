@@ -169,7 +169,7 @@ import { ComponentNotFoundError, CrossProjectComponentError } from '@/lib/compon
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
 import { validateStoryPoints } from '@/lib/estimation/validate';
-import { workItemTranslationReadService } from '@/lib/services/workItemTranslationReadService';
+import { readerTranslationContextService } from '@/lib/services/readerTranslationContextService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import {
   toWorkItemDto,
@@ -287,6 +287,7 @@ import type {
   WorkItemValidityDto,
   WorkItemSoftBlockDto,
   WorkItemCoverageAdvisoryDto,
+  WorkItemTitleCoverageAdvisoryDto,
   WorkItemProseAdvisoryDto,
   CrossLevelEdgeDto,
   InvalidEdgeDto,
@@ -309,8 +310,9 @@ import {
   type ProseAdvisorySubject,
 } from '@/lib/services/proseGraphAdvisoryService';
 import { buildPathReferenceAdvisories } from '@/lib/services/pathReferenceAdvisoryService';
-import { containerCoverageFinding } from '@/lib/workItems/containerCoverage';
+import { containerCoverageFinding, unnamedTitleWords } from '@/lib/workItems/containerCoverage';
 import { acceptanceCriteriaTexts } from '@/lib/workItems/proseVsGraph';
+import { sectionFindingsFor } from '@/lib/workItems/sections/validity';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { parseWorkItemRefs, type WorkItemRefs } from '@/lib/mentions/workItemRefs';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
@@ -350,6 +352,11 @@ import {
 import { classifyRepoDelivery, type RepoDelivery } from '@/lib/workItems/repoDelivery';
 import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
 import { ContainerRepoSetNotWritableError } from '@/lib/workItems/errors';
+import { resolveSectionsInput } from '@/lib/plans/applySectionsInput';
+import {
+  InvalidSectionsError,
+  SectionsWithDescriptionError,
+} from '@/lib/workItems/sections/errors';
 import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { runTokenScopeService } from '@/lib/services/runTokenScopeService';
@@ -1233,6 +1240,8 @@ function assembleProjectForest(
  * is not implemented, so neither counts a cancelled card as finished work.
  */
 const ROADMAP_CANCELLED_KEY = 'cancelled';
+/** The status a `manual_work` question does not survive a move into (MOTIR-8670). */
+const MANUAL_WORK_NOT_READY_KEY = 'blocked';
 /** The status an item enters to be reviewed — the one whose entry re-asks its
  *  pending questions (ADR `approval-gates.md` §6d AMENDMENT, rule 7). */
 const REVIEW_STATUS_KEY = 'in_review';
@@ -1791,6 +1800,50 @@ export interface CreateWorkItemOptions {
   inTransaction?: (created: WorkItemDto, tx: Prisma.TransactionClient) => Promise<void>;
 }
 
+/**
+ * The ONE place the sections-write rules are applied on the work-item doors
+ * (Story MOTIR-9023 · MOTIR-9031). Returns the `descriptionMd` to write, or
+ * throws before anything is written:
+ *   · `sections` beside `descriptionMd` → `SectionsWithDescriptionError`;
+ *   · a missing / unknown / invalid section for the FINAL kind × type →
+ *     `InvalidSectionsError`, naming each.
+ * On an update `currentBody` is the stored body, parsed and merged sparsely under
+ * the row lock the caller already holds; on a create it is null. The plan doors
+ * run the same resolution (`applySectionsInput`), so one partial `sections`
+ * behaves alike on both families. Nothing structured is stored: the rendered text
+ * is the only thing that is.
+ */
+function resolveSectionsWrite(args: {
+  kind: string;
+  type: string | null;
+  sections: unknown;
+  descriptionMd: string | null | undefined;
+  currentBody: string | null;
+}): string {
+  if (args.descriptionMd !== undefined) throw new SectionsWithDescriptionError();
+  const outcome = resolveSectionsInput({ ...args, label: 'work item' });
+  if (outcome.ok) return outcome.body;
+  if (outcome.reason === 'conflict') throw new SectionsWithDescriptionError();
+  const findings: string[] = [];
+  if (outcome.reason === 'sections') {
+    if (outcome.missing.length > 0) findings.push(`missing: ${outcome.missing.join(', ')}`);
+    if (outcome.unknown.length > 0) findings.push(`unknown: ${outcome.unknown.join(', ')}`);
+    if (outcome.invalid.length > 0) {
+      findings.push(
+        `invalid: ${outcome.invalid.map((i) => `${i.section} (${i.message})`).join(', ')}`,
+      );
+    }
+  }
+  throw new InvalidSectionsError(
+    findings.length > 0
+      ? `sections refused — ${findings.join('; ')}. Read the section set for this kind and type with get_section_sets.`
+      : `sections refused — ${outcome.detail}`,
+    outcome.missing,
+    outcome.unknown,
+    outcome.invalid,
+  );
+}
+
 export const workItemsService = {
   /**
    * Create a work item: allocate the per-project key + insert the row + emit
@@ -1914,6 +1967,20 @@ export const workItemsService = {
     const itemType = input.type ?? null;
     const itemExecutor = resolveExecutor(itemType, input.executor, null);
     assertTypeKindConsistent(input.kind, itemType, itemExecutor);
+    // Sections (Story MOTIR-9023 · MOTIR-9031): an agent's typed `sections` are
+    // checked against the registry for THIS kind × type and rendered into the body
+    // BEFORE the key-allocation transaction, so a refused write burns no key. A
+    // write with no `sections` stores `descriptionMd` exactly as sent.
+    const writtenDescriptionMd =
+      input.sections !== undefined
+        ? resolveSectionsWrite({
+            kind: input.kind,
+            type: itemType,
+            sections: input.sections,
+            descriptionMd: input.descriptionMd,
+            currentBody: null,
+          })
+        : input.descriptionMd;
     // Difficulty (Story MOTIR-6016): leaf-only by the same kind rule, checked
     // before the key-allocation transaction for the same reason.
     const itemDifficulty = input.difficulty ?? null;
@@ -2003,7 +2070,7 @@ export const workItemsService = {
     // transaction (reference data, the commentsService pattern); invalid /
     // non-viewable ids are silently dropped (the Jira rule). The validated set
     // rides the post-commit `work-item/mentioned` event.
-    const descTokenIds = parseMentionIds(input.descriptionMd ?? '');
+    const descTokenIds = parseMentionIds(writtenDescriptionMd ?? '');
     let descMentionIds: string[] = [];
     if (descTokenIds.length > 0) {
       const mentionable = await resolveDescriptionMentionable(
@@ -2072,7 +2139,7 @@ export const workItemsService = {
         {
           projectId: input.projectId,
           projectIdentifier: prefix,
-          fields: [input.descriptionMd, input.explanationMd],
+          fields: [writtenDescriptionMd, input.explanationMd],
         },
         tx,
       );
@@ -2326,6 +2393,15 @@ export const workItemsService = {
             },
             tx,
           );
+          // A new card filed as BLOCKING an existing manual card takes that card's
+          // question away (MOTIR-8670): the new card is unfinished by birth.
+          if (directed.kind === 'is_blocked_by' && directed.fromId !== row.id) {
+            await manualWorkGateService.withdrawIfNewBlockerOpen(
+              directed.fromId,
+              directed.toId,
+              tx,
+            );
+          }
 
           if (directed.kind === 'relates_to') {
             const existingReciprocal = await workItemLinkRepository.findReciprocal(
@@ -2481,6 +2557,7 @@ export const workItemsService = {
       'kind',
       'title',
       'descriptionMd',
+      'sections',
       'explanationMd',
       'explanationSource',
       'assigneeId',
@@ -2634,9 +2711,26 @@ export const workItemsService = {
       // already-canonical body stays a no-op (the normalize is idempotent).
       // Runs only when a body field is supplied; a field absent from the patch
       // stays `undefined`, preserving the "was it supplied?" guards below.
-      let normalizedDescriptionMd: string | null | undefined = patch.descriptionMd;
+      //
+      // Sections (Story MOTIR-9023 · MOTIR-9031): a patch carrying `sections` is
+      // rendered HERE, under the lock, against the stored body and the card's
+      // FINAL kind × type (the patched one when this write changes it). The check
+      // and the render both finish before any write, so a refused write changes
+      // nothing. The rendered text then flows through the same normalize / diff
+      // path as a typed body. No `sections` → `patch.descriptionMd` as sent.
+      const writtenDescriptionMd: string | null | undefined =
+        patch.sections !== undefined
+          ? resolveSectionsWrite({
+              kind: patch.kind !== undefined ? patch.kind : current.kind,
+              type: patch.type !== undefined ? patch.type : current.type,
+              sections: patch.sections,
+              descriptionMd: patch.descriptionMd,
+              currentBody: current.descriptionMd,
+            })
+          : patch.descriptionMd;
+      let normalizedDescriptionMd: string | null | undefined = writtenDescriptionMd;
       let normalizedExplanationMd: string | null | undefined = patch.explanationMd;
-      if (patch.descriptionMd !== undefined || patch.explanationMd !== undefined) {
+      if (writtenDescriptionMd !== undefined || patch.explanationMd !== undefined) {
         const refProject = await projectRepository.findById(current.projectId, tx);
         /* istanbul ignore else -- the project always resolves (it was read to gate
            the edit above); the guard narrows the nullable type only */
@@ -2645,7 +2739,7 @@ export const workItemsService = {
             {
               projectId: current.projectId,
               projectIdentifier: refProject.identifier,
-              fields: [patch.descriptionMd, patch.explanationMd],
+              fields: [writtenDescriptionMd, patch.explanationMd],
             },
             tx,
           );
@@ -3700,6 +3794,26 @@ export const workItemsService = {
       awaitingGates.some((gate) => gate.kind === 'manual_work' && gate.id !== opts.decidingGateId)
     ) {
       await manualWorkGateService.withdrawOnUndecidedClose(workItemId, tx);
+    }
+
+    // ⚠️ AND A MANUAL-WORK QUESTION LEAVES A CARD NOBODY CAN START (MOTIR-8670;
+    // `manual-work-gate.md` §6, amended). Waiting on you asks a person to do the work
+    // now; a card moved to Blocked waits on something else first, and a card moved to
+    // Planning — by hand, or parked by a plan's append — is being rewritten, so the
+    // card the run reached is not the card that will come back. Every writer, system
+    // included: the question is wrong whoever made the move. Rule 6 keeps every OTHER
+    // kind's question through `blocked`; this is the one kind whose question is about
+    // doing the work rather than judging it. Nothing re-raises it: the next run that
+    // reaches the card, ready, does.
+    if (
+      (toStatusKey === MANUAL_WORK_NOT_READY_KEY || toStatusKey === PLANNING_STATUS_KEY) &&
+      awaitingGates.some((gate) => gate.kind === 'manual_work')
+    ) {
+      if (toStatusKey === PLANNING_STATUS_KEY) {
+        await manualWorkGateService.withdrawOnReplan(workItemId, tx);
+      } else {
+        await manualWorkGateService.withdrawWhenNotReady(workItemId, tx);
+      }
     }
 
     // ⚠️ AND THE MERGE QUESTION LEAVES WITH THE CARD, WHEREVER IT GOES (MOTIR-6971;
@@ -5920,6 +6034,11 @@ export const workItemsService = {
       /* istanbul ignore next -- the non-idempotent branch never returns null (the
          forward create throws on a duplicate rather than returning null) */
       if (!link) throw new WorkItemLinkNotFoundError(input.fromId);
+      // An open prerequisite takes the manual-work question off the blocked card
+      // (MOTIR-8670), in the link's own transaction.
+      if (input.kind === 'is_blocked_by') {
+        await manualWorkGateService.withdrawIfNewBlockerOpen(input.fromId, input.toId, tx);
+      }
       return { dto: toWorkItemLinkDto(link), fromItem, toItem };
     });
 
@@ -6432,6 +6551,38 @@ export const workItemsService = {
     // A hosted run's own credential reaches its run's cards and no other
     // (MOTIR-6557) — the one gate every keyed `/api/v1` operation it may call
     // opens with. A no-op for every other caller.
+    await runTokenScopeService.assertReachesWorkItems([row.id], ctx);
+    return toWorkItemDto(row);
+  },
+
+  /**
+   * Resolve a work item within ONE project by EITHER of the two forms a planner
+   * holds (MOTIR-8940): its `<KEY>-<n>` identifier, or its internal id.
+   *
+   * ⚠️ WHY BOTH. A plan names committed cards by id — `parentRef`,
+   * `blockedByRefs`, `workItemId` — while this read took a key only, so a
+   * planning session that followed the ref its own plan stores was refused and
+   * had to search by title to find the card. The two forms cannot collide: a key
+   * always carries a dash and a work-item id (a cuid) never does.
+   *
+   * The id arm keeps every gate the key arm has — workspace binding, browse,
+   * the run-token scope — and holds the row to `projectId`, so an id from
+   * another project is the same not-found an unknown key is.
+   */
+  async getWorkItemByRef(
+    projectId: string,
+    ref: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemDto> {
+    const trimmed = ref.trim();
+    if (trimmed.includes('-')) {
+      return workItemsService.getWorkItemByIdentifier(projectId, trimmed, ctx);
+    }
+    const row = await readWorkItem(trimmed, ctx);
+    if (!row || row.workspaceId !== ctx.workspaceId || row.projectId !== projectId) {
+      throw new WorkItemNotFoundError(trimmed);
+    }
+    await projectAccessService.assertCanBrowse(row.projectId, ctx);
     await runTokenScopeService.assertReachesWorkItems([row.id], ctx);
     return toWorkItemDto(row);
   },
@@ -7040,8 +7191,31 @@ export const workItemsService = {
     // Built from the item's own fields — the peek shows no to-dos, and it offers
     // only for the title and description it draws (design D3). A failing read is
     // no offer, never a failed peek. A Visitor's peek carries none.
-    const translation = await workItemTranslationReadService
-      .getReaderTranslation({ workItem: detail.item, todos: [], readerLocale: locale, ctx })
+    // The project's auto-translate switch rides the same read (Story MOTIR-7738 ·
+    // MOTIR-8832): the reader's context layers it, and the credit verdict, over the
+    // offer, so the peek's host can start on mount. The switch is one primary-key
+    // read; the entitlement is asked only when it is on and something differs.
+    const translation = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      projectRepository.findAutoTranslateWorkContent(projectId, tx),
+    )
+      .then((project) =>
+        readerTranslationContextService.resolveForItem({
+          project: { autoTranslateWorkContent: project?.autoTranslateWorkContent ?? false },
+          reader: ctx,
+          readerLocale: locale,
+          workItem: detail.item,
+          todos: [],
+        }),
+      )
+      .then((resolved) =>
+        resolved
+          ? {
+              offer: resolved.offer,
+              canAddCredits: resolved.canAddCredits,
+              auto: resolved.context,
+            }
+          : null,
+      )
       .catch(() => null);
     return { ...view, pageRefs, heldTransitions, planHold, mergeMembers, translation };
   },
@@ -9061,6 +9235,7 @@ async function computeWorkItemValidity(
       crossLevelEdges: [],
       advisories: [],
       softBlocks,
+      sectionFindings: [],
     };
   }
 
@@ -9110,6 +9285,7 @@ async function computeWorkItemValidity(
   const crossLevelEdges = computeCrossLevelEdges(edges, membersById, chains);
   const invalidEdges = await computeInvalidEdges(edges, membersById, chains, ctx);
   const coverage = await computeSubtreeCoverageAdvisories(notDone, members, ctx);
+  const titleCoverage = await computeSubtreeTitleCoverageAdvisories(notDone, members, ctx);
   // The PATH-REFERENCE family (MOTIR-5424), off the SAME scanned bodies the prose
   // family read — `subjects` is `notDone` mapped in order, so the two zip.
   const pathReferences = await buildPathReferenceAdvisories(
@@ -9132,8 +9308,18 @@ async function computeWorkItemValidity(
     blockers,
     invalidEdges,
     crossLevelEdges,
-    advisories: [...prose, ...coverage, ...pathReferences],
+    advisories: [...prose, ...coverage, ...titleCoverage, ...pathReferences],
     softBlocks,
+    // MOTIR-9032 — the SAME scanned bodies, parsed against the section registry.
+    // Advisory: `valid` above is computed without it.
+    sectionFindings: sectionFindingsFor(
+      subjects.map((subject) => ({
+        item: subject.item,
+        kind: subject.kind ?? 'task',
+        type: subject.type,
+        descriptionMd: subject.descriptionMd,
+      })),
+    ),
   };
 }
 
@@ -9483,6 +9669,52 @@ async function computeSubtreeCoverageAdvisories(
 }
 
 /**
+ * The TITLE-COVERAGE advisories for a validated subtree (MOTIR-8647) — for every
+ * NOT-done member that holds children, does its body mention each distinguishing
+ * word its title carries? The pure decision is `unnamedTitleWords`; this gathers
+ * the containers' titles and bodies in two reads.
+ *
+ * ⚠️ ADVISORY, NEVER A BLOCKER — appended beside the coverage family, and the
+ * `valid` / `blockers` verdict is computed without it.
+ */
+async function computeSubtreeTitleCoverageAdvisories(
+  notDone: Array<{ id: string; identifier: string }>,
+  members: Array<{ id: string; parentId: string | null }>,
+  ctx: ServiceContext,
+): Promise<WorkItemTitleCoverageAdvisoryDto[]> {
+  const parentIds = new Set(members.flatMap((m) => (m.parentId === null ? [] : [m.parentId])));
+  const containers = notDone.filter((m) => parentIds.has(m.id));
+  if (containers.length === 0) return [];
+  const ids = containers.map((c) => c.id);
+  const bodies = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.findDescriptionsByIds(ids, ctx.workspaceId, tx),
+  );
+  const titles = new Map(
+    (
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findTitlesByIds(ids, ctx.workspaceId, tx),
+      )
+    ).map((row) => [row.id, row.title]),
+  );
+  const advisories: WorkItemTitleCoverageAdvisoryDto[] = [];
+  for (const container of containers) {
+    const body = bodies.find((row) => row.id === container.id);
+    const title = titles.get(container.id);
+    if (!body || title === undefined) continue;
+    const words = unnamedTitleWords(title, body.descriptionMd);
+    if (words.length === 0) continue;
+    advisories.push({
+      kind: 'title-coverage',
+      item: container.identifier,
+      severity: 'likely-unnamed-title-part',
+      words,
+    });
+  }
+  advisories.sort((a, b) => a.item.localeCompare(b.item));
+  return advisories;
+}
+
+/**
  * The PROSE-vs-GRAPH advisories for a validated subtree (MOTIR-1969) — the same
  * NOT-DONE members the blocker walk probes, each scanned for `motir:` references
  * its body names but the graph has no `blocked_by` edge to. A `done` member is
@@ -9501,7 +9733,10 @@ async function computeSubtreeCoverageAdvisories(
 async function computeSubtreeProseAdvisories(
   root: WorkItemDto,
   notDone: Array<{ id: string; identifier: string; parentId: string | null }>,
-  membersById: Map<string, { id: string; identifier: string; parentId: string | null }>,
+  membersById: Map<
+    string,
+    { id: string; identifier: string; parentId: string | null; kind: string }
+  >,
   edges: Array<{ fromId: string; blockerId: string }>,
   ctx: ServiceContext,
 ): Promise<{ advisories: WorkItemProseAdvisoryDto[]; subjects: ProseAdvisorySubject[] }> {
@@ -9567,6 +9802,7 @@ async function computeSubtreeProseAdvisories(
     return {
       item: member.identifier,
       descriptionMd: row?.descriptionMd ?? null,
+      kind: membersById.get(member.id)?.kind,
       exemptIds,
       // The ORDERING exemption's inputs (MOTIR-2175) and the REPO-STRADDLE
       // check's repository SET (MOTIR-2177, widened in MOTIR-2728), from the same
@@ -9596,6 +9832,13 @@ async function computeSubtreeProseAdvisories(
         (blockerId) => blockerTypes.get(blockerId) === 'design',
       ),
       blockerCount: blockedByMember.get(member.id)?.size ?? 0,
+      // The POST-MERGE-CHILD check's input (MOTIR-8863): the parent, when it is
+      // inside the subtree (the root's own parent is above it and not a container
+      // of THIS validation, but a member's parent always is).
+      parent: (() => {
+        const p = member.parentId ? membersById.get(member.parentId) : undefined;
+        return p ? { identifier: p.identifier, kind: p.kind } : null;
+      })(),
     };
   });
 

@@ -245,7 +245,15 @@ describe('the dispatch-run ingest routes', () => {
     const { id, key } = await seedRun(caller);
     // …and `review_verdict` (MOTIR-6821): a review run's verdict is recorded by the verdict
     // route's service only, never reported.
-    for (const kind of ['bug_filed', 'plan_submitted', 'unbuildable_reported', 'review_verdict']) {
+    // …and `discrepancy_recorded` (MOTIR-8655): a run's discrepancy record is written by the
+    // discrepancy service in the same transaction as the card comment, never reported.
+    for (const kind of [
+      'bug_filed',
+      'plan_submitted',
+      'unbuildable_reported',
+      'review_verdict',
+      'discrepancy_recorded',
+    ]) {
       const res = await appendEvents(caller, id, {
         events: [{ kind, workItemKey: key, data: { outcome: 'filed' } }],
       });

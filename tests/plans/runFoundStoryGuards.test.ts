@@ -76,6 +76,10 @@ const NEVER_A_REVISION_KEY: Record<string, string> = {
   titleLanguage: 'recorded with the title by its writer, never a revision (MOTIR-8096)',
   descriptionLanguage: 'recorded with the description by its writer, never a revision (MOTIR-8096)',
   explanationLanguage: 'recorded with the explanation by its writer, never a revision (MOTIR-8096)',
+  embeddingFailedHash:
+    'the embedding sweep’s poison-item bookkeeping, written by raw SQL, never a revision (MOTIR-8227)',
+  embeddingFailedAttempts:
+    'written with embeddingFailedHash by the same sweep, never a revision (MOTIR-8227)',
 };
 
 type Disposition = 'shape' | 'ignored' | 'unclassified' | 'both';
@@ -246,18 +250,27 @@ function render(replan: boolean): string {
     targetRepo: 'motir-core',
     sessionBranch: null,
     findingsPolicy: { ...FULL_FINDINGS_POLICY, replan, autoApproveReplan: false },
+    // The prompt a CLI that posts the self-report is handed (MOTIR-8810).
+    runnerPostsAgentReport: true,
   };
   return assembleDispatchPrompt(source).prompt;
 }
 
-/** THE CARD IS WRONG, from its heading up to FOUND A DEFECT, whitespace collapsed. */
+/**
+ * The STOP branch of THE CARD IS WRONG, from its sub-heading up to FOUND A DEFECT.
+ *
+ * Since MOTIR-8658 the block opens with the WHAT test and BUILD THROUGH, which carry words this
+ * guard keeps out of the runner's STOP text (the test is quoted verbatim, and says "unchanged").
+ * The guard's claim is about the STOP branch, so it starts there; the two branches before it are
+ * asserted in `tests/dispatch/promptTemplate.test.ts`.
+ */
 function cardIsWrongBlock(prompt: string): string {
   // The branch itself, inside REPORTING THE OUTCOME — the heading is also named
   // in passing earlier in the prompt ("see THE CARD IS WRONG below").
   const outcome = prompt.indexOf('REPORTING THE OUTCOME');
   expect(outcome, 'the prompt carries REPORTING THE OUTCOME').toBeGreaterThan(-1);
-  const start = prompt.indexOf('THE CARD IS WRONG —', outcome);
-  expect(start, 'the prompt carries THE CARD IS WRONG').toBeGreaterThan(-1);
+  const start = prompt.indexOf('STOP — the WHAT itself breaks', outcome);
+  expect(start, 'the prompt carries the STOP branch of THE CARD IS WRONG').toBeGreaterThan(-1);
   const end = prompt.indexOf('FOUND A DEFECT', start);
   return prompt.slice(start, end === -1 ? undefined : end);
 }
@@ -294,7 +307,7 @@ describe('the RENDERED dispatch prompt (criterion 5)', () => {
       const block = cardIsWrongBlock(prompt);
       expect(block.split(REPORT_UNBUILDABLE_TARGET_TOOL_NAME)).toHaveLength(2);
       expect(flat(block)).toMatch(
-        /4\. Report it with the report_unbuildable_target tool: projectKey: PROD targetKey: PROD-42/,
+        /4\. Report it\. If the environment variable MOTIR_AGENT_REPORT is set, .* report it with the report_unbuildable_target tool: projectKey: PROD targetKey: PROD-42/,
       );
     },
   );

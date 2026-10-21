@@ -384,7 +384,7 @@ export function FilterConditionBuilder({
               type="button"
               onClick={() => removeRow(row.key)}
               aria-label={t('advancedRemoveCondition', { n: index + 1 })}
-              className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              className="inline-flex h-(--height-control-28) w-[26px] items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             >
               <X className="h-3.5 w-3.5" aria-hidden />
             </button>
@@ -420,7 +420,7 @@ export function FilterConditionBuilder({
           disabled={atCap}
           onClick={addRow}
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-(--radius-control) px-1 py-0.5 text-[13px] font-medium focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
+            'inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-2) text-[13px] font-medium focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
             atCap ? 'cursor-default text-(--el-text-faint)' : 'text-(--el-link) hover:underline',
           )}
         >
@@ -471,7 +471,7 @@ function StaleFieldRow({
         type="button"
         onClick={onRemove}
         aria-label={t('advancedRemoveCondition', { n: index + 1 })}
-        className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        className="inline-flex h-(--height-control-28) w-[26px] items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
         <X className="h-3.5 w-3.5" aria-hidden />
       </button>

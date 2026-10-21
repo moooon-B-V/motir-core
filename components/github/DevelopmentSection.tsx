@@ -265,7 +265,7 @@ function PullRequestRow({
         target="_blank"
         rel="noopener noreferrer"
         aria-label={t('development.openOnGithub')}
-        className="shrink-0 rounded-(--radius-control) p-1 text-(--el-icon-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none @max-[30rem]:order-2"
+        className="shrink-0 rounded-(--radius-control) p-(--spacing-control-x-4) text-(--el-icon-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none @max-[30rem]:order-2"
       >
         <ExternalLink className="h-4 w-4" aria-hidden />
       </a>
@@ -301,13 +301,15 @@ function AwaitingRepoRow({ delivery }: { delivery: RepoDelivery }) {
   const unknown = state === 'unknown';
   // `delivered_without_change_request` (MOTIR-7180) reaches it too: there is no
   // pull request to draw, and its own copy says the work finished without one
-  // rather than leaving the row to read "No pull request yet".
+  // rather than leaving the row to read "No pull request yet". So does
+  // `delivered_by_child` (MOTIR-8811): the merge is linked to a CHILD card, so
+  // this item has no row of its own for it, and the copy says where it landed.
   const Glyph =
     state === 'unknown'
       ? CircleQuestionMark
       : state === 'unestablished'
         ? FolderGit2
-        : state === 'delivered_without_change_request'
+        : state === 'delivered_without_change_request' || state === 'delivered_by_child'
           ? CircleCheck
           : CircleDashed;
   const title =
@@ -319,7 +321,9 @@ function AwaitingRepoRow({ delivery }: { delivery: RepoDelivery }) {
           ? 'development.repositorySkipped'
           : state === 'delivered_without_change_request'
             ? 'development.shippedWithoutPullRequest'
-            : 'development.noPullRequestYet';
+            : state === 'delivered_by_child'
+              ? 'development.deliveredByChildPullRequest'
+              : 'development.noPullRequestYet';
   const pillKey = `development.repoState.${state}` as const;
   return (
     <li className="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-dashed border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)">
@@ -457,6 +461,7 @@ export function DevelopmentSectionBody({
   decision = null,
   agentReview = null,
   repairHostedDoor,
+  repairMyAgentDoor,
 }: {
   pullRequests: LinkedPullRequestDto[];
   /** The item's `MOTIR-<n>` key — the empty-state / caption copy names it. */
@@ -636,6 +641,8 @@ export function DevelopmentSectionBody({
    * host omits it, and the part draws the command alone.
    */
   repairHostedDoor?: ReactNode;
+  /** *Fix in my agent* (MOTIR-9053): the door beside the command of a red-checks repair. */
+  repairMyAgentDoor?: ReactNode;
 }) {
   const t = useTranslations('github');
   const locale = useLocale();
@@ -707,6 +714,7 @@ export function DevelopmentSectionBody({
           itemIdentifier={itemIdentifier}
           sentBackBy={sentBackBy}
           hostedDoor={repairHostedDoor}
+          myAgentDoor={repairMyAgentDoor}
         />
       ) : null}
       {continuePart}

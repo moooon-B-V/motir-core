@@ -28,7 +28,7 @@ export function InvalidFilterCallout({ view, sort, filter }: InvalidFilterCallou
   return (
     <div
       role="alert"
-      className="flex max-w-[560px] items-start gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-4 py-3.5"
+      className="flex max-w-[560px] items-start gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-card-padding-16) py-(--spacing-card-padding-12)"
     >
       <TriangleAlert className="mt-px h-[18px] w-[18px] shrink-0 text-(--el-warning)" aria-hidden />
       <div>
@@ -39,7 +39,7 @@ export function InvalidFilterCallout({ view, sort, filter }: InvalidFilterCallou
         <button
           type="button"
           onClick={() => router.push(buildIssueListHref(pathname, { view, sort, filter }))}
-          className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-(--el-border) px-3 font-sans text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-(--el-border) px-(--spacing-control-x-12) font-sans text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >
           <X className="h-4 w-4 text-(--el-text-muted)" aria-hidden />
           {t('advancedClearFilter')}

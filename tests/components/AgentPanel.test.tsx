@@ -862,6 +862,13 @@ describe('the header’s mutations update the list too (page-state contract)', (
 });
 
 describe('the narrow width (panel 7)', () => {
+  it('the terminal area keeps a floor of its own, so a tall read-out above the tab strip cannot collapse it (MOTIR-8845)', async () => {
+    await mount(undefined, { openAgentId: 'a1' });
+    const body = within(panel()).getByTestId('agent-terminal-body');
+    expect(body.className).toContain('min-h-40');
+    expect(body.className).not.toContain('min-h-0');
+  });
+
   it('the panel carries the ← My agents crumb that returns to the list; the list column hides below 1024px', async () => {
     await mount(undefined, { openAgentId: 'a1' });
     const crumb = within(panel()).getByRole('button', { name: 'My agents' });

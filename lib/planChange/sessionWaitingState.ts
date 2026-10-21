@@ -138,6 +138,7 @@ export const PLAN_SESSION_FAILURE_REASONS = [
   'token_expired',
   'prompt_too_large',
   'job_failed',
+  'stalled',
   'internal',
 ] as const satisfies readonly PlanSessionFailureReason[];
 
@@ -168,6 +169,7 @@ export const planSessionFailureRecordSchema = z.object({
   failureStopPhase: z.enum(['lay', 'author']).nullable().optional().default(null),
   failureStopRef: capped(FAILURE_STOP_REF_MAX),
   failureStopTitle: capped(FAILURE_STOP_TITLE_MAX),
+  failureResumable: z.boolean().nullable().optional().default(null),
 });
 
 export interface PlanSessionFailureRecord {
@@ -180,6 +182,9 @@ export interface PlanSessionFailureRecord {
   failureStopPhase?: PlanSessionWalkPhase | null;
   failureStopRef?: string | null;
   failureStopTitle?: string | null;
+  /** motir-ai's verdict on whether the failed job can be resumed (MOTIR-9121); `false`
+   *  when it failed before its conversation settled. `null` / absent: unknown. */
+  failureResumable?: boolean | null;
 }
 
 /** The wait `markAwaitingPerson` writes. */
@@ -220,6 +225,7 @@ export const CLEARED_FAILURE_COLUMNS = {
   failureStopPhase: null,
   failureStopRef: null,
   failureStopTitle: null,
+  failureResumable: null,
 } as const;
 
 /** The two awaiting columns, set to null. */

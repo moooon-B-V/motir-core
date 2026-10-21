@@ -85,7 +85,7 @@ export default async function OnboardingImportPage({
                     <li key={p.id}>
                       <Link
                         href={`/onboarding/import?projectId=${encodeURIComponent(p.id)}`}
-                        className="block rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-3 text-sm text-(--el-text) hover:border-(--el-border-strong)"
+                        className="block rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-(--spacing-card-padding-12) text-sm text-(--el-text) hover:border-(--el-border-strong)"
                       >
                         {p.name}
                       </Link>

@@ -420,13 +420,13 @@ export function MarkdownEditor({
     // client — an intentional, sanctioned attribute mismatch, not a bug.
     <div className="flex flex-col gap-1" data-color-mode={colorMode} suppressHydrationWarning>
       {labelHidden ? null : (
-        <span className="text-(--el-text) flex items-center gap-2 font-sans text-sm font-medium">
+        <span className="text-(--el-text) flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm font-medium">
           {label}
           {labelAccessory}
         </span>
       )}
       {readOnly ? (
-        <div className="border-(--el-border) bg-(--el-surface) rounded-(--radius-input) border px-3 py-2">
+        <div className="border-(--el-border) bg-(--el-surface) rounded-(--radius-input) border px-(--spacing-control-x-12) py-(--spacing-control-y-8)">
           <MarkdownView value={value} />
         </div>
       ) : (
@@ -592,7 +592,7 @@ function Toolbar({
             aria-label={b.label}
             title={b.label}
             onClick={b.run}
-            className="text-(--el-text-muted) hover:bg-(--el-page-bg) hover:text-(--el-text) focus-visible:ring-(--el-editor-focus) rounded-(--radius-control) p-1.5 focus-visible:ring-2 focus-visible:outline-none"
+            className="text-(--el-text-muted) hover:bg-(--el-page-bg) hover:text-(--el-text) focus-visible:ring-(--el-editor-focus) rounded-(--radius-control) p-(--spacing-control-x-6) focus-visible:ring-2 focus-visible:outline-none"
           >
             <Icon className="h-4 w-4" aria-hidden />
           </button>
@@ -604,7 +604,7 @@ function Toolbar({
           aria-label="Attach file"
           title="Attach file"
           onClick={onAttach}
-          className="text-(--el-text-muted) hover:bg-(--el-page-bg) hover:text-(--el-text) focus-visible:ring-(--el-editor-focus) rounded-(--radius-control) p-1.5 focus-visible:ring-2 focus-visible:outline-none"
+          className="text-(--el-text-muted) hover:bg-(--el-page-bg) hover:text-(--el-text) focus-visible:ring-(--el-editor-focus) rounded-(--radius-control) p-(--spacing-control-x-6) focus-visible:ring-2 focus-visible:outline-none"
         >
           <Paperclip className="h-4 w-4" aria-hidden />
         </button>

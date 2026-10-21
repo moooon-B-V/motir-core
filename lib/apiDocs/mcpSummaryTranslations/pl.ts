@@ -212,6 +212,12 @@ export const pl: McpSummaryTranslations = {
     source:
       "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
   },
+  get_coding_convention: {
+    summary:
+      'Pełna konwencja kodowania jednego repozytorium – wyprowadzona lub zredagowana przez osobę, z numerem wersji – to, czego trzyma się zmiana w tym repozytorium.',
+    source:
+      "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
+  },
   get_design: {
     summary:
       'ZATWIERDZONY projekt jednego elementu roboczego z projektem, z krótkotrwałymi linkami do jego plików — albo informacja, który z pięciu powodów sprawia, że go nie ma.',
@@ -238,9 +244,9 @@ export const pl: McpSummaryTranslations = {
   },
   get_project_state: {
     summary:
-      'Warunki wstępne planowania w Projekcie — ustanowiony, kod podłączony, zaindeksowany, repozytorium ustawione — zanim zaczniesz planować.',
+      'Warunki wstępne planowania w Projekcie — ustanowiony, kod podłączony, zaindeksowany, repozytorium ustawione — oraz język treści organizacji, zanim zaczniesz planować.',
     source:
-      "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
+      "A project's planning preconditions — established, code connected, indexed, repo set — and its organisation's content language, before you plan.",
   },
   get_work_item: {
     summary:
@@ -388,6 +394,12 @@ export const pl: McpSummaryTranslations = {
       'Zgłoś krok, na którym jest sesja planisty (settle, lay, author), albo ją zakończ — doradczy sygnał postępu na generowanym Planie.',
     source:
       'Report the step a planner session is on (settle, lay, author) or end it — an advisory progress signal on a generating plan.',
+  },
+  record_run_discrepancy: {
+    summary:
+      'Runner, który zbudował element roboczy według planu błędnego tylko co do JAK, zapisuje, co zbudował inaczej — komentarz do elementu i wpis przebiegu, przyjęte do wiadomości.',
+    source:
+      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
   },
   report_unbuildable_target: {
     summary:

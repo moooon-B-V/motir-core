@@ -27,6 +27,9 @@ import {
   WarmButton as Button,
 } from '@/components/onboarding/layout';
 import { ConnectPanel } from './ConnectPanel';
+import { Dots, IMPORT_SOURCE_NAME, IndexIndicator } from './IndexIndicator';
+import { summariseIndex } from './indexSummary';
+import { useMigrateIndexStatus } from './useMigrateIndexStatus';
 import { StepHead } from './StepHead';
 import { DiscoveryChatBubble } from '@/components/onboarding/DiscoveryChatRail';
 import { setActiveProjectAction } from '@/app/(authed)/_project-actions';
@@ -39,6 +42,7 @@ import { isMigrateOnboardingStep } from '@/lib/dto/migrateOnboarding';
 import type {
   MigrateGeneratedPlanDto,
   MigrateIndexStatusDto,
+  MigrateLatestImportDto,
   MigrateOnboardingDto,
   MigrateOnboardingStepDto,
 } from '@/lib/dto/migrateOnboarding';
@@ -53,10 +57,12 @@ import {
 // bar, a hero (full on a run's first screen, compact after), and one work band
 // holding the rail and the current step.
 //
-// ONE PAGE TO FINISH ONBOARDING (Revision 6). Every step before the plan is
-// ready happens here: the importer runs inside the Import step, and "A few
-// questions" is a step of this page driven by the same discovery turn API the
-// discovery canvas uses. The only exit at the end is Review your plan.
+// ONE PAGE TO FINISH ONBOARDING (Revision 6), ENDING AT IMPORT (§ Revision A,
+// MOTIR-8772). The wizard ends at the Import step with one primary action,
+// Enter Motir, which never waits on the index or on an import: both keep going
+// in the background. No plan is drafted here any more; the plan screens below
+// (Decision, Resume, the questions step) are reached only by a run that was
+// already parked on one of those steps before the change.
 //
 // A client island seeded from the Server Component's read of the state machine;
 // it drives step transitions through the migrate API routes (start / advance /
@@ -80,6 +86,15 @@ const STEP_RANK: Record<MigrateOnboardingStepDto, number> = {
 
 /** How often the drafting status re-asks the machine whether the plan is ready. */
 const GENERATE_POLL_MS = 5000;
+
+/** How often the Import step re-reads the run while an import runs, so the
+ *  status line, the rail row and the chip follow it. */
+const IMPORT_POLL_MS = 5000;
+
+/** An import the run reports as still going. */
+function importRunning(latest: MigrateLatestImportDto | null | undefined): boolean {
+  return latest?.status === 'running';
+}
 
 export interface MigrateWizardProject {
   id: string;
@@ -258,9 +273,11 @@ export function MigrateWizard({
     return result;
   }, [postRunRoute, run]);
 
-  const skipImport = useCallback(() => {
+  /** ENTER MOTIR (§ Revision A): completes the run from wherever it stands at
+   *  index or import; the completed-run redirect above takes it from there. */
+  const enter = useCallback(() => {
     if (!run) return;
-    void postRunRoute(`/api/onboarding/migrate/${run.id}/skip-import`).then((r) => {
+    void postRunRoute(`/api/onboarding/migrate/${run.id}/enter`).then((r) => {
       if (r.kind === 'ok') setHeroFull(false);
     });
   }, [postRunRoute, run]);
@@ -268,8 +285,34 @@ export function MigrateWizard({
   const arriving = autoStart && run === null && !autoStartFailed;
   const saveExitHref = onboardingReturnHref(searchParams, 'abandoned') ?? '/roadmap';
 
+  // ONE index read for the page (MOTIR-8771): the Index step and the bar's
+  // indicator both render from it.
+  const pastConnect = run !== null && run.step !== 'connect';
+  const { status: indexStatus, refresh: refreshIndexStatus } = useMigrateIndexStatus(
+    pastConnect ? run.id : null,
+  );
+  const showIndicator = run !== null && run.step !== 'connect' && run.step !== 'index';
+
+  // A started import runs in the background (§ Revision A): while the run
+  // reports one, re-read the run so its count and its end reach the page.
+  const importing = run !== null && importRunning(run.latestImport);
+  const runId = run?.id ?? null;
+  useEffect(() => {
+    if (!importing || !runId) return;
+    const timer = setInterval(() => void reread(runId), IMPORT_POLL_MS);
+    return () => clearInterval(timer);
+  }, [importing, runId, reread]);
+
   const bar = (
     <OnboardingWizardBar flowName={t('brandBar.flowName')} userInitial={userInitial}>
+      {showIndicator ? (
+        <IndexIndicator
+          runId={run.id}
+          status={indexStatus}
+          latestImport={run.latestImport}
+          onRetried={refreshIndexStatus}
+        />
+      ) : null}
       <Link
         href="/onboarding/discovery"
         className={cn(
@@ -311,14 +354,14 @@ export function MigrateWizard({
   } else if (run.step === 'connect') {
     panel = <ConnectPanel runId={run.id} onAdvance={advance} busy={busy} />;
   } else if (run.step === 'index') {
-    panel = <IndexPanel runId={run.id} onAdvance={advance} busy={busy} />;
+    panel = <IndexPanel status={indexStatus} onAdvance={advance} busy={busy} />;
   } else if (run.step === 'import') {
     panel = (
       <ImportPanel
         importer={importer}
         justConnected={justConnected}
-        onContinue={() => void advance()}
-        onSkip={skipImport}
+        latestImport={run.latestImport}
+        onEnter={enter}
         busy={busy}
       />
     );
@@ -343,11 +386,13 @@ export function MigrateWizard({
           <Rail
             step={run?.step ?? (arriving ? 'connect' : null)}
             keptSteps={run?.keptSteps ?? []}
+            indexStatus={indexStatus}
+            latestImport={run?.latestImport ?? null}
           />
           <section className="min-w-0 flex-1">
             {error ? (
               <p
-                className="mb-4 flex items-center gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding) py-3 text-sm text-(--el-text-strong)"
+                className="mb-4 flex items-center gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding) py-(--spacing-card-padding-12) text-sm text-(--el-text-strong)"
                 role="alert"
               >
                 <AlertCircle className="size-4 flex-none" aria-hidden />
@@ -384,15 +429,11 @@ const STEP_LABEL_KEY = {
   connect: 'connect',
   index: 'index',
   import: 'importStep',
-  discovery: 'discoveryStep',
 } as const satisfies Partial<Record<MigrateOnboardingStepDto, string>>;
 
-const RAIL_STEPS: readonly (keyof typeof STEP_LABEL_KEY)[] = [
-  'connect',
-  'index',
-  'import',
-  'discovery',
-];
+/** The rail's steps. The questions step left with plan generation (§ Revision
+ *  A): the wizard ends at Import, so it is neither shown nor collapsed. */
+const RAIL_STEPS: readonly (keyof typeof STEP_LABEL_KEY)[] = ['connect', 'index', 'import'];
 
 const RAIL_GROUP =
   'mt-5 mb-0 flex items-center gap-2 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase';
@@ -400,9 +441,16 @@ const RAIL_GROUP =
 function Rail({
   step,
   keptSteps,
+  indexStatus,
+  latestImport,
 }: {
   step: MigrateOnboardingStepDto | null;
   keptSteps: readonly MigrateOnboardingStepDto[];
+  /** The wizard's one index read: past the Index step, an index still going
+   *  makes Index a background row (§ Revision A). */
+  indexStatus: MigrateIndexStatusDto | null;
+  /** A running import makes Import work items a background row. */
+  latestImport: MigrateLatestImportDto | null;
 }) {
   const t = useTranslations('onboardingMigrate');
   const rank = step ? STEP_RANK[step] : -1;
@@ -411,11 +459,32 @@ function Rail({
   const collapsed = keptSteps.length === 0 ? [] : RAIL_STEPS.filter((s) => !keptSteps.includes(s));
   const runs = (s: MigrateOnboardingStepDto) => keptSteps.length === 0 || keptSteps.includes(s);
 
+  // BACKGROUND ROWS (§ Revision A): a job that keeps going after the person
+  // moved on reads "In the background", never as the current step.
+  const index = rank > STEP_RANK.index ? summariseIndex(indexStatus) : null;
+  const indexBackground =
+    index && index.state !== 'done'
+      ? t('rail.background', {
+          detail:
+            index.state === 'failed'
+              ? t('rail.backgroundFailed')
+              : index.state === 'queued'
+                ? t('rail.backgroundQueued')
+                : t('rail.backgroundInProgress'),
+        })
+      : null;
+  const importBackground =
+    latestImport && importRunning(latestImport)
+      ? t('rail.background', {
+          detail: t('indexing.importProgress', { done: latestImport.processedCount }),
+        })
+      : null;
+
   return (
     <nav aria-label={t('rail.title')} className="w-full flex-none md:w-56">
       <p className="m-0 text-sm font-semibold text-(--el-text)">{t('rail.title')}</p>
       <p className="m-0 mt-1 text-xs text-(--el-text-secondary)">
-        {collapsed.length > 0 ? t('rail.subShort') : t('rail.sub')}
+        {collapsed.length > 0 ? t('rail.subShort') : t('rail.subtitle')}
       </p>
 
       {collapsed.length > 0 ? (
@@ -424,7 +493,7 @@ function Rail({
           <ul className="m-0 mt-2 list-none p-0">
             <li
               data-testid="migrate-rail-collapsed"
-              className="flex items-start gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-2 text-sm text-(--el-text-secondary)"
+              className="flex items-start gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y-8) text-sm text-(--el-text-secondary)"
             >
               {/* Panel 5's SATISFIED marker, verbatim: sky tint and a READ glyph,
                   because what happened is that something was read. Never the DONE
@@ -454,7 +523,18 @@ function Rail({
           <p className={RAIL_GROUP}>{t('rail.setUp')}</p>
           <ul className="m-0 mt-2 flex list-none flex-row flex-wrap gap-2 p-0 md:flex-col md:gap-1">
             {runs('connect') ? <RailStep label={t('rail.connect')} state={stateOf(0)} /> : null}
-            {runs('index') ? <RailStep label={t('rail.index')} state={stateOf(1)} /> : null}
+            {runs('index') ? (
+              indexBackground ? (
+                <RailStep
+                  label={t('rail.index')}
+                  state="background"
+                  meta={indexBackground}
+                  failed={index?.state === 'failed'}
+                />
+              ) : (
+                <RailStep label={t('rail.index')} state={stateOf(1)} />
+              )
+            ) : null}
           </ul>
         </>
       ) : null}
@@ -465,30 +545,19 @@ function Rail({
         <>
           <p className={RAIL_GROUP}>
             {t('rail.import')}
-            <span className="rounded-(--radius-badge) bg-(--el-tint-yellow) px-(--spacing-chip-x) py-0.5 text-[0.65rem] font-semibold text-(--el-text-strong) normal-case">
+            <span className="rounded-(--radius-badge) bg-(--el-tint-yellow) px-(--spacing-chip-x) py-(--spacing-chip-y) text-[0.65rem] font-semibold text-(--el-text-strong) normal-case">
               {t('rail.importOptional')}
             </span>
           </p>
           <ul className="m-0 mt-2 flex list-none flex-row flex-wrap gap-2 p-0 md:flex-col md:gap-1">
-            <RailStep
-              label={t('rail.importStep')}
-              state={rank > 2 ? 'done' : rank === 2 ? 'current' : 'optional'}
-            />
-          </ul>
-        </>
-      ) : null}
-
-      {runs('discovery') ? (
-        <>
-          {/* ⚠️ ONE ROW, AND IT NEVER NAMES A TIER (MOTIR-4755 revision 2, after
-              Yue's note that a user does not know what Discovery and Vision
-              are). `discovery` / `vision` / `feasibility` / `validation` are the
-              planner's identifiers for questions the user is simply being asked;
-              a rail that listed them would teach a stranger four words before it
-              told them anything. The row says what it IS. */}
-          <p className={RAIL_GROUP}>{t('rail.directionGroup')}</p>
-          <ul className="m-0 mt-2 flex list-none flex-row flex-wrap gap-2 p-0 md:flex-col md:gap-1">
-            <RailStep label={t('rail.discoveryStep')} state={stateOf(4)} />
+            {importBackground ? (
+              <RailStep label={t('rail.importStep')} state="background" meta={importBackground} />
+            ) : (
+              <RailStep
+                label={t('rail.importStep')}
+                state={rank > 2 ? 'done' : rank === 2 ? 'current' : 'optional'}
+              />
+            )}
           </ul>
         </>
       ) : null}
@@ -499,14 +568,20 @@ function Rail({
 function RailStep({
   label,
   state,
+  meta,
+  failed = false,
 }: {
   label: string;
-  state: 'done' | 'current' | 'upcoming' | 'optional';
+  state: 'done' | 'current' | 'upcoming' | 'optional' | 'background';
+  /** A background row's second line ("In the background · …"). */
+  meta?: string;
+  /** A background job that failed: its marker stops pulsing. */
+  failed?: boolean;
 }) {
   return (
     <li
       className={cn(
-        'flex items-center gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-2 text-sm',
+        'flex items-center gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y-8) text-sm',
         state === 'current' &&
           'bg-(--el-surface) text-(--el-text) ring-1 ring-(--el-accent-on-surface)',
         // Every non-current step takes the same ink: the CURRENT step is the
@@ -527,6 +602,7 @@ function RailStep({
           state === 'upcoming' && 'border border-(--el-border) text-(--el-text-secondary)',
           state === 'optional' &&
             'border border-dashed border-(--el-border) text-(--el-text-secondary)',
+          state === 'background' && 'border border-(--el-border)',
         )}
         aria-hidden
       >
@@ -534,9 +610,20 @@ function RailStep({
           <Check className="size-3" strokeWidth={3} />
         ) : state === 'optional' ? (
           <Download className="size-3" />
+        ) : state === 'background' ? (
+          <span className="scale-75">
+            <Dots pulsing={!failed} />
+          </span>
         ) : null}
       </span>
-      {label}
+      {meta ? (
+        <span className="flex min-w-0 flex-col" data-rail-background="">
+          <span className="text-(--el-text)">{label}</span>
+          <span className="text-xs text-(--el-text-secondary)">{meta}</span>
+        </span>
+      ) : (
+        label
+      )}
     </li>
   );
 }
@@ -628,7 +715,7 @@ function StartPanel({
             <label
               key={p.id || i}
               className={cn(
-                'flex cursor-pointer items-center gap-3 rounded-(--radius-card) border px-(--spacing-card-padding) py-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-(--focus-ring-color)',
+                'flex cursor-pointer items-center gap-3 rounded-(--radius-card) border px-(--spacing-card-padding) py-(--spacing-card-padding-12) has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-(--focus-ring-color)',
                 selected
                   ? 'border-(--el-accent-on-surface) bg-(--el-surface) ring-1 ring-(--el-accent-on-surface)'
                   : 'border-(--el-border) bg-(--el-page-bg) hover:border-(--el-border-strong)',
@@ -684,41 +771,17 @@ function StartPanel({
 }
 
 function IndexPanel({
-  runId,
+  status,
   onAdvance,
   busy,
 }: {
-  runId: string;
+  /** The wizard's one index read (`useMigrateIndexStatus`, MOTIR-8771). The
+   *  region is aria-live so a screen reader announces progress. */
+  status: MigrateIndexStatusDto | null;
   onAdvance: () => Promise<RunResult>;
   busy: boolean;
 }) {
   const t = useTranslations('onboardingMigrate');
-  const [status, setStatus] = useState<MigrateIndexStatusDto | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
-  // Poll the index-status route while the run sits on the `index` step. The
-  // region is aria-live so a screen reader announces progress; the poll stops
-  // on unmount / when every repo is indexed.
-  useEffect(() => {
-    const poll = async () => {
-      const ctrl = new AbortController();
-      abortRef.current = ctrl;
-      try {
-        const res = await fetch(`/api/onboarding/migrate/${runId}/index-status`, {
-          signal: ctrl.signal,
-        });
-        if (res.ok) setStatus((await res.json()) as MigrateIndexStatusDto);
-      } catch {
-        // a transient fetch failure is fine — the next tick retries
-      }
-    };
-    void poll();
-    const interval = window.setInterval(poll, 3000);
-    return () => {
-      window.clearInterval(interval);
-      abortRef.current?.abort();
-    };
-  }, [runId]);
 
   const total = status?.total ?? 0;
   const done = status?.indexedCount ?? 0;
@@ -779,7 +842,7 @@ function IndexPanel({
                 return (
                   <li
                     key={repo.repoRef}
-                    className="flex items-center gap-3 rounded-(--radius-control) border border-(--el-border-soft) px-(--spacing-control-x) py-2.5"
+                    className="flex items-center gap-3 rounded-(--radius-control) border border-(--el-border-soft) px-(--spacing-control-x) py-(--spacing-control-y-8)"
                   >
                     <GitBranch
                       className="size-4 flex-none text-(--el-text-secondary)"
@@ -820,7 +883,10 @@ function IndexPanel({
       <PanelFoot
         nextLabel={t('index.next')}
         onNext={() => void onAdvance()}
-        nextDisabled={!allIndexed}
+        // NOT A STOP (MOTIR-8768): the run may leave the step once an index
+        // exists in any state, so Next opens with the first repository listed,
+        // indexed or not. The progress keeps going in the bar's chip.
+        nextDisabled={total === 0}
         busy={busy}
       />
     </div>
@@ -828,57 +894,93 @@ function IndexPanel({
 }
 
 /**
- * Import — the importer IN the step (Revision 6, 4a–4f): its own rail and steps
- * inside one card, Skip import in its Cancel slot, and Continue on its finished
- * state. A vendor OAuth round trip returns here (`lib/import/oauthReturn.ts`).
+ * Import — the importer IN the step (Revision 6, 4a–4f), and the end of the
+ * wizard (§ Revision A, MOTIR-8772). One primary action under the sources,
+ * Enter Motir, enabled whatever the index or an import is doing. A started
+ * import runs in the background: a status line names it and the sources go
+ * inert while it runs. A vendor OAuth round trip returns here
+ * (`lib/import/oauthReturn.ts`).
  */
 function ImportPanel({
   importer,
   justConnected,
-  onContinue,
-  onSkip,
+  latestImport,
+  onEnter,
   busy,
 }: {
   importer: MigrateImporterSeed | null;
   justConnected?: ImportWizardProps['justConnected'];
-  onContinue: () => void;
-  onSkip: () => void;
+  latestImport: MigrateLatestImportDto | null;
+  onEnter: () => void;
   busy: boolean;
 }) {
   const t = useTranslations('onboardingMigrate');
+  const running = latestImport !== null && importRunning(latestImport);
   return (
     <div>
       <StepHead
         eyebrow={t('import.eyebrow')}
         heading={t('import.heading')}
-        body={t('import.bodyInline')}
+        body={t('import.body')}
       />
       <Card>
-        {importer ? (
-          <ImportWizard
-            project={importer.project}
-            statuses={importer.statuses}
-            connected={importer.connected}
-            existingImportId={importer.existingImportId}
-            justConnected={justConnected}
-            embedded={{
-              skipLabel: t('import.skip'),
-              onSkip,
-              continueLabel: t('import.continue'),
-              onContinue,
-              busy,
-            }}
-          />
-        ) : (
-          // The importer's data could not be read: the step can still be left.
-          <div className="flex justify-end">
-            <Button variant="ghost" size="md" onClick={onSkip} disabled={busy}>
-              {t('import.skip')}
+        <div className="flex flex-col gap-4">
+          {importer ? (
+            <div
+              data-testid="migrate-import-sources"
+              aria-disabled={running || undefined}
+              inert={running}
+              className={cn(running && 'opacity-60')}
+            >
+              <ImportWizard
+                project={importer.project}
+                statuses={importer.statuses}
+                connected={importer.connected}
+                existingImportId={importer.existingImportId}
+                justConnected={justConnected}
+                embedded={{
+                  continueLabel: t('import.continue'),
+                  onContinue: onEnter,
+                  busy,
+                }}
+              />
+            </div>
+          ) : null}
+          {running ? (
+            <div
+              role="status"
+              data-testid="migrate-import-running"
+              className="flex items-start gap-2.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-tint-sky) px-(--spacing-control-x) py-(--spacing-control-y-8)"
+            >
+              <span className="mt-1.5">
+                <Dots pulsing />
+              </span>
+              <span className="flex flex-col">
+                <span className="text-sm font-semibold text-(--el-text-strong)">
+                  {t('import.running', {
+                    source: IMPORT_SOURCE_NAME[latestImport.source] ?? latestImport.source,
+                    done: latestImport.processedCount,
+                  })}
+                </span>
+                <span className="text-xs text-(--el-text-strong)">{t('import.runningBody')}</span>
+              </span>
+            </div>
+          ) : null}
+          <div className="flex items-center justify-end gap-3 border-t border-(--el-border-soft) pt-3">
+            <p className="m-0 flex-1 text-xs text-(--el-text-secondary)">{t('enter.hint')}</p>
+            <Button
+              variant="primary"
+              size="md"
+              onClick={onEnter}
+              disabled={busy}
+              aria-busy={busy || undefined}
+              rightIcon={<ArrowRight className="size-4" />}
+            >
+              {t('enter.cta')}
             </Button>
           </div>
-        )}
+        </div>
       </Card>
-      <p className="m-0 mt-4 text-xs text-(--el-text-secondary)">{t('import.reconcile')}</p>
     </div>
   );
 }
@@ -1100,7 +1202,7 @@ function Conversation({
           </p>
         ) : null}
         {error ? (
-          <div className="rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)">
+          <div className="rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)">
             <p className="m-0">{chatT('errorBody')}</p>
             <button
               type="button"
@@ -1197,7 +1299,7 @@ function DraftingCard({
     return (
       <p
         role="alert"
-        className="m-0 flex items-center gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding) py-3 text-sm text-(--el-text-strong)"
+        className="m-0 flex items-center gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding) py-(--spacing-card-padding-12) text-sm text-(--el-text-strong)"
       >
         <AlertCircle className="size-4 flex-none" aria-hidden />
         {t('common.error')}

@@ -6,6 +6,7 @@ import { signIn } from './_helpers/shell-session';
 import { agentSession } from './_helpers/agent-authored-plan-seed';
 import {
   backdatePlanActivity,
+  nudgePlan,
   seedPlanProgress,
   PLAN_PROGRESS_PASSWORD,
   type PlanProgressSeed,
@@ -618,6 +619,8 @@ for (const doorName of DOORS) {
 
         // ONE dropped read: the same animation runs on, and nothing reads reconnecting.
         const once = await dropReviewReads(page, door.planId, 1);
+        // The pane reads on a push: a quiet touch of the plan causes the read to drop.
+        await nudgePlan(door.planId);
         await expect.poll(() => once.dropped(), { timeout: 4 * POLL_MS }).toBe(1);
         await reviewAnswered(page, door.planId);
         await once.release();
@@ -627,6 +630,7 @@ for (const doorName of DOORS) {
 
         // Reads that KEEP failing: the marker reads reconnecting, and everything stops.
         const all = await dropReviewReads(page, door.planId);
+        await nudgePlan(door.planId);
         await expect(liveState(page)).toHaveAttribute('data-state', 'reconnecting', {
           timeout: (FAILING_AFTER + 2) * POLL_MS,
         });

@@ -1,7 +1,9 @@
 'use client';
 
+import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
+import { RelatedTitles } from '../[key]/_components/translation/RelatedTitles';
 import { personDisplayName } from '@/lib/people/personLabel';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   Archive,
@@ -23,6 +25,15 @@ import { DevelopmentSection, hasOpenPullRequest } from '@/components/github/Deve
 import { DesignResultPanel } from '../[key]/_components/DesignResultPanel';
 import { RepositorySetField } from '@/components/workItems/RepositorySetField';
 import { MarkdownView } from '@/components/ui/MarkdownView';
+import { TypeInText } from '@/components/planning/TypeInText';
+import { usePrefersReducedMotion } from '@/lib/hooks/usePrefersReducedMotion';
+import {
+  finishTypeIn,
+  foldTypeIn,
+  startTypeIn,
+  typeInPhase,
+  type TypedField,
+} from '@/lib/planning/typeIn';
 import { TodoRowReadOnly } from '@/app/(authed)/items/[key]/_components/TodoListSection';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
 import { WorkItemPlanEntrance } from '@/components/planning/WorkItemPlanEntrance';
@@ -176,6 +187,15 @@ type IssueQuickViewPanelProps = {
        * `proposal`.
        */
       onOpenProposal?: (planItemId: string) => void;
+      /**
+       * THE TYPEWRITER (Story MOTIR-8590 · MOTIR-8595, design Part XXVIII §28.6) —
+       * the fields that were UNWRITTEN when this quick view opened, on the
+       * overlay while the plan is written. Each one that then arrives types itself
+       * in, in reading order. Decided by the host (`ProposalPeek`), which holds the
+       * review item; this panel only renders what it is told to type. Ignored
+       * without `proposal`, so no committed host can ever type.
+       */
+      typeIn?: ReadonlySet<TypedField> | null;
     }
 );
 
@@ -269,7 +289,7 @@ function OpenTargetLink({ identifier }: { identifier: string }) {
       target="_blank"
       rel="noopener noreferrer"
       data-testid="quick-view-open-full"
-      className="inline-flex h-(--height-btn-sm) shrink-0 items-center justify-center gap-1.5 rounded-(--radius-btn) bg-(--el-accent) px-3 font-sans text-xs font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:outline-none"
+      className="inline-flex h-(--height-btn-sm) shrink-0 items-center justify-center gap-1.5 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-control-x-12) font-sans text-xs font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:outline-none"
     >
       {t('openTargetAsItStands')}
       <ArrowRight className="h-[15px] w-[15px]" aria-hidden />
@@ -287,7 +307,7 @@ function OpenFullPageLink({ identifier }: { identifier: string }) {
       target="_blank"
       rel="noopener noreferrer"
       data-testid="quick-view-open-full"
-      className="inline-flex h-(--height-btn-sm) shrink-0 items-center justify-center gap-1.5 rounded-(--radius-btn) bg-(--el-accent) px-3 font-sans text-xs font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:outline-none"
+      className="inline-flex h-(--height-btn-sm) shrink-0 items-center justify-center gap-1.5 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-control-x-12) font-sans text-xs font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:outline-none"
     >
       {t('openFullPage')}
       <ArrowRight className="h-[15px] w-[15px]" aria-hidden />
@@ -328,7 +348,7 @@ function CustomRailRow({
                 : t('quickViewEditField', { field: field.label })
             }
             aria-expanded={editing}
-            className="ml-auto inline-flex rounded-(--radius-control) p-0.5 text-(--el-text-faint) transition-colors hover:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            className="ml-auto inline-flex rounded-(--radius-control) p-(--spacing-control-x-2) text-(--el-text-faint) transition-colors hover:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >
             <ChevronDown
               className={`h-3.5 w-3.5 transition-transform ${editing ? 'rotate-180' : ''}`}
@@ -403,6 +423,42 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
     // Obsolescence row lifts the hold with no re-read.
     edit.effective ? edit.effective.obsolescence : ready?.obsolescence,
   );
+  // THE TYPEWRITER'S RUN for this open (MOTIR-8595) — above the early returns for
+  // hook order. The panel is keyed per proposal, so the run is per open. Folded in
+  // render: an armed field that arrives queues, a changed one shows final, and
+  // reduced motion or a finished plan (`typeIn` gone) shows everything at once.
+  const typeInArmed = props.state === 'ready' && props.proposal ? (props.typeIn ?? null) : null;
+  const reducedMotion = usePrefersReducedMotion();
+  const [typeRun, setTypeRun] = useState(() => startTypeIn(typeInArmed));
+  const typeRunNow = foldTypeIn(
+    typeRun,
+    ready
+      ? {
+          title: ready.title,
+          descriptionMd: ready.descriptionMd,
+          explanationMd: ready.explanationMd,
+        }
+      : {},
+    typeInArmed !== null && !reducedMotion,
+  );
+  if (typeRunNow !== typeRun) setTypeRun(typeRunNow);
+  const finishTyping = useCallback(
+    (field: TypedField) => setTypeRun((run) => finishTypeIn(run, field)),
+    [],
+  );
+  const typed = (field: TypedField, node: ReactNode, placeholder: ReactNode = null) =>
+    typeInArmed?.has(field) ? (
+      <TypeInText
+        phase={typeInPhase(typeRunNow, field)}
+        placeholder={placeholder}
+        onDone={() => finishTyping(field)}
+        testId={`quick-view-typein-${field}`}
+      >
+        {node}
+      </TypeInText>
+    ) : (
+      node
+    );
   const labelEdit = useLabelEditing({
     workItemId: ready?.id ?? '',
     projectKey: ready?.projectIdentifier ?? '',
@@ -798,13 +854,16 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
         <QuickViewMain>
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <h2 className="font-serif text-[27px] leading-tight font-semibold text-(--el-text)">
-                <TranslatableTitle
-                  title={data.title}
-                  projectIdentifier={data.projectIdentifier}
-                  workItemRefs={data.workItemRefs}
-                />
-              </h2>
+              {typed(
+                'title',
+                <h2 className="font-serif text-[27px] leading-tight font-semibold text-(--el-text)">
+                  <TranslatableTitle
+                    title={data.title}
+                    projectIdentifier={data.projectIdentifier}
+                    workItemRefs={data.workItemRefs}
+                  />
+                </h2>,
+              )}
               <FieldTranslationMark fieldRef={fieldRef.title()} field="title" />
             </div>
             <TranslateControl />
@@ -852,6 +911,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               blockedByAncestor={
                 data.readiness.blockedByAncestor
                   ? {
+                      id: data.readiness.blockedByAncestor.id,
                       identifier: data.readiness.blockedByAncestor.identifier,
                       title: data.readiness.blockedByAncestor.title,
                       href: routes.item(data.readiness.blockedByAncestor.identifier),
@@ -868,16 +928,20 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               <FieldTranslationMark fieldRef={fieldRef.description()} field="description" />
             </span>
           </span>
-          {data.descriptionMd ? (
-            <TranslatableMarkdown
-              fieldRef={fieldRef.description()}
-              value={data.descriptionMd}
-              aria-label={t('issueDescriptionAria')}
-              workItemRefs={data.workItemRefs}
-              pageRefs={data.pageRefs}
-            />
-          ) : (
-            <p className="text-sm text-(--el-text-secondary) italic">{t('noDescription')}</p>
+          {typed(
+            'descriptionMd',
+            data.descriptionMd ? (
+              <TranslatableMarkdown
+                fieldRef={fieldRef.description()}
+                value={data.descriptionMd}
+                aria-label={t('issueDescriptionAria')}
+                workItemRefs={data.workItemRefs}
+                pageRefs={data.pageRefs}
+              />
+            ) : (
+              <p className="text-sm text-(--el-text-secondary) italic">{t('noDescription')}</p>
+            ),
+            <p className="text-sm text-(--el-text-secondary) italic">{t('noDescription')}</p>,
           )}
           {/* THE EXPLANATION, INLINE (Part XIV §6). The shipped peek defers it
               to the full page; a proposal has no page, and deferring to a thing
@@ -891,17 +955,23 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               <span className="mt-6 mb-2 block text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
                 {tPlan('sectionExplanation')}
               </span>
-              {data.explanationMd ? (
-                <MarkdownView
-                  value={data.explanationMd}
-                  aria-label={t('issueExplanationAria')}
-                  workItemRefs={data.workItemRefs}
-                  pageRefs={data.pageRefs}
-                />
-              ) : (
+              {typed(
+                'explanationMd',
+                data.explanationMd ? (
+                  <MarkdownView
+                    value={data.explanationMd}
+                    aria-label={t('issueExplanationAria')}
+                    workItemRefs={data.workItemRefs}
+                    pageRefs={data.pageRefs}
+                  />
+                ) : (
+                  <p className="text-sm text-(--el-text-secondary) italic">
+                    {tPlan('noExplanation')}
+                  </p>
+                ),
                 <p className="text-sm text-(--el-text-secondary) italic">
                   {tPlan('noExplanation')}
-                </p>
+                </p>,
               )}
             </>
           ) : null}
@@ -1348,7 +1418,9 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               >
                 <IssueTypeIcon type={view.parent.kind} className="h-3.5 w-3.5 shrink-0" />
                 <span className="shrink-0 font-mono text-xs">{view.parent.identifier}</span>
-                <span className="truncate text-(--el-text-secondary)">{view.parent.title}</span>
+                <span className="truncate text-(--el-text-secondary)">
+                  <SurfaceTitle id={view.parentId ?? ''} title={view.parent.title} />
+                </span>
               </Link>
             ) : (
               <span className="text-(--el-text-secondary)">{t('none')}</span>
@@ -1367,7 +1439,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             control={
               <QuickViewFolderControl
                 folderId={view.folderId}
-                parent={view.parent}
+                parent={view.parent && view.parentId ? { ...view.parent, id: view.parentId } : null}
                 onDismiss={edit.close}
                 onPick={(folderId, folderPath) => {
                   edit.close();
@@ -1667,7 +1739,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                     type="button"
                     aria-expanded={showAllCustom}
                     onClick={() => setShowAllCustom((s) => !s)}
-                    className="flex items-center gap-1.5 self-start rounded-(--radius-control) px-1 py-1 font-sans text-xs font-medium text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                    className="flex items-center gap-1.5 self-start rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) font-sans text-xs font-medium text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
                   >
                     <ChevronRight
                       className={`h-3.5 w-3.5 shrink-0 text-(--el-text-faint) transition-transform ${showAllCustom ? 'rotate-90' : ''}`}
@@ -1717,12 +1789,14 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   // 1–5): the same provider, bar and marks as the item page, from the offer this
   // peek read carried. It draws only the title and the description, so it offers
   // and marks only those (D3) — its press is the page's request and translates
-  // every differing field. No offer (a Visitor, a proposal, a failed read): the
+  // every differing field. Under auto-translate (MOTIR-8832) the offer carries the
+  // reader's context (`translation.auto`) and the host starts on mount with the
+  // same two-field scope. No offer (a Visitor, a proposal, a failed read): the
   // peek renders exactly as before. Bound to `peek` so the wrap re-indents nothing.
   const translation = proposal ? null : (data.translation ?? null);
   return translation ? (
     <TranslationProvider itemId={data.id} translation={translation} fields={QUICK_VIEW_FIELDS}>
-      {peek}
+      <RelatedTitles projectKey={data.projectIdentifier}>{peek}</RelatedTitles>
     </TranslationProvider>
   ) : (
     peek

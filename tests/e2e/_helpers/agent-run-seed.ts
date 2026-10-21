@@ -159,10 +159,19 @@ export async function callMotirTool<T>(
 /** The events of a run, in `seq` order — what the record holds, read as the test's own admin. */
 export async function runEvents(
   runId: string,
-): Promise<{ kind: string; body: string | null; reportedBy: string }[]> {
-  return adminDb.dispatchRunEvent.findMany({
+): Promise<
+  { kind: string; body: string | null; reportedBy: string; cardId: string | null; data: unknown }[]
+> {
+  const rows = await adminDb.dispatchRunEvent.findMany({
     where: { dispatchRunId: runId },
     orderBy: { seq: 'asc' },
-    select: { kind: true, body: true, reportedBy: true },
+    select: {
+      kind: true,
+      body: true,
+      reportedBy: true,
+      dispatchRunCardId: true,
+      data: true,
+    },
   });
+  return rows.map(({ dispatchRunCardId, ...rest }) => ({ ...rest, cardId: dispatchRunCardId }));
 }

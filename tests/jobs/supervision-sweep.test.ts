@@ -522,6 +522,9 @@ describe('the shape of the thing', () => {
     const spy = vi
       .spyOn(supervisionSweepService, 'sweepAbandoned')
       .mockResolvedValue({ scanned: 3, settled: 2, skipped: 1 });
+    const repairSpy = vi
+      .spyOn(supervisionSweepService, 'repairStrandedUsage')
+      .mockResolvedValue({ scanned: 4, settled: 1 });
     const silentStep = {
       run: async <T>(_id: string, fn: () => T | Promise<T>): Promise<T> => fn(),
     };
@@ -530,9 +533,10 @@ describe('the shape of the thing', () => {
     const result = await handler({ step: silentStep } as never, jobServices as never);
 
     expect(spy).toHaveBeenCalledTimes(1);
+    expect(repairSpy).toHaveBeenCalledTimes(1);
     // The counts land on the ledger row's `output`, which is what makes a quiet
     // tick and a busy one distinguishable on the operator surface.
-    expect(result).toEqual({ scanned: 3, settled: 2, skipped: 1 });
+    expect(result).toEqual({ scanned: 3, settled: 2, skipped: 1, repairedUsage: 1 });
   });
 
   it('runs every 5 minutes, and declares its catch-up at the cron', () => {

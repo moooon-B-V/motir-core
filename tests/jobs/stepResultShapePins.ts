@@ -99,6 +99,14 @@ export interface RetiredStepId {
  * new id would re-run it on a resumed run. A memo written before the change
  * carries `orphans: { machines, volumes }` — a superset of what is pinned — and
  * its one reader is the job's own return value, which nothing destructures.
+ *
+ * ⚠️ MOTIR-8711 KEPT `boot-runner` ON PURPOSE. Its supervising `session` gained an
+ * OPTIONAL `runnerTarget` (the org and installation the runner was minted in),
+ * which WIDENS the shape. The step provisions, so a new id would re-provision on
+ * a resumed run. A memo written before the change carries no `runnerTarget`, and
+ * its one reader (teardown's `deregisterQuietly`) reads it as
+ * `session.runnerTarget ?? undefined` — the provisioning installation, which is
+ * where every pre-change runner was minted.
  */
 export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   '`head-settle-${pass}`': {
@@ -141,10 +149,16 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/ciActionsGateSweep.ts',
     shape: '{ applied: number; failed: number }',
   },
+  // MOTIR-8839 added the OPTIONAL `session.handle.volumeId` (the runner's Docker
+  // volume) WITHOUT an id bump, on purpose: this step PROVISIONS, so a new id
+  // would boot a second container on a resumed run. The replayed value is safe at
+  // the boundary instead — a session memoised before the field existed simply
+  // lacks it, and the settle's teardown then finds the volume in the machine's
+  // own mounts, or the fleet reconciler's orphan sweep deletes it.
   'boot-runner': {
     file: 'lib/services/ciRunnerBootService.ts',
     shape:
-      '{ outcome: { billableSeconds: number; bootLatencyMs: null | number; containerId: string; costUsd: string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "gate_deferred"; reason: "ai_plan_required" | "balance_unavailable" | "ci_credits_exhausted" | "credits_insufficient" | "fleet_ceiling" | "gate_unavailable" | "org_pool" | "plan_unknown" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "no_runner_group" } | { detail: string; outcome: "provision_failed" } | { outcome: "already_claimed" } | { outcome: "not_configured" } | { outcome: "rate_limited"; retryAfterSeconds: null | number } | { outcome: "unknown_intent" }; phase: "terminal" } | { phase: "supervising"; session: { attribution: { orgId: string; projectId: string; repoFullName: string; workflowJobId: number; workspaceId: string }; bootedAt: string; githubRunnerId: null | number; handle: { createdAt: string; id: string; provider: "arc" | "fake" | "fly" | "runs_on"; region: string }; intentId: string; queuedAt: string } }',
+      '{ outcome: { billableSeconds: number; bootLatencyMs: null | number; containerId: string; costUsd: string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "gate_deferred"; reason: "ai_plan_required" | "balance_unavailable" | "ci_credits_exhausted" | "credits_insufficient" | "fleet_ceiling" | "gate_unavailable" | "org_pool" | "plan_unknown" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "no_runner_group" } | { detail: string; outcome: "provision_failed" } | { outcome: "already_claimed" } | { outcome: "not_configured" } | { outcome: "rate_limited"; retryAfterSeconds: null | number } | { outcome: "unknown_intent" }; phase: "terminal" } | { phase: "supervising"; session: { attribution: { orgId: string; projectId: string; repoFullName: string; workflowJobId: number; workspaceId: string }; bootedAt: string; githubRunnerId: null | number; handle: { createdAt: string; id: string; provider: "arc" | "fake" | "fly" | "runs_on"; region: string; volumeId?: string | undefined }; intentId: string; queuedAt: string; runnerTarget?: null | undefined | { installationId: string; org: string; role: "provisioning" | "user-facing" } } }',
   },
   'build-archive': {
     file: 'lib/jobs/definitions/dataExportBuild.ts',
@@ -312,6 +326,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/ciRunnerFleet.ts',
     shape: 'Array<string>',
   },
+  'reconcile-github-queue': {
+    file: 'lib/jobs/definitions/ciRunnerFleet.ts',
+    shape: '{ added: number }',
+  },
   'mark-stale-for-terminal-target': {
     file: 'lib/jobs/definitions/planDrift.ts',
     shape: '{ markedStale: Array<string>; restored: Array<string>; skipped: Array<string> }',
@@ -363,10 +381,14 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/fleetDebitMonitor.ts',
     shape: '{ alerted: number; failures: number; mismatched: number; orgs: number }',
   },
+  // MOTIR-8839 added `orphanedVolumesDestroyed` WITHOUT an id bump: the result is
+  // only returned as the job's output — nothing branches on it — and a pass
+  // re-decides from the inventory rather than replaying, so a memo written
+  // before the field existed is read by no one who needs it.
   'reconcile-fleet-attribution': {
     file: 'lib/jobs/definitions/fleetAttribution.ts',
     shape:
-      '{ apps: number; failures: number; killed: Array<{ action: "destroyed" | "stopped"; app: string; machineId: string; reason: "no_record" | "org_stopped" | "record_ended"; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent" | null }>; listed: number; matched: number; outcome: "reconciled"; spared: number; unavailableApps: Array<string>; undated: number } | { detail: string; outcome: "inventory_unavailable" } | { outcome: "disabled" }',
+      '{ apps: number; failures: number; killed: Array<{ action: "destroyed" | "stopped"; app: string; machineId: string; reason: "no_record" | "org_stopped" | "record_ended"; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent" | null }>; listed: number; matched: number; orphanedVolumesDestroyed: number; outcome: "reconciled"; spared: number; unavailableApps: Array<string>; undated: number } | { detail: string; outcome: "inventory_unavailable" } | { outcome: "disabled" }',
   },
   'recompute-code-graph-drift': {
     file: 'lib/jobs/definitions/codeGraphDriftSweep.ts',
@@ -376,9 +398,15 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/abandonedPlanSweep.ts',
     // MOTIR-8304 added `lostMachine` and MOTIR-8307 `autoResume` to the
     // `awaiting_resume` outcome, so the id was bumped.
+    //
+    // MOTIR-9065 added the OPTIONAL `jobCancel` to the `awaiting_resume` and
+    // `declined` outcomes and the `job_queued` keep reason. The id is KEPT: the
+    // change only ADDS members, so every memo written under the old shape is still
+    // a valid value of the new one, and the handler returns it without reading it.
     shape:
-      '{ declined: number; outcomes: Array<{ autoResume: null | { count: number; jobId: string; started: true } | { reason: "bound_spent" | "lost_race" | "no_proposal" | "not_failed" | "not_resumable" | "starter_cannot_plan" | "submit_refused"; started: false }; lostMachine: boolean; outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "revision_held" | "row_moved" | "session_waiting" | "writing" } | { outcome: "revision_failed"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "revision_released"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" }>; scanned: number }',
+      '{ declined: number; outcomes: Array<{ autoResume: null | { count: number; jobId: string; started: true } | { reason: "bound_spent" | "lost_race" | "no_proposal" | "not_failed" | "not_resumable" | "starter_cannot_plan" | "submit_refused"; started: false }; jobCancel?: undefined | { cancelled: false; why: string } | { cancelled: true }; lostMachine: boolean; outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { jobCancel?: undefined | { cancelled: false; why: string } | { cancelled: true }; outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "job_queued" | "revision_held" | "row_moved" | "session_waiting" | "writing" } | { outcome: "revision_failed"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "revision_released"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" }>; scanned: number }',
   },
+
   'reconcile-established-runs': {
     file: 'lib/jobs/definitions/migrateOnboardingSweep.ts',
     shape: '{ failed: number; scanned: number; terminated: number }',
@@ -532,6 +560,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/supervisionSweep.ts',
     shape: '{ scanned: number; settled: number; skipped: number }',
   },
+  'repair-stranded-index-usage': {
+    file: 'lib/jobs/definitions/supervisionSweep.ts',
+    shape: '{ scanned: number; settled: number }',
+  },
   'sweep-auto-plan-projects': {
     file: 'lib/jobs/definitions/autoPlanCadenceTick.ts',
     shape:
@@ -605,6 +637,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/oauthSweep.ts',
     shape:
       '{ accessTokens: number; authorizationCodes: number; clients: number; refreshTokens: number }',
+  },
+  'embed-stale-work-items': {
+    file: 'lib/jobs/definitions/workItemEmbeddingSweep.ts',
+    shape:
+      '{ configured: boolean; embedded: number; failed: number; failedIds: Array<string>; givenUp: number; givenUpIds: Array<string>; projectsVisited: number; scanned: number; truncated: boolean }',
   },
   'sweep-standing-dead-letters': {
     file: 'lib/jobs/definitions/dlqStandingDepthSweep.ts',

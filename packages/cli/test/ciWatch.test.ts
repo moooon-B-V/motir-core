@@ -11,7 +11,9 @@ import {
   queueReasonInWords,
   renderFixPrompt,
   runCiWatchPhase,
+  CI_WAITING_EVENT_INTERVAL_MS,
   watchAndFixCi,
+  type CiWatchEvent,
 } from '../src/ciWatch.js';
 import type { WorkItemDelivery } from '../src/client.js';
 
@@ -335,6 +337,75 @@ describe('a card read that FAILS', () => {
 
     expect(call).toBe(2);
     expect(outcome.kind === 'fix_failed' && outcome.detail).toContain('a bare string');
+  });
+});
+
+describe('the lane-facing phase — resuming the run’s own session (MOTIR-9048)', () => {
+  const plain = { command: 'fresh', binary: 'fresh', args: [] };
+  const resumed = { command: 'resume', binary: 'resume', args: ['--resume', 's1'] };
+
+  const watch = async (opts: { resumeAgent?: typeof resumed; reds: number }) => {
+    const used: { command: string; prompt: string; cwd: string }[] = [];
+    const lines: string[] = [];
+    let call = 0;
+    const outcome = await runCiWatchPhase({
+      client: {
+        getWorkItem: async () => {
+          call += 1;
+          return {
+            deliveries: [delivery({ ci: call <= opts.reds ? 'failing' : 'passing' })],
+          } as never;
+        },
+      },
+      key: 'PROD-1',
+      title: 'the card',
+      agent: plain,
+      ...(opts.resumeAgent ? { resumeAgent: opts.resumeAgent } : {}),
+      cwd: '/tmp/checkout',
+      report: (line) => lines.push(line),
+      wait: async () => {},
+      runAgentFn: async ({ command, prompt, cwd }) => {
+        used.push({ command: command.command, prompt, cwd });
+        return { exitCode: 0, signal: null, model: null };
+      },
+    });
+    return { outcome, used, lines };
+  };
+
+  it('spawns the resume command with the unchanged prompt and cwd on every attempt', async () => {
+    const { used, lines } = await watch({ resumeAgent: resumed, reds: 3 });
+    expect(used.map((u) => u.command)).toEqual(['resume', 'resume', 'resume']);
+    expect(used.every((u) => u.cwd === '/tmp/checkout')).toBe(true);
+    expect(used[0]?.prompt).toContain('# Make the build pass — PROD-1 (the card)');
+    expect(lines.filter((l) => l.includes('continuing the run’s own agent session'))).toHaveLength(
+      3,
+    );
+    expect(lines.join('\n')).not.toContain('fresh agent');
+  });
+
+  it('spawns exactly the plain agent when no resume command is given', async () => {
+    const { used, lines } = await watch({ reds: 2 });
+    expect(used.map((u) => u.command)).toEqual(['fresh', 'fresh']);
+    expect(lines.filter((l) => l.includes('starting a fresh agent'))).toHaveLength(2);
+    expect(lines.join('\n')).not.toContain('continuing');
+  });
+
+  it('keeps the budget under either form: five reds give up, a failing agent is fix_failed', async () => {
+    const gaveUp = await watch({ resumeAgent: resumed, reds: 99 });
+    expect(gaveUp.outcome).toMatchObject({ kind: 'gave_up', attempts: 5 });
+    expect(gaveUp.used).toHaveLength(5);
+    const failed = await runCiWatchPhase({
+      client: { getWorkItem: async () => ({ deliveries: [delivery({ ci: 'failing' })] }) as never },
+      key: 'PROD-1',
+      title: null,
+      agent: plain,
+      resumeAgent: resumed,
+      cwd: '/tmp/checkout',
+      report: () => {},
+      wait: async () => {},
+      runAgentFn: async () => ({ exitCode: 3, signal: null, model: null }),
+    });
+    expect(failed).toEqual({ kind: 'fix_failed', attempts: 1, detail: 'exit 3' });
   });
 });
 
@@ -777,5 +848,114 @@ describe('a STANDING merge-queue failure (MOTIR-5720)', () => {
 
   it('an unrecognised reason still reads as something', () => {
     expect(queueReasonInWords('SOMETHING_NEW')).toContain('SOMETHING_NEW');
+  });
+});
+
+// THE WATCH IS A SIGN OF LIFE (MOTIR-8979).
+//
+// The server decides a run has stalled from its latest run EVENT, and a watch
+// that writes none is killed after 15 minutes of CI — taking the fix loop with
+// it. These pin what the watch tells the run, and that it says it on a cadence
+// rather than every poll.
+describe('what the watch tells the run while it waits', () => {
+  async function driveEvents(sets: (WorkItemDelivery[] | undefined)[], stepMs: number) {
+    const { client } = scripted(sets);
+    const events: CiWatchEvent[] = [];
+    let t = 0;
+    const outcome = await watchAndFixCi({
+      client,
+      key: 'PROD-1',
+      report: () => {},
+      onEvent: (e) => events.push(e),
+      now: () => t,
+      wait: async () => {
+        t += stepMs;
+      },
+      fix: async () => ({ ok: true }),
+    });
+    return { outcome, events };
+  }
+
+  it('says CI is pending ONCE when it starts waiting', async () => {
+    const { events } = await driveEvents([pending, green], 20_000);
+
+    expect(events).toEqual([{ kind: 'log', data: { ci: 'pending', pending: 1 } }]);
+  });
+
+  it('repeats "still waiting" every five minutes of a long wait, not every poll', async () => {
+    // 20 s polls for 16 minutes: 48 polls, so a per-poll report would be 48 events.
+    const polls = Array.from({ length: 48 }, () => pending);
+    const { events } = await driveEvents([...polls, green], 20_000);
+
+    const waiting = events.filter((e) => e.kind === 'log' && e.data.ci === 'waiting');
+    expect(events[0]).toEqual({ kind: 'log', data: { ci: 'pending', pending: 1 } });
+    expect(waiting).toHaveLength(3);
+    // No two events further apart than the 15-minute stall window.
+    expect(CI_WAITING_EVENT_INTERVAL_MS).toBeLessThan(15 * 60_000);
+  });
+
+  it('counts only the deliveries still waiting', async () => {
+    const mixed = [delivery({ ci: 'passing' }), delivery({ number: 2, ci: 'running' })];
+    const { events } = await driveEvents([mixed, green], 20_000);
+
+    expect(events[0]).toEqual({ kind: 'log', data: { ci: 'pending', pending: 1 } });
+  });
+
+  it('reports each fixing attempt, and announces pending again once the fix has pushed', async () => {
+    const { outcome, events } = await driveEvents([pending, red, pending, green], 20_000);
+
+    expect(outcome).toEqual({ kind: 'green', attempts: 1 });
+    expect(events.map((e) => (e.kind === 'log' ? e.data.ci : e.kind))).toEqual([
+      'pending',
+      'ci_fix_attempt',
+      'pending',
+    ]);
+    expect(events[1]).toEqual({
+      kind: 'ci_fix_attempt',
+      data: { attempt: 1, of: CI_FIX_ATTEMPTS, failing: ['moooon/motir-core#1'] },
+    });
+  });
+
+  it('writes nothing when the card has nothing to watch', async () => {
+    const { events } = await driveEvents([undefined], 20_000);
+
+    expect(events).toEqual([]);
+  });
+
+  it('a reporter that THROWS never changes the watch', async () => {
+    const { client } = scripted([pending, green]);
+    const outcome = await watchAndFixCi({
+      client,
+      key: 'PROD-1',
+      report: () => {},
+      onEvent: () => {
+        throw new Error('the run is gone');
+      },
+      wait: async () => {},
+      fix: async () => ({ ok: true }),
+    });
+
+    expect(outcome).toEqual({ kind: 'green', attempts: 0 });
+  });
+
+  it('tees the fixing agent’s output to the run', async () => {
+    const chunks: string[] = [];
+    const { client } = scripted([red, green]);
+    await runCiWatchPhase({
+      client,
+      key: 'PROD-1',
+      title: 'a card',
+      agent: { binary: 'claude', args: [] } as never,
+      cwd: '/tmp/x',
+      report: () => {},
+      wait: async () => {},
+      onOutput: (c) => chunks.push(c),
+      runAgentFn: async (input) => {
+        input.onOutput?.('fixing…');
+        return { exitCode: 0, signal: null } as never;
+      },
+    });
+
+    expect(chunks).toEqual(['fixing…']);
   });
 });

@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ParsedAgentCommand } from './agentProfiles.js';
+import { createAgentStreamFormatter, lookupSessionId } from './agentStreamLog.js';
 import { CliError } from './errors.js';
 import { DESIGN_SUBDIR, MOTIR_DESIGN_DIR_ENV } from './designFiles.js';
 
@@ -62,6 +63,13 @@ export interface AgentRunResult {
   /** The signal that killed the agent, when it was killed by one. */
   signal: NodeJS.Signals | null;
   /**
+   * The agent's OWN session id (MOTIR-8980) — the conversation a later fix resumes. Read
+   * from the agent's stream, or chosen by Motir before the spawn where the agent lets it,
+   * or looked up in the agent's session store. Null when the run was not in a streaming
+   * form or none could be established; absent from a caller's fake.
+   */
+  sessionId?: string | null;
+  /**
    * The model the agent SELF-REPORTED, or null when it reported none.
    *
    * Null is a first-class answer, not a missing value: the caller records it
@@ -70,7 +78,73 @@ export interface AgentRunResult {
    * observed.
    */
   model: string | null;
+  /**
+   * The agent's REASON for stopping on an unbuildable card, when it wrote one into
+   * its self-report as `unbuildable` (MOTIR-8698) — the prompt's STOP branch tells
+   * it to, so the CLI can make the run-found report with the run's own credential.
+   * Null (or absent, from a caller's fake) when the agent built the card, or said
+   * nothing.
+   */
+  unbuildableReason?: string | null;
+  /**
+   * The points of a BUILD-THROUGH the agent wrote into its self-report as `discrepancy`
+   * (MOTIR-8722) — the prompt tells an agent with no Motir tools to, so the CLI can record
+   * them with the run's own credential. Null (or absent) when it wrote none.
+   */
+  discrepancy?: AgentDiscrepancyPoint[] | null;
+  /**
+   * The agent's STOP, when it wrote one into its self-report as `stop` (MOTIR-8722) — the
+   * comment, whether the card goes to Planning, and the re-plan brief — so the CLI can
+   * make those writes with the run's own credential. Null (or absent) when it wrote none.
+   */
+  stop?: AgentStopReport | null;
 }
+
+/** One point of a build-through: what the plan asked · what was built · why. */
+export interface AgentDiscrepancyPoint {
+  planAsked: string;
+  built: string;
+  why: string;
+}
+
+/** The six `SettledRequirement` fields of a re-plan brief, as far as the agent wrote them. */
+export type AgentStopRequirement = Partial<
+  Record<
+    'outcome' | 'behaviour' | 'scopeEdge' | 'constraints' | 'acceptance' | 'assumptions',
+    string
+  >
+>;
+
+/** What the agent asked the run to do on a STOP. */
+export interface AgentStopReport {
+  /** The finding for the card's comment — `stop.comment`, else the `unbuildable` text. */
+  comment: string;
+  toPlanning: boolean;
+  requirement: AgentStopRequirement | null;
+}
+
+/** The server's bounds on a discrepancy record (`RUN_DISCREPANCY_*_MAX`). */
+const MAX_DISCREPANCY_POINTS = 20;
+const MAX_DISCREPANCY_FIELD_LENGTH = 2000;
+/** The server's bounds on a stop report (`RUN_STOP_*_MAX`). */
+const MAX_STOP_COMMENT_LENGTH = 4000;
+const MAX_STOP_FIELD_LENGTH = 2000;
+const REQUIREMENT_FIELDS = [
+  'outcome',
+  'behaviour',
+  'scopeEdge',
+  'constraints',
+  'acceptance',
+  'assumptions',
+] as const;
+
+/**
+ * The longest unbuildable reason carried — the server's own bound
+ * (`RUN_FOUND_REPORT_REASON_MAX`). A longer one is CUT to it rather than dropped:
+ * unlike a model id, the head of a reason is still the reason, and dropping it
+ * would silence the report it exists to make.
+ */
+const MAX_UNBUILDABLE_REASON_LENGTH = 4000;
 
 /**
  * The longest string accepted as a model identifier. A self-report is UNTRUSTED
@@ -80,30 +154,123 @@ export interface AgentRunResult {
  */
 const MAX_MODEL_LENGTH = 200;
 
+/** What the self-report said. Each field is read on its own: a bad one is null. */
+export interface AgentReport {
+  model: string | null;
+  unbuildableReason: string | null;
+  discrepancy: AgentDiscrepancyPoint[] | null;
+  stop: AgentStopReport | null;
+}
+
+const EMPTY_REPORT: AgentReport = {
+  model: null,
+  unbuildableReason: null,
+  discrepancy: null,
+  stop: null,
+};
+
 /**
  * Read the agent's self-report. Total: every failure mode — no file, no
- * permission, invalid JSON, a non-object, a non-string, a blank or an
- * implausibly long `model` — is the same answer, a null model.
+ * permission, invalid JSON, a non-object — is the empty report; a non-string, a
+ * blank or an implausibly long `model` is a null model; a non-string or blank
+ * `unbuildable` is a null reason.
  */
-function readAgentReport(path: string): string | null {
+export function readAgentReport(path: string): AgentReport {
   let raw: string;
   try {
     raw = readFileSync(path, 'utf8');
   } catch {
-    return null;
+    return EMPTY_REPORT;
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return null;
+    return EMPTY_REPORT;
   }
-  if (typeof parsed !== 'object' || parsed === null) return null;
-  const model = (parsed as { model?: unknown }).model;
+  if (typeof parsed !== 'object' || parsed === null) return EMPTY_REPORT;
+  const { model, unbuildable, discrepancy, stop } = parsed as {
+    model?: unknown;
+    unbuildable?: unknown;
+    discrepancy?: unknown;
+    stop?: unknown;
+  };
+  const unbuildableReason = reasonOf(unbuildable);
+  return {
+    model: modelOf(model),
+    unbuildableReason,
+    discrepancy: discrepancyOf(discrepancy),
+    stop: stopOf(stop, unbuildableReason),
+  };
+}
+
+/** A trimmed, non-empty string cut to `max`, or null. Cut rather than dropped, like a reason. */
+function textOf(value: unknown, max: number): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed.slice(0, max);
+}
+
+/**
+ * The build-through points. A point missing a field is dropped, not the whole record — the
+ * rest is still what the agent built differently; more than the server's 20 are cut to it.
+ */
+function discrepancyOf(value: unknown): AgentDiscrepancyPoint[] | null {
+  if (!Array.isArray(value)) return null;
+  const points: AgentDiscrepancyPoint[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const raw = entry as Record<string, unknown>;
+    const planAsked = textOf(raw.planAsked, MAX_DISCREPANCY_FIELD_LENGTH);
+    const built = textOf(raw.built, MAX_DISCREPANCY_FIELD_LENGTH);
+    const why = textOf(raw.why, MAX_DISCREPANCY_FIELD_LENGTH);
+    if (planAsked && built && why) points.push({ planAsked, built, why });
+  }
+  return points.length === 0 ? null : points.slice(0, MAX_DISCREPANCY_POINTS);
+}
+
+/**
+ * The STOP. Its comment is `stop.comment`, else the `unbuildable` text the prompt asks for
+ * anyway; with neither there is nothing to say on the card, so there is no stop.
+ * `toPlanning` must be `true` to move the card — anything else leaves it where it is.
+ */
+function stopOf(value: unknown, unbuildableReason: string | null): AgentStopReport | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const comment = textOf(raw.comment, MAX_STOP_COMMENT_LENGTH) ?? unbuildableReason;
+  if (!comment) return null;
+  let requirement: AgentStopRequirement | null = null;
+  if (typeof raw.requirement === 'object' && raw.requirement !== null) {
+    const bag = raw.requirement as Record<string, unknown>;
+    const kept: AgentStopRequirement = {};
+    for (const field of REQUIREMENT_FIELDS) {
+      // A field the agent wrote as "" is an ANSWER ("considered, there is none"), so it is
+      // kept; only a non-string is left out.
+      if (typeof bag[field] === 'string') {
+        kept[field] = (bag[field] as string).trim().slice(0, MAX_STOP_FIELD_LENGTH);
+      }
+    }
+    if (Object.keys(kept).length > 0) requirement = kept;
+  }
+  return {
+    comment: comment.slice(0, MAX_STOP_COMMENT_LENGTH),
+    toPlanning: raw.toPlanning === true,
+    requirement,
+  };
+}
+
+function modelOf(model: unknown): string | null {
   if (typeof model !== 'string') return null;
   const trimmed = model.trim();
   if (trimmed === '' || trimmed.length > MAX_MODEL_LENGTH) return null;
   return trimmed;
+}
+
+function reasonOf(reason: unknown): string | null {
+  if (typeof reason !== 'string') return null;
+  const trimmed = reason.trim();
+  if (trimmed === '') return null;
+  return trimmed.slice(0, MAX_UNBUILDABLE_REASON_LENGTH);
 }
 
 export interface RunAgentOptions {
@@ -150,6 +317,26 @@ export interface RunAgentOptions {
   tempDirFactory?: () => string;
 }
 
+/**
+ * The session id to record: what the stream said, else the one Motir chose or is
+ * resuming, else the newest session the agent's own store holds for this checkout.
+ */
+async function sessionIdOf(
+  opts: RunAgentOptions,
+  fromStream: string | null,
+  since: number,
+): Promise<string | null> {
+  const stream = opts.command.stream;
+  if (!stream) return null;
+  const known = fromStream ?? stream.sessionId;
+  if (known) return known;
+  return lookupSessionId(
+    stream.profile,
+    { cwd: opts.cwd, env: opts.command.env ?? opts.env ?? process.env },
+    since,
+  );
+}
+
 function defaultTempDir(): string {
   return mkdtempSync(join(tmpdir(), 'motir-prompt-'));
 }
@@ -186,83 +373,125 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
   }
 
   try {
-    const result = await new Promise<Omit<AgentRunResult, 'model'>>((resolve, reject) => {
-      const tee = opts.onOutput;
-      const promptOnStdin = opts.command.promptOnStdin !== false;
-      const args = [...opts.command.args, ...(opts.command.promptArgs?.(prompt, promptFile) ?? [])];
-      const child = spawnFn(opts.command.binary, args, {
-        cwd: opts.cwd,
-        // stdin piped (we write the prompt); stdout/stderr inherited so the
-        // agent's output streams straight through to the user's terminal —
-        // unless a caller wants a COPY, in which case they are piped and
-        // forwarded to the very same streams below. A launcher that takes its
-        // prompt on argv leaves stdin unconnected (`promptOnStdin: false`).
-        stdio: [
-          promptOnStdin ? 'pipe' : 'ignore',
-          tee ? 'pipe' : 'inherit',
-          tee ? 'pipe' : 'inherit',
-        ],
-        env: {
-          // A built-in launcher's environment REPLACES the inherited one — it is
-          // an allow-list (MOTIR-6559), and merging would defeat it.
-          ...(opts.command.env ?? opts.env ?? process.env),
-          MOTIR_PROMPT_FILE: promptFile,
-          MOTIR_AGENT_REPORT: reportFile,
-          // Set ONLY when every file landed. An unset variable is what tells the
-          // agent to follow the prompt's fetch instruction instead, so setting it
-          // over a partial directory would be the one lie this design forbids.
-          ...(designReady ? { [MOTIR_DESIGN_DIR_ENV]: designRoot } : {}),
-        },
-      });
+    // Two seconds of slack: a store may stamp a session at a coarser resolution than the clock.
+    const startedAt = Date.now() - 2000;
+    // The agent's event stream, turned into readable lines (MOTIR-8980). Null for a
+    // command the user typed, and for a profile no chat adapter reads.
+    const formatter = opts.command.stream
+      ? createAgentStreamFormatter(opts.command.stream.profile)
+      : null;
+    const result = await new Promise<Omit<AgentRunResult, 'model' | 'unbuildableReason'>>(
+      (resolve, reject) => {
+        const tee = opts.onOutput;
+        const promptOnStdin = opts.command.promptOnStdin !== false;
+        const args = [
+          ...opts.command.args,
+          ...(opts.command.promptArgs?.(prompt, promptFile) ?? []),
+        ];
+        const child = spawnFn(opts.command.binary, args, {
+          cwd: opts.cwd,
+          // stdin piped (we write the prompt); stdout/stderr inherited so the
+          // agent's output streams straight through to the user's terminal —
+          // unless a caller wants a COPY, in which case they are piped and
+          // forwarded to the very same streams below. A launcher that takes its
+          // prompt on argv leaves stdin unconnected (`promptOnStdin: false`).
+          stdio: [
+            promptOnStdin ? 'pipe' : 'ignore',
+            // A stream is never left to `inherit`: its raw JSON is not for a terminal.
+            tee || formatter ? 'pipe' : 'inherit',
+            tee ? 'pipe' : 'inherit',
+          ],
+          env: {
+            // A built-in launcher's environment REPLACES the inherited one — it is
+            // an allow-list (MOTIR-6559), and merging would defeat it.
+            ...(opts.command.env ?? opts.env ?? process.env),
+            MOTIR_PROMPT_FILE: promptFile,
+            MOTIR_AGENT_REPORT: reportFile,
+            // Set ONLY when every file landed. An unset variable is what tells the
+            // agent to follow the prompt's fetch instruction instead, so setting it
+            // over a partial directory would be the one lie this design forbids.
+            ...(designReady ? { [MOTIR_DESIGN_DIR_ENV]: designRoot } : {}),
+          },
+        });
 
-      if (tee) {
-        // Forward FIRST, tee second: the terminal is the contract and the copy
-        // is the extra. A `pipe` nobody reads fills its buffer and stalls the
-        // child, so both streams are consumed unconditionally once piped.
-        const forward = (src: NodeJS.ReadableStream | null, sink: NodeJS.WritableStream): void => {
-          if (!src) return;
-          src.setEncoding('utf8');
-          src.on('data', (chunk: string) => {
-            sink.write(chunk);
+        if (tee || formatter) {
+          // Forward FIRST, tee second: the terminal is the contract and the copy
+          // is the extra. A `pipe` nobody reads fills its buffer and stalls the
+          // child, so both streams are consumed unconditionally once piped.
+          const forward = (
+            src: NodeJS.ReadableStream | null,
+            sink: NodeJS.WritableStream,
+            render: (chunk: string) => string = (chunk) => chunk,
+          ): void => {
+            if (!src) return;
+            src.setEncoding('utf8');
+            src.on('data', (chunk: string) => {
+              const text = render(chunk);
+              if (text === '') return;
+              sink.write(text);
+              try {
+                tee?.(text);
+              } catch {
+                /* an observation may never break the run it observes */
+              }
+            });
+            src.on('error', () => {});
+          };
+          // stdout goes through the stream formatter when there is one, so what the
+          // terminal and the log both get is the readable line, never the JSON event.
+          forward(
+            child.stdout,
+            process.stdout,
+            formatter ? (chunk) => formatter.write(chunk) : undefined,
+          );
+          // stderr is the agent's own words, plain text, in every form.
+          forward(child.stderr, process.stderr);
+        }
+
+        child.on('error', (err: NodeJS.ErrnoException) => {
+          reject(
+            err.code === 'ENOENT'
+              ? new CliError(`Could not launch the agent "${opts.command.binary}": not found.`, {
+                  hint: 'Run `motir doctor` to check your agent command and credentials.',
+                })
+              : new CliError(`Could not launch the agent "${opts.command.binary}": ${err.message}`),
+          );
+        });
+
+        // An agent that closes stdin early (or never reads it) makes the write
+        // fail with EPIPE. That is not an error: the prompt is ALSO on disk at
+        // $MOTIR_PROMPT_FILE, which is the whole reason both channels exist.
+        const stdin = promptOnStdin ? child.stdin : null;
+        if (stdin) {
+          stdin.on('error', () => {});
+          stdin.end(prompt);
+        }
+
+        child.on('close', (code, signal) => {
+          // The line still open when the stream ended goes out before the verdict.
+          const rest = formatter?.flush() ?? '';
+          if (rest !== '') {
+            process.stdout.write(rest);
             try {
-              tee(chunk);
+              tee?.(rest);
             } catch {
               /* an observation may never break the run it observes */
             }
-          });
-          src.on('error', () => {});
-        };
-        forward(child.stdout, process.stdout);
-        forward(child.stderr, process.stderr);
-      }
-
-      child.on('error', (err: NodeJS.ErrnoException) => {
-        reject(
-          err.code === 'ENOENT'
-            ? new CliError(`Could not launch the agent "${opts.command.binary}": not found.`, {
-                hint: 'Run `motir doctor` to check your agent command and credentials.',
-              })
-            : new CliError(`Could not launch the agent "${opts.command.binary}": ${err.message}`),
-        );
-      });
-
-      // An agent that closes stdin early (or never reads it) makes the write
-      // fail with EPIPE. That is not an error: the prompt is ALSO on disk at
-      // $MOTIR_PROMPT_FILE, which is the whole reason both channels exist.
-      const stdin = promptOnStdin ? child.stdin : null;
-      if (stdin) {
-        stdin.on('error', () => {});
-        stdin.end(prompt);
-      }
-
-      child.on('close', (code, signal) => {
-        resolve({ exitCode: signal ? 1 : (code ?? 1), signal });
-      });
-    });
+          }
+          resolve({ exitCode: signal ? 1 : (code ?? 1), signal });
+        });
+      },
+    );
     // Read the self-report BEFORE the `finally` takes the temp dir with it —
     // and read it whatever the exit code was: an agent that reported its model
     // and then failed still ran on that model.
-    return { ...result, model: readAgentReport(reportFile) };
+    return {
+      ...result,
+      ...readAgentReport(reportFile),
+      ...(opts.command.stream
+        ? { sessionId: await sessionIdOf(opts, formatter?.sessionId() ?? null, startedAt) }
+        : {}),
+    };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -484,3 +484,41 @@ describe('the end and the scope notice, read by id (AMENDMENT 23 §1; MOTIR-6024
     ).resolves.toBe(false);
   });
 });
+
+describe('getById — the reviewable plan of a reopened session (MOTIR-8867)', () => {
+  async function planIn(sessionId: string, status: 'planned' | 'declined', createdAt: Date) {
+    return adminDb.plan.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        sessionId,
+        status,
+        createdById: fx.ownerId,
+        createdAt,
+      },
+    });
+  }
+
+  it('an older `planned` plan under newer `declined` ones is still the pending plan', async () => {
+    const me = pctxFor(fx.ownerId);
+    const started = await planChangeSessionsService.startWithFirstTurn(me, PROJECT_SCOPE, 'hi');
+    const now = Date.now();
+    const waiting = await planIn(started.id, 'planned', new Date(now - 4 * MINUTE));
+    await planIn(started.id, 'declined', new Date(now - 3 * MINUTE));
+    await planIn(started.id, 'declined', new Date(now - 2 * MINUTE));
+
+    const read = await planChangeSessionsService.getById(me, started.id);
+
+    expect(read.pendingPlanId).toBe(waiting.id);
+  });
+
+  it('a session whose every plan is decided has no pending plan', async () => {
+    const me = pctxFor(fx.ownerId);
+    const started = await planChangeSessionsService.startWithFirstTurn(me, PROJECT_SCOPE, 'hi');
+    await planIn(started.id, 'declined', new Date(Date.now() - MINUTE));
+
+    const read = await planChangeSessionsService.getById(me, started.id);
+
+    expect(read.pendingPlanId).toBeNull();
+  });
+});

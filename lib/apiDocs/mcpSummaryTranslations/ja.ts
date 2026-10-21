@@ -210,6 +210,12 @@ export const ja: McpSummaryTranslations = {
     source:
       "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
   },
+  get_coding_convention: {
+    summary:
+      '1つのリポジトリのコーディング規約の全文。導出されたものか人が編集したものかと、そのバージョンを示す。そのリポジトリでの変更が従う内容。',
+    source:
+      "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
+  },
   get_design: {
     summary:
       '1つのデザイン作業項目の承認済みデザインと、そのファイルへの短時間有効なリンク。承認済みデザインがない場合は、5つの理由のどれに当たるかを返します。',
@@ -235,9 +241,9 @@ export const ja: McpSummaryTranslations = {
   },
   get_project_state: {
     summary:
-      'プロジェクトの計画の前提条件(確立済みか、コードが接続されているか、インデックス済みか、リポジトリが設定されているか)。計画する前に確認します。',
+      'プロジェクトの計画の前提条件(確立済みか、コードが接続されているか、インデックス済みか、リポジトリが設定されているか)と、その組織のコンテンツ言語。計画する前に確認します。',
     source:
-      "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
+      "A project's planning preconditions — established, code connected, indexed, repo set — and its organisation's content language, before you plan.",
   },
   get_work_item: {
     summary:
@@ -387,6 +393,12 @@ export const ja: McpSummaryTranslations = {
       '計画者セッションが今いる手順(settle、lay、author)を報告する、またはそれを終了します。生成中の計画に対する、助言的な進捗シグナルです。',
     source:
       'Report the step a planner session is on (settle, lay, author) or end it — an advisory progress signal on a generating plan.',
+  },
+  record_run_discrepancy: {
+    summary:
+      'HOW だけが誤っている計画に沿って作業項目を実装したランナーが、計画と異なる形で実装した内容を記録します。作業項目へのコメントと実行記録が残り、受理されます。',
+    source:
+      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
   },
   report_unbuildable_target: {
     summary:

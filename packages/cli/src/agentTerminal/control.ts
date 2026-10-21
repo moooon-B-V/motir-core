@@ -60,8 +60,20 @@ export function runWorkspaceDir(home: string, runId: string): string {
   return join(home, '.motir', 'runs', runId);
 }
 
+/**
+ * What a run session is for (MOTIR-9045). A CLI-local copy of the app's
+ * `AGENT_RUN_COMMANDS` — `packages/cli` cannot import `lib/` — checked against
+ * it by one test so the two cannot drift. Absent on the wire means `run`.
+ */
+export const AGENT_RUN_COMMANDS = ['run', 'fix', 'continue'] as const;
+export type AgentRunCommand = (typeof AGENT_RUN_COMMANDS)[number];
+
+export function isAgentRunCommand(value: unknown): value is AgentRunCommand {
+  return typeof value === 'string' && (AGENT_RUN_COMMANDS as readonly string[]).includes(value);
+}
+
 export type ControlRequest =
-  | { op: 'run'; runId: string; workItemKey: string }
+  | { op: 'run'; runId: string; workItemKey: string; command?: AgentRunCommand }
   | { op: 'stop'; runId: string }
   | { op: 'status'; runId: string };
 
@@ -93,8 +105,14 @@ export function parseControlRequest(text: string): ControlRequest | null {
   const runId = req['runId'];
   switch (req['op']) {
     case 'run':
-      return isWorkItemKey(req['workItemKey'])
-        ? { op: 'run', runId, workItemKey: req['workItemKey'] }
+      if (!isWorkItemKey(req['workItemKey'])) return null;
+      // MOTIR-9045: an absent command is today's `run` (an older launcher sends
+      // none); a value outside the set is refused as a bad request.
+      if (req['command'] === undefined) {
+        return { op: 'run', runId, workItemKey: req['workItemKey'], command: 'run' };
+      }
+      return isAgentRunCommand(req['command'])
+        ? { op: 'run', runId, workItemKey: req['workItemKey'], command: req['command'] }
         : null;
     case 'stop':
       return { op: 'stop', runId };

@@ -164,7 +164,7 @@ function PageDocument({
         <div
           role="status"
           data-testid="decision-page-changed"
-          className="flex items-start gap-2.5 rounded-(--radius-card) bg-(--el-warning-surface) px-3 py-2.5 text-[13px] leading-normal text-(--el-text-strong)"
+          className="flex items-start gap-2.5 rounded-(--radius-card) bg-(--el-warning-surface) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-[13px] leading-normal text-(--el-text-strong)"
         >
           <History className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>
@@ -219,7 +219,7 @@ function ReasonCallout({
     <div
       role="status"
       data-reason={reason}
-      className="flex items-start gap-2.5 rounded-(--radius-card) bg-(--el-callout-bg) px-3 py-2.5 text-[13px] leading-normal text-(--el-callout-text)"
+      className="flex items-start gap-2.5 rounded-(--radius-card) bg-(--el-callout-bg) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-[13px] leading-normal text-(--el-callout-text)"
     >
       <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
       <span>

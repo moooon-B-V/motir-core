@@ -145,7 +145,8 @@ describe('projectSquareService.listDirectory — the public directory', () => {
 describe('projectSquareService.listDirectory — cursor pagination boundary', () => {
   it('pages the full set across the page boundary with no skipped or duplicated row', async () => {
     // 26 public projects (each its own workspace/org) → more than the 24-row
-    // page size, so the directory must paginate.
+    // page size, so the directory must paginate. Each is a full user + org +
+    // workspace + project seed, so this case is the heaviest in the file.
     for (let i = 0; i < 26; i++) {
       const fx = await makeWorkItemFixture({
         name: `Many ${i}`,
@@ -171,7 +172,12 @@ describe('projectSquareService.listDirectory — cursor pagination boundary', ()
 
     expect(seen.size).toBe(26); // every public project surfaced exactly once
     expect(pages).toBe(2); // 24 + 2
-  });
+    // MOTIR-8915: an explicit 60 s budget for THIS seeded case. The 26-org seed
+    // is sequential DB work that finishes in a few seconds alone but passed the
+    // global 15 s `testTimeout` on a loaded CI shard — and the timeout left the
+    // directory's `WITH ranked AS (…)` query active, which the in-flight probe
+    // then reported as a second failure. The global budget stays at 15 s.
+  }, 60_000);
 });
 
 describe('projectRepository.listPublicDirectoryRanked — keyset determinism (recent)', () => {

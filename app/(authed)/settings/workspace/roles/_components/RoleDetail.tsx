@@ -74,7 +74,7 @@ export function RoleDetail({
         <div className="flex min-w-0 items-start gap-3">
           <span
             aria-hidden="true"
-            className={`${roleTileTint(role)} flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-control)`}
+            className={`${roleTileTint(role)} flex h-(--height-control) w-9 shrink-0 items-center justify-center rounded-(--radius-control)`}
           >
             <RoleGlyph role={role} className="h-[17px] w-[17px]" />
           </span>

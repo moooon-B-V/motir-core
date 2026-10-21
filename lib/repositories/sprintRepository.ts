@@ -143,6 +143,39 @@ export const sprintRepository = {
   },
 
   /**
+   * The COMPLETED sprints at or before `end`, newest first, capped at `limit` —
+   * the bounded read behind a Velocity range that ENDS at a chosen sprint
+   * (Story MOTIR-8919). Same filter, order and `take` as
+   * {@link listCompletedByProject}, plus one keyset predicate on the order's own
+   * keys: `completedAt < end.completedAt`, or the same `completedAt` with
+   * `sequence <= end.sequence` — so the end sprint is the first row and ties on
+   * `completedAt` break by `sequence` exactly as the unbounded read does.
+   * Carries the explicit `workspaceId` gate (finding #26).
+   */
+  async listCompletedByProjectEndingAt(
+    projectId: string,
+    workspaceId: string,
+    end: { completedAt: Date; sequence: number },
+    limit: number,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Sprint[]> {
+    const client = tx ?? dbRead;
+    return client.sprint.findMany({
+      where: {
+        projectId,
+        workspaceId,
+        state: 'complete',
+        OR: [
+          { completedAt: { lt: end.completedAt } },
+          { completedAt: end.completedAt, sequence: { lte: end.sequence } },
+        ],
+      },
+      orderBy: [{ completedAt: 'desc' }, { sequence: 'desc' }],
+      take: limit,
+    });
+  },
+
+  /**
    * How many sprints in a project are in a given state (e.g. the active count,
    * for the service's pre-activation check that complements the DB index).
    */

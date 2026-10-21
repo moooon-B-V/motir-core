@@ -1,3 +1,4 @@
+import { SurfaceShowOriginalSwitch } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import type { IssueListView, IssueSort } from '@/lib/issues/issueListView';
 import type { IssueFilter } from '@/lib/issues/issueListFilter';
 import type { FilterAst } from '@/lib/filters/ast';
@@ -103,12 +104,12 @@ export async function IssueListToolbar({
       {archivedHref === null ? null : (
         <Link
           href={archivedHref}
-          className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-transparent px-3 font-sans text-sm text-(--el-text-secondary) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-transparent px-(--spacing-control-x-12) font-sans text-sm text-(--el-text-secondary) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >
           <Archive className="h-4 w-4 text-(--el-text-muted)" aria-hidden />
           {t('archivedEntry')}
           {archivedCount > 0 ? (
-            <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-(--radius-badge) bg-(--el-muted) px-1.5 text-[11px] font-semibold text-(--el-text-secondary)">
+            <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x-6) text-[11px] font-semibold text-(--el-text-secondary)">
               {archivedCount}
             </span>
           ) : null}
@@ -149,6 +150,7 @@ export async function IssueListToolbar({
           only: the List never shows folders, and a filtered Tree is the static
           context-preserving read with no folder levels to create into. */}
       {view === 'tree' && !isFilterActive(filter) && ast === null ? <NewFolderButton /> : null}
+      <SurfaceShowOriginalSwitch />
       <NewIssueButton />
     </div>
   );

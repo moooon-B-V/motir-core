@@ -934,14 +934,14 @@ operator action; there is one surface now, and it is this one.
 - **How to replay a dead letter with NO workspace** — every `system.*` job writes
   its dead letters with `workspace_id` NULL, and the workspace **Dead letter** tab
   cannot take them (it replays rows of the active workspace, as a workspace Manager).
-  The platform operator (`PLATFORM_ADMIN_EMAIL`) replays them from **System** → **Dead
+  Platform staff at `operator` level or above replay them from **System** → **Dead
   letters with no workspace** on the jobs dashboard (`/settings/workspace/jobs?tab=system`,
   or the same tab in the organization's _Job runs_ section). That list is every
   unreplayed row plus the ones replayed in the last seven days; **Replay** is absent
   on a replayed row. Under the hood `replaySystemDlqAction` calls
   `jobsDashboardService.replaySystemDLQ`, which runs `replayDLQ(dlqId, tx)` under
   `withSystemContext` — the same re-emit, key re-shaping and stamp as above — and
-  refuses a caller who is not the operator and a row that has a workspace (replay
+  refuses a caller below `operator` and a row that has a workspace (replay
   that one from its workspace's Dead letter tab). MOTIR-8083.
 
   ⚠️ **"A second click does nothing" holds only for a job that declares an
@@ -1139,10 +1139,16 @@ group) backed by `lib/services/jobsDashboardService.ts`.
   The tab carries a badge with the count of **not-yet-replayed** entries.
   **Replay** is gated to the workspace **owner** (others see a disabled button
   with a tooltip); **View** opens the failure + the replayable event payload.
-- **System** — visible only to a `PLATFORM_ADMIN_EMAIL` operator. Same shape as
-  Recent runs but spans **all** workspaces, including untenanted system jobs
-  (`workspace_id IS NULL`). This is the pre-Epic-6 escape hatch; real
-  platform-admin roles replace the email check in Epic 6 (PRODECT_FINDINGS #36).
+- **System** — visible only to platform staff: an account whose
+  `User.platformRole` is `support` or above (`lib/jobs/platformStanding.ts`). Same
+  shape as Recent runs but spans **all** workspaces, including untenanted system
+  jobs (`workspace_id IS NULL`). Replaying a dead letter with no workspace from it
+  needs `operator` or above. Both are read fresh on every request, so a revoked
+  role loses the tab on the next page load; roles are granted out-of-band, per
+  `docs/decisions/platform-staff-auth.md` §6 (MOTIR-8196).
+
+  _Migration note:_ `PLATFORM_ADMIN_EMAIL` was removed with no fallback; platform
+  staff are granted a role instead. Setting the variable now does nothing.
 
 **Scoping.** Tenant reads run under `withWorkspaceContext`, so the `job_run` /
 `job_run_dlq` RLS policies scope every row to the active workspace (the repo
@@ -1218,6 +1224,7 @@ cluster bought nothing. The why is
 | `system.organization-erasure-sweep` | `0 * * * *`  |
 | `system.auto-plan-cadence-tick`     | `30 * * * *` |
 | `system.ci-actions-gate-sweep`      | `30 * * * *` |
+| `system.work-item-embedding-sweep`  | `17 * * * *` |
 
 **Daily (UTC)**
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { useSurfaceTitleText } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import type { FolderPickerNodeDto, ProjectFoldersDto } from '@/lib/dto/folders';
@@ -20,7 +21,7 @@ export interface QuickViewFolderControlProps {
   /** The item's current folder; `null` when it is not filed. */
   folderId: string | null;
   /** The item's work-item parent, when it has one — filing will clear it. */
-  parent: { identifier: string; title: string } | null;
+  parent: { id: string; identifier: string; title: string } | null;
   /** A folder (or `null` for No folder) was picked; `path` is its names, root first. */
   onPick: (folderId: string | null, path: string[]) => void;
   onDismiss: () => void;
@@ -35,6 +36,7 @@ export function QuickViewFolderControl({
   const t = useTranslations('folders');
   const [loaded, setLoaded] = useState<ProjectFoldersDto | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
+  const parentTitle = useSurfaceTitleText(parent?.id ?? '', parent?.title ?? '');
 
   useEffect(() => {
     let alive = true;
@@ -71,10 +73,10 @@ export function QuickViewFolderControl({
     <div className="flex w-full min-w-0 flex-col gap-1.5">
       {parent ? (
         <p className="text-[11.5px] leading-relaxed text-(--el-text-secondary)">
-          {t('removesFromParent', { key: parent.identifier, title: parent.title })}
+          {t('removesFromParent', { key: parent.identifier, title: parentTitle })}
         </p>
       ) : null}
-      <div className="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-1">
+      <div className="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding-4)">
         <FolderPickerPanel
           mode="file"
           title={t('fieldLabel')}

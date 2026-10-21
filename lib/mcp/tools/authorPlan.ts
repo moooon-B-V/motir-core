@@ -5,7 +5,8 @@ import { projectsService } from '@/lib/services/projectsService';
 import { plansService, PLAN_STEP_SESSION_KEY_MAX } from '@/lib/services/plansService';
 import type {
   PlanDto,
-  PlanItemProposedFields,
+  ProposalSectionsInput,
+  ProposedFieldsInput,
   PlanWithItemsDto,
   ProposalInput,
   UpdateProposalInput,
@@ -291,6 +292,27 @@ const DIFFICULTY_DESCRIPTION =
   ', easiest first. Leaf kinds only (task / bug / subtask): a non-null value on an epic or ' +
   'story is refused with INVALID_PROPOSAL naming `difficulty`, never silently dropped.';
 
+/**
+ * The card's SECTIONS INPUT (Story MOTIR-9023 · MOTIR-9030), described once for
+ * every plan door that takes it. The schema is a LOOSE record on purpose: the
+ * registry, not this schema, decides which sections a kind × type defines, so a
+ * strict object here would duplicate it and its refusal would name a zod path
+ * rather than the section. The service answers a typed `INVALID_PROPOSAL`
+ * naming each missing, unknown or invalid section.
+ */
+const SECTIONS_INPUT_DESCRIPTION =
+  'OPTIONAL. The card\u2019s sections as named values, instead of composing headings inside ' +
+  '`descriptionMd`: the door checks them against the section set for the proposal\u2019s kind \u00d7 ' +
+  'type, refuses a missing, unknown or invalid section BY NAME with INVALID_PROPOSAL, writes ' +
+  'the headings itself and stores ONLY the rendered `descriptionMd` \u2014 `sections` itself is never ' +
+  'stored. Never send it together with `descriptionMd` (refused, naming both). The section ' +
+  'sets, their shapes and which are required are served by `get_section_sets`. On an EDIT it ' +
+  'is sparse at the section key: the stored body is read back into its sections first, a ' +
+  'section you omit is kept, an explicit `null` clears one, and a list REPLACES the list. ' +
+  'Omit it to keep sending a plain `descriptionMd` exactly as before.';
+
+const sectionsInputSchema = z.record(z.string(), z.unknown());
+
 // ── The OBSOLESCENCE mark and its `supersedes` edges (Story MOTIR-6577 · MOTIR-6631) ──
 // Described ONCE here for every plan door that carries them. The service is the
 // only validator (`validateProposedObsolescence`, `assertMarkTargetIsFinished`,
@@ -393,6 +415,7 @@ const proposedFieldsSchema = z
       .optional()
       .describe('The proposed kind. Defaults to `task` (a standalone leaf) when omitted.'),
     descriptionMd: z.string().optional().describe('Markdown body — WHAT to do.'),
+    sections: sectionsInputSchema.optional().describe(SECTIONS_INPUT_DESCRIPTION),
     explanationMd: z.string().optional().describe('Markdown body — WHY it matters.'),
     type: z
       .enum(WORK_ITEM_TYPES)
@@ -548,6 +571,18 @@ const patchSchema = z
         'Re-judge the target’s difficulty. ' +
           DIFFICULTY_DESCRIPTION +
           ' Judged on the target’s MERGED kind. An explicit `null` clears it.',
+      ),
+    todos: z
+      .array(proposedTodoSchema)
+      .nullable()
+      .optional()
+      .describe(
+        'REPLACE the target’s ordered steps (its to-do list). Approve makes the list exactly ' +
+          'this array, in order, none ticked, and DELETES every existing row — ticked ones ' +
+          'included; the review and `get_plan` show how many steps that drops and how many ' +
+          'were ticked. Omit the key to leave the list alone; `[]` or `null` clears it. Leaf ' +
+          'kinds only (judged on the target’s MERGED kind). Not a mark key: a `modify` of a ' +
+          'done or cancelled card that carries it is refused.',
       ),
     targetRepo: z
       .string()
@@ -812,6 +847,7 @@ const updatePlanItemInputSchema = {
     .nullable()
     .optional()
     .describe('Markdown body — WHAT to do. Send `null` to clear it; omit to leave it as it is.'),
+  sections: sectionsInputSchema.optional().describe(SECTIONS_INPUT_DESCRIPTION),
   explanationMd: z
     .string()
     .nullable()
@@ -1270,6 +1306,7 @@ interface UpdatePlanItemArgs {
   title?: string;
   kind?: string;
   descriptionMd?: string | null;
+  sections?: ProposalSectionsInput;
   explanationMd?: string | null;
   type?: string | null;
   priority?: string | null;
@@ -1541,10 +1578,7 @@ export async function runCreatePlan(
  * nothing to preserve. `plansService.addProposals` still honours a provenance
  * the INTERNAL generator route supplies — that path is untouched.
  */
-function stampProvenance(
-  proposedFields: PlanItemProposedFields,
-  plan: PlanDto,
-): PlanItemProposedFields {
+function stampProvenance(proposedFields: ProposedFieldsInput, plan: PlanDto): ProposedFieldsInput {
   return {
     ...proposedFields,
     planningProvenance: {
@@ -1629,7 +1663,7 @@ export async function runAddPlanItems(
     workItemId: p.workItemId ?? null,
     proposedFields:
       p.op === 'add' && p.proposedFields
-        ? stampProvenance(p.proposedFields as PlanItemProposedFields, existing)
+        ? stampProvenance(p.proposedFields as ProposedFieldsInput, existing)
         : null,
     patch: (p.patch ?? null) as ProposalInput['patch'],
     parentRef: p.parentRef ?? null,
@@ -1707,6 +1741,7 @@ export async function runUpdatePlanItem(
     'title',
     'kind',
     'descriptionMd',
+    'sections',
     'explanationMd',
     'type',
     'priority',
@@ -1764,6 +1799,7 @@ export async function runUpdatePlanProposal(
     'title',
     'kind',
     'descriptionMd',
+    'sections',
     'explanationMd',
     'type',
     'priority',

@@ -11,6 +11,11 @@ import { toToolError, toolOk } from '../toolResult';
 import { derived } from '../payloads/define';
 import { planPayload, presentMcpPlan } from '../payloads/workLoop';
 import { firstLine } from '../obsolescence';
+import { DEFAULT_PROPOSED_KIND } from '@/lib/plans/validateProposals';
+import { parseSections, type ParsedBody } from '@/lib/workItems/sections/parse';
+import type { IssueType } from '@/lib/issues/parentRules';
+import type { SectionType } from '@/lib/workItems/sections/registry';
+import { includeSectionsField, PARSED_SECTIONS_DESCRIPTION } from '../parsedSections';
 import { GET_PLAN_STATUS_TOOL_NAME } from './expandItem';
 
 // `get_plan` (Story 7.9 · MOTIR-1837) — the plan read that returns WHAT was
@@ -57,6 +62,7 @@ const getPlanInputSchema = {
       'The plan id — as returned by an `expand_item` submit, by `get_plan_status`, or shown ' +
         'on the plan in Motir.',
     ),
+  includeSections: includeSectionsField,
 };
 
 /** The op markers the review surface uses: add / modify / remove. */
@@ -140,6 +146,10 @@ export type PlacementByPlanItemId = ReadonlyMap<string, ProposalPlacement>;
 export interface ProposalMarkRefs {
   keyById: ReadonlyMap<string, string>;
   markById: ReadonlyMap<string, string | null>;
+  /** The live step count of each `modify` target whose patch REPLACES its list
+   *  (MOTIR-8668) — how many rows it has and how many are ticked. Absent from a
+   *  caller that did not read it; the line then prints `replaces ?`. */
+  todoCountById?: ReadonlyMap<string, { total: number; done: number }>;
 }
 
 /** A ref as the reader's word for it: its KEY when one resolved, else verbatim. */
@@ -184,11 +194,44 @@ function modifyMark(item: PlanItemDto, marks?: ProposalMarkRefs): string {
   return parts.length > 0 ? ` · ${parts.join(' · ')}` : '';
 }
 
+/**
+ * ` · todos: N steps (replaces M, K ticked)` — a `modify`'s REPLACEMENT step
+ * list (MOTIR-8668 · AMENDMENT 27). The ticked count is the point: approve
+ * deletes those rows, and they are a person's progress, so the reviewer reads
+ * the cost on the same line as the change. `cleared` for `[]` / `null`; `?` for
+ * the old side when the live list could not be read. Empty when the patch
+ * leaves the list alone.
+ */
+function modifySteps(item: PlanItemDto, marks?: ProposalMarkRefs): string {
+  const todos = item.patch?.todos;
+  if (todos === undefined) return '';
+  const n = todos?.length ?? 0;
+  const count = item.workItemId ? marks?.todoCountById?.get(item.workItemId) : undefined;
+  const known = item.workItemId != null && marks?.todoCountById !== undefined;
+  const replaces = !known
+    ? 'replaces ?'
+    : count && count.total > 0
+      ? `replaces ${count.total}${count.done > 0 ? `, ${count.done} ticked` : ''}`
+      : 'replaces none';
+  const what = n > 0 ? `${n} step${n === 1 ? '' : 's'}` : 'cleared';
+  return ` · todos: ${what} (${replaces})`;
+}
+
+/** ` · sections missing: a, b` / ` · sections: complete` — only when the sections
+ *  view was asked for (MOTIR-9033), so an unasked line is unchanged. */
+function sectionsSuffix(parsed: ParsedBody | undefined): string {
+  if (!parsed) return '';
+  return parsed.missing.length > 0
+    ? ` · sections missing: ${parsed.missing.join(', ')}`
+    : ' · sections: complete';
+}
+
 /** One proposal as a single line — the op, what it targets, and its sizing. */
 function describeItem(
   item: PlanItemDto,
   placement?: ProposalPlacement,
   marks?: ProposalMarkRefs,
+  sections?: ReadonlyMap<string, ParsedBody>,
 ): string {
   const marker = OP_MARKER[item.op];
   if (item.op === 'add') {
@@ -202,7 +245,8 @@ function describeItem(
       repoPin(fields?.targetRepo) +
       steps(fields?.todos) +
       blockers(item.blockedByRefs) +
-      addSupersedes(item.supersedesRefs, marks)
+      addSupersedes(item.supersedesRefs, marks) +
+      sectionsSuffix(sections?.get(item.id))
     );
   }
   // The target by its KEY when the tree could be read (MOTIR-3191). `MOTIR-3181`
@@ -217,6 +261,7 @@ function describeItem(
   return (
     `${marker} modify ${target}` +
     (changed.length > 0 ? ` — ${changed.join(', ')}` : '') +
+    modifySteps(item, marks) +
     modifyMark(item, marks) +
     blockers(item.blockedByRefs)
   );
@@ -263,6 +308,7 @@ function renderProposals(
   items: PlanItemDto[],
   placements?: PlacementByPlanItemId,
   marks?: ProposalMarkRefs,
+  sections?: ReadonlyMap<string, ParsedBody>,
 ): string[] {
   const byId = new Map(items.map((item) => [item.id, item]));
   const childrenOf = new Map<string, PlanItemDto[]>();
@@ -287,7 +333,9 @@ function renderProposals(
     // path.
     if (rendered.has(item.id)) return;
     rendered.add(item.id);
-    lines.push(`${'  '.repeat(depth + 1)}${describeItem(item, placements?.get(item.id), marks)}`);
+    lines.push(
+      `${'  '.repeat(depth + 1)}${describeItem(item, placements?.get(item.id), marks, sections)}`,
+    );
     for (const child of childrenOf.get(item.id) ?? []) walk(child, depth + 1);
   };
 
@@ -334,6 +382,7 @@ export function summarizePlan(
   plan: PlanWithItemsDto,
   placements?: PlacementByPlanItemId,
   marks?: ProposalMarkRefs,
+  sections?: ReadonlyMap<string, ParsedBody>,
 ): string {
   const lines = [
     `Plan ${plan.id} — ${plan.status}, ${plan.itemCount} proposal(s).`,
@@ -353,7 +402,7 @@ export function summarizePlan(
   } else {
     lines.push(
       'Proposals (indented under their proposed parent):',
-      ...renderProposals(plan.items, placements, marks),
+      ...renderProposals(plan.items, placements, marks, sections),
     );
   }
 
@@ -439,7 +488,7 @@ async function resolveMarks(
 
 /** The adapter: read the plan through the service, summarize, return. */
 export async function runGetPlan(
-  args: { planId: string },
+  args: { planId: string; includeSections?: boolean },
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   // The READER's door (MOTIR-6330): a plan outside the Plans room's scope for
@@ -450,9 +499,33 @@ export async function runGetPlan(
   // the same reading `/api/v1` presents beside `parentRef`.
   const folders = await planReviewService.resolveProposalFolders(plan, ctx);
   const marks = await resolveMarks(plan, ctx);
+  // The sections view (MOTIR-9033): every `add`'s proposed body parsed with the
+  // kind the plan doors default an unsaid kind to. `modify` / `remove` carry a
+  // patch on a card whose kind and type may sit outside it, so they are not parsed.
+  // Absent unless asked for; `items` are never touched.
+  const sections = args.includeSections
+    ? new Map<string, ParsedBody>(
+        plan.items
+          .filter((item) => item.op === 'add')
+          .map((item) => {
+            const fields = item.proposedFields;
+            return [
+              item.id,
+              parseSections(
+                fields?.descriptionMd,
+                (fields?.kind ?? DEFAULT_PROPOSED_KIND) as IssueType,
+                (fields?.type ?? null) as SectionType,
+              ),
+            ] as const;
+          }),
+      )
+    : undefined;
   return toolOk(
-    summarizePlan(plan, placements, marks),
-    derived(planPayload, presentMcpPlan(plan, folders)),
+    summarizePlan(plan, placements, marks, sections),
+    derived(planPayload, {
+      ...presentMcpPlan(plan, folders),
+      ...(sections ? { parsedSections: Object.fromEntries(sections) } : {}),
+    }),
   );
 }
 
@@ -476,7 +549,9 @@ export function registerGetPlan(server: McpServer, resolveContext: McpContextRes
         'supersedes edges by key — `supersedes +K1 −K2` (the target replaces / stops replacing ' +
         'them) and `superseded by +K3` (K3 replaces the target) — and an `add` line prints ' +
         '`supersedes K1, K2` from its `supersedesRefs`; `structuredContent` carries the patch ' +
-        'keys and `supersedesRefs` in full. ' +
+        'keys and `supersedesRefs` in full. A `modify` whose patch REPLACES the target’s steps ' +
+        'prints `todos: N steps (replaces M, K ticked)` — approve deletes the old rows, ticked ' +
+        'ones included. ' +
         `Reach for \`${GET_PLAN_STATUS_TOOL_NAME}\` ` +
         'instead when you only need the status of a submitted job (and whether that job died); ' +
         'reach for this one to SHOW or judge the content. A plan still generating returns the ' +
@@ -484,7 +559,12 @@ export function registerGetPlan(server: McpServer, resolveContext: McpContextRes
         'IMPORTANT: these are PROPOSALS, NOT work items. Nothing here exists in the tree: ' +
         'approving the plan in Motir is the only path from a proposal to a work item, and an ' +
         "`add`'s `workItemId` stays null until then. Do not report proposed items as created. " +
-        'A pure read.',
+        'A pure read.' +
+        PARSED_SECTIONS_DESCRIPTION.replace(
+          'to also receive `parsedSections` — the body parsed',
+          'to also receive `parsedSections` — a map keyed by plan item id, one entry per `add`, ' +
+            'each proposal’s body parsed',
+        ),
       inputSchema: getPlanInputSchema,
     },
     async (args, extra) => {

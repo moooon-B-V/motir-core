@@ -204,7 +204,7 @@ test('four projects, four destinations', async ({ page, chapter, beat, acceptanc
     // kept-step strip, which is the apology this route owes.
     await expect(handOff(page)).toHaveAttribute('data-outcome', 'onboard_existing_project');
     await expect(handOff(page)).toContainText('still mostly the starter template');
-    await expect(handOff(page)).toContainText('A few questions');
+    await expect(handOff(page)).not.toContainText('A few questions');
     await beat();
 
     // ⚠️ THE SET REACHES THE RUN ON *START*, not on arrival, and the rail is the
@@ -239,8 +239,13 @@ test('four projects, four destinations', async ({ page, chapter, beat, acceptanc
 
     // ⚠️ AND NO ROW NAMES A DIRECTION TIER. `discovery` is the identifier; what a
     // user reads is what they are being asked (MOTIR-4757, MOTIR-4755 rev 2).
+    //
+    // EDITED IN PLACE (MOTIR-8772): the wizard no longer asks the questions step
+    // at all. Mo's approved design (MOTIR-8767 revision A) ends onboarding at the
+    // Import step with Enter Motir and drafts no plan, so the rail stopped
+    // listing "A few questions". The assertion that no tier is named stands.
     const rail = page.getByRole('navigation', { name: /migration/i });
-    await expect(rail).toContainText('A few questions');
+    await expect(rail).not.toContainText('A few questions');
     await expect(rail).not.toContainText(/discovery|vision|Pre-plan/i);
     await beat();
   });

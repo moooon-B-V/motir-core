@@ -42,6 +42,9 @@ const EVERY_PATCH_KEY: Required<PlanItemPatch> = {
   estimateMinutes: null,
   // MOTIR-6133 carries it; MOTIR-6137 gives it the seventh rail row.
   difficulty: null,
+  // The STEPS a `modify` replaces (MOTIR-8668) move no rail row — the
+  // denominator is unchanged; the reviewer reads a `todos` change row.
+  todos: null,
   targetRepo: null,
   // The SET spellings of the same axis (bug MOTIR-4904) — they move the SAME
   // `targetRepo` rail row, so the denominator below is unchanged by their
@@ -62,6 +65,9 @@ const EVERY_PATCH_KEY: Required<PlanItemPatch> = {
   supersedesRemove: [],
   supersededByAdd: [],
   supersededByRemove: [],
+  // The language each rewritten text field was written in (MOTIR-8743) — an
+  // annotation on the body fields, so it moves no rail row.
+  languages: {},
 };
 
 describe('the proposal envelope’s SETTABLE rail-field set (MOTIR-4183)', () => {

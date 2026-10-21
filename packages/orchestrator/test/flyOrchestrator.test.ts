@@ -542,6 +542,18 @@ describe('teardown — destroys, and RETURNS what it cost', () => {
     expect(usage.teardownReason).toBe('job_completed');
   });
 
+  it.each(['stopped', 'destroying', 'started'])(
+    "records `destroyed` as the terminal state, not Fly's pre-destroy state (%s)",
+    async (state) => {
+      handler = (call) =>
+        call.method === 'GET' ? json(200, machine({ state })) : new Response(null, { status: 200 });
+
+      const usage = await flyOrchestrator.teardown(HANDLE, 'job_completed', ATTRIBUTION);
+
+      expect(usage.terminalState).toBe('destroyed');
+    },
+  );
+
   it("falls back to the CALLER's observed start when the machine self-destroyed", async () => {
     // ⚠️ THE HAPPY PATH IS THE HARD CASE. `auto_destroy` means a completed run
     // deletes its own machine, taking its event log with it — so without this
@@ -603,7 +615,11 @@ describe('reap — the provider is the source of truth, and AGE is the test', ()
     const usages = await flyOrchestrator.reap(OLDER_THAN, resolveAll);
 
     expect(usages).toHaveLength(1);
-    expect(usages[0]).toMatchObject({ handleId: 'old-1', teardownReason: 'reaped' });
+    expect(usages[0]).toMatchObject({
+      handleId: 'old-1',
+      teardownReason: 'reaped',
+      terminalState: 'destroyed',
+    });
     expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(1);
   });
 

@@ -311,9 +311,17 @@ describe('agentCommand — each profile’s unattended form (MOTIR-7024)', () =>
       ANTHROPIC_API_KEY: 'the developer’s own',
       ...Object.fromEntries(AGENT_RUN_WITHHELD_ENV.map((n) => [n, `secret-${n}`])),
     };
-    const cmd = unattendedAgentCommand('claude', env)!;
+    const cmd = unattendedAgentCommand('claude', env, { newSessionId: () => 'sid-1' })!;
     expect(cmd.binary).toBe('claude');
-    expect(cmd.args).toEqual(['-p', '--dangerously-skip-permissions']);
+    expect(cmd.args).toEqual([
+      '-p',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--dangerously-skip-permissions',
+      '--session-id',
+      'sid-1',
+    ]);
     expect(cmd.promptOnStdin).toBeUndefined();
     expect(cmd.promptArgs).toBeUndefined();
     expect(cmd.env).toEqual({
@@ -326,9 +334,11 @@ describe('agentCommand — each profile’s unattended form (MOTIR-7024)', () =>
   });
 
   it('puts an argv agent’s prompt on argv only, and a huge one in its file', () => {
-    const cmd = unattendedAgentCommand('goose', { PATH: '/bin' })!;
+    // The plain-text form (MOTIR-8980's forced fallback) — the original argv-prompt shape.
+    const cmd = unattendedAgentCommand('goose', { PATH: '/bin', MOTIR_AGENT_OUTPUT: 'text' })!;
     expect(cmd.args).toEqual(['run', '--no-session', '-t']);
-    expect(cmd.env).toEqual({ PATH: '/bin', GOOSE_MODE: 'auto' });
+    expect(cmd.stream).toBeUndefined();
+    expect(cmd.env).toEqual({ PATH: '/bin', MOTIR_AGENT_OUTPUT: 'text', GOOSE_MODE: 'auto' });
     expect(cmd.promptOnStdin).toBe(false);
     expect(cmd.promptArgs!('do it', '/tmp/p.md')).toEqual(['do it']);
     const [huge] = cmd.promptArgs!('x'.repeat(200 * 1024), '/tmp/p.md');

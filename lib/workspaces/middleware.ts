@@ -2,12 +2,14 @@ import { readSession } from '@/lib/auth';
 import { contentLanguageFromAcceptLanguage } from '@/lib/i18n/contentLanguage';
 import type { Locale } from '@/lib/i18n/locales';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import type { WorkspaceContext } from './context';
 
 // Workspace-context resolution. Given a Better-Auth session and an
 // optional cookie hint, decide which workspace the request acts within.
-// Returns null only when there is no session — a signed-in user with zero
-// memberships is SELF-HEALED (Subtask 1.2.4) rather than stranded.
+// Returns null when there is no session, or when the org cookie names an org
+// the user belongs to that has no workspace (MOTIR-8777) — a signed-in user with
+// zero memberships is otherwise SELF-HEALED (Subtask 1.2.4) rather than stranded.
 //
 // This module is the HTTP/cookie seam only: it reads the session, parses
 // the workspace_id cookie, and delegates the resolution + self-heal to
@@ -35,12 +37,14 @@ async function resolveActiveWorkspaceId(
   cookieWorkspaceId: string | null,
   userName?: string,
   contentLanguage?: Locale,
+  cookieOrganizationId?: string | null,
 ): Promise<string | null> {
   return workspacesService.resolveActiveWorkspace(
     userId,
     cookieWorkspaceId,
     userName,
     contentLanguage,
+    cookieOrganizationId,
   );
 }
 
@@ -77,9 +81,15 @@ export async function resolveWorkspaceContext(request: Request): Promise<Workspa
   // A staff "View as" session is PINNED to the workspace it was started in: the
   // operator's own `workspace_id` cookie names THEIR workspace, never the
   // customer's, so it is not consulted.
-  const cookieWorkspaceId =
-    session.impersonation?.session.workspaceId ??
-    parseCookieHeader(request.headers.get('cookie'), WORKSPACE_COOKIE_NAME);
+  const pinned = session.impersonation?.session.workspaceId ?? null;
+  const cookieHeader = request.headers.get('cookie');
+  const cookieWorkspaceId = pinned ?? parseCookieHeader(cookieHeader, WORKSPACE_COOKIE_NAME);
+  // The org the user last chose (MOTIR-8777): an org with no workspace resolves
+  // to NO workspace rather than to another org's. A pinned staff session is
+  // never re-pointed by the operator's own cookies.
+  const cookieOrganizationId = pinned
+    ? null
+    : parseCookieHeader(cookieHeader, ORGANIZATION_COOKIE_NAME);
 
   // Only the self-heal path reads it: a default org minted here takes the
   // browser's content language (Story MOTIR-7731 · MOTIR-8093).
@@ -88,6 +98,7 @@ export async function resolveWorkspaceContext(request: Request): Promise<Workspa
     cookieWorkspaceId,
     session.user.name,
     contentLanguageFromAcceptLanguage(request.headers.get('accept-language')),
+    cookieOrganizationId,
   );
   if (!workspaceId) return null;
   return { userId, workspaceId };

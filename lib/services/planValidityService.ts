@@ -22,6 +22,7 @@ import {
 import {
   NOT_YET_FILED,
   containerCoverageFinding,
+  unnamedTitleWords,
   type CoverageChild,
 } from '@/lib/workItems/containerCoverage';
 import { acceptanceCriteriaTexts } from '@/lib/workItems/proseVsGraph';
@@ -32,11 +33,16 @@ import type {
   CrossLevelEdgeDto,
   InvalidEdgeDto,
   WorkItemCoverageAdvisoryDto,
+  WorkItemTitleCoverageAdvisoryDto,
   WorkItemProseAdvisoryDto,
+  WorkItemProseMislabelledLinkAdvisoryDto,
   WorkItemSoftBlockDto,
   WorkItemValidityDto,
 } from '@/lib/dto/workItems';
+import { isMislabelledLinkAdvisory } from '@/lib/dto/workItems';
 import type { PlanValidityDto } from '@/lib/dto/plans';
+import type { SectionFindingDto } from '@/lib/dto/workItems';
+import { sectionFindingsFor } from '@/lib/workItems/sections/validity';
 import type { SprintBlockerDto, SprintValidityDto } from '@/lib/dto/sprints';
 import { type ValidityCondition, DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sprints';
 
@@ -188,6 +194,50 @@ function projectedSizing(
   return stored;
 }
 
+/**
+ * The SECTION findings (MOTIR-9032) over the PROJECTED tree: each scanned
+ * not-done node's projected body parsed against the registry for its projected
+ * kind × type. Same layering as every projected read above — the plan's value
+ * where the plan sets one, the stored row otherwise — and one batched read for
+ * the real nodes. ADVISORY: never an input to a verdict.
+ */
+async function projectedSectionFindings(
+  proj: Projection,
+  nodeIds: Iterable<string>,
+  ctx: ServiceContext,
+): Promise<SectionFindingDto[]> {
+  const scanned = [...nodeIds]
+    .map((id) => proj.nodes.get(id))
+    .filter((n): n is ProjectedNode => n !== undefined && !isDone(proj, n));
+  if (scanned.length === 0) return [];
+  const storedRows = new Map(
+    (
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findDescriptionsByIds(
+          scanned.filter((n) => !n.id.startsWith(TEMP_REF_PREFIX)).map((n) => n.id),
+          ctx.workspaceId,
+          tx,
+        ),
+      )
+    ).map((r) => [r.id, r] as const),
+  );
+  return sectionFindingsFor(
+    scanned.map((node) => {
+      const stored = storedRows.get(node.id);
+      return {
+        item: node.identifier,
+        kind: node.kind,
+        type: proj.projectedType.has(node.id)
+          ? (proj.projectedType.get(node.id) ?? null)
+          : (stored?.type ?? null),
+        descriptionMd: proj.projectedDescription.has(node.id)
+          ? (proj.projectedDescription.get(node.id) ?? null)
+          : (stored?.descriptionMd ?? null),
+      };
+    }),
+  );
+}
+
 async function projectedProseAdvisories(
   proj: Projection,
   memberIds: ReadonlySet<string>,
@@ -246,6 +296,7 @@ async function projectedProseAdvisories(
     const stored = storedRows.get(node.id);
     return {
       item: node.identifier,
+      kind: node.kind,
       descriptionMd: proj.projectedDescription.has(node.id)
         ? (proj.projectedDescription.get(node.id) ?? null)
         : (stored?.descriptionMd ?? null),
@@ -308,6 +359,13 @@ async function projectedProseAdvisories(
         Object.keys(proj.patchByWorkItemId.get(node.id) ?? {}),
       ),
       blockerCount: proj.blockedBy.get(node.id)?.size ?? 0,
+      // The POST-MERGE-CHILD check (MOTIR-8863), off the PROJECTED parent — so a
+      // plan that lays a production-verify card under a story is told at
+      // authoring time, before approval.
+      parent: (() => {
+        const p = node.parentId ? proj.nodes.get(node.parentId) : undefined;
+        return p ? { identifier: p.identifier, kind: p.kind } : null;
+      })(),
     };
   });
 
@@ -445,6 +503,62 @@ async function projectedCoverageAdvisories(
   }
   // Deterministic wire order, the committed path's: by container, then by criterion.
   advisories.sort((a, b) => a.item.localeCompare(b.item) || a.criterionIndex - b.criterionIndex);
+  return advisories;
+}
+
+/**
+ * The TITLE-COVERAGE advisories for a PROJECTED subtree (MOTIR-8647) — the same
+ * question the committed verdict asks (does a container's body mention each
+ * distinguishing word its title carries?), put to the tree the plan would leave,
+ * so a plan that narrows a story's body is told before approval rather than after.
+ *
+ * ⚠️ ADVISORY, NEVER A BLOCKER.
+ */
+async function projectedTitleCoverageAdvisories(
+  proj: Projection,
+  memberIds: ReadonlySet<string>,
+  ctx: ServiceContext,
+): Promise<WorkItemTitleCoverageAdvisoryDto[]> {
+  const containers = [...memberIds]
+    .map((id) => proj.nodes.get(id)!)
+    .filter((node) => !isDone(proj, node) && proj.childrenByParent.has(node.id));
+  if (containers.length === 0) return [];
+
+  const storedIds = containers
+    .map((node) => node.id)
+    .filter((id) => !id.startsWith(TEMP_REF_PREFIX));
+  const storedBodies = new Map(
+    (
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findDescriptionsByIds(storedIds, ctx.workspaceId, tx),
+      )
+    ).map((row) => [row.id, row.descriptionMd] as const),
+  );
+  const storedTitles = new Map(
+    (
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findTitlesByIds(storedIds, ctx.workspaceId, tx),
+      )
+    ).map((row) => [row.id, row.title] as const),
+  );
+
+  const advisories: WorkItemTitleCoverageAdvisoryDto[] = [];
+  for (const node of containers) {
+    const title = projectedTitle(proj, node.id) ?? storedTitles.get(node.id);
+    if (title === undefined) continue;
+    const descriptionMd = proj.projectedDescription.has(node.id)
+      ? (proj.projectedDescription.get(node.id) ?? null)
+      : (storedBodies.get(node.id) ?? null);
+    const words = unnamedTitleWords(title, descriptionMd);
+    if (words.length === 0) continue;
+    advisories.push({
+      kind: 'title-coverage',
+      item: node.identifier,
+      severity: 'likely-unnamed-title-part',
+      words,
+    });
+  }
+  advisories.sort((a, b) => a.item.localeCompare(b.item));
   return advisories;
 }
 
@@ -655,6 +769,8 @@ export const planValidityService = {
     }
 
     const blockers: SprintBlockerDto[] = [];
+    const waits: SprintBlockerDto[] = [];
+    const owns = planOwnsEdge(proj);
     const seen = new Set<string>();
     for (const memberId of memberIds) {
       const member = proj.nodes.get(memberId)!;
@@ -668,31 +784,38 @@ export const planValidityService = {
         /* v8 ignore next -- UNREACHABLE: a member's blocker set is a `Set` of ids and every projected node's identifier is distinct, so one walk cannot produce the same `<item> <blocker>` key twice. Kept as the guard the SPRINT walk's `addBlocker` genuinely needs (there a member blocked_by its OWN out-of-sprint child is reached by both the edge and the children rule). Invariant asserted in tests/integration/plans/planValidityService.test.ts — 'the projection invariant behind the walks' defensive arms' (MOTIR-3123). */
         if (seen.has(key)) continue;
         seen.add(key);
-        blockers.push({
+        const row: SprintBlockerDto = {
           item: member.identifier,
           blockedBy: blocker.identifier,
           blockerStatus: blocker.status,
           blockerSprintId: blocker.sprintId,
-        });
+        };
+        blockers.push(row);
+        // A WAIT (MOTIR-9021): an edge the plan does not own, so it was in place
+        // before the plan and waits on a committed card still being worked.
+        if (!owns(memberId, blockerId)) waits.push(row);
       }
     }
     sortBlockers(blockers);
+    sortBlockers(waits);
     // Prose families first, then COVERAGE — the committed verdict's order.
     const prose = await projectedProseAdvisories(proj, memberIds, ctx);
     const coverage = await projectedCoverageAdvisories(proj, memberIds, ctx);
+    const titleCoverage = await projectedTitleCoverageAdvisories(proj, memberIds, ctx);
     // Only the edge findings this PLAN owns (MOTIR-7727) — an old bad edge in
     // the subtree is the committed verdict's to report, not the plan's.
-    const owns = planOwnsEdge(proj);
     const invalidEdges = projectedInvalidEdges(proj, memberIds, owns);
     const crossLevelEdges = projectedCrossLevelEdges(proj, memberIds, owns);
     return {
       key: root.identifier,
       valid: blockers.length === 0 && invalidEdges.length === 0 && crossLevelEdges.length === 0,
       blockers,
+      ...(waits.length > 0 ? { waits } : {}),
       invalidEdges,
       crossLevelEdges,
-      advisories: [...prose, ...coverage],
+      advisories: [...prose, ...coverage, ...titleCoverage],
       softBlocks: await projectedSoftBlocks(proj, root.id, ctx),
+      sectionFindings: await projectedSectionFindings(proj, memberIds, ctx),
     };
   },
 
@@ -755,6 +878,8 @@ export const planValidityService = {
 
     // The SAME per-member rule as the subtree walk, applied over the whole-forest S.
     const blockers: SprintBlockerDto[] = [];
+    const waits: SprintBlockerDto[] = [];
+    const owns = planOwnsEdge(proj);
     const seen = new Set<string>();
     for (const memberId of memberIds) {
       const member = proj.nodes.get(memberId)!;
@@ -768,15 +893,20 @@ export const planValidityService = {
         /* v8 ignore next -- UNREACHABLE: a member's blocker set is a `Set` of ids and every projected node's identifier is distinct, so one walk cannot produce the same `<item> <blocker>` key twice. Kept as the guard the SPRINT walk's `addBlocker` genuinely needs (there a member blocked_by its OWN out-of-sprint child is reached by both the edge and the children rule). Invariant asserted in tests/integration/plans/planValidityService.test.ts — 'the projection invariant behind the walks' defensive arms' (MOTIR-3123). */
         if (seen.has(key)) continue;
         seen.add(key);
-        blockers.push({
+        const row: SprintBlockerDto = {
           item: member.identifier,
           blockedBy: blocker.identifier,
           blockerStatus: blocker.status,
           blockerSprintId: blocker.sprintId,
-        });
+        };
+        blockers.push(row);
+        // A WAIT (MOTIR-9021): an edge the plan does not own, so it was in place
+        // before the plan and waits on a committed card still being worked.
+        if (!owns(memberId, blockerId)) waits.push(row);
       }
     }
     sortBlockers(blockers);
+    sortBlockers(waits);
 
     // ⚠️ THE SECOND QUESTION (MOTIR-3575). Everything above answers
     // FINISHABILITY — can every item in the projected forest be finished once
@@ -801,7 +931,6 @@ export const planValidityService = {
     // BOTH narrowed to the edges this plan OWNS (MOTIR-7727): S above is the
     // whole project, so without it one old bad edge anywhere made every plan on
     // the project read `valid: false` with no blocker and no rejection.
-    const owns = planOwnsEdge(proj);
     const invalidEdges = projectedInvalidEdges(proj, memberIds, owns);
     const crossLevelEdges = projectedCrossLevelEdges(proj, memberIds, owns);
     return {
@@ -814,10 +943,44 @@ export const planValidityService = {
         invalidEdges.length === 0 &&
         crossLevelEdges.length === 0,
       blockers,
+      ...(waits.length > 0 ? { waits } : {}),
       rejections,
       invalidEdges,
       crossLevelEdges,
+      // Only the cards the PLAN writes (an `add`, or a `modify` of a real card):
+      // an untouched stored card's body is the committed verdict's to judge.
+      sectionFindings: await projectedSectionFindings(
+        proj,
+        [...memberIds].filter((id) => proj.proposalByRef.has(id) || proj.patchByWorkItemId.has(id)),
+        ctx,
+      ),
     };
+  },
+
+  /**
+   * The MISLABELLED-LINK advisories (MOTIR-9007) over every body this plan
+   * PROPOSES — an `add`'s body and a `modify`'s patched one — for `validate_plan`.
+   *
+   * Deliberately NOT part of {@link validateProjectedPlan}'s verdict: that DTO is
+   * also the internal `validate-plan-forest` contract motir-ai reads, and the
+   * forest's no-advisory rule exists because a body-vs-EDGES gap has no single
+   * subject there. A mislabelled link has no such problem — it is a property of
+   * one body, decided by what its id opens — so it is reported per proposed card,
+   * beside the verdict and never inside it. Untouched committed cards are not
+   * scanned: they are not the plan's finding (`validate_work_item` reports them).
+   */
+  async projectedLinkAdvisories(
+    planId: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemProseMislabelledLinkAdvisoryDto[]> {
+    const proj = await buildProjection(planId, ctx);
+    const proposedBodies = new Set(
+      [...proj.projectedDescription.keys()].filter(
+        (id) => proj.nodes.get(id)?.projectId === proj.projectId,
+      ),
+    );
+    const advisories = await projectedProseAdvisories(proj, proposedBodies, ctx);
+    return advisories.filter(isMislabelledLinkAdvisory);
   },
 
   /**

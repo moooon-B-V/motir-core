@@ -235,6 +235,7 @@
     "noteShowLess": "Minder tonen",
     "field_description": "Beschrijving",
     "field_explanation": "Toelichting",
+    "field_todos": "Stappen",
     "field_links": "Afhankelijkheden",
     "field_parent": "Bovenliggend",
     "field_targetRepo": "Repository",
@@ -1735,7 +1736,8 @@
       "unknown": "Onbekend",
       "unestablished": "Niet aangemaakt",
       "excluded": "Overgeslagen",
-      "delivered_without_change_request": "Opgeleverd zonder PR"
+      "delivered_without_change_request": "Opgeleverd zonder PR",
+      "delivered_by_child": "Opgeleverd via onderliggend item"
     }
   },
   "comments": {
@@ -1971,6 +1973,7 @@
       "components": "Componenten",
       "aiPlanning": "AI-planning",
       "hostedAgent": "Gehoste agent",
+      "translation": "Vertaling",
       "rules": "Regels",
       "repositories": "Repository's",
       "monitoring": "Monitoring",
@@ -3872,6 +3875,61 @@
         "factKeptBy": "Behouden"
       }
     },
+    "translation": {
+      "title": "Vertaling",
+      "pageDescription": "Hoe leden die in verschillende talen lezen de werkinhoud van dit project zien.",
+      "card": {
+        "title": "Automatisch vertalen",
+        "subtitle": "Laat elk lid het werk van dit project in de eigen taal lezen en toch het origineel zien."
+      },
+      "switch": {
+        "label": "Werkinhoud automatisch vertalen"
+      },
+      "hint": {
+        "off": "Uit. Werkinhoud wordt getoond zoals geschreven, en een knop <b>Vertalen</b> op elke werkitempagina vertaalt dat ene werkitem wanneer een lid erom vraagt.",
+        "on": "Aan. Elk lid leest werkinhoud in de eigen interfacetaal zonder iets in te drukken, en <b>Origineel tonen</b> is altijd één klik weg."
+      },
+      "saving": "Opslaan…",
+      "flipError": "Automatisch vertalen kon niet worden {to, select, on {ingeschakeld} other {uitgeschakeld}}. Er is niets gewijzigd.",
+      "retry": "Opnieuw proberen",
+      "loadFailed": "Deze instelling kon niet worden geladen.",
+      "effects": {
+        "title": "Wat lezers krijgen",
+        "page": "Werkitempagina’s en snelle weergaven tonen elk veld in de taal van de lezer: de titel, de beschrijving, de toelichting en elke taak.",
+        "lists": "Lijsten, borden, de backlog, sprints, de roadmap, gereed en triage tonen titels in de taal van de lezer, met een schakelaar <b>Origineel tonen</b> in elke weergave.",
+        "original": "Agents, de API en e-mails krijgen altijd de originele tekst, en bewerken opent altijd het origineel."
+      },
+      "cost": "Elk veld wordt per taal één keer vertaald en bewaard, dus een latere lezer van dezelfde tekst betaalt niets, en tekst die al in de taal van de lezer is, wordt nooit verstuurd. Vertalen verbruikt de AI-tegoeden van je organisatie tegen de kosten van het model plus 50%. <link>Gebruik en kosten</link>",
+      "noCredit": {
+        "body": "<b>Vertalen heeft AI-tegoed nodig.</b> Werkinhoud wordt getoond zoals geschreven totdat er tegoed is toegevoegd. Er wordt niets gefactureerd.",
+        "add": "Tegoed toevoegen",
+        "askAdmin": "Een eigenaar of beheerder van de organisatie kan dit toevoegen."
+      },
+      "readOnly": "Alleen-lezen",
+      "readOnlyNote": "Alleen een projectbeheerder kan automatisch vertalen wijzigen.",
+      "readOnlyValue": {
+        "on": "Automatisch vertalen staat aan voor dit project. Werkinhoud wordt getoond in de taal van elk lid.",
+        "off": "Automatisch vertalen staat uit voor dit project. Werkinhoud wordt getoond zoals geschreven."
+      },
+      "value": {
+        "on": "Aan",
+        "off": "Uit"
+      },
+      "history": {
+        "title": "Wijzigingsgeschiedenis",
+        "subtitle": "Wie automatisch vertalen aan- of uitzette, en wanneer.",
+        "col": {
+          "who": "Wie",
+          "change": "Wijziging",
+          "when": "Wanneer"
+        },
+        "row": "{who} wijzigde automatisch vertalen van {from} naar {to} op {when}.",
+        "unknownActor": "Een voormalig lid",
+        "empty": "Nog geen wijzigingen. Automatisch vertalen is in dit project nog nooit gewijzigd.",
+        "capped": "De {shown} meest recente van {total} wijzigingen worden getoond.",
+        "failed": "<b>De wijzigingsgeschiedenis kon niet worden geladen.</b> De instelling hierboven is ongewijzigd."
+      }
+    },
     "hostedAgent": {
       "title": "Gehoste agent",
       "pageDescription": "Welk model een gehoste run gebruikt. Gehost uitvoeren kiest het vooraf op basis van de moeilijkheid van het werkitem; wie de run start, kan nog een ander kiezen.",
@@ -3899,7 +3957,11 @@
       "savedTitle": "Instellingen van gehoste agent opgeslagen",
       "savedDesc": "Nieuwe gehoste runs gebruiken deze modellen.",
       "errorTitle": "Kan niet opslaan",
-      "saveError": "Je instellingen voor de gehoste agent zijn niet opgeslagen. Probeer het opnieuw."
+      "saveError": "Je instellingen voor de gehoste agent zijn niet opgeslagen. Probeer het opnieuw.",
+      "autoFix": {
+        "label": "Repareer een rode pull request in de eigen agent van het werkitem.",
+        "help": "Als een pull request rood wordt en de laatste run van het werkitem in een ingelogde, actieve agent plaatsvond, start Motir de reparatie in die agent. Uit (de standaard) betekent dat er niets uit zichzelf start."
+      }
     },
     "connectedApps": {
       "title": "Gekoppelde apps",
@@ -4157,6 +4219,7 @@
         "bugs": "Waar de bugs van dit project worden opgeslagen, wordt beheerd door projectbeheerders. Vraag het een beheerder als de bestemming moet veranderen.",
         "ai-planning": "De AI-planning van dit project — het ritme — wordt geconfigureerd door projectbeheerders. Vraag het een beheerder als die moet veranderen.",
         "hosted-agent": "Welk model een gehoste run gebruikt, wordt getoond aan personen die in dit project een gehoste run kunnen starten. Vraag het een projectbeheerder als je het wilt zien.",
+        "translation": "Of de werkinhoud van dit project voor elke lezer wordt vertaald, wordt getoond aan mensen die de werkitems van het project kunnen lezen. Vraag het een projectbeheerder als je dit wilt zien.",
         "automation": "Projectautomatisering wordt beheerd door projectbeheerders. Vraag het een beheerder als je een regel wilt laten wijzigen.",
         "monitoring": "De koppeling met de foutmonitor van dit project wordt beheerd door personen die integraties kunnen beheren. Vraag het een projectbeheerder als Sentry moet worden gekoppeld of opnieuw gekoppeld."
       }
@@ -4690,7 +4753,13 @@
       "velocityTableCaption": "Velocity — toegezegde tegenover afgeronde {statistic} per Sprint. Gemiddeld afgerond: {average}.",
       "velocityTableSprint": "Sprint",
       "notFound": "Dit sprintrapport is niet beschikbaar.",
-      "backToBacklog": "Terug naar backlog"
+      "backToBacklog": "Terug naar backlog",
+      "sprintLabel": "Sprint",
+      "activeGroup": "Actief",
+      "completedGroup": "Afgerond",
+      "sprintSearch": "Sprints zoeken…",
+      "noSprintsTitle": "Nog geen Sprints om over te rapporteren",
+      "noSprintsBody": "Start een Sprint vanuit de backlog en het rapport ervan verschijnt hier."
     },
     "aiPlan": {
       "cta": "Sprints plannen met Motir",
@@ -5053,7 +5122,16 @@
       "chartDesc": "Aangemaakt tegenover opgelost per {period} over de laatste {count} perioden. In totaal {created} aangemaakt tegenover {resolved} opgelost; het verschil is rood gearceerd waar de backlog groeit en groen waar het team inhaalt.",
       "tableCaption": "Aangemaakt tegenover opgelost per periode (aantallen per periode).",
       "tableCaptionCumulative": "Aangemaakt tegenover opgelost per periode (cumulatieve totalen).",
-      "subWindow": "afgelopen {days} dagen"
+      "subWindow": "afgelopen {days} dagen",
+      "chartFormLabel": "Grafiek",
+      "formLine": "Lijn",
+      "formBars": "Balken",
+      "seriesLabel": "Reeksen",
+      "seriesLocked": "Minstens één reeks blijft aan.",
+      "subCreatedOnly": "Alleen aangemaakt",
+      "subResolvedOnly": "Alleen opgelost",
+      "chartDescBars": "Aangemaakt en opgelost per {period} over de laatste {count} perioden, als balken. In totaal {created} aangemaakt tegenover {resolved} opgelost.",
+      "chartDescSingle": "{series} per {period} over de laatste {count} perioden, {total} in totaal."
     },
     "distribution": {
       "title": "Statusverdeling",
@@ -5077,7 +5155,18 @@
       "noSprintsBody": "Start een Sprint vanuit de backlog om de sprintgrafiek ervan te zien."
     },
     "velocity": {
-      "title": "Velocitygrafiek"
+      "title": "Velocitygrafiek",
+      "endingAtLabel": "Eindigend bij",
+      "endingAtHint": "Een afgeronde Sprint. Leeg = de laatste.",
+      "latest": "Laatst afgerond",
+      "latestNamed": "Laatst afgerond — {name}",
+      "endingAtSearch": "Sprints zoeken…",
+      "countLabel": "Sprints",
+      "countFewer": "Minder Sprints",
+      "countMore": "Meer Sprints",
+      "countHint": "3 tot 52 · standaard 7.",
+      "rangeSubLine": "{project} · {from} – {to}",
+      "chartLoading": "Velocitygrafiek laden"
     },
     "controls": {
       "periodLabel": "Periode",
@@ -5134,13 +5223,20 @@
       "xPoints": "Storypoints (open)",
       "xCount": "Werkitems (open)",
       "unassigned": "Niet toegewezen",
-      "chartDesc": "Open {measure} per verantwoordelijke, gerangschikt: {breakdown}. Totaal {total} verdeeld over {count} onopgeloste werkitems.",
-      "tableCaption": "Open (onopgelost) werk per verantwoordelijke — storypoints en aantal werkitems.",
+      "chartDesc": "Open {measure}, gerangschikt per persoon over de gekozen periode: {breakdown}. Totaal {total} verdeeld over {count} werkitems.",
+      "tableCaption": "Open werk per persoon over de gekozen periode — toegewezen, niet toegewezen en door hen gemaakt, en het totaal, voor de actieve maat.",
       "tableAssignee": "Verantwoordelijke",
       "tablePoints": "Storypoints",
       "tableIssues": "Werkitems",
       "emptyTitle": "Nog geen open werk toegewezen",
-      "emptyBody": "Elk onopgelost werkitem is niet toegewezen, of er is geen open werk. Kies een ander bereik."
+      "emptyBody": "Elk onopgelost werkitem is niet toegewezen, of er is geen open werk. Kies een ander bereik.",
+      "legendAssigned": "Toegewezen",
+      "legendUnassigned": "Niet toegewezen — gemaakt door",
+      "tableAssigned": "Toegewezen",
+      "tableUnassigned": "Niet toegewezen (gemaakt)",
+      "tableTotal": "Totaal",
+      "subWindow": "afgelopen {days} dagen",
+      "chartDescPerson": "{name} {total} ({assigned} toegewezen, {unassigned} niet toegewezen en gemaakt)"
     },
     "statistic": {
       "kind": "Type",
@@ -5151,6 +5247,45 @@
       "sprint": "Sprint",
       "label": "Label",
       "component": "Component"
+    },
+    "help": {
+      "hide": "Hulptekst verbergen",
+      "show": "Hulptekst tonen",
+      "regionLabel": "Over dit rapport",
+      "whatLabel": "Wat het toont.",
+      "howLabel": "Hoe je het leest.",
+      "burndown": {
+        "what": "Hoe de scope, het afgeronde en het gestarte werk van de Sprint zich ontwikkelen van begin tot eind, met een doellijn en een markering voor Vandaag.",
+        "how": "Als Afgerond naar Scope toe stijgt, ligt de Sprint op schema. Een Scope-lijn die na de start stijgt is scope creep; een Afgerond-lijn die achterblijft bij het Doel loopt achter."
+      },
+      "velocity": {
+        "what": "De storypoints die een team heeft toegezegd tegenover de punten die het heeft afgerond, Sprint voor Sprint.",
+        "how": "Vergelijk de twee balken in elke Sprint. Gelijkmatige balken voor afgerond werk tonen een betrouwbaar tempo waarop je de volgende Sprint kunt plannen; kies een eerdere Sprint om vanaf daar terug te kijken."
+      },
+      "sprintReport": {
+        "what": "Een afgeronde of lopende Sprint op één pagina: wat is afgerond, wat niet, wat na de start is toegevoegd en de bijbehorende sprintgrafiek.",
+        "how": "Begin met afgerond tegenover niet afgerond en lees dan het werk dat midden in de Sprint is toegevoegd. Gebruik de kiezer onder de titel om van Sprint te wisselen."
+      },
+      "createdVsResolved": {
+        "what": "Hoeveel werkitems er per periode zijn aangemaakt en hoeveel er zijn opgelost.",
+        "how": "Als de balk voor aangemaakt hoger is dan die voor opgelost, groeit de backlog; als hij lager is, haalt het team in. Gebruik de reeksschakelaars om er één afzonderlijk te bekijken."
+      },
+      "distribution": {
+        "what": "Hoe de werkitems van het project zich verdelen over de waarden van één veld, zoals status, type of verantwoordelijke.",
+        "how": "Hoe breder een segment, hoe meer werkitems die waarde hebben. Wijzig de statistiek om hetzelfde werk anders op te delen."
+      },
+      "averageAge": {
+        "what": "Het gemiddelde aantal dagen dat de onopgeloste werkitems aan het einde van elke periode openstonden.",
+        "how": "Een lijn die blijft stijgen betekent dat werk open blijft staan. Vergelijk hem met het gemiddelde van het venster om te zien of de laatste periode ongewoon is."
+      },
+      "resolutionTime": {
+        "what": "Het gemiddelde aantal dagen dat het kostte om de werkitems op te lossen die in elke periode zijn opgelost.",
+        "how": "Een dalende lijn betekent dat werk sneller wordt afgerond. Periodes worden geteld op oplosdatum, dus een oud item dat vandaag is opgelost verhoogt de periode van vandaag."
+      },
+      "workload": {
+        "what": "Het open werk dat elke persoon over een gekozen periode heeft, geteld in storypoints of werkitems. Werk zonder verantwoordelijke wordt geteld onder de maker.",
+        "how": "De langste balken zijn de mensen met het meeste open werk. Let op een zeer ongelijke verdeling voordat je meer toewijst."
+      }
     }
   },
   "dashboards": {
@@ -6278,8 +6413,11 @@
       "stateDrawing": "Verbruikt tegoed",
       "statePaused": "CI gepauzeerd",
       "stateNothing": "Niets te factureren",
+      "stateInternal": "Intern",
       "usedLabel": "Gebruikte minuten deze maand",
       "usedOfPool": "{used} van {pool} minuten",
+      "internalUsed": "{used} minuten",
+      "internalNote": "Deze organisatie is van Motir zelf: geen inbegrepen minuten, geen verbruikte credits en geen kosten. De minuten worden vastgelegd zodat het team ziet wat de CI-runners kosten. De telling loopt per kalendermaand.",
       "minutesLeft": "{left} minuten over",
       "minutesOver": "{over} minuten overschreden",
       "creditsDrawn": "{credits} credits verbruikt",
@@ -7171,6 +7309,43 @@
               "body": "Er is niets opgestart en niets in rekening gebracht. Repareren met de gehoste agent werkt weer zodra de organisatie credits heeft — of repareer het vanuit je terminal."
             }
           }
+        },
+        "myAgent": {
+          "lead": "Repareer het in je eigen agent: <b>{agent}</b>, de agent die de laatste run van dit werkitem gebruikte.",
+          "door": {
+            "label": "Repareren in mijn agent",
+            "starting": "Reparatie wordt gestart…",
+            "why": "De reparatie draait in dezelfde agent op dezelfde branch, dus begint met de eigen context van de run in plaats van een lege."
+          },
+          "fixing": {
+            "by": "<b>{name}</b> startte <when></when> een reparatie in <b>{agent}</b> — <run>{label}</run>.",
+            "byYou": "Jij startte <when></when> een reparatie in <b>{agent}</b> — <run>{label}</run>.",
+            "why": "Eén reparatie tegelijk: deze run houdt de reparatie vast tot hij eindigt, dus een tweede reparatie kan er niet bovenop starten."
+          },
+          "refused": {
+            "busy": {
+              "title": "Niet gestart — voor dit werkitem loopt al een reparatie.",
+              "body": "<b>{name}</b> startte hem <when></when> — <run>{label}</run>. Er is niets opgestart en niets gerekend.",
+              "bodyYou": "Jij startte hem <when></when> — <run>{label}</run>. Er is niets opgestart en niets gerekend."
+            },
+            "signedOut": {
+              "title": "Niet gestart — <b>{agent}</b> is uitgelogd.",
+              "body": "Log in bij <b>{agent}</b> en druk daarna opnieuw op ‘Repareren in mijn agent’. <link>Open de agent</link> om in te loggen met <cmd>{cmd}</cmd>. Er is niets opgestart en niets gerekend."
+            }
+          },
+          "fellBack": {
+            "notice": "<b>{agent}</b> kon de runsessie van dit werkitem niet hervatten, dus de reparatie startte een nieuwe sessie op dezelfde branch (<b>{branch}</b>)."
+          },
+          "settled": {
+            "notice": "De pull requests van dit werkitem zijn nu groen, dus er is geen reparatie gestart."
+          },
+          "gaveUp": {
+            "note": "De laatste reparatie in <b>{agent}</b> gaf het <when></when> op na {attempts, plural, one {# poging} other {# pogingen}}. ‘Repareren in mijn agent’ kan opnieuw worden ingedrukt.",
+            "noteNoCount": "De laatste reparatie in <b>{agent}</b> gaf het <when></when> op. ‘Repareren in mijn agent’ kan opnieuw worden ingedrukt."
+          },
+          "modal": {
+            "lead": "Deze run eindigde met een rode pull request. Repareer hem in dezelfde agent, zonder de fout naar een nieuwe te kopiëren."
+          }
         }
       },
       "continue": {
@@ -7288,11 +7463,13 @@
         "delivered": "Opgeleverd",
         "unestablished": "Niet aangemaakt",
         "excluded": "Overgeslagen",
-        "delivered_without_change_request": "Opgeleverd zonder PR"
+        "delivered_without_change_request": "Opgeleverd zonder PR",
+        "delivered_by_child": "Opgeleverd via onderliggend item"
       },
       "repositoryNotCreated": "Repository nog niet aangemaakt",
       "repositorySkipped": "Overgeslagen voor dit project",
       "shippedWithoutPullRequest": "Opgeleverd zonder pull request",
+      "deliveredByChildPullRequest": "Opgeleverd via de pull request van een onderliggend werkitem",
       "unlinkAria": "De koppeling met {target} verwijderen",
       "unlinkConfirmBefore": "De koppeling verwijderen met",
       "unlinkConfirmAfter": "? De pull request op GitHub blijft onaangeroerd — alleen de koppeling verdwijnt.",
@@ -7544,7 +7721,9 @@
         "aria": "{key} openen, het werkitem dat dit gesprek opnieuw plant",
         "pickLabel": "Vervolg op <mono>{key}</mono>",
         "chose": "koos {label}",
-        "pickAria": "{key} openen, de keuze waarop dit gesprek het vervolg is (koos {label})"
+        "pickAria": "{key} openen, de keuze waarop dit gesprek het vervolg is (koos {label})",
+        "guideLabel": "Uit de gids voor <mono>{key}</mono>",
+        "guideAria": "{key} openen, het werkitem waar Motir AI je doorheen leidde toen het deze herplanning voorstelde"
       },
       "end": {
         "failed": "Gesloten · de poging is mislukt · {time}",
@@ -7809,7 +7988,6 @@
       "replan": "Geopend om het bestaande plan van {project} te wijzigen.",
       "contextual": "Geopend in context op {project}.",
       "contextualItem": "Geopend in de context van {item}.",
-      "conventionRefine": "Geopend om de codeconventie van {repo} te verfijnen.",
       "roadmap": "Geopend vanuit de roadmap.",
       "followUp": "Geopend om het vervolg op {choice} te plannen, op {item}.",
       "followUpProject": "Geopend op {project} om het vervolg op {choice} te plannen."
@@ -7974,6 +8152,16 @@
     "followUpCard": {
       "label": "Vervolg op een keuze"
     },
+    "guideSeed": {
+      "chip": "uit een gids",
+      "lead": "Geopend op {target} vanuit de gids van Motir AI over {guided}.",
+      "card": "Uit een gids",
+      "cardBy": "Bevestigd door {who} · {when}",
+      "justNow": "zojuist",
+      "you": "jij",
+      "status": "In planning",
+      "offerClosed": "Dit herplanningsvoorstel is niet meer open. Ga terug naar de gids om te zien hoe het ervoor staat."
+    },
     "guide": {
       "openedFrom": "Geopend vanuit {key}",
       "reading": "{key} en de takenlijst lezen…",
@@ -8005,7 +8193,8 @@
       "errors": {
         "notManual": "Motir AI begeleidt een persoon bij handmatig werk, en dit werkitem is voor een agent, dus hier valt niets te begeleiden.",
         "closed": "Dit werkitem is klaar of gearchiveerd, dus er valt niets meer te begeleiden.",
-        "forbidden": "Je hebt toestemming nodig om dit werkitem te bewerken en om met Motir AI te plannen om erdoorheen begeleid te worden."
+        "forbidden": "Je hebt toestemming nodig om dit werkitem te bewerken en om met Motir AI te plannen om erdoorheen begeleid te worden.",
+        "offerClosed": "Dit voorstel is al beslist, dus het kan niet meer worden gewijzigd. Laad het werkitem opnieuw om te zien hoe het ervoor staat."
       },
       "youTicked": "Je hebt stap {n} op de lijst afgevinkt",
       "youUnticked": "Je hebt stap {n} op de lijst weer opengezet",
@@ -8060,6 +8249,32 @@
         "typeText": "Tekst",
         "typeMarkdown": "Markdown",
         "typeFile": "Bestand"
+      },
+      "offer": {
+        "label": "Herplanningsverzoek",
+        "target": "Gericht op",
+        "targetElsewhere": "De herplanning begint bij {key}, niet bij dit werkitem.",
+        "resolved": "{done} is klaar, dus de herplanning begint bij {open}.",
+        "noTarget": "Er is geen open werkitem om de herplanning vanaf te starten.",
+        "confirm": "Bevestigen",
+        "confirming": "Starten…",
+        "openSession": "Open de planningssessie",
+        "decline": "Afwijzen",
+        "declining": "Afwijzen…",
+        "showAll": "Alles tonen",
+        "showLess": "Minder tonen",
+        "confirmHelp": "Opent de planning van Motir AI voor {key} met dit verzoek erbij. Dit kost credits.",
+        "declineHelp": "Sluit dit voorstel. Er wordt niets gepland.",
+        "replaced": "Vervangen door een nieuwer voorstel",
+        "started": "Herplanning gestart",
+        "startedBy": "Bevestigd · {when}",
+        "declined": "Afgewezen",
+        "declinedBy": "Afgewezen · {when}",
+        "recorded": "Vastgelegd op het werkitem",
+        "resumeAt": "Loop mij erdoorheen gaat verder bij stap {n}.",
+        "walkStopped": "De wandeling is gestopt.",
+        "cannotPlan": "Je kunt hier geen planning starten — vraag het iemand die dat wel kan, of deel dit verzoek.",
+        "noAi": "Motir AI is hier niet ingesteld, dus de planning kan niet starten. Je kunt dit verzoek nog wel delen."
       }
     },
     "restart": {
@@ -8082,7 +8297,9 @@
       "onlyStarter": "Alleen {name} of een projectmanager kan dit hervatten.",
       "onlyStarterAnon": "Alleen de persoon die dit startte of een projectmanager kan het hervatten.",
       "failureLine": "Je laatste wijziging aan dit plan kon niet worden doorgevoerd · {when}",
-      "failureLineAgain": "Je laatste wijziging kon opnieuw niet worden doorgevoerd · {when}"
+      "failureLineAgain": "Je laatste wijziging kon opnieuw niet worden doorgevoerd · {when}",
+      "failureLinePlanAgain": "Deze poging kon niet worden voortgezet · {when}. Je volgende bericht plant opnieuw.",
+      "failureLinePlanAgainAgain": "Deze poging kon opnieuw niet worden voortgezet · {when}. Je volgende bericht plant opnieuw."
     },
     "grill": {
       "control": {
@@ -8096,6 +8313,11 @@
         },
         "hint": "Je volgende bericht start het ondervragen."
       }
+    },
+    "follow": {
+      "following": "Volgt de planner",
+      "resume": "De planner volgen",
+      "resumedAnnouncement": "Volgt de planner weer"
     }
   },
   "codeHealth": {
@@ -8182,13 +8404,40 @@
       }
     },
     "convention": {
+      "versionEdited": "v{version} · bewerkt",
+      "bylineDerived": "Afgeleid uit de code",
+      "bylineEdited": "Bewerkt door {name} · {date}",
+      "bylineEditedUnknown": "Bewerkt door een teamlid · {date}",
+      "edit": "Bewerken",
+      "writeFirst": "Schrijf de conventie",
+      "editFieldLabel": "Conventie (Markdown)",
+      "editingVersion": "v{version} bewerken",
+      "saveCreates": "Opslaan maakt v{next} aan. {count} / {max} tekens.",
+      "editHelper": "Elke nieuwe prompt voor deze repository leest de opgeslagen tekst. Een nieuwere afgeleide versie vervangt die nooit.",
+      "save": "Opslaan",
+      "cancel": "Annuleren",
+      "saving": "Opslaan…",
+      "saveFailed": "De conventie kon niet worden opgeslagen. Je tekst staat er nog — probeer het opnieuw.",
+      "tooLong": "De conventie is langer dan {max} tekens. Kort haar in om op te slaan.",
+      "blank": "Schrijf iets om op te slaan.",
+      "conflictTitle": "Iemand heeft een nieuwere versie opgeslagen",
+      "conflictBody": "{name} heeft v{latest} opgeslagen op {date} terwijl je v{base} bewerkte. Je wijzigingen zijn niet opgeslagen.",
+      "conflictLoadTheirs": "Hun versie laden",
+      "conflictKeepMine": "Mijn versie bewaren als kopie",
+      "conflictCopyLabel": "Jouw tekst — kopieer hem en laad dan hun versie",
+      "conflictCopyHint": "Alleen-lezen kopie. Als je hun versie laadt, sluit deze editor.",
+      "copy": "Kopiëren naar klembord",
+      "pendingTitle": "Er is een nieuwere versie afgeleid uit de code",
+      "pendingBody": "Een nieuwe audit op {date} leverde een afgeleide versie op. Die is niet in gebruik — de tekst hieronder wel. Er verandert niets tenzij je bewerkt.",
+      "pendingCompare": "Naast elkaar vergelijken",
+      "pendingInUse": "In gebruik · v{version} bewerkt",
+      "pendingWaiting": "Wacht · afgeleid",
+      "emptyWriteBody": "Er zijn nog geen conventieregels afgeleid voor deze repo. Schrijf hier de eerste versie, of wacht tot Motir er een uit je code afleidt.",
       "emptyTitle": "Nog geen conventie",
       "emptyDescription": "Motir leidt een codeconventie uit je code af zodra er een repo is gekoppeld. Bekijk hem hier.",
       "defaultRepo": "Code",
       "noRules": "Er zijn nog geen conventieregels afgeleid voor deze repo.",
       "versionDerived": "v{version} · afgeleid",
-      "bannerDerivedTitle": "Afgeleid uit je code — automatisch gebruikt",
-      "bannerDerivedBody": "Deze conventie is afgeleid uit je codebase en wordt in elke prompt voor nieuwe code opgenomen. Gebruik hierboven Verfijnen met Motir om de AI-chat te openen en hem te verfijnen.",
       "provenanceTitle": "Herkomst van regels",
       "provenanceLegend": "Overgenomen — je code doet dit al, wij hebben het vastgelegd. Voorgesteld — je code zei niets of was inconsistent, hier is een standaard voor schone code geplaatst.",
       "provenance": {
@@ -8494,7 +8743,12 @@
       "answeredGroup": "Al beantwoord door je project",
       "answeredMeta": "Motir heeft je code en je werkitems gelezen",
       "discoveryStep": "Een paar vragen",
-      "directionGroup": "Je richting"
+      "directionGroup": "Je richting",
+      "subtitle": "Indexeren en importeren lopen op de achtergrond. Open Motir wanneer je wilt.",
+      "background": "Op de achtergrond · {detail}",
+      "backgroundInProgress": "Bezig",
+      "backgroundQueued": "In de wachtrij",
+      "backgroundFailed": "Mislukt"
     },
     "common": {
       "back": "Terug",
@@ -8576,6 +8830,58 @@
         "installation_not_accessibleHint": "Je GitHub-gebruiker kan deze installatie niet zien, dus er is niets gekoppeld. Een eigenaar van het GitHub-account kan je toegang geven.",
         "not_configuredTitle": "GitHub is niet ingesteld op deze installatie",
         "not_configuredHint": "Deze Motir-installatie heeft nog geen GitHub-app, dus GitHub kan hier niet worden gekoppeld. Wie de installatie beheert, kan dit instellen."
+      },
+      "existing": {
+        "title": "Je GitHub-accounts met de Motir-app",
+        "hint": "De Motir-app is al geïnstalleerd op deze accounts. Kies er een om de repository's ervan hier te koppelen. Je hoeft niet opnieuw te installeren.",
+        "loading": "Je GitHub-accounts worden gezocht…",
+        "typeUser": "Persoonlijk account",
+        "typeOrg": "GitHub-organisatie",
+        "linkedHere": "Al gekoppeld aan deze organisatie",
+        "pickCta": "Repository's kiezen",
+        "pickAria": "Repository's kiezen uit {login}",
+        "installAnotherCta": "Op een ander account installeren",
+        "installAnotherHint": "Gebruik dit als het account dat je wilt niet in de lijst staat.",
+        "loadErrorTitle": "We konden je GitHub-accounts niet lezen",
+        "loadErrorHint": "Er is niets gewijzigd. Probeer het opnieuw of installeer op een ander account.",
+        "retryCta": "Opnieuw proberen",
+        "identity": {
+          "title": "Log in met GitHub om je installaties te vinden.",
+          "hint": "Motir controleert alleen op welke accounts de Motir-app is geïnstalleerd en welke daarvan je kunt bereiken. Je kunt dit overslaan en in plaats daarvan op een nieuw account installeren.",
+          "cta": "Inloggen met GitHub",
+          "skipCta": "Overslaan en installeren",
+          "declinedHint": "GitHub heeft je niet ingelogd, dus er is niets gewijzigd. Probeer het opnieuw, of sla dit over en installeer in plaats daarvan."
+        },
+        "picker": {
+          "heading": "Repository's in {login}",
+          "hint": "Kies de repository's die deze organisatie koppelt. Er wordt niets gekoppeld tot je bevestigt.",
+          "fromInstallHint": "Je hebt een account gekozen waarop de Motir-app al is geïnstalleerd. Kies welke repository's ervan deze organisatie koppelt.",
+          "loading": "Repository's laden…",
+          "available": "Beschikbaar",
+          "connectedHere": "Hier gekoppeld",
+          "connectedElsewhere": "Gekoppeld aan een andere organisatie",
+          "connectedElsewhereHint": "Deze repository kan hier niet worden gekozen.",
+          "selectedCount": "{count, plural, one {# repository geselecteerd} other {# repository's geselecteerd}}",
+          "confirmCta": "{count, plural, one {# repository koppelen} other {# repository's koppelen}}",
+          "backCta": "Terug naar accounts",
+          "nothingLeftTitle": "Niets meer te koppelen uit dit account",
+          "nothingLeftHint": "Elke repository hier is al gekoppeld, aan deze organisatie of aan een andere. Voeg op GitHub repository's toe aan de installatie om er meer aan te bieden.",
+          "nothingLeftCta": "Repository's toevoegen op GitHub"
+        },
+        "outcome": {
+          "linkedTitle": "Repository's gekoppeld",
+          "linkedHint": "Motir kan nu de repository's lezen die je hebt gekozen. Verder is er niets van dit account gekoppeld.",
+          "takenTitle": "Er is een repository bezet geraakt terwijl je koos",
+          "takenHint": "Een andere organisatie heeft {repos} gekoppeld. Er is niets gekoppeld. De lijst is bijgewerkt, dus kies opnieuw.",
+          "notAccessibleTitle": "Je kunt dat account niet meer bereiken",
+          "notAccessibleHint": "GitHub laat je deze installatie niet meer zien, dus hij is uit de lijst gehaald. Vraag een eigenaar van het GitHub-account om toegang, of installeer op een ander account.",
+          "notAdminTitle": "Alleen een beheerder van de organisatie kan een bestaande installatie koppelen",
+          "notAdminHint": "Vraag een beheerder van deze organisatie om hem te koppelen, of installeer zelf op een ander account.",
+          "selectionRequiredTitle": "Kies ten minste één repository",
+          "selectionRequiredHint": "Er is niets gekoppeld. Vink de repository's aan die je wilt en bevestig daarna.",
+          "notVisibleTitle": "Een repository hoort niet meer bij deze installatie",
+          "notVisibleHint": "Er is niets gekoppeld. De lijst is bijgewerkt, dus kies opnieuw."
+        }
       }
     },
     "index": {
@@ -8588,7 +8894,9 @@
       "perRepo": "Per repository",
       "state": {
         "indexed": "Geïndexeerd",
-        "queued": "In wachtrij"
+        "queued": "In wachtrij",
+        "indexing": "Bezig",
+        "failed": "Mislukt"
       },
       "callout": "Motir leidt je conventies + een codegezondheidscheck (en eventueel een plan) af uit het hele project, dus elke repo moet geïndexeerd zijn — Volgende blijft uitgeschakeld totdat elke repository klaar is.",
       "completeTitle": "Codegraaf gebouwd",
@@ -8598,11 +8906,13 @@
     "import": {
       "eyebrow": "Optioneel · Importeren en plannen",
       "heading": "Je bestaande Backlog meenemen",
-      "body": "Houd je al werk bij in Jira, Linear, GitHub, Plane of een CSV? Importeer het in dit project — je bekijkt eerst een voorbeeld van een proefrun voordat er iets wordt geschreven. Sla dit over als je geen Backlog hebt om mee te nemen.",
+      "body": "Importeer uit Jira, Linear of Plane, of open Motir en doe het later. Een import gaat op de achtergrond door.",
       "reconcile": "Als je daarna een plan genereert, brengt Motir de twee met elkaar in overeenstemming, zodat er niets dubbel komt.",
       "skip": "Import overslaan",
       "bodyInline": "Houd je al werk bij in Jira, Linear, GitHub, Plane of een CSV? Neem het hier direct mee. Je bekijkt eerst een voorbeeld van een proefrun voordat er iets wordt geschreven. Sla dit over als je geen Backlog hebt om mee te nemen.",
-      "continue": "Doorgaan"
+      "continue": "Doorgaan",
+      "running": "Importeren uit {source} · tot nu toe {done} werkitems",
+      "runningBody": "Dit gaat op de achtergrond door. Je hoeft er niet op te wachten."
     },
     "decision": {
       "eyebrow": "Inrichten voltooid",
@@ -8628,6 +8938,26 @@
       "readyTitle": "Je eerste plan is klaar",
       "readyBody": "{count, plural, one {# item is} other {# items zijn}} opgesteld voor {project}. Niets is definitief totdat je het goedkeurt.",
       "readyCta": "Je plan bekijken"
+    },
+    "indexing": {
+      "doneTitle": "{repos} geïndexeerd",
+      "repoCount": "{count, plural, one {# repository} other {# repository's}}",
+      "aggregateTail": "{done} van {total} klaar",
+      "failedTail": "{count} mislukt",
+      "detailBody": "Dit gaat op de achtergrond door. Je kunt Motir nu openen; niets wacht tot het klaar is.",
+      "rowFailed": "Motir kon deze repository niet indexeren. Niets van wat je hebt gedaan is verloren.",
+      "checkConnection": "Verbinding controleren",
+      "close": "Sluiten",
+      "retrying": "Opnieuw proberen…",
+      "refusedNotConnected": "Deze repository is niet meer met het project verbonden. Controleer de verbinding en probeer het opnieuw.",
+      "refusedTooLarge": "Deze repository is te groot voor Motir om te indexeren.",
+      "retryError": "Motir kon dat niet opnieuw starten. Probeer het zo nog eens.",
+      "importHeading": "Import van werkitems",
+      "importProgress": "{done} tot nu toe"
+    },
+    "enter": {
+      "cta": "Naar Motir",
+      "hint": "Indexeren en een eventuele import gaan door nadat je Motir opent."
     }
   },
   "repositorySet": {
@@ -9250,6 +9580,7 @@
         "token_expired": "de verbinding met de AI-aanbieder verlopen was",
         "prompt_too_large": "de context van het plan te groot was voor het model",
         "job_failed": "de planningstaak mislukt is",
+        "stalled": "het plan niet meer vorderde",
         "internal": "er aan onze kant iets misging"
       },
       "refusal": {
@@ -9334,7 +9665,8 @@
       "navPlanningLessons": "Planningslessen",
       "navIdeas": "Ideeën",
       "navEnterpriseRequests": "Enterprise-aanvragen",
-      "navRunModels": "Modellen voor gehoste runs"
+      "navRunModels": "Modellen voor gehoste runs",
+      "navFleetSettings": "Vlootinstellingen"
     },
     "nav": {
       "overview": "Overzicht",
@@ -9514,7 +9846,11 @@
             }
           },
           "fleet": {
-            "stop": "De vlootcontainers gestopt"
+            "stop": "De vlootcontainers gestopt",
+            "org_ci": {
+              "enable": "Vloot-CI ingeschakeld",
+              "disable": "Vloot-CI uitgeschakeld"
+            }
           },
           "enterprise_request": {
             "transition": "Een Enterprise-aanvraag verplaatst"
@@ -11441,6 +11777,186 @@
         "notFound": "Dit idee bestaat niet meer. Iemand heeft het verwijderd terwijl je de pagina open had.",
         "failed": "Er ging iets mis, dus er is niets gewijzigd. Probeer het opnieuw."
       }
+    },
+    "fleetSettings": {
+      "breadcrumb": "Beheer · Vlootinstellingen",
+      "title": "Vlootinstellingen",
+      "subtitle": "Hier beslist een superadmin wiens CI op de eigen machines van Motir draait. Elke wijziging vraagt om een reden en wordt in het auditlogboek geschreven.",
+      "empty": "Geen enkel project biedt vloot-CI aan — geen project van de meta-organisatie heeft een privérepository in een gekoppelde organisatie.",
+      "setting": {
+        "title": "CI van de privérepository's van Motir op de vloot draaien",
+        "pair": "Project {project} · GitHub-organisatie {org}",
+        "superadminOnly": "Alleen superadmin",
+        "explanation": "Aan: elke CI-job in de privérepository's van Motir op {org} vraagt het label {label} aan en draait op de gedeelde {fleet}-machines, toegerekend aan moooon B.V. Uit: ze draaien op door GitHub gehoste runners. In beide gevallen verandert er geen workflowbestand."
+      },
+      "state": {
+        "on": "Aan",
+        "off": "Uit"
+      },
+      "action": {
+        "turnOn": "Aanzetten",
+        "turnOff": "Uitzetten"
+      },
+      "blocked": "Kan pas aan als aan elke voorwaarde is voldaan.",
+      "offNeverBlocked": "Uitzetten wacht nooit op gereedheid.",
+      "meta": {
+        "lastChanged": "Laatst gewijzigd",
+        "changedBy": "door {email}, {when} — ‘{reason}’",
+        "neverChanged": "Nooit gewijzigd",
+        "auditLink": "Auditlogboek",
+        "variable": "GitHub-variabele",
+        "repositories": "Repository's"
+      },
+      "variable": {
+        "present": "{name} = {value} op {org} (privérepository's) — nieuwe jobs vragen de vloot aan.",
+        "absent": "{name} is niet ingesteld op {org} — jobs vallen terug op door GitHub gehoste runners.",
+        "unknown": "Kon {name} op {org} niet lezen — GitHub antwoordde met HTTP {status}.",
+        "unreachable": "Kon {name} op {org} niet lezen — GitHub was niet bereikbaar."
+      },
+      "drift": {
+        "onAbsent": {
+          "title": "Opgeslagen als aan, maar GitHub is het er niet mee eens.",
+          "body": "{name} is niet ingesteld op {org}, dus nieuwe jobs draaien nog op door GitHub gehoste runners. Zet de instelling uit en weer aan om hem te schrijven."
+        },
+        "offPresent": {
+          "title": "Opgeslagen als uit, maar GitHub is het er niet mee eens.",
+          "body": "{name} is nog ingesteld op {org}, dus nieuwe jobs vragen nog de vloot aan. Zet de instelling aan en weer uit om hem te verwijderen."
+        }
+      },
+      "repositories": {
+        "count": "{count, plural, one {# privérepository} other {# privérepository's}}, tijdens runtime gelezen uit de privérepository's van project {project} op {org}"
+      },
+      "monitoringLine": "De machines van Motir verschijnen onder moooon B.V. in Monitoring › Vloot",
+      "onCallout": {
+        "title": "De CI van Motir draait op de vloot.",
+        "link": "Monitoring › Vloot openen"
+      },
+      "degraded": {
+        "title": "Aan, maar niet gereed.",
+        "body": "Nieuwe jobs blijven in de wachtrij tot dit is opgelost of de instelling wordt uitgezet."
+      },
+      "readiness": {
+        "title": "Gereedheid",
+        "subtitle": "Negen voorwaarden, in de volgorde waarin een job ze tegenkomt. Een voorwaarde die niet gecontroleerd kon worden, telt als niet voldaan.",
+        "ready": "Gereed",
+        "readySub": "Aan alle {count} voorwaarden voldaan",
+        "notReady": "Niet gereed — {count, plural, one {# voorwaarde} other {# voorwaarden}} niet voldaan",
+        "unmetCount": "{count} niet voldaan",
+        "unknownCount": "{count} niet te controleren",
+        "checked": "Gecontroleerd {when}",
+        "checkedAgain": "Opnieuw gecontroleerd {when}",
+        "recheck": "Opnieuw controleren"
+      },
+      "mark": {
+        "met": "Voldaan",
+        "unmet": "Niet voldaan",
+        "unknown": "Niet te controleren"
+      },
+      "cond": {
+        "kill_switch": {
+          "label": "Noodschakelaar van de vloot"
+        },
+        "app_installed": {
+          "label": "App geïnstalleerd"
+        },
+        "app_runner_permission": {
+          "label": "App-machtiging: zelf gehoste runners"
+        },
+        "app_variables_permission": {
+          "label": "App-machtiging: variabelen (schrijven)"
+        },
+        "workflow_job_subscription": {
+          "label": "Levering van workflow_job"
+        },
+        "app_repositories": {
+          "label": "App bereikt de repository's"
+        },
+        "delivery_attributable": {
+          "label": "Jobs toegerekend aan project {project}"
+        },
+        "runner_group": {
+          "label": "Runnergroep"
+        },
+        "image_coverage": {
+          "label": "Imagedekking"
+        }
+      },
+      "why": {
+        "kill_switch_engaged": "De noodschakelaar van de vloot staat aan ({variable}=0), dus er start geen vlootmachine. Een operator heft hem op of verhoogt hem.",
+        "app_not_installed": "De motir-studio-app is niet geïnstalleerd op {org}. Een eigenaar van {org} installeert hem.",
+        "app_suspended": "De motir-studio-app op {org} is opgeschort sinds {date}. Een eigenaar van {org} heft de opschorting op.",
+        "permission_missing": "De motir-studio-app op {org} heeft {permission}: geen, en heeft schrijfrechten nodig. Een eigenaar van {org} accepteert het machtigingsverzoek.",
+        "permission_insufficient": "De motir-studio-app op {org} heeft {permission}: {granted}, en heeft schrijfrechten nodig. Een eigenaar van {org} accepteert het machtigingsverzoek.",
+        "not_subscribed": "De app is niet geabonneerd op workflow_job-events, dus GitHub laat Motir nooit weten dat een job in de wachtrij staat. Wie de motir-studio-app beheert, abonneert hem in de instellingen van de app.",
+        "repositories_not_granted": "De installatie van de app op {org} bereikt {repositories} niet. Een eigenaar van {org} voegt ze toe aan de repositorytoegang van de installatie.",
+        "no_private_repositories": "Project {project} heeft geen privérepository in {org}, dus er is niets voor de vloot om te draaien.",
+        "not_attributable": "Een job in de wachtrij uit {repositories} zou niet aan project {project} worden toegerekend en zou dus in de wachtrij blijven tot GitHub hem laat verlopen. Koppel de repository opnieuw aan het project zodat de spiegelrij actueel is.",
+        "no_runner_group": "Project {project} heeft geen runnergroep in {org}. Een operator voert {script} --project {project} uit.",
+        "sync_pending": "De runnergroep van het project in {org} is niet gesynchroniseerd met de repository's. Een operator voert {script} --project {project} uit.",
+        "jobs_not_runnable": "{count, plural, one {# job kan} other {# jobs kunnen}} nog niet draaien op het runnerimage van de vloot. Wie het vlootimage onderhoudt, voegt de ontbrekende tool toe; een job die een ander besturingssysteem nodig heeft, blijft niet uitvoerbaar tot hij de privéset verlaat.",
+        "not_inventoried": "{repositories} {count, plural, one {staat} other {staan}} niet in de jobinventaris van de vloot, dus niemand heeft gecontroleerd of het runnerimage {count, plural, one {de jobs ervan} other {hun jobs}} kan draaien. Wie de inventaris onderhoudt, voert hem opnieuw uit.",
+        "inventory_stale": "De workflows van {repositories} zijn gewijzigd nadat de jobinventaris van de vloot ze heeft gemeten. Wie de inventaris onderhoudt, voert hem opnieuw uit.",
+        "read_failed": "Kon dit niet controleren: GitHub antwoordde met HTTP {status}. Telt als niet voldaan tot een controle slaagt.",
+        "read_unreachable": "Kon dit niet controleren: GitHub was niet bereikbaar. Telt als niet voldaan tot een controle slaagt.",
+        "read_failedNoStatus": "Kon dit niet controleren. Telt als niet voldaan tot een controle slaagt.",
+        "app_not_readable": "Kan pas worden gecontroleerd als de motir-studio-app op {org} is geïnstalleerd en leesbaar is."
+      },
+      "jobs": {
+        "missing": "{repo} · {workflow} · {job} — ontbreekt: {tools}",
+        "cannotHost": "{repo} · {workflow} · {job} — kan niet worden gehost: {reason}",
+        "more": "+{count} meer",
+        "scope": "Dit betreft het geïnventariseerde image dat uit main is gebouwd, niet het image dat productie start."
+      },
+      "confirm": {
+        "onTitle": "Vloot-CI aanzetten voor {org}?",
+        "onBody": "Uit → Aan. Elke nieuwe CI-job in {count, plural, one {# repository} other {# repository's}} draait op de vloot en wordt ten laste van de pool van moooon B.V. gebracht: {repositories}. Jobs die al draaien, eindigen waar ze begonnen.",
+        "offTitle": "Vloot-CI uitzetten voor {org}?",
+        "offBody": "Aan → Uit. Nieuwe jobs gaan terug naar door GitHub gehoste runners; jobs die al op de vloot draaien, eindigen daar. Uitzetten wacht nooit op gereedheid.",
+        "reasonLabel": "Reden — verplicht, wordt in het auditlogboek geschreven",
+        "reasonPlaceholderOn": "Waarom zet je dit aan?",
+        "reasonPlaceholderOff": "Waarom zet je dit uit?",
+        "reasonHint": "Zichtbaar voor elke operator die deze wijziging later leest. ‘Testen’ alleen zegt niets.",
+        "reasonHintEmpty": "De knop blijft uitgeschakeld tot er een reden is getypt — dezelfde regel die de server toepast.",
+        "cancel": "Annuleren",
+        "confirmOn": "Aanzetten",
+        "confirmOff": "Uitzetten"
+      },
+      "refused": {
+        "reasonMissing": "Niet {direction}: een reden is verplicht en wordt met deze wijziging in het auditlogboek geschreven. Er is niets veranderd.",
+        "alreadyOn": "Staat al aan — er is niets veranderd.",
+        "alreadyOff": "Staat al uit — er is niets veranderd.",
+        "alreadyBody": "Een andere superadmin heeft het eerst gewijzigd, dus er is niets geschreven en geen auditrij toegevoegd.",
+        "githubStatus": "Niet {direction}: GitHub weigerde {name} op {org} te {operation} (HTTP {status}).",
+        "githubUnreachable": "Niet {direction}: GitHub was niet bereikbaar om {name} op {org} te {operation}.",
+        "nothingChanged": "Er is niets veranderd: de instelling en de GitHub-variabele zijn zoals ze waren.",
+        "notReady": "Niet aangezet: de vloot was niet meer gereed nadat deze pagina was geladen.",
+        "notReadyList": "Nu niet voldaan: {conditions}. Er is niets veranderd. De gereedheid hieronder is opnieuw gecontroleerd.",
+        "notPermitted": "Niet gewijzigd: alleen een superadmin kan deze instelling wijzigen.",
+        "targetUnknown": "Niet gewijzigd: deze instelling wordt niet meer aangeboden voor dit project en deze organisatie. Laad de pagina opnieuw.",
+        "failed": "Niet {direction}: er ging iets mis. Laad de pagina opnieuw om de instelling te zien zoals hij nu is."
+      },
+      "done": {
+        "on": "Aangezet. Nieuwe jobs vragen vanaf nu de vloot aan.",
+        "off": "Uitgezet. Nieuwe jobs gaan terug naar door GitHub gehoste runners."
+      },
+      "direction": {
+        "on": "aangezet",
+        "off": "uitgezet"
+      },
+      "operation": {
+        "read": "lezen",
+        "set": "instellen",
+        "delete": "verwijderen"
+      },
+      "permission": {
+        "organization_self_hosted_runners": "Zelf gehoste runners",
+        "organization_actions_variables": "Variabelen"
+      },
+      "unavailable": {
+        "title": "Kon de vlootinstelling niet laden",
+        "body": "De instelling of de gereedheid ervan kon niet worden gelezen, dus er wordt geen status getoond en geen schakelaar aangeboden. Dit is een leesfout — er is niets veranderd en er wordt geen waarde geraden.",
+        "retry": "Opnieuw proberen"
+      }
     }
   },
   "legal": {
@@ -11886,6 +12402,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "Run",
     "searchLabel": "Deze run doorzoeken",
     "gloss": "wat de agent heeft gedaan",
@@ -11961,8 +12479,9 @@
     "sectionPast": "Eerdere runs",
     "noneRunning": "Er draait niets.",
     "nonePast": "Er is nog geen run afgerond.",
-    "colCommand": "Opdracht",
-    "colScope": "Scope",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, one {and # more work item} other {and # more work items}}",
     "colAgent": "Agent",
     "colStarted": "Gestart",
     "colStatus": "Status",
@@ -12010,6 +12529,10 @@
       "expired": {
         "title": "Buiten de bewaartermijn",
         "body": "Loginhoud wordt 30 dagen na een run verwijderd. Die van deze run is al verwijderd."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12023,6 +12546,8 @@
       "approvedFor": "goedgekeurd voor {key}",
       "materialized": "{count, plural, one {# voorstel} other {# voorstellen}} omgezet in werk",
       "bugFiled": "Bug aangemaakt",
+      "discrepancy": "Anders gebouwd",
+      "discrepancyPoints": "{count, plural, one {# punt} other {# punten}}",
       "open": "Openen →"
     },
     "scope": {
@@ -12348,7 +12873,10 @@
       "progressAria": "{done} van {total} stappen klaar",
       "progressAllDone": "{total} van {total} stappen klaar",
       "door": "Begeleid me"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "Repository toevoegen",
@@ -12514,6 +13042,8 @@
         "subject_gone": "Waar deze vraag over ging, is weg, dus deze vraag is ingetrokken.",
         "no_longer_manual": "Het werkitem is geen handmatig werk meer, dus deze vraag is ingetrokken.",
         "closed_without_decision": "Het werkitem is gesloten zonder dat iemand het als klaar heeft gemarkeerd, dus deze vraag is ingetrokken.",
+        "not_ready": "Het werkitem wordt geblokkeerd door ander werk, dus deze vraag is ingetrokken tot het kan beginnen.",
+        "replanned": "Het werkitem is opnieuw gepland, dus deze vraag is ingetrokken.",
         "unknown": "Deze vraag is ingetrokken. De reden is niet vastgelegd."
       },
       "causeByKind": {
@@ -14237,7 +14767,9 @@
       "completed": "Dat is alles wat ik moest vragen.",
       "nothingToAsk": "Ik heb niets te vragen: dit is duidelijk genoeg om te plannen. Ik schrijf nu het plan.",
       "stopped": "Je hebt het ondervragen gestopt.",
-      "stoppedNoAnswer": "Je hebt het ondervragen gestopt vóór een antwoord. Er is niets geschreven."
+      "stoppedNoAnswer": "Je hebt het ondervragen gestopt vóór een antwoord. Er is niets geschreven.",
+      "handoffFailed": "Ondervraag me kon zijn vragen niet stellen, dus het plan wordt zonder die vragen geschreven. Je verzoek blijft zoals je het schreef.",
+      "handoffNoCredit": "Ondervraag me heeft AI-tegoed nodig om zijn vragen te stellen, dus het plan wordt zonder die vragen geschreven."
     },
     "summary": {
       "title": "Wat je hebt vastgelegd",
@@ -14266,6 +14798,8 @@
     "translate": "Vertalen",
     "translating": "Bezig met vertalen…",
     "showOriginal": "Origineel tonen",
+    "originalIn": "Origineel: {language}",
+    "originalNotRecorded": "Oorspronkelijke taal niet vastgelegd",
     "showTranslation": "Vertaling tonen",
     "retry": "Opnieuw proberen",
     "hintInto": "naar het {language}",
@@ -14298,5 +14832,18 @@
     "liveFailedCount": "{n, plural, one {# veld kon niet worden vertaald.} other {# velden konden niet worden vertaald.}}",
     "liveNoCredits": "Vertalen vereist AI-tegoed.",
     "liveEdited": "{field} is bewerkt en opnieuw vertaald."
+  },
+  "titleTranslation": {
+    "addCredit": "Tegoed toevoegen",
+    "liveDone": "Titels vertaald",
+    "liveFailed": "Sommige titels konden niet worden vertaald",
+    "liveNoCredit": "Titels worden in de oorspronkelijke taal getoond: geen tegoed meer",
+    "livePending": "Titels worden vertaald…",
+    "marked": "Vertaald",
+    "markedFrom": "Vertaald uit het {language}",
+    "noCredit": "Titels blijven in de oorspronkelijke taal omdat je organisatie geen tegoed meer heeft.",
+    "pendingMark": "Bezig met vertalen",
+    "showOriginal": "Origineel tonen",
+    "showTranslation": "Vertaling tonen"
   }
 }

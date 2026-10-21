@@ -69,6 +69,7 @@ export default async function AverageAgePage({
       crumb={t('hub.title')}
       title={t('averageAge.title')}
       subLine={subLine}
+      help="averageAge"
     >
       <AverageAgeReport
         result={clientResult}

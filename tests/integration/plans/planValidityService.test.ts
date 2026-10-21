@@ -8,7 +8,11 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { sprintsService } from '@/lib/services/sprintsService';
 import type { PlanWithItemsDto } from '@/lib/dto/plans';
-import { isCoverageAdvisory, type WorkItemValidityDto } from '@/lib/dto/workItems';
+import {
+  isCoverageAdvisory,
+  isMislabelledLinkAdvisory,
+  type WorkItemValidityDto,
+} from '@/lib/dto/workItems';
 import type { ProposalInput } from '@/lib/dto/plans';
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
@@ -18,6 +22,8 @@ import { makeWorkItemFixture, createTestProject, type WorkItemFixture } from '..
 import { adminDb } from '../../helpers/adminDb';
 import { seedBlockedBy } from '../../helpers/seedBlockedBy';
 import { truncateAuthTables } from '../../helpers/db';
+import { renderSections } from '@/lib/workItems/sections/render';
+import { fixture as sectionsFixture } from '../../unit/workItems/sections/helpers/sectionFixture';
 
 /**
  * Drop the target locks an UN-DECIDED plan holds, so a fixture can build a
@@ -60,7 +66,18 @@ const mk = (
   title: string,
   kind: 'epic' | 'story' | 'task' | 'subtask',
   parentId?: string,
-) => workItemsService.createWorkItem({ projectId: fx.projectId, kind, title, parentId }, fx.ctx);
+) =>
+  workItemsService.createWorkItem(
+    {
+      projectId: fx.projectId,
+      kind,
+      title,
+      parentId,
+      // Typed so a leaf is not UNDER-AUTHORED (MOTIR-5427); containers cannot carry one.
+      ...(kind === 'task' || kind === 'subtask' ? { type: 'code' as const } : {}),
+    },
+    fx.ctx,
+  );
 
 /**
  * A TASK one level below a root of its own ("Elsewhere"), in `projectId` (the
@@ -76,7 +93,7 @@ async function outsideTask(fx: WorkItemFixture, title: string, projectId = fx.pr
     fx.ctx,
   );
   const item = await workItemsService.createWorkItem(
-    { projectId, kind: 'task', title, parentId: elsewhere.id },
+    { projectId, kind: 'task', type: 'code', title, parentId: elsewhere.id },
     fx.ctx,
   );
   return Object.assign(item, { elsewhere });
@@ -250,6 +267,44 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
         blockerSprintId: null,
       },
     ]);
+  });
+
+  it('a blocker the plan does NOT own is also reported as a WAIT; one the plan draws is not (MOTIR-9021)', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const outside = await outsideTask(fx, 'Outside');
+    await link(fx, story.id, outside.elsewhere.id); // LIVE, before the plan: Story blocked_by Elsewhere
+
+    const planId = await freshPlan(fx);
+    const p = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'New child', kind: 'subtask' },
+      parentRef: story.id,
+      blockedByRefs: [outside.id],
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+    const addId = itemIdByTitle(p, 'New child');
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    // `valid` and `blockers` are unchanged: both edges still gate the subtree …
+    expect(res.valid).toBe(false);
+    expect(res.blockers.map((b) => b.blockedBy).sort()).toEqual(
+      [outside.elsewhere.identifier, outside.identifier].sort(),
+    );
+    // … but only the edge in place before the plan is a wait.
+    expect(res.waits).toEqual([
+      {
+        item: story.identifier,
+        blockedBy: outside.elsewhere.identifier,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+    ]);
+    expect(res.waits!.some((w) => w.item === `planItem:${addId}`)).toBe(false);
   });
 
   it('a `modify` adding an out-of-subtree blocked_by edge is INVALID, and the verdict EQUALS post-materialize validate_work_item', async () => {
@@ -483,6 +538,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
         },
       ],
       crossLevelEdges: [],
+      sectionFindings: expect.any(Array),
     });
 
     // The OTHER half: the same forest with epic B blocked_by epic A is VALID.
@@ -524,6 +580,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
       rejections: [],
       invalidEdges: [],
       crossLevelEdges: [],
+      sectionFindings: expect.any(Array),
     });
 
     // Proof of the defect the forest rule fixes: iterating the SINGLE-subtree
@@ -636,6 +693,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
       rejections: [],
       invalidEdges: [],
       crossLevelEdges: [],
+      sectionFindings: expect.any(Array),
     });
   });
 
@@ -652,6 +710,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
       rejections: [],
       invalidEdges: [],
       crossLevelEdges: [],
+      sectionFindings: expect.any(Array),
     });
   });
 
@@ -692,6 +751,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
       rejections: [],
       invalidEdges: [],
       crossLevelEdges: [],
+      sectionFindings: expect.any(Array),
     });
   });
 
@@ -956,7 +1016,7 @@ describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advis
     const planId = await freshPlan(fx);
     const withSibling = await addProposal(fx, planId, {
       op: 'add',
-      proposedFields: { title: 'Producer', kind: 'subtask' },
+      proposedFields: { title: 'Producer', kind: 'subtask', type: 'code' },
       parentRef: story.id,
     });
     const producerItemId = itemIdByTitle(withSibling, 'Producer');
@@ -994,7 +1054,7 @@ describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advis
     const planId = await freshPlan(fx);
     const p = await addProposal(fx, planId, {
       op: 'add',
-      proposedFields: { title: 'Producer', kind: 'subtask' },
+      proposedFields: { title: 'Producer', kind: 'subtask', type: 'code' },
       parentRef: story.id,
     });
     const producerItemId = itemIdByTitle(p, 'Producer');
@@ -1063,6 +1123,7 @@ describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advis
       proposedFields: {
         title: 'New child',
         kind: 'subtask',
+        type: 'code',
         descriptionMd: `Built on ${refToken('SHIPPED', shipped.id)}.`,
       },
       parentRef: story.id,
@@ -1102,7 +1163,107 @@ describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advis
       rejections: [],
       invalidEdges: [],
       crossLevelEdges: [],
+      sectionFindings: expect.any(Array),
     });
+  });
+});
+
+describe('the MISLABELLED-LINK advisory on a PROPOSED body (MOTIR-9007)', () => {
+  it("AC3: an `add`'s proposed body and a `modify`'s patched one both report it, and nothing is approved", async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const child = await mk(fx, 'Child', 'subtask', story.id);
+    const meant = await mk(fx, 'Meant', 'task');
+    const opened = await mk(fx, 'Opened', 'task');
+
+    const planId = await freshPlan(fx);
+    const withAdd = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: {
+        title: 'New child',
+        kind: 'subtask',
+        type: 'code',
+        descriptionMd: `Built on ${refToken(meant.identifier, opened.id)}.`,
+      },
+      parentRef: story.id,
+    });
+    await addProposal(fx, planId, {
+      op: 'modify',
+      workItemId: child.id,
+      patch: { descriptionMd: `Reads ${refToken('PROD-404', 'cl_no_such_card')}.` },
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+    const addRef = `planItem:${itemIdByTitle(withAdd, 'New child')}`;
+
+    // Per subtree, through `validate_work_item`'s planId path …
+    const subtree = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(subtree.valid).toBe(true);
+    const links = subtree.advisories.filter(isMislabelledLinkAdvisory);
+    expect(links).toHaveLength(2);
+    expect(links).toEqual(
+      expect.arrayContaining([
+        {
+          kind: 'shape',
+          item: child.identifier,
+          severity: 'likely-mislabelled-link',
+          label: 'PROD-404',
+          targetId: 'cl_no_such_card',
+          targetKey: null,
+        },
+        {
+          kind: 'shape',
+          item: addRef,
+          severity: 'likely-mislabelled-link',
+          label: meant.identifier,
+          targetId: opened.id,
+          targetKey: opened.identifier,
+        },
+      ]),
+    );
+
+    // … and over the whole plan, for `validate_plan`.
+    const whole = await planValidityService.projectedLinkAdvisories(planId, fx.ctx);
+    expect(new Set(whole.map((a) => `${a.item} ${a.targetKey}`))).toEqual(
+      new Set([`${child.identifier} null`, `${addRef} ${opened.identifier}`]),
+    );
+
+    // Read-only: the stored body is untouched and no card was created.
+    const stored = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(stored.advisories.filter(isMislabelledLinkAdvisory)).toEqual([]);
+    expect(await adminDb.workItem.count({ where: { projectId: fx.projectId } })).toBe(4);
+  });
+
+  it('the whole-plan check scans PROPOSED bodies only — an untouched committed card is not the plan’s finding', async () => {
+    const fx = await makeWorkItemFixture();
+    const opened = await mk(fx, 'Opened', 'task');
+    // A committed card already carrying a crossed link, which the plan never touches.
+    await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        type: 'code',
+        title: 'Old card',
+        descriptionMd: refToken('PROD-99', opened.id),
+      },
+      fx.ctx,
+    );
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: {
+        title: 'Clean add',
+        kind: 'task',
+        type: 'code',
+        descriptionMd: `Uses ${refToken(opened.identifier, opened.id)}.`,
+      },
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    expect(await planValidityService.projectedLinkAdvisories(planId, fx.ctx)).toEqual([]);
   });
 });
 
@@ -1244,6 +1405,7 @@ describe('planValidityService — the not-done filter (MOTIR-3123)', () => {
       crossLevelEdges: [],
       advisories: [],
       softBlocks: [],
+      sectionFindings: expect.any(Array),
     });
   });
 
@@ -1276,6 +1438,7 @@ describe('planValidityService — the not-done filter (MOTIR-3123)', () => {
       crossLevelEdges: [],
       advisories: [],
       softBlocks: [],
+      sectionFindings: expect.any(Array),
     });
   });
 
@@ -2599,5 +2762,111 @@ describe('planValidityService.validateProjectedWorkItem — the CONTAINER-COVERA
       [second.identifier, 1],
       [second.identifier, 2],
     ]);
+  });
+});
+
+describe('planValidityService — SECTION findings parsed from the projected body (MOTIR-9032)', () => {
+  const structured = renderSections('task', 'code', sectionsFixture('task', 'code'));
+  const { scopeBoundary: _dropped, ...withoutScope } = sectionsFixture('task', 'code');
+  const incomplete = renderSections('task', 'code', withoutScope);
+
+  it('reports an `add` whose body is prose, names a missing section, and leaves `valid` alone', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await freshPlan(fx);
+    const plan = await plansService.addProposals(
+      planId,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Clean', kind: 'task', type: 'code', descriptionMd: structured },
+        },
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Prose',
+            kind: 'task',
+            type: 'code',
+            descriptionMd: 'Just prose.',
+          },
+        },
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Partial',
+            kind: 'task',
+            type: 'code',
+            descriptionMd: incomplete,
+          },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
+    expect(res.valid).toBe(true);
+    const byItem = new Map(res.sectionFindings.map((f) => [f.item, f]));
+    expect(byItem.size).toBe(2);
+    const prose = byItem.get(`planItem:${itemIdByTitle(plan, 'Prose')}`);
+    expect(prose?.state).toBe('unstructured');
+    const partial = byItem.get(`planItem:${itemIdByTitle(plan, 'Partial')}`);
+    expect(partial).toMatchObject({ state: 'incomplete', missing: ['scopeBoundary'] });
+    expect(byItem.has(`planItem:${itemIdByTitle(plan, 'Clean')}`)).toBe(false);
+    expect(res.sectionFindings.map((f) => f.item)).toEqual(
+      [...res.sectionFindings.map((f) => f.item)].sort((a, b) => a.localeCompare(b)),
+    );
+  });
+
+  it('judges a `modify` by its PATCHED body, and never reports an untouched stored card', async () => {
+    const fx = await makeWorkItemFixture();
+    const touched = await mk(fx, 'Touched', 'task');
+    const untouched = await mk(fx, 'Untouched', 'task');
+    const planId = await freshPlan(fx);
+    await plansService.addProposals(
+      planId,
+      [{ op: 'modify', workItemId: touched.id, patch: { descriptionMd: incomplete } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
+    expect(res.sectionFindings.map((f) => f.item)).toEqual([touched.identifier]);
+    expect(res.sectionFindings[0]).toMatchObject({
+      state: 'incomplete',
+      missing: ['scopeBoundary'],
+    });
+    expect(res.sectionFindings.some((f) => f.item === untouched.identifier)).toBe(false);
+  });
+
+  it('a modify that FIXES a stored bare body clears the finding in the subtree verdict', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const child = await mk(fx, 'Child', 'task', story.id);
+    const planId = await freshPlan(fx);
+    await plansService.addProposals(
+      planId,
+      [{ op: 'modify', workItemId: child.id, patch: { descriptionMd: structured } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const fixed = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(fixed.sectionFindings.some((f) => f.item === child.identifier)).toBe(false);
+
+    const emptyPlan = await freshPlan(fx);
+    await plansService.markPlanned(emptyPlan, fx.ctx);
+    const bare = await planValidityService.validateProjectedWorkItem(
+      emptyPlan,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(bare.sectionFindings.find((f) => f.item === child.identifier)?.state).toBe(
+      'unstructured',
+    );
+    expect(bare.valid).toBe(true);
   });
 });

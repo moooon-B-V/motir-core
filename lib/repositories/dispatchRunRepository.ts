@@ -30,6 +30,15 @@ export type DispatchRunWithCards = Prisma.DispatchRunGetPayload<{
   };
 }>;
 
+/** A run as the INDEX reads it: the legs, plus the scope's own key. */
+export type DispatchRunListRow = Prisma.DispatchRunGetPayload<{
+  include: {
+    cards: true;
+    agentInstance: { select: { id: true; name: true; profileId: true } };
+    scope: { select: { identifier: true } };
+  };
+}>;
+
 /**
  * The agent a run executed in (MOTIR-7023, `agent-instance-run.md` §5), as the
  * run's reads carry it — the name and the profile the run section and the run
@@ -47,6 +56,13 @@ const AGENT_INSTANCE_REF = { select: { id: true, name: true, profileId: true } }
 const WITH_CARDS = {
   cards: { orderBy: { position: 'asc' } },
   agentInstance: AGENT_INSTANCE_REF,
+} as const;
+
+/** The list reads only: the scope's identifier rides the same `findMany`, so the
+ *  index can name a run by its target without a second query. */
+const WITH_CARDS_AND_SCOPE = {
+  ...WITH_CARDS,
+  scope: { select: { identifier: true } },
 } as const;
 
 /** A RUNNING run in one agent — the active-run read by agent (§5). */
@@ -205,6 +221,30 @@ export interface LatestRunForWorkItem {
   scope: { identifier: string } | null;
   /** The leg naming the work item — empty for a scoped run's container. */
   cards: Array<{ id: string; sessionBranch: string | null }>;
+}
+
+/**
+ * "The card's run" as ONE expression (MOTIR-9046): any run but a `review` that
+ * holds a leg for the work item or is scoped to it. Every read of a card's
+ * newest run builds its `where` from this, so the definition cannot drift.
+ */
+function notAReviewRunFor(workItemId: string): Prisma.DispatchRunWhereInput {
+  return {
+    command: { not: 'review' },
+    OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }],
+  };
+}
+
+/** What {@link dispatchRunRepository.findLatestResumeRunForWorkItem} returns (MOTIR-9046). */
+export interface LatestResumeRunForWorkItem {
+  id: string;
+  command: DispatchCommand;
+  status: DispatchRunStatus;
+  startedAt: Date;
+  endedAt: Date | null;
+  /** The leg naming the work item — empty for a scoped run's container. */
+  cards: Array<{ id: string }>;
+  agentInstance: { id: string; name: string; profileId: string; ownerId: string } | null;
 }
 
 export const dispatchRunRepository = {
@@ -393,10 +433,9 @@ export const dispatchRunRepository = {
   ): Promise<string | null> {
     const row = await tx.dispatchRun.findFirst({
       where: {
-        status: 'running',
         // A review run writes no How to test (§8.3), so it is never the record's run.
-        command: { not: 'review' },
-        OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }],
+        ...notAReviewRunFor(workItemId),
+        status: 'running',
       },
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       select: { id: true },
@@ -525,8 +564,7 @@ export const dispatchRunRepository = {
       where: {
         // ⚠️ NEVER A REVIEW RUN (MOTIR-1626): a review builds nothing, so it is not the
         // lane, the dispatcher or the model that produced the design being re-run.
-        command: { not: 'review' },
-        OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }],
+        ...notAReviewRunFor(workItemId),
       },
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       select: { id: true, origin: true, createdById: true, model: true },
@@ -548,8 +586,7 @@ export const dispatchRunRepository = {
         // ⚠️ NEVER A REVIEW RUN (MOTIR-1626; `hosted-agent-run.md` §8.1 / §8.3). A review
         // builds nothing and holds no card: its end is not the card's run dying, and a
         // review opened after a build died must not hide that death from To fix.
-        command: { not: 'review' },
-        OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }],
+        ...notAReviewRunFor(workItemId),
       },
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       select: {
@@ -571,6 +608,31 @@ export const dispatchRunRepository = {
           select: { id: true, sessionBranch: true },
           take: 1,
         },
+      },
+    });
+  },
+
+  /**
+   * The card's newest run (see `notAReviewRunFor`) with only what the resume read
+   * needs: the run, the card's own leg and the agent it executed in (MOTIR-9046).
+   * ⚠️ NOT narrowed to runs with an agent: narrowing would answer "the newest run
+   * in an agent" and skip a newer hosted run.
+   */
+  async findLatestResumeRunForWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<LatestResumeRunForWorkItem | null> {
+    return tx.dispatchRun.findFirst({
+      where: notAReviewRunFor(workItemId),
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        command: true,
+        status: true,
+        startedAt: true,
+        endedAt: true,
+        cards: { where: { workItemId }, select: { id: true }, take: 1 },
+        agentInstance: { select: { id: true, name: true, profileId: true, ownerId: true } },
       },
     });
   },
@@ -766,7 +828,7 @@ export const dispatchRunRepository = {
     scopeWorkItemId: string,
     { take, cursor, statuses, createdById, withheldWorkItemIds }: DispatchRunPage,
     tx: Prisma.TransactionClient,
-  ): Promise<DispatchRunWithCards[]> {
+  ): Promise<DispatchRunListRow[]> {
     return tx.dispatchRun.findMany({
       where: {
         scopeWorkItemId,
@@ -774,7 +836,7 @@ export const dispatchRunRepository = {
         ...startedBy(createdById),
         ...notTouching(withheldWorkItemIds),
       },
-      include: WITH_CARDS,
+      include: WITH_CARDS_AND_SCOPE,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -793,7 +855,7 @@ export const dispatchRunRepository = {
     projectId: string,
     { take, cursor, statuses, createdById, withheldWorkItemIds }: DispatchRunPage,
     tx: Prisma.TransactionClient,
-  ): Promise<DispatchRunWithCards[]> {
+  ): Promise<DispatchRunListRow[]> {
     return tx.dispatchRun.findMany({
       where: {
         projectId,
@@ -801,7 +863,7 @@ export const dispatchRunRepository = {
         ...startedBy(createdById),
         ...notTouching(withheldWorkItemIds),
       },
-      include: WITH_CARDS,
+      include: WITH_CARDS_AND_SCOPE,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),

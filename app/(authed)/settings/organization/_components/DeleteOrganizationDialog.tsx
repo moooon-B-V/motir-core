@@ -165,6 +165,10 @@ export function DeleteOrganizationDialog({
   async function signInAgain(): Promise<void> {
     await signOut();
     const next = `/settings/organization?dialog=${DELETE_ORGANIZATION_DIALOG}`;
+    // After `signOut()` the client state (this dialog, the session-bound
+    // providers) is stale; a full document navigation discards it, which
+    // `router.push` would not.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.assign(`/sign-in?next=${encodeURIComponent(next)}`);
   }
 

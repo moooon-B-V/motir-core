@@ -1,5 +1,6 @@
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
+import { resolveTenantLanguages } from '@/lib/ai/tenantLanguages';
 import type { JobStreamEvent } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -47,6 +48,11 @@ export const aiExplanationService = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
+    // The two languages (MOTIR-8742): the draft is written for the person who asked.
+    const languages = await resolveTenantLanguages({
+      workspaceId: ctx.workspaceId,
+      userId: ctx.userId,
+    });
     const tenant = {
       organizationId,
       isMeta,
@@ -54,6 +60,7 @@ export const aiExplanationService = {
       workspaceId: ctx.workspaceId,
       projectId: ctx.projectId,
       projectKey: ctx.project.identifier,
+      ...languages,
     };
     const explanation = {
       title: input.title,

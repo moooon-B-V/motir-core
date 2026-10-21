@@ -314,6 +314,11 @@ describe('every operation’s REAL response validates against its declared schem
     // ── Identity + discovery ────────────────────────────────────────────────
     await drive('getMe', () => import('@/app/api/v1/me/route'), get('/api/v1/me'));
     await drive(
+      'getSectionSets',
+      () => import('@/app/api/v1/section-sets/route'),
+      get('/api/v1/section-sets'),
+    );
+    await drive(
       'listWorkspaces',
       () => import('@/app/api/v1/workspaces/route'),
       get('/api/v1/workspaces'),
@@ -733,6 +738,42 @@ describe('every operation’s REAL response validates against its declared schem
       'getDispatchRunCloseOutPrompt',
       () => import('@/app/api/v1/dispatch-runs/[id]/close-out-prompt/route'),
       send(`/api/v1/dispatch-runs/${runId}/close-out-prompt`, 'GET'),
+      { id: runId },
+    );
+
+    // The RUN-FOUND REPORT (MOTIR-8698) — the run's leg on `runCard` is open (the
+    // append above claimed it). No plan shaped the card, so it is recorded on the
+    // leg and nothing is filed; the answer is the acknowledgement either way.
+    await drive(
+      'reportDispatchRunUnbuildable',
+      () => import('@/app/api/v1/dispatch-runs/[id]/unbuildable/route'),
+      send(`/api/v1/dispatch-runs/${runId}/unbuildable`, 'POST', {
+        targetKey: runCard,
+        reason: 'The card names a table that does not exist.',
+      }),
+      { id: runId },
+    );
+
+    // The run's DISCREPANCY record and its STOP report (MOTIR-8722), on the same open leg.
+    // The STOP leaves the card where it is (`toPlanning: false`), so the steps after it
+    // drive the run unchanged.
+    await drive(
+      'recordDispatchRunDiscrepancy',
+      () => import('@/app/api/v1/dispatch-runs/[id]/discrepancy/route'),
+      send(`/api/v1/dispatch-runs/${runId}/discrepancy`, 'POST', {
+        key: runCard,
+        points: [{ planAsked: 'Edit a.ts', built: 'Edited b.ts', why: 'a.ts does not exist' }],
+      }),
+      { id: runId },
+    );
+    await drive(
+      'reportDispatchRunStop',
+      () => import('@/app/api/v1/dispatch-runs/[id]/stop/route'),
+      send(`/api/v1/dispatch-runs/${runId}/stop`, 'POST', {
+        key: runCard,
+        comment: 'The card names a table that does not exist.',
+        toPlanning: false,
+      }),
       { id: runId },
     );
 

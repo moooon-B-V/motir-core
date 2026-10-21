@@ -1,5 +1,33 @@
 # Changelog — `@motir/cli`
 
+## 0.15.0
+
+### Minor Changes
+
+- 646dd3b: `motir fix` in your own agent now continues the card's last session (MOTIR-9052). When the card's last run was in the same agent and recorded a session, the repair resumes that conversation instead of starting a fresh agent, prints one line saying so, and falls back to a fresh agent once if the resume fails. A repair in your own agent now answers a red CI or a failed acceptance re-run as well as a review.
+
+### Patch Changes
+
+- 646dd3b: `motir auto`, `motir batch` and `motir fix` now repair a red pull request in the conversation that built the card (MOTIR-9059). Each card's own session is handed to its CI watch, so in a multi-card run card N's fix lands in card N's conversation; a card that recorded no session keeps today's fresh-agent fix.
+
+## 0.14.0
+
+### Minor Changes
+
+- 9552e64: A run in your own agent now shows the agent's progress while it works (MOTIR-8980). `motir run` launches each agent in the structured streaming mode it has, and no longer in the print-only mode that wrote nothing until the turn ended: `claude -p --output-format stream-json --verbose`, `codex exec --json`, `opencode run --format json`, `kimi --output-format stream-json -p`, and `goose run -q --output-format stream-json` (without `--no-session`). The stream is read with the same adapters as the Chat tab and written, to your terminal and to the run's Agent output, as readable lines: the reply text, one line per tool call (`Edit lib/x.ts`, `Bash: pnpm test`) and a line for each failure, never the raw events. Log lines reach Motir within about two seconds of the agent writing them instead of waiting for a 4 KiB batch and the next heartbeat. The run also records the agent's session id (`sessionId` on the `agent_started` and `agent_exited` events), and each profile carries the form that resumes that session. `aider` has no stream and is unchanged. Set `MOTIR_AGENT_OUTPUT=text` to force the old plain-text launch if a CLI version refuses the flags.
+
+## 0.13.1
+
+### Patch Changes
+
+- 68ca56c: The sandbox images now ship `procps`, so `ps` is on the PATH and Codex's background app-server can start in a hosted agent (MOTIR-8868). Before this, every `codex` after a successful `codex login --device-auth` exited with `failed to invoke ps for pid-managed app server`. The fix merged in #3644 without a changeset, so it was never released; this patch release publishes it. Agents created from an earlier image keep that image, so create a new Codex agent to get it.
+
+## 0.13.0
+
+### Minor Changes
+
+- 5415737: A run now reports what its agent writes into `$MOTIR_AGENT_REPORT` besides the model (MOTIR-8698, MOTIR-8722, MOTIR-8810). An agent that stops on an unbuildable card and writes its reason there as `unbuildable` gets the run-found report made for it (`POST /api/v1/dispatch-runs/{id}/unbuildable`); an agent with no Motir tools gets its build-through points (`discrepancy`) recorded on the card and its STOP (`stop`) commented and, when re-planning is on, the card moved to Planning. Every dispatch-prompt read now sends `agentReport=1`, which is how the server knows it may name that file as the route; 0.12.0 and older send nothing and are told to use the `report_unbuildable_target` tool instead, so their reports are no longer lost.
+
 ## 0.12.0
 
 ### Minor Changes

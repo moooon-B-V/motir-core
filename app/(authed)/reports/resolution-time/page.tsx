@@ -72,6 +72,7 @@ export default async function ResolutionTimePage({
       crumb={t('hub.title')}
       title={t('resolutionTime.title')}
       subLine={subLine}
+      help="resolutionTime"
     >
       <ResolutionTimeReport
         result={clientResult}

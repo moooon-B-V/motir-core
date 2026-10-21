@@ -403,6 +403,7 @@ model User {
   // (Story MOTIR-7521 · MOTIR-7525). SetNull: the entry outlives the account,
   // and the hash-chained audit log keeps WHO for ever.
   platformRunModelsAdded           PlatformRunModel[]                  @relation("PlatformRunModelAddedBy")
+  platformFleetOrgCiUpdated        PlatformFleetOrgCi[]                @relation("PlatformFleetOrgCiUpdatedBy")
   ideaResearchRuns                 IdeaResearchRun[]
   // Organizations this platform operator SUSPENDED and that are still suspended
   // (MOTIR-748). SetNull on the org's side: an operator's account outliving its
@@ -437,6 +438,7 @@ model User {
   // (a closing org's Owner may themselves be erased first — DECISION §5).
   requestedOrganizationDeletions   OrganizationDeletionRequest[]       @relation("OrganizationDeletionRequestedBy")
   contentLanguageChanges           OrganizationContentLanguageChange[] @relation("OrganizationContentLanguageChangedBy")
+  autoTranslateChanges             ProjectAutoTranslateChange[]        @relation("ProjectAutoTranslateChangedBy")
   cancelledOrganizationDeletions   OrganizationDeletionRequest[]       @relation("OrganizationDeletionCancelledBy")
   // Enterprise requests this person sent from Billing & plans (MOTIR-7605). SetNull:
   // the request is the ORG's sales record and outlives the account that sent it.
@@ -520,6 +522,33 @@ enum PlatformAuditTargetKind {
 /// `PlatformAuditLog` row. Seeded with motir-ai's offer on the first console
 /// read after deploy (`PlatformRunModelList` marks that it happened), so no
 /// project loses its model on deploy and no migration calls motir-ai.
+/// The platform setting "Run Motir's private repositories' CI on the fleet"
+/// (Story MOTIR-8699 · MOTIR-8714), one row per (project, connected org). It
+/// stores the operator's INTENT; its EFFECT is the org's `MOTIR_RUNNER` Actions
+/// variable, written by `fleetOrgCiSettingService` in the same audited
+/// transaction. No row = OFF. Read unconditionally, written only under
+/// `app.platform_staff` (the `platform_run_model` policy shape).
+model PlatformFleetOrgCi {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  /// The org login, stored lower-cased.
+  org             String
+  enabled         Boolean  @default(false)
+  /// The reason the last flip was given — the same text its audit row carries,
+  /// kept here so the console can show it without an audited read of the trail.
+  lastReason      String?  @map("last_reason")
+  updatedByUserId String?  @map("updated_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  updatedBy User?   @relation("PlatformFleetOrgCiUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, org])
+  @@index([updatedByUserId])
+  @@map("platform_fleet_org_ci")
+}
+
 model PlatformRunModel {
   id        String   @id @default(cuid())
   model     String   @unique
@@ -1744,6 +1773,7 @@ model Workspace {
   folders                     Folder[]
   pages                       Page[]
   pageVersions                PageVersion[]
+  projectAutoTranslateChanges ProjectAutoTranslateChange[]
   decisionPagePublications    DecisionPagePublication[]
   pageWorkItemLinks           PageWorkItemLink[]
   /// Users' agent instances in this workspace's projects (MOTIR-6870). Cascade.
@@ -1841,6 +1871,22 @@ model Project {
   /// `decisionSource = system`, `decidedUnderAuthority = project_setting`. Read at
   /// RAISE time only, so flipping it never decides a gate already waiting.
   designApprovalGate               Boolean               @default(true) @map("design_approval_gate")
+  /// Whether this project reads its WORK CONTENT in each member's own language
+  /// without pressing anything (Story MOTIR-7738 · MOTIR-8825). `false` — the
+  /// default, and every existing project's value — keeps today's behaviour:
+  /// content shows as stored and a Translate button offers one work item at a
+  /// time. Named for WHAT it translates: work content only, never the product's
+  /// interface strings, which stay on the reader's locale path and off the
+  /// translation lane. Default `false` needs no copy-forward, unlike the
+  /// acceptance-video switch above, whose `DEFAULT true` would have flipped a
+  /// deliberately-off setting back on: `NOT NULL DEFAULT false` is the whole
+  /// data step. Every flip is recorded in `autoTranslateChanges`.
+  autoTranslateWorkContent         Boolean               @default(false) @map("auto_translate_work_content")
+  /// Whether a delivery set reported red starts the fix in the card's own agent on
+  /// its own (Story MOTIR-8981 · MOTIR-9060). `false` is the product's intended
+  /// default, not an accident of the column: `NOT NULL DEFAULT false` leaves every
+  /// existing project off, and nothing is started until a person flips it.
+  agentAutoFixEnabled              Boolean               @default(false) @map("agent_auto_fix_enabled")
   /// How this project's pull requests are merged (MOTIR-4880 ·
   /// `docs/decisions/approval-gates.md` §7). PROJECT-scoped because a merge
   /// policy is a property of a codebase and its team, and the merge gate that
@@ -2169,6 +2215,15 @@ model Project {
   // INTENDED repository, ordered, primary first. Cascade: deleting a project
   // removes its set (the plan for repos that only existed for that project).
   repos                       ProjectRepo[]
+  // The project's runner groups in CONNECTED orgs (Story MOTIR-8699 · MOTIR-8712)
+  // — one per org other than the provisioning org that owns some of the project's
+  // private repositories and has the provisioning App installed. The provisioning
+  // org's group stays on the `runnerGroup*` columns above. Cascade: a group row
+  // existed only to serve this project.
+  runnerGroups                ProjectRunnerGroup[]
+  /// The platform switch "run this project's private-repository CI on the fleet",
+  /// one row per connected org (Story MOTIR-8699 · MOTIR-8714).
+  fleetOrgCiSettings          PlatformFleetOrgCi[]
   // The external monitored projects bound to THIS project (Story MOTIR-4926 ·
   // MOTIR-5258) — a SET whose degenerate case is one, never a column on this
   // model. Cascade: the bindings existed only to route this project's errors.
@@ -2224,9 +2279,9 @@ model Project {
   /// `SetNull` on the primary, `Cascade` on the list: removing the address a
   /// project is canonical at must NOT delete the project, it must fall back to
   /// the default; deleting the project takes its addresses with it.
-  primaryAddressId              String?                   @map("primary_address_id")
-  primaryAddress                PublicAddress?            @relation("ProjectPrimaryAddress", fields: [primaryAddressId], references: [id], onDelete: SetNull)
-  publicAddresses               PublicAddress[]           @relation("ProjectPublicAddresses")
+  primaryAddressId              String?                      @map("primary_address_id")
+  primaryAddress                PublicAddress?               @relation("ProjectPrimaryAddress", fields: [primaryAddressId], references: [id], onDelete: SetNull)
+  publicAddresses               PublicAddress[]              @relation("ProjectPublicAddresses")
   /// Approval gates scoped to this project (a gate is `workspaceId` + `projectId`,
   /// per the ADR §7 tier — `prMergeMode` lives at the project, not the workspace).
   approvalGates                 ApprovalGate[]
@@ -2235,6 +2290,7 @@ model Project {
   folders                       Folder[]
   pages                         Page[]
   pageVersions                  PageVersion[]
+  autoTranslateChanges          ProjectAutoTranslateChange[]
   decisionPagePublications      DecisionPagePublication[]
   pageWorkItemLinks             PageWorkItemLink[]
   /// The folder this project's filed bugs land in (Story MOTIR-4927 · MOTIR-4934).
@@ -2244,8 +2300,8 @@ model Project {
   /// the destination to the folder's parent first (MOTIR-5537); `SetNull` would
   /// turn a deleted nested folder into a root nobody chose. Same-project is
   /// enforced by `trg_project_bug_destination_folder_tenancy`.
-  bugDestinationFolderId        String?                   @map("bug_destination_folder_id")
-  bugDestinationFolder          Folder?                   @relation("ProjectBugDestinationFolder", fields: [bugDestinationFolderId], references: [id], onDelete: NoAction)
+  bugDestinationFolderId        String?                      @map("bug_destination_folder_id")
+  bugDestinationFolder          Folder?                      @relation("ProjectBugDestinationFolder", fields: [bugDestinationFolderId], references: [id], onDelete: NoAction)
   /// The folder this project's PLANNER bugs are filed into (Story MOTIR-5818 ·
   /// MOTIR-5820) — the `@planner-bug-home` marker's destination. A SECOND
   /// pointer, mirroring `bugDestinationFolderId` field for field, because the two
@@ -2255,8 +2311,8 @@ model Project {
   /// deliberately set it. `NoAction` for the same reason as the product pointer:
   /// `foldersService.deleteFolder` carries it up first (MOTIR-5821). Same-project
   /// is enforced by `trg_project_planner_bug_destination_folder_tenancy`.
-  plannerBugDestinationFolderId String?                   @map("planner_bug_destination_folder_id")
-  plannerBugDestinationFolder   Folder?                   @relation("ProjectPlannerBugDestinationFolder", fields: [plannerBugDestinationFolderId], references: [id], onDelete: NoAction)
+  plannerBugDestinationFolderId String?                      @map("planner_bug_destination_folder_id")
+  plannerBugDestinationFolder   Folder?                      @relation("ProjectPlannerBugDestinationFolder", fields: [plannerBugDestinationFolderId], references: [id], onDelete: NoAction)
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -3099,6 +3155,16 @@ model WorkItem {
   // is; `SetNull` so a pruned run can never leave a dangling pointer.
   resumeRunId           String?                       @map("resume_run_id")
   resumeRun             DispatchRun?                  @relation("WorkItemResumeRun", fields: [resumeRunId], references: [id], onDelete: SetNull)
+  // The EMBEDDING SWEEP's poison-item bookkeeping (Story MOTIR-8226 · MOTIR-8227):
+  // the content hash of the document the provider REJECTED, and how many runs have
+  // rejected it. Both NULL until a rejection is recorded. A work item with no
+  // embedding row has nowhere else to keep an attempt count (the row exists only
+  // once a vector does), and a per-run result is not durable. A changed title or
+  // description is a different hash, so the count restarts without any cleanup;
+  // a successful embed clears both. Written by raw SQL in the workspace context,
+  // so neither bumps `updatedAt` nor emits a work-item event.
+  embeddingFailedHash   String?                       @map("embedding_failed_hash")
+  embeddingFailedAttempts Int?                        @map("embedding_failed_attempts")
   // WHEN this item finished (Story MOTIR-4777 · MOTIR-4780) — the moment it
   // ENTERED a `done`-CATEGORY status, cleared the moment it leaves one. The
   // Workbench's "Recently finished" tab is the first reader; it is also the
@@ -3537,6 +3603,11 @@ model PublicFollow {
   /// mid-week gets the next full week rather than a backfill, and a failed send
   /// does not silently skip a window.
   lastDigestAt DateTime? @map("last_digest_at")
+
+  /// Language of the page an email-only follow was made from; NULL on account
+  /// follows and on follows made before the column existed (MOTIR-8105). Plain
+  /// text, validated on read by `isLocale`, so a new locale needs no migration.
+  locale String?
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -5460,6 +5531,14 @@ enum ApprovalGateSupersedeCause {
   /// parent cascade, the rollup — so the question closes without being recorded as
   /// approved (MOTIR-7474; `docs/decisions/manual-work-gate.md` §6).
   closed_without_decision
+  /// A `manual_work` gate's card stopped being ready for a person — it was moved to
+  /// Blocked, or gained a `blocked_by` on unfinished work — so nobody can do the work
+  /// it asks for (MOTIR-8670; `docs/decisions/manual-work-gate.md` §6, amended).
+  not_ready
+  /// A `manual_work` gate's card was re-planned — parked or moved to Planning, or a plan
+  /// approval rewrote its title or body — so the card the run reached is not the card
+  /// as planned (MOTIR-8670; `docs/decisions/manual-work-gate.md` §6, amended).
+  replanned
 
   /// The person SENT A TURN on the planning session a `planning_session` gate asked
   /// about (MOTIR-7913) — the question is answered.
@@ -7272,7 +7351,9 @@ enum PlanSessionEndReason {
 /// WHY a hosted planning attempt failed, as motir-ai's CLOSED vocabulary
 /// (`walkStop.reasonCode`, motir-ai `docs/contract.md` §5; Story MOTIR-7905).
 /// A CODE, never motir-ai's English: core translates each member (en / zh) at
-/// render time. The failure path maps any code it does not recognise, and a
+/// render time. `stalled` is the one member motir-ai never sends: it is core's
+/// abandoned-plan sweep finding the plan silent (MOTIR-9065). The failure path
+/// maps any code it does not recognise, and a
 /// missing `walkStop`, to `internal` before it writes, so the column is total.
 enum PlanSessionFailureReason {
   rate_limited
@@ -7281,6 +7362,7 @@ enum PlanSessionFailureReason {
   token_expired
   prompt_too_large
   job_failed
+  stalled
   internal
 
   @@map("plan_session_failure_reason")
@@ -9146,6 +9228,15 @@ model PlanChangeSession {
   /// session of the SAME seed. SetNull — a gate row that goes leaves the
   /// conversation intact and unseeded.
   seedGateId          String?                   @map("seed_gate_id")
+  /// The GUIDE REPLY TURN whose re-plan offer SEEDED this session (Story MOTIR-8684 ·
+  /// MOTIR-8691; decision MOTIR-8685): the `assistant` turn of a guide conversation
+  /// that holds the offer. Written ONLY at creation, by the guide-seeded first turn
+  /// (`planChangeSessionsService.startGuideSeededWithFirstTurn`), and never changed;
+  /// NULL on every other session, and on a session the guide's request was sent
+  /// into because the person already held the target. EXCLUSIVE with `seedGateId`
+  /// (the `plan_change_session_one_seed` CHECK). SetNull — a turn that goes leaves
+  /// the conversation intact and unseeded.
+  seedGuideTurnId     String?                   @map("seed_guide_turn_id")
   /// When the session ENDED (AMENDMENT 23 §1). **A session is OPEN ⟺ this is
   /// NULL.** An ended session is never resumed and accepts no turn. Written only
   /// by the one end operation, together with `endReason` and `endedById`.
@@ -9192,6 +9283,13 @@ model PlanChangeSession {
   /// That level's or card's title at the moment of failure, so a row can name it
   /// without a second read.
   failureStopTitle    String?                   @map("failure_stop_title")
+  /// Whether the failed attempt can be RESUMED (MOTIR-9121): motir-ai's own verdict on
+  /// the failed job (`resumable` on `GET /v1/jobs/:id`) — `false` when the job failed
+  /// before its conversation settled, so a resume has nothing to continue from. A
+  /// `false` record offers no Resume, has released the attempt's targets, and lets the
+  /// next turn plan again. Null when unknown (a motir-ai that does not say, or a failure
+  /// recorded before this column), which reads as resumable, as it always did.
+  failureResumable    Boolean?                  @map("failure_resumable")
   // ── AWAITING ITS PERSON ───────────────────────────────────────────────────────
   /// When the conversation began waiting on its owner's next turn. Written by the
   /// planning-session gate (`markAwaitingPerson`), cleared by the person's next turn
@@ -9218,27 +9316,28 @@ model PlanChangeSession {
   createdAt           DateTime                  @default(now()) @map("created_at")
   updatedAt           DateTime                  @updatedAt @map("updated_at")
 
-  workspace   Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project     Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy   User?                    @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  seedGate    ApprovalGate?            @relation("PlanChangeSessionSeedGate", fields: [seedGateId], references: [id], onDelete: SetNull)
-  endedBy     User?                    @relation("PlanChangeSessionEndedBy", fields: [endedById], references: [id], onDelete: SetNull)
-  copiedFrom  PlanChangeSession?       @relation("PlanChangeSessionCopiedFrom", fields: [copiedFromSessionId], references: [id], onDelete: SetNull)
-  copies      PlanChangeSession[]      @relation("PlanChangeSessionCopiedFrom")
-  turns       PlanChangeTurn[]
+  workspace     Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project       Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy     User?                    @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  seedGate      ApprovalGate?            @relation("PlanChangeSessionSeedGate", fields: [seedGateId], references: [id], onDelete: SetNull)
+  seedGuideTurn PlanChangeTurn?          @relation("PlanChangeSessionSeedGuideTurn", fields: [seedGuideTurnId], references: [id], onDelete: SetNull)
+  endedBy       User?                    @relation("PlanChangeSessionEndedBy", fields: [endedById], references: [id], onDelete: SetNull)
+  copiedFrom    PlanChangeSession?       @relation("PlanChangeSessionCopiedFrom", fields: [copiedFromSessionId], references: [id], onDelete: SetNull)
+  copies        PlanChangeSession[]      @relation("PlanChangeSessionCopiedFrom")
+  turns         PlanChangeTurn[]
   /// The BOUNDARY MAILBOX for this thread's runs (MOTIR-4067) — one ordered
   /// sequence per job, carrying BOTH the turns typed mid-run and the stop.
   /// Cascade: a deleted thread takes its mailbox with it.
-  mailbox     PlanChangeMailboxEntry[]
+  mailbox       PlanChangeMailboxEntry[]
   /// The planner's mid-run PAUSES on this thread's runs (MOTIR-8007). Cascade.
-  runPauses   PlanChangeRunPause[]
+  runPauses     PlanChangeRunPause[]
   /// The work items this conversation currently HOLDS (Story MOTIR-2786 ·
   /// MOTIR-2787). Cascade — a deleted thread releases everything it held.
-  targetLocks PlanTargetLock[]
+  targetLocks   PlanTargetLock[]
   /// The plans this conversation produced (AMENDMENT 17 §5) — many plans to one
   /// session: a refine or a revision writes a successor plan on the SAME
   /// session, never a new one.
-  plans       Plan[]
+  plans         Plan[]
 
   /// The composite-FK TARGET (MOTIR-1735). `id` is already unique on its own, so
   /// this adds no integrity constraint of its own — it exists solely to make
@@ -9256,6 +9355,9 @@ model PlanChangeSession {
   /// The SEEDED-session read (AMENDMENT 17 §9): "this member's most recent
   /// session seeded by this gate" — `findSeededForUser`.
   @@index([seedGateId, createdById, lastActivityAt])
+  /// The GUIDE-SEEDED-session read (MOTIR-8691): "this member's most recent
+  /// session seeded by this guide offer" — `findSeededByGuideTurnForUser`.
+  @@index([seedGuideTurnId, createdById, lastActivityAt])
   /// The TO RESUME read (Story MOTIR-7905): "this member's failed-waiting sessions",
   /// newest failure first.
   @@index([workspaceId, createdById, failedAt])
@@ -9434,7 +9536,7 @@ model PlanChangeTurn {
   authorId              String?                @map("author_id")
   createdAt             DateTime               @default(now()) @map("created_at")
 
-  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   /// COMPOSITE FK (MOTIR-1735) — the turn points at `(session_id, workspace_id)`,
   /// not at `session_id` alone, so a turn can only ever attach to a session IN ITS
   /// OWN WORKSPACE. This is the structural half of the tenancy guarantee: RLS
@@ -9444,8 +9546,10 @@ model PlanChangeTurn {
   /// use, wedging their thread (a cross-tenant DoS). Referencing the pair makes
   /// that row nonexistent rather than merely invisible, and unlike a policy it
   /// also holds for BYPASSRLS/superuser connections.
-  session   PlanChangeSession @relation(fields: [sessionId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  author    User?             @relation("PlanChangeTurnAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  session            PlanChangeSession   @relation(fields: [sessionId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  /// The planning sessions seeded by the re-plan offer this turn holds (MOTIR-8691).
+  seededPlanSessions PlanChangeSession[] @relation("PlanChangeSessionSeedGuideTurn")
+  author             User?               @relation("PlanChangeTurnAuthor", fields: [authorId], references: [id], onDelete: SetNull)
 
   @@unique([sessionId, seq])
   @@index([sessionId, seq])
@@ -10697,6 +10801,20 @@ model CiRunnerProvisioningIntent {
   /// A short, non-secret failure detail. Never a provider body.
   failureDetail  String?   @map("failure_detail")
 
+  /// How many boots of this intent failed TRANSIENTLY and put it back in the
+  /// pending pool (MOTIR-8941). A fleet runner is interchangeable, so a boot that
+  /// is lost for good leaves one queued GitHub job with no runner; a transient
+  /// failure is re-queued instead, up to a bound after which it settles
+  /// `provision_failed`.
+  bootAttempts Int @default(0) @map("boot_attempts")
+
+  /// Which RECONCILE of the job this intent is (MOTIR-8976). 0 is the intent the
+  /// `workflow_job.queued` delivery recorded. A fleet runner is not tied to a job
+  /// (GitHub hands a new runner to the OLDEST queued job carrying the label), so a
+  /// lost runner leaves some job queued while every intent settles `job_completed`;
+  /// the reconcile sweep mints generation N+1 for a job GitHub still holds queued.
+  reconcileGeneration Int @default(0) @map("reconcile_generation")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -10710,7 +10828,7 @@ model CiRunnerProvisioningIntent {
   /// The idempotency guarantee: a redelivered webhook produces no second intent,
   /// while a RE-RUN (a new attempt) and every sibling JOB of the same run each
   /// get their own.
-  @@unique([runId, runAttempt, jobId])
+  @@unique([runId, runAttempt, jobId, reconcileGeneration])
   @@index([workspaceId])
   /// MOTIR-1921's work queue: the oldest unclaimed intents, and MOTIR-1922's
   /// per-org in-flight count, are both served by this.
@@ -11863,6 +11981,33 @@ model OrganizationContentLanguageChange {
   @@map("organization_content_language_change")
 }
 
+/// One flip of a project's auto-translate switch (Story MOTIR-7738 ·
+/// MOTIR-8825) — the "who / from / to / when" record, the project-tier twin of
+/// {@link OrganizationContentLanguageChange}. Written only by the service that
+/// flips `Project.autoTranslateWorkContent`, in the same transaction as that
+/// write. No CHECK forbids `fromEnabled = toEnabled`: whether a no-op flip
+/// writes a row is the service's call. RLS is the project-scoped pair
+/// (`page_version`): workspace-keyed, with a project-narrowing SELECT arm.
+model ProjectAutoTranslateChange {
+  id              String   @id @default(cuid())
+  workspaceId     String   @map("workspace_id")
+  projectId       String   @map("project_id")
+  /// Who flipped it. SetNull: the record of the change outlives the account.
+  changedByUserId String?  @map("changed_by_user_id")
+  fromEnabled     Boolean  @map("from_enabled")
+  toEnabled       Boolean  @map("to_enabled")
+  changedAt       DateTime @default(now()) @map("changed_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  changedBy User?     @relation("ProjectAutoTranslateChangedBy", fields: [changedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  /// The history read, newest first.
+  @@index([projectId, changedAt])
+  @@map("project_auto_translate_change")
+}
+
 /// One email notice sent about an {@link OrganizationDeletionRequest} (Story
 /// MOTIR-6306 · MOTIR-6395) — the DEDUPE record that makes each notice
 /// exactly-once per (request, kind, daysLeft) whatever the job engine's own
@@ -12586,6 +12731,15 @@ enum DispatchEventKind {
   /// ⚠️ SERVER-WRITTEN, like `unbuildable_reported`: the verdict route's service
   /// appends it, and the v1 ingest refuses it, so a run token cannot forge one.
   review_verdict
+  /// A run BUILT THROUGH a card whose plan was wrong only about the HOW and recorded
+  /// each discrepancy through `record_run_discrepancy` (MOTIR-8655,
+  /// `A run builds through a wrong HOW — the discrepancy record`, decision page
+  /// MOTIR-8654). CARD-scoped, one per leg; `data` is a POINTER only
+  /// (`{ commentId, pointCount, dispatchRunCardId }`) — the text lives in the card comment.
+  /// ⚠️ SERVER-WRITTEN, like `unbuildable_reported`: the discrepancy service appends it in
+  /// the same transaction as the comment, and the v1 ingest refuses it, so a run token
+  /// cannot forge one.
+  discrepancy_recorded
 
   /// One step the agent says it is about to take, in one line of at most 500
   /// characters (`agent-reported-runs.md` §3) — written through `report_action`.
@@ -14361,4 +14515,33 @@ model IdeaResearchRun {
   @@index([ranAt])
   @@index([actorUserId])
   @@map("idea_research_run")
+}
+
+/// A project's self-hosted runner group in a CONNECTED org (Story MOTIR-8699 ·
+/// MOTIR-8712) — the org-keyed SET whose degenerate case, the provisioning org's
+/// group, stays on `Project.runnerGroup*`. One row per `(project, org)`: the group
+/// in that org, access-listed to the project's PRIVATE repositories there, managed
+/// through the provisioning App's installation on that org.
+model ProjectRunnerGroup {
+  id              String    @id @default(cuid())
+  projectId       String    @map("project_id")
+  workspaceId     String    @map("workspace_id")
+  /// The org login, stored lower-cased (GitHub logins are case-insensitive).
+  org             String
+  /// The provisioning App's installation on `org` the group is managed through.
+  installationId  String    @map("installation_id")
+  runnerGroupId   Int       @map("runner_group_id")
+  runnerGroupName String    @map("runner_group_name")
+  syncedAt        DateTime? @map("synced_at")
+  /// A GitHub-side failure on the last sync for THIS org — the same meaning as
+  /// `Project.runnerGroupSyncPending`, scoped to one org.
+  syncPending     Boolean   @default(false) @map("sync_pending")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([projectId, org])
+  @@index([workspaceId])
+  @@map("project_runner_group")
 }

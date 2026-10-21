@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils/cn';
 import type { OrganizationDTO } from '@/lib/dto/organizations';
 import { orgCan } from '@/lib/organizations/capabilities';
 import { visibleOrganizationSettingsNav } from '@/lib/settings/organizationSettingsNav';
+import { entitlementExceededMessage } from '@/lib/billing/entitlementCopy';
 import { createOrganizationAction, switchOrganizationAction } from '../_actions';
 import { CreateWorkspaceDialog } from './CreateWorkspaceDialog';
 
@@ -48,6 +49,15 @@ export interface OrgControlProps {
    * nothing of theirs and answers 404 (MOTIR-6312 · panel 3a / 3b).
    */
   workspaceTierRevealed?: boolean;
+  /**
+   * Whether this ACCOUNT may create an organization right now — the server's
+   * §4.5 answer (`entitlementsService.canCreateOrganization`), resolved in the
+   * layout. It alone decides whether "Create organization" is offered, at ANY
+   * org count: inferring it from `orgs.length >= 2` hid the door from every
+   * account with one org, which is exactly who is owed their first one free
+   * (MOTIR-8779). Defaults to `false`, the answer that offers nothing.
+   */
+  canCreateOrganization?: boolean;
 }
 
 // The organization control in the app shell (Story 6.10.5, design/org-admin
@@ -55,15 +65,19 @@ export interface OrgControlProps {
 // org is permanent chrome — an OPC is just an org of one). It is a menu button,
 // not only a switcher: the menu carries Settings · Members · Usage & cost ·
 // Billing & plans (cloud only, Story 8.1.7) · New workspace, then — only when the
-// account is in ≥2 orgs — a "Switch organization" section. The WORKSPACE switcher
+// account is in ≥2 orgs — a "Switch organization" section, and "Create
+// organization" whenever the server says this account may create one (MOTIR-8779,
+// at any org count). The WORKSPACE switcher
 // (rendered alongside by the shell only at ≥2 workspaces) is a separate control.
 export function OrgControl({
   activeOrg,
   orgs,
   cloudBilling,
   workspaceTierRevealed = false,
+  canCreateOrganization = false,
 }: OrgControlProps) {
   const t = useTranslations('orgAdmin');
+  const tErr = useTranslations('errors');
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
@@ -100,9 +114,12 @@ export function OrgControl({
   const hasOrgRows = offered.size > 0 || canManageWorkspaces;
 
   // 3b · a Member, 2+ workspaces, ONE org: the menu would hold nothing — no org
-  // page to open and no org to switch to — so the name is a plain LABEL, not a
-  // button with a chevron over an empty popover.
-  if (!hasOrgRows && !multiOrg) {
+  // page to open, no org to switch to, and no org of their own to create — so
+  // the name is a plain LABEL, not a button with a chevron over an empty
+  // popover. The create door counts: a Member who owns no org is entitled to
+  // their first one, and this label used to be the reason they could not reach
+  // it (MOTIR-8779).
+  if (!hasOrgRows && !multiOrg && !canCreateOrganization) {
     return (
       <span className="flex min-w-0 shrink-3 items-center px-(--spacing-control-x) font-sans text-sm text-(--el-text)">
         <span className="min-w-0 max-w-[20ch] truncate font-serif">{activeOrg.name}</span>
@@ -283,6 +300,14 @@ export function OrgControl({
                   );
                 })}
               </ul>
+            </>
+          ) : null}
+
+          {canCreateOrganization ? (
+            <>
+              {/* Under the org list when there is one; below the org rows, behind
+                  the same separator, when the account has a single org. */}
+              {!multiOrg && hasOrgRows ? <div className="my-1 h-px bg-(--el-border)" /> : null}
               <div className="px-1 pb-1 pt-1">
                 <button
                   type="button"
@@ -314,9 +339,16 @@ export function OrgControl({
         title={t('menu.createOrg')}
         label={t('settings.nameLabel')}
         submitLabel={t('menu.createOrg')}
-        run={(name) => createOrganizationAction(name).then(() => undefined)}
+        run={async (name) => {
+          const result = await createOrganizationAction(name);
+          // At the quota the action RETURNS the refusal (MOTIR-8779): the modal
+          // stays open and says which limit held, in the reader's language.
+          if (!result.ok) return { error: entitlementExceededMessage(tErr, result.entitlement) };
+        }}
         onDone={() => router.refresh()}
-        onError={() => toast({ variant: 'error', title: t('settings.saveError') })}
+        onError={(message) =>
+          toast({ variant: 'error', title: message ?? t('settings.saveError') })
+        }
       />
     </>
   );

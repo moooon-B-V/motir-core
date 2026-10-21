@@ -65,7 +65,7 @@ function trimmedLength(value: string): number {
  */
 export function validateProposedTodos(
   todos: unknown,
-  kind: string,
+  kind: string | null,
   label: string,
 ): asserts todos is ProposedTodoInput[] | null | undefined {
   if (todos === undefined || todos === null) return;
@@ -82,7 +82,11 @@ export function validateProposedTodos(
   // days later. Read off `TYPEABLE_KINDS`, the same single source of truth the
   // leaf-only `type` / `executor` enforcement uses, so "what is a leaf" cannot
   // acquire a second answer here.
-  if (todos.length > 0 && !TYPEABLE_KINDS.has(kind as WorkItemKindDto)) {
+  //
+  // A `null` kind skips this gate and checks the rows alone: a `modify`'s pure
+  // pass has not read its target yet (MOTIR-8668), so the container half runs
+  // inside the append's transaction on the target's merged kind instead.
+  if (kind !== null && todos.length > 0 && !TYPEABLE_KINDS.has(kind as WorkItemKindDto)) {
     throw new InvalidProposalError(
       `${label}: a \`${kind}\` is a container and its steps are its children, so it cannot carry a to-do list. Move the steps onto the leaf that performs them.`,
     );

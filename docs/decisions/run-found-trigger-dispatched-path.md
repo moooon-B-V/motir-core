@@ -215,3 +215,131 @@ unchanged.
   guards own the first, and MOTIR-6225's verdict owns the second.
 - **How Motir staff read a customer's verbatim reason** when they debug a customer-tenant bug.
   That is a support-access question, not a filing question.
+
+## AMENDMENT 1 — the report reaches the server in every lane, and Motir's own MCP plans file (MOTIR-8698, 2026-10-15)
+
+**What was wrong.** The record assumed _"The runner reaches motir-core only through that MCP
+server"_ with a `CLI_TOKEN_GRANT` token. That held only for a tenant running the agent on their
+own machine with a Motir MCP configured. A hosted run's agent and an agent-instance run's agent
+hold no Motir token (`AGENT_RUN_WITHHELD_ENV`), and `/api/mcp` refuses a run token
+(`lib/mcp/auth.ts`), so step 4 had nothing to land on. A local agent with no Motir MCP had the
+same problem. And the precondition _"only a plan motir-ai made fires a bug"_ excluded every one of
+Motir's own plans, which are written by `plan.py` over the MCP (`authorSource = mcp`).
+
+**What changes.**
+
+1. **A run door.** `POST /api/v1/dispatch-runs/{id}/unbuildable`, body `{ targetKey, reason }`,
+   gated `work_item:edit` and admitted to a run token bound to its own run
+   (`lib/hostedRuns/runTokenRoutes.ts`, binding `own_run`). It runs the same service as the MCP
+   tool (`runFoundReportService.reportUnbuildableTargetForRun`). The one difference is which leg:
+   the leg `targetKey` holds on THIS run, read under the run's lock. Only the run's operator (or
+   the run's own credential) may report for it. The answer is the same acknowledgement.
+2. **The CLI makes the call, not the agent.** Step 4 of the prompt's STOP branch now tells an agent
+   that has `$MOTIR_AGENT_REPORT` to write its reason into that file as `"unbuildable"`. The CLI
+   reads it when the agent exits (`runAgent`), and the leg posts the report with the run's own
+   credential before any verdict settles the leg (`runDispatchLeg`). The MCP tool stays as the
+   fallback for a reader with no such file. One path covers rows 4, 5 and 6, because hosted runs
+   and agent-instance runs execute the CLI's own `motir run`.
+3. **Motir's own MCP plans file.** The precondition admits `mcp` as well as `native` when the
+   target is in the system principal's workspace (Motir's own). Everywhere else it is unchanged: a
+   tenant's `mcp` plan, and `manual`, `api` or `null` anywhere, never fire. The reviewer's
+   precondition on MOTIR-6226 stands for every tenant.
+
+Nothing about WHERE a bug lands changes. It is always Motir's planner-bug home, filed as the system
+principal, and the `customer_workspace` regime and its allowlist are unchanged.
+
+### The rows, as they stand now
+
+| #   | Who runs, and how                                                 | How the report reaches motir-core                                                                     | Planning bug filed?                                                                      |
+| --- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 1   | Motir team, runbook (`motir run` skill, motir-meta `run.md`)      | The runbook reads the verdict and files with `create_work_item` into `@planner-bug-home` (MOTIR-6231) | ✅ into Motir's `Bugs / Planning bugs`                                                   |
+| 2   | Motir team, CLI dispatch (`motir run/auto`)                       | The CLI posts the run door with the developer's credential                                            | ✅ for a `native` **or `mcp`** plan, unchanged since approval (`motir_workspace` regime) |
+| 3   | Tenant, CLI dispatch on their own machine, agent with a Motir MCP | The CLI posts the run door; the agent may also call the tool (one record per leg)                     | ✅ for a `native` plan, unchanged (`customer_workspace` regime)                          |
+| 4   | Tenant, CLI dispatch, agent with no Motir MCP                     | The CLI posts the run door from the agent's `$MOTIR_AGENT_REPORT`                                     | ✅ for a `native` plan, unchanged                                                        |
+| 5   | Hosted run (Motir cloud)                                          | The container's CLI posts the run door with the run token                                             | ✅ for a `native` plan, unchanged                                                        |
+| 6   | Run inside the user's agent instance (MOTIR-7024)                 | The instance's CLI posts the run door with the run token                                              | ✅ for a `native` plan, unchanged                                                        |
+
+The arms after the call (no open leg, `no_plan`, not admitted, `changed`, no system principal,
+admitted and `unchanged`) are the ones in [Decision](#decision), with "not `native`" read as "not
+admitted" above.
+
+### What this amendment does NOT decide
+
+- The other MCP calls the prompt asks a hosted or agent-instance agent to make (the STOP branch's
+  comment, Planning transition, `append_plan_turn` and `submit_plan_session`, and the build-through's
+  `record_run_discrepancy`). They have the same wall and are filed as **MOTIR-8722**.
+- `motir next`, which only prints the prompt for a person's own agent. No CLI is around the agent to
+  read a report file, so that agent still needs the MCP tool.
+
+## AMENDMENT 2 — the build-through record and the STOP's own writes reach the server too (MOTIR-8722, 2026-10-15)
+
+**What was wrong.** AMENDMENT 1 gave ONE of the agent's Motir calls a run door: the unbuildable
+report. Every other call the dispatch prompt names was still an MCP call, so a hosted run's agent
+and an agent-instance run's agent (no Motir token, `/api/mcp` refuses a run token) could make none
+of them. A build-through left no discrepancy record (only the prompt's _"Discrepancy record
+missing"_ line), and a STOP left the card In Progress with no comment, no Planning status and no
+re-plan.
+
+**What changes.**
+
+1. **The build-through record.** `POST /api/v1/dispatch-runs/{id}/discrepancy`, body
+   `{ key, points }`, runs `runDiscrepancyService.recordDiscrepancy` pinned to the card's leg on
+   THIS run. One comment on the card, one `discrepancy_recorded` finding on the leg, one record per
+   leg. The agent writes the points into `$MOTIR_AGENT_REPORT` as `"discrepancy"` when the
+   `record_run_discrepancy` tool is not available to it, and the CLI posts them when it exits.
+2. **The STOP's writes.** `POST /api/v1/dispatch-runs/{id}/stop`, body
+   `{ key, comment, toPlanning, requirement? }`, runs `runStopReportService.reportStopForRun`: one
+   comment carrying the agent's finding and, with `toPlanning`, the move to Planning in the same
+   transaction, with the agent's re-plan brief kept in that comment. The agent writes `"stop"`
+   beside `"unbuildable"` when it has no Motir tools; the comment text is the `unbuildable` text.
+   The CLI posts it before the leg's verdict, so a card it moved to Planning settles the leg as
+   `replanned`.
+3. Both doors are `work_item:edit`, admitted to a run token for its own run only (`own_run` in
+   `lib/hostedRuns/runTokenRoutes.ts`), and refuse a card that is not an open leg of the run.
+
+**What does NOT change, and why: the re-plan is not submitted from a run's credential.** The
+card's acceptance allowed either a submitted re-plan or a prompt that says what to do instead.
+This amendment takes the second for the submit, and only for the submit. A run's credential holds
+no `ai:*` key by decision (`HOSTED_RUN_TOKEN_GRANT`: _"a run token can neither author nor read a
+plan"_; `permission-inventory.md` R75 refuses _"every plan or AI route"_ by name), and submitting
+is the act that spends the owner's AI credits. Granting it would widen what every hosted and
+agent-instance run can spend unattended, which is a decision for the owner of that grant, not a
+side effect of a bug fix. So on these lanes the card goes to Planning, out of the pickable set,
+with the finding and the brief on it, and the comment and the prompt both say the re-plan was not
+submitted. A person submits it from the card. An agent that has the Motir tools (a local run with
+a Motir MCP) still makes every STOP call itself, the submit included.
+
+| Lane                                 | Build-through record           | STOP: comment and Planning     | STOP: re-plan submitted                          |
+| ------------------------------------ | ------------------------------ | ------------------------------ | ------------------------------------------------ |
+| Local run, agent with a Motir MCP    | the agent's tool call          | the agent's tool calls         | ✅ the agent's `submit_plan_session`             |
+| Local run, agent with no Motir MCP   | the CLI posts `…/discrepancy`  | the CLI posts `…/stop`         | ❌ the brief is on the card; a person submits it |
+| Hosted run                           | the container's CLI, run token | the container's CLI, run token | ❌ as above: the run token holds no `ai:*` key   |
+| Run inside the user's agent instance | the instance's CLI, run token  | the instance's CLI, run token  | ❌ as above                                      |
+
+## AMENDMENT 3 — the file is the route only when the client says it posts it (MOTIR-8810, 2026-10-16)
+
+**What was wrong.** AMENDMENTS 1 and 2 moved three reports into `$MOTIR_AGENT_REPORT`
+(`unbuildable`, `discrepancy`, `stop`) and made the CLI post them. The server half deploys on
+merge; the CLI half reaches people only in a release. When MOTIR-8698 deployed, the only CLI
+anyone could install was `@motir/cli` 0.12.0 (published 2026-10-04), which reads `model` from
+that file and nothing else. So the deployed prompt told every agent with the file to put its
+unbuildable reason there instead of calling `report_unbuildable_target`, and the report was
+lost: no `unbuildable_reported` event and no planning bug (reproduced on MOTIR-8806, two runs at
+12:24 and 12:27 UTC, 2026-10-16; the same card with a CLI built from `main` filed MOTIR-8808).
+
+**What changes.** `GET /api/v1/work-items/{key}/dispatch-prompt` takes an optional
+`agentReport=1`, the client's declaration that it posts all three. The CLI sends it on every
+prompt read. Without it the STOP branch's step 4 is the `report_unbuildable_target` call it was
+before AMENDMENT 1, and the two _NO MOTIR TOOLS?_ file routes are not rendered, because the
+runner would drop them. The MCP `dispatch_prompt` tool never declares it, because nobody reading
+a prompt through it is the runner that would post, so the REST and MCP transports still render
+the same text for the same card.
+
+**Why a declaration and not the version header.** `x-motir-client-version` already exists, but a
+CLI built from `main` reports the same version string as the release it is ahead of (both read
+`0.12.0` at `ed2a90c87`), so a version floor could not tell the CLI that posts from the one that
+does not. The declaration is sent only by code that does the posting.
+
+**The rule this leaves.** A prompt change that routes work through the runner is a contract with
+a CLI release that ships after the server. It renders behind the client's own declaration, never
+on the assumption that the CLI on `main` is the CLI people run.

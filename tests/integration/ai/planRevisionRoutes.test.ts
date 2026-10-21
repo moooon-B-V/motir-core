@@ -699,6 +699,10 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     title: 'The dependent, corrected',
     kind: 'task',
     descriptionMd: 'The corrected spec.',
+    // `sections` is the OTHER way to say the body (Story MOTIR-9023 · MOTIR-9030):
+    // rendered into `descriptionMd`, never stored, and refused beside it — so it
+    // cannot ride in this sample, which sends `descriptionMd` and asserts it
+    // stored. Its own transport test is below; the key-set assertions add it back.
     type: 'code',
     priority: 'high',
     storyPoints: 3,
@@ -715,7 +719,10 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     // internal correction route's parser has to carry the key through into
     // `proposedFields`, which is the door MOTIR-4619 opens.
     todos: [{ text: 'Create the restricted API key', executor: 'human' }],
-  } satisfies Record<UpdateProposalKey, unknown>;
+    // The language each text field above was written in (MOTIR-8743) — every
+    // field it names is rewritten here, so the merge keeps all four keys.
+    languages: { title: 'zh', description: 'zh', explanation: 'ko', todos: 'zh' },
+  } satisfies Record<Exclude<UpdateProposalKey, 'sections'>, unknown>;
 
   /** Each STRUCTURAL key → where the correction lands it, or `null` for a key
    *  this test does not exercise (with the reason, by name). */
@@ -768,7 +775,9 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
         { revision: true },
       )
     ).appendedItemIds[0]!;
-    expect(Object.keys(CONTENT_SAMPLE).sort()).toEqual([...UPDATE_PROPOSAL_KEYS].sort());
+    expect([...Object.keys(CONTENT_SAMPLE), 'sections'].sort()).toEqual(
+      [...UPDATE_PROPOSAL_KEYS].sort(),
+    );
     expect(Object.keys(STRUCTURAL_LANDS_IN).sort()).toEqual(
       [...CORRECT_PROPOSAL_KEYS].filter((k) => !UPDATE_PROPOSAL_KEYS.includes(k as never)).sort(),
     );
@@ -803,6 +812,70 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     expect(stored.parentRef).toBe(`planItem:${firstId}`);
     expect(stored.blockedByRefs).toEqual([`planItem:${peer}`]);
     expect(stored.supersedesRefs).toEqual([`planItem:${firstId}`]);
+  });
+
+  // ── MOTIR-9030 · the `sections` key SURVIVES the parser, on both modes ───────
+  //
+  // Held apart from the key-sample above because `sections` and `descriptionMd`
+  // may not ride together. What this asserts is the TRANSPORT: the parser picks
+  // the key off the body and forwards it AS SENT, so the service — which owns
+  // every rule — renders it, and a wrong-typed value is refused rather than
+  // dropped.
+  it('`sections` reaches the proposal on the deepen and the correct modes, rendered and never stored', async () => {
+    const fx = await makeWorkItemFixture();
+    const { itemId } = await generatingPlan(fx, 'job-sections');
+    const sections = {
+      framing: 'Why this card exists.',
+      scopeBoundary: 'Stops at the renderer.',
+      acceptanceCriteria: ['It renders.'],
+      contextRefs: [{ ref: 'lib/a.ts', why: 'the module' }],
+    };
+
+    const deepened = await patch(fx, itemId, {
+      jobId: 'job-sections',
+      patch: { type: 'code', sections },
+    });
+    expect(deepened.status).toBe(200);
+    const afterDeepen = (await adminDb.planItem.findUniqueOrThrow({ where: { id: itemId } }))
+      .proposedFields as Record<string, unknown>;
+    expect(afterDeepen['descriptionMd']).toContain('## Scope BOUNDARY');
+    expect(afterDeepen['descriptionMd']).toContain('It renders.');
+    expect(afterDeepen).not.toHaveProperty('sections');
+
+    // A SPARSE correction over the body just rendered — only the boundary changes.
+    const corrected = await patch(fx, itemId, {
+      jobId: 'job-sections',
+      mode: 'correct',
+      patch: { sections: { scopeBoundary: 'Stops at the parser.' } },
+    });
+    expect(corrected.status).toBe(200);
+    const afterCorrect = (await adminDb.planItem.findUniqueOrThrow({ where: { id: itemId } }))
+      .proposedFields as Record<string, unknown>;
+    expect(afterCorrect['descriptionMd']).toContain('Stops at the parser.');
+    expect(afterCorrect['descriptionMd']).toContain('It renders.');
+    expect(afterCorrect['descriptionMd']).not.toContain('Stops at the renderer.');
+    expect(afterCorrect).not.toHaveProperty('sections');
+  });
+
+  it('a WRONG-TYPED `sections` and `sections` beside `descriptionMd` are typed 422s, never dropped', async () => {
+    const fx = await makeWorkItemFixture();
+    const { itemId } = await generatingPlan(fx, 'job-sections-bad');
+
+    const wrongType = await patch(fx, itemId, {
+      jobId: 'job-sections-bad',
+      patch: { sections: 'a string' },
+    });
+    expect(wrongType.status).toBe(422);
+    expect(await wrongType.json()).toMatchObject({ code: 'INVALID_PROPOSAL' });
+
+    const both = await patch(fx, itemId, {
+      jobId: 'job-sections-bad',
+      patch: { descriptionMd: 'a body', sections: { framing: 'f' } },
+    });
+    expect(both.status).toBe(422);
+    const message = ((await both.json()) as { error: string }).error;
+    expect(message).toContain('`sections`');
+    expect(message).toContain('`descriptionMd`');
   });
 
   it('`explanationMd` reaches the proposal on the DEEPEN mode too, not only on `correct`', async () => {

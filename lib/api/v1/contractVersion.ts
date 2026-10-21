@@ -991,5 +991,107 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.66.0` after MOTIR-8098's
  *   `1.65.0`. If a sibling has taken it since, RENUMBER this entry — it names the
  *   FIELD and the HEADER.
+ *
+ * - `1.67.0` — MOTIR-8670 adds `not_ready` and `replanned` to the approval-gate
+ *   supersede cause: a `manual_work` gate is withdrawn when its card is Blocked or gains
+ *   an open `blocked_by`, and when it is re-planned (`docs/decisions/manual-work-gate.md`
+ *   §6, amended).
+ *
+ *   Additive: new members of an enum every client must tolerate (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.67.0` after MOTIR-8600's
+ *   `1.66.0`. If a sibling has taken it since, RENUMBER this entry — it names the ENUM
+ *   MEMBERS.
+ *
+ * - `1.68.0` — MOTIR-8698 adds `reportDispatchRunUnbuildable`:
+ *   `POST /api/v1/dispatch-runs/{id}/unbuildable`, body `{ targetKey, reason }`, `200`
+ *   with `UnbuildableReportAcknowledgement` (`{ acknowledged, recordedOnRun }`) — the
+ *   run-found report made by the CLI with the run's own credential, so a hosted run, a
+ *   run inside an agent instance and an agent with no Motir MCP all reach it
+ *   (`run-found-trigger-dispatched-path.md` AMENDMENT 1). A run token may call it for
+ *   its own run (`runTokenRoutes.ts`, binding `own_run`).
+ *
+ *   Additive: a new operation and a new component (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.68.0` after MOTIR-8670's
+ *   `1.67.0`. If a sibling has taken it since, RENUMBER this entry — it names the
+ *   OPERATION.
+ *
+ * - `1.69.0` — MOTIR-8722 adds `recordDispatchRunDiscrepancy`
+ *   (`POST /api/v1/dispatch-runs/{id}/discrepancy`, body `{ key, points }`, `200` with
+ *   `RunDiscrepancyAcknowledgement` — `{ commentId, recorded }`) and `reportDispatchRunStop`
+ *   (`POST /api/v1/dispatch-runs/{id}/stop`, body `{ key, comment, toPlanning, requirement? }`,
+ *   `200` with `RunStopReportAcknowledgement` — `{ commentId, movedToPlanning }`): the CLI
+ *   records a build-through and a STOP with the run's own credential, so a hosted run and a
+ *   run inside an agent instance reach both (`run-found-trigger-dispatched-path.md`
+ *   AMENDMENT 2). A run token may call both for its own run (`runTokenRoutes.ts`, `own_run`).
+ *
+ *   Additive: two new operations and two new components (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.69.0` after MOTIR-8698's
+ *   `1.68.0`. If a sibling has taken it since, RENUMBER this entry — it names the
+ *   OPERATIONS.
+ *
+ * - `1.70.0` — MOTIR-8810 adds the optional `agentReport` query parameter to
+ *   `getWorkItemDispatchPrompt`: `1` declares that the client posts what its agent writes
+ *   into `$MOTIR_AGENT_REPORT` as `unbuildable`, `discrepancy` and `stop`. Absent, the STOP
+ *   branch routes the report through `report_unbuildable_target` again and names neither
+ *   file route — `@motir/cli` 0.12.0 sends nothing and posts none of the three, so the
+ *   prompt MOTIR-8698 deployed lost every report it handled
+ *   (`run-found-trigger-dispatched-path.md` AMENDMENT 3).
+ *
+ *   Additive: a new optional parameter; a client that omits it is answered a prompt it
+ *   can act on.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.70.0` after MOTIR-8722's
+ *   `1.69.0`. If a sibling has taken it since, RENUMBER this entry — it names the
+ *   PARAMETER.
+ *
+ * - `1.71.0` — MOTIR-5427 adds the `under-authored` dispatch advisory shape: a childless
+ *   card with no enumerated acceptance criterion and null `storyPoints`,
+ *   `estimateMinutes`, `type` and `executor`, carrying `criteria` (`no-heading` or
+ *   `no-criterion`). Never a gate.
+ *
+ *   Additive: one new member of an advisory union whose severity is explicitly
+ *   open-ended (§8's allowed list); no existing shape changes.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.71.0` after MOTIR-8810's
+ *   `1.70.0`. If a sibling has taken it since, RENUMBER this entry.
+ *
+ * - `1.72.0` — MOTIR-9029 adds `getSectionSets` (`GET /api/v1/section-sets`, optional
+ *   `kind` and `type` query parameters, `200` with `SectionSets`) and the code
+ *   `UNKNOWN_SECTION_CELL` (422): which sections a work item of a kind × type has, which
+ *   are required and the heading each renders under in the free-text `descriptionMd`.
+ *   The same descriptor the MCP `get_section_sets` tool serves.
+ *
+ *   Additive: a new operation, a new component and a new code for a new condition
+ *   (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.72.0` after MOTIR-5427's
+ *   `1.71.0`. If a sibling has taken it since, RENUMBER this entry — it names the
+ *   OPERATION.
+ *
+ * - `1.73.0` — MOTIR-9031 adds an optional `sections` object to the `createWorkItem` and
+ *   `updateWorkItem` bodies (named sections the service checks against the registry for
+ *   the item's kind × type and renders into `descriptionMd`; sparse on PATCH), an optional
+ *   `sections` field on the error body (`missing` / `unknown` / `invalid`, by name), and the
+ *   codes `INVALID_SECTIONS` and `SECTIONS_AND_DESCRIPTION_CONFLICT` (422). `descriptionMd`
+ *   stays the one stored, always-free-text body and a write without `sections` is unchanged.
+ *
+ *   Additive: two new optional request fields, a new optional response field and two new
+ *   codes for new conditions (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.73.0` after MOTIR-9029's
+ *   `1.72.0`. If a sibling has taken it since, RENUMBER this entry — it names the FIELD.
+ *
+ * - `1.74.0` — MOTIR-9052 (Story MOTIR-8981) adds the optional nullable `repair.resume`
+ *   (`profile`, `sessionId`, `canResume`) to `getDispatchRun`: the profile and recorded
+ *   session of the card's last agent run, which an agent-door `fix` run opened with so
+ *   the CLI can resume that conversation.
+ *
+ *   Additive: one new optional response field.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.74.0` after MOTIR-9031's
+ *   `1.73.0`. If a sibling has taken it since, RENUMBER this entry.
  */
-export const V1_CONTRACT_VERSION = '1.66.0';
+export const V1_CONTRACT_VERSION = '1.74.0';

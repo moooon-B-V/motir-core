@@ -132,7 +132,19 @@ describe('the verdicts', () => {
   it('succeeds with the agent’s self-reported model', async () => {
     const { verdict } = await leg({ agent: { model: 'claude-opus-5' } });
 
-    expect(verdict).toEqual({ kind: 'succeeded', model: 'claude-opus-5', suspects: [] });
+    expect(verdict).toEqual({
+      kind: 'succeeded',
+      model: 'claude-opus-5',
+      sessionId: null,
+      suspects: [],
+    });
+  });
+
+  it('carries the session id the agent reported, and null when it reported none (MOTIR-9048)', async () => {
+    const { verdict } = await leg({ agent: { sessionId: 'sess-1' } });
+    expect(verdict.kind === 'succeeded' && verdict.sessionId).toBe('sess-1');
+    const none = await leg({ agent: { sessionId: null } });
+    expect(none.verdict.kind === 'succeeded' && none.verdict.sessionId).toBeNull();
   });
 
   it('carries a NULL model for an agent that reported nothing — never a guess', async () => {
@@ -234,6 +246,61 @@ describe('checkout_ready names the BRANCH the leg’s work will be on (MOTIR-653
   });
 });
 
+describe('the agent’s session id is recorded on the run (MOTIR-8980)', () => {
+  async function events(
+    agent: { stream?: { profile: string; sessionId: string | null } },
+    sessionId: string | null | undefined,
+  ) {
+    const out: Array<{ kind: string; data?: unknown }> = [];
+    const primary = target();
+    await runDispatchLeg({
+      client: {
+        getWorkItem: async () => ({ item: { status: 'in_progress' } }) as never,
+        listWorkItemDesigns: async () => ({ designs: [] }),
+      },
+      rootDir: ROOT,
+      key: 'PROD-1',
+      dispatch: PROMPT,
+      agent: { command: 'fake-agent', binary: 'fake-agent', args: [], ...agent },
+      targets: [primary],
+      primary,
+      sessionBranch: null,
+      onMaterialization: () => undefined,
+      beforeSpawn: () => undefined,
+      runAgentFn: async () => ({
+        exitCode: 0,
+        signal: null,
+        model: null,
+        ...(sessionId === undefined ? {} : { sessionId }),
+      }),
+      run: git(true),
+      reporter: { event: (e: (typeof out)[number]) => out.push(e) } as never,
+    });
+    return out;
+  }
+
+  it('names a session Motir chose on agent_started, before the agent has done anything', async () => {
+    const out = await events({ stream: { profile: 'claude', sessionId: 'chosen' } }, 'chosen');
+    expect(out.find((e) => e.kind === 'agent_started')!.data).toEqual({
+      agent: 'fake-agent',
+      sessionId: 'chosen',
+    });
+  });
+
+  it('puts the id the run came back with on agent_exited — also for an agent that chose its own', async () => {
+    const out = await events({ stream: { profile: 'codex', sessionId: null } }, 'thread-7');
+    expect(out.find((e) => e.kind === 'agent_started')!.data).toEqual({ agent: 'fake-agent' });
+    expect(out.find((e) => e.kind === 'agent_exited')!.data).toMatchObject({
+      sessionId: 'thread-7',
+    });
+  });
+
+  it('is an explicit null when there is none', async () => {
+    const out = await events({}, undefined);
+    expect(out.find((e) => e.kind === 'agent_exited')!.data).toMatchObject({ sessionId: null });
+  });
+});
+
 describe('agent_exited carries the agent’s self-reported model TOP-LEVEL (MOTIR-7504)', () => {
   async function exitedEvent(model: string | null) {
     const events: Array<{ kind: string; model?: unknown; data?: unknown; exitCode?: number }> = [];
@@ -263,11 +330,124 @@ describe('agent_exited carries the agent’s self-reported model TOP-LEVEL (MOTI
     const exited = await exitedEvent('m');
     expect(exited.model).toBe('m');
     expect(exited.exitCode).toBe(0);
-    expect(exited.data).toEqual({ model: 'm', signal: null });
+    expect(exited.data).toEqual({ model: 'm', signal: null, sessionId: null });
   });
 
   it('sends null — never a guess — when the agent reported none', async () => {
     const exited = await exitedEvent(null);
     expect(exited).toHaveProperty('model', null);
+  });
+});
+
+describe('the run-found report rides the leg, before any verdict settles it (MOTIR-8698)', () => {
+  async function legWith(unbuildableReason: string | null, exitCode = 0) {
+    const order: string[] = [];
+    const reports: Array<[string, string]> = [];
+    const primary = target();
+    await runDispatchLeg({
+      client: {
+        getWorkItem: async () => ({ item: { status: 'planning' } }) as never,
+        listWorkItemDesigns: async () => ({ designs: [] }),
+      },
+      rootDir: ROOT,
+      key: 'PROD-1',
+      dispatch: PROMPT,
+      agent: { command: 'fake-agent', binary: 'fake-agent', args: [] },
+      targets: [primary],
+      primary,
+      sessionBranch: null,
+      onMaterialization: () => undefined,
+      beforeSpawn: () => undefined,
+      runAgentFn: async () => ({ exitCode, signal: null, model: 'm', unbuildableReason }),
+      run: git(false),
+      reporter: {
+        event: (e: { kind: string }) => order.push(e.kind),
+        reportUnbuildable: async (key: string, reason: string) => {
+          order.push('report');
+          reports.push([key, reason]);
+        },
+      } as never,
+    });
+    return { order, reports };
+  }
+
+  it('reports the agent’s reason on the leg’s card, after agent_exited and before leg_verdict', async () => {
+    const { order, reports } = await legWith('no such table');
+    expect(reports).toEqual([['PROD-1', 'no such table']]);
+    expect(order.indexOf('agent_exited')).toBeLessThan(order.indexOf('report'));
+    expect(order.indexOf('report')).toBeLessThan(order.indexOf('leg_verdict'));
+  });
+
+  it('reports even when the agent then exited non-zero', async () => {
+    const { reports } = await legWith('no such table', 3);
+    expect(reports).toHaveLength(1);
+  });
+
+  it('reports nothing when the agent gave no reason', async () => {
+    const { reports } = await legWith(null);
+    expect(reports).toHaveLength(0);
+  });
+});
+
+describe('the agent’s build-through and STOP ride the leg, before the verdict (MOTIR-8722)', () => {
+  const POINTS = [{ planAsked: 'a', built: 'b', why: 'c' }];
+  const STOP = { comment: 'no such table', toPlanning: true, requirement: null };
+
+  async function legWith(report: {
+    discrepancy?: typeof POINTS | null;
+    stop?: typeof STOP | null;
+  }) {
+    const order: string[] = [];
+    const calls: unknown[] = [];
+    const primary = target();
+    const verdict = await runDispatchLeg({
+      client: {
+        // The STOP's move to Planning is what the verdict then reads.
+        getWorkItem: async () =>
+          ({ item: { status: order.includes('stop') ? 'planning' : 'in_progress' } }) as never,
+        listWorkItemDesigns: async () => ({ designs: [] }),
+      },
+      rootDir: ROOT,
+      key: 'PROD-1',
+      dispatch: PROMPT,
+      agent: { command: 'fake-agent', binary: 'fake-agent', args: [] },
+      targets: [primary],
+      primary,
+      sessionBranch: null,
+      onMaterialization: () => undefined,
+      beforeSpawn: () => undefined,
+      runAgentFn: async () => ({ exitCode: 0, signal: null, model: 'm', ...report }),
+      run: git(true),
+      reporter: {
+        event: (e: { kind: string }) => order.push(e.kind),
+        reportDiscrepancy: async (key: string, points: unknown) => {
+          order.push('discrepancy');
+          calls.push(['discrepancy', key, points]);
+        },
+        reportStop: async (key: string, stop: unknown) => {
+          order.push('stop');
+          calls.push(['stop', key, stop]);
+        },
+      } as never,
+    });
+    return { order, calls, verdict };
+  }
+
+  it('records the points on the leg’s card after agent_exited and before leg_verdict', async () => {
+    const { order, calls } = await legWith({ discrepancy: POINTS });
+    expect(calls).toEqual([['discrepancy', 'PROD-1', POINTS]]);
+    expect(order.indexOf('agent_exited')).toBeLessThan(order.indexOf('discrepancy'));
+    expect(order.indexOf('discrepancy')).toBeLessThan(order.indexOf('leg_verdict'));
+  });
+
+  it('makes the STOP before the verdict, so a card it moved to Planning settles as a re-plan', async () => {
+    const { calls, verdict } = await legWith({ stop: STOP });
+    expect(calls).toEqual([['stop', 'PROD-1', STOP]]);
+    expect(verdict.kind).toBe('replan_submitted');
+  });
+
+  it('makes neither when the agent wrote neither', async () => {
+    const { calls } = await legWith({});
+    expect(calls).toHaveLength(0);
   });
 });

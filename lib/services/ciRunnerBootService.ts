@@ -39,6 +39,9 @@ import {
   type SupervisionTerminalReason,
 } from '@/lib/jobs/supervision/driver';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
+import { ciDockerVolumeGb } from '@/lib/ciFleet/limits';
+import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
+import { OrgTargetAuthError, type GithubOrgTarget } from '@/lib/github/orgTarget';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
   ORCHESTRATOR_REQUEST_TIMEOUT_MS,
@@ -240,6 +243,15 @@ const MAX_CONSECUTIVE_READ_FAILURES = 3;
  *  slow-but-live provision is never swept out from under itself. */
 const STALE_CLAIM_MS = 15 * 60_000;
 
+/**
+ * How many times one intent's boot may be attempted before a transient provider
+ * failure settles it `provision_failed` (MOTIR-8941). A fleet runner is
+ * interchangeable, so an intent lost for good takes one runner away from the
+ * jobs queued at GitHub and one of them waits for ever; a re-queued intent boots
+ * on the next sweep instead.
+ */
+export const MAX_BOOT_ATTEMPTS = 3;
+
 /** A CI intent's OWN end: boot + the job timeout + 10 minutes. It used to be an
  *  age cutoff on the machine (the reaper's); since MOTIR-6925 it is a property of
  *  the RECORD, read by the attribution reconciler (`fleet-per-org-pool.md` §6).
@@ -407,8 +419,20 @@ export interface SupervisionSession {
     readonly region: string;
     /** ISO-8601. */
     readonly createdAt: string;
+    /** The runner's Docker volume (MOTIR-8839), so the settle's teardown can
+     *  delete it after the machine destroyed itself. OPTIONAL on read: a session
+     *  memoised before it existed has none, and teardown reads the mounts. */
+    readonly volumeId?: string;
   };
   readonly githubRunnerId: number | null;
+  /**
+   * The org the runner was minted in, when it is NOT the provisioning org
+   * (Story MOTIR-8699 · MOTIR-8711) — `fleetRunnerTargetFor(intent)` at boot.
+   * `null` for a provisioning-org job. OPTIONAL on read: a session memoised
+   * before this field existed has none, and every such session is a
+   * provisioning-org job, so it de-registers through the default.
+   */
+  readonly runnerTarget?: GithubOrgTarget | null;
   /** ISO-8601 — when the container was booted, the origin both deadlines run from. */
   readonly bootedAt: string;
   /** ISO-8601 — GitHub's own queue instant, which boot latency is measured from. */
@@ -475,7 +499,9 @@ export type RunIntentOutcome =
    * GitHub could not be asked to register a runner right now. RETRYABLE — the
    * claim is released and the intent stays pending for the next sweep.
    *
-   * TWO causes, deliberately one outcome (MOTIR-2011): the registration ceiling
+   * THREE causes, deliberately one outcome (MOTIR-2011, MOTIR-8941): a boot that
+   * failed transiently and has attempts left re-queues the same way.
+   * The first two: the registration ceiling
    * is exhausted (`retryAfterSeconds` set, when GitHub said when), or the mint
    * did not answer inside its deadline (`retryAfterSeconds: null`). They differ
    * in what caused the wait and not at all in what the fleet should DO — the job
@@ -883,7 +909,7 @@ export const ciRunnerBootService = {
     // The row vanished between the teardown and the write-back (a tenant
     // teardown, a cascade): the container is gone, which is what mattered.
     if (!intent) return true;
-    await deregisterQuietly(intent.githubRunnerId, intent.id);
+    await deregisterQuietly(intent.githubRunnerId, intent.id, fleetRunnerTargetFor(intent));
     await settleIntent(intent.id, intent.projectId, {
       status: CI_RUNNER_INTENT_FAILED,
       teardownReason: 'reaped',
@@ -950,6 +976,10 @@ export const ciRunnerBootService = {
       size: FLEET_CONTAINER_SIZE,
       timeoutSeconds,
       region,
+      // Native disk for the runner's Docker daemon (MOTIR-8839): on the Machine's
+      // rootfs it can only use `vfs`, which fills the disk on the first
+      // `services:` job.
+      dockerVolumeGb: ciDockerVolumeGb(),
       env: {
         // The credential, injected at boot and never baked into the image (§4).
         ACTIONS_RUNNER_INPUT_JITCONFIG: encodedJitConfig,
@@ -1110,10 +1140,14 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
     // 1, `visibility: "all"`), which would silently restore the cross-tenant
     // pickup the per-project group exists to prevent — a runner booted for
     // project X taking project Y's job, including one the gate DECLINED.
-    runnerGroupId = await projectRunnerGroupService.requireRunnerGroupId({
-      projectId: intent.projectId,
-      workspaceId: intent.workspaceId,
-    });
+    //
+    // Read in the org that owns the job's repository (MOTIR-8711): the same
+    // `intent.repoOwner` `fleetRunnerTargetFor` keys the mint on, so the group
+    // and the runner cannot land in different orgs.
+    runnerGroupId = await projectRunnerGroupService.requireRunnerGroupIdFor(
+      { projectId: intent.projectId, workspaceId: intent.workspaceId },
+      intent.repoOwner,
+    );
   } catch (err) {
     const detail =
       err instanceof RunnerGroupNotProvisionedError
@@ -1139,17 +1173,23 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
   // The credential the container receives. ONE runner, ONE config, no
   // registration capability inside the container (§7.4).
   const runnerName = runnerNameFor(intent);
+  // The org the runner is registered in — the job repository's own, through the
+  // installation the delivery arrived on; `undefined` for the provisioning org.
+  const runnerTarget = fleetRunnerTargetFor(intent);
   let jit;
   try {
-    jit = await runnerJitConfigClient.mint({
-      name: runnerName,
-      runnerGroupId,
-      // EXACTLY the one §M-compliant label. Not `self-hosted`, not `linux`, not
-      // `x64`: a runner carrying GitHub's defaults would match some unrelated
-      // tenant's `runs-on: self-hosted`, which is §7.3's cross-tenant pickup
-      // arriving through the label axis instead of the group axis.
-      labels: [MOTIR_RUNNER_LABEL],
-    });
+    jit = await runnerJitConfigClient.mint(
+      {
+        name: runnerName,
+        runnerGroupId,
+        // EXACTLY the one §M-compliant label. Not `self-hosted`, not `linux`, not
+        // `x64`: a runner carrying GitHub's defaults would match some unrelated
+        // tenant's `runs-on: self-hosted`, which is §7.3's cross-tenant pickup
+        // arriving through the label axis instead of the group axis.
+        labels: [MOTIR_RUNNER_LABEL],
+      },
+      runnerTarget,
+    );
   } catch (err) {
     if (err instanceof RunnerRegistrationRateLimitedError) {
       // Early, not broken. Release the claim and let the next sweep try — a
@@ -1170,7 +1210,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
       // Failing it would dead-letter a run whose only sin is that a third party
       // was slow, and `retryPolicy: 'none'` means dead-lettered is where it would
       // stay.
-      await deregisterByNameQuietly(runnerName, intentId);
+      await deregisterByNameQuietly(runnerName, intentId, runnerTarget);
       await releaseClaim(intentId);
       console.warn('[ciRunnerBootService] the JIT mint blew its deadline — claim released', {
         intentId,
@@ -1178,6 +1218,30 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
         timeoutMs: err.timeoutMs,
       });
       return terminal({ outcome: 'rate_limited', retryAfterSeconds: null });
+    }
+    if (err instanceof OrgTargetAuthError) {
+      // The installation token for a connected org could not be minted
+      // (MOTIR-8711). GitHub UNREACHABLE is early, not broken — the same answer
+      // as a blown deadline. A REFUSAL (403, 404, …) is the installation lacking
+      // the grant or the App being gone: no retry fixes that, so the job settles
+      // with the org, the installation and the status named. Never a token.
+      if (err.status === null) {
+        await releaseClaim(intentId);
+        console.warn(
+          '[ciRunnerBootService] GitHub unreachable minting an org token — claim released',
+          {
+            intentId,
+            org: err.org,
+            installationId: err.installationId,
+          },
+        );
+        return terminal({ outcome: 'rate_limited', retryAfterSeconds: null });
+      }
+      const detail =
+        `could not mint a JIT config in ${err.org}: installation ${err.installationId} ` +
+        `was refused a token (HTTP ${err.status})`;
+      await settleFailed(intentId, intent.projectId, 'provision_failed', detail);
+      return terminal({ outcome: 'provision_failed', detail });
     }
     const detail = `could not mint a JIT config: ${detailOf(err)}`;
     await settleFailed(intentId, intent.projectId, 'provision_failed', detail);
@@ -1212,7 +1276,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
     // A MINTED-BUT-UNUSED JIT CONFIG. The runner is registered at GitHub and no
     // container will ever claim it, so it is de-registered here rather than
     // left to GitHub — which does not clean it up (§7.4, verified).
-    await deregisterQuietly(jit.runnerId, intentId);
+    await deregisterQuietly(jit.runnerId, intentId, runnerTarget);
 
     // ⚠️ §6.2 of `docs/decisions/fleet-image-pull.md` — AN UNPULLABLE IMAGE IS
     // ITS OWN NAMED CONDITION, not a generic boot failure. It is the one
@@ -1236,6 +1300,19 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
     }
 
     const detail = `could not boot a container: ${detailOf(err)}`;
+    // A provider refusal or a blown deadline is transient until it repeats: the
+    // intent goes back to the pool rather than taking a runner away from the jobs
+    // queued at GitHub (MOTIR-8941).
+    const attempt = intent.bootAttempts + 1;
+    if (attempt < MAX_BOOT_ATTEMPTS) {
+      await ciRunnerAdmissionService.releaseClaimForRetry(intentId);
+      console.warn('[ciRunnerBootService] the boot failed — claim released for another attempt', {
+        intentId,
+        attempt,
+        detail,
+      });
+      return terminal({ outcome: 'rate_limited', retryAfterSeconds: null });
+    }
     await settleFailed(intentId, intent.projectId, 'provision_failed', detail);
     return terminal({ outcome: 'provision_failed', detail });
   }
@@ -1266,8 +1343,10 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
         id: handle.id,
         region: handle.region,
         createdAt: handle.createdAt.toISOString(),
+        ...(handle.volumeId ? { volumeId: handle.volumeId } : {}),
       },
       githubRunnerId: jit.runnerId,
+      runnerTarget: runnerTarget ?? null,
       bootedAt: bootedAt.toISOString(),
       queuedAt: intent.queuedAt.toISOString(),
       attribution: {
@@ -1329,6 +1408,7 @@ async function pollContainerOnce(
       id: session.handle.id,
       region: session.handle.region,
       createdAt: new Date(session.handle.createdAt),
+      ...(session.handle.volumeId ? { volumeId: session.handle.volumeId } : {}),
     });
   } catch (err) {
     // ⚠️ A SINGLE PROVIDER BLIP MUST NOT KILL A CUSTOMER'S JOB. Without this
@@ -1405,6 +1485,7 @@ async function settleSupervisedContainer(
     id: session.handle.id,
     region: session.handle.region,
     createdAt: new Date(session.handle.createdAt),
+    ...(session.handle.volumeId ? { volumeId: session.handle.volumeId } : {}),
   };
 
   // The started instant is recorded here rather than mid-loop: it is known once
@@ -1445,7 +1526,7 @@ async function settleSupervisedContainer(
     size: FLEET_CONTAINER_SIZE,
     observedStartedAt,
   });
-  await deregisterQuietly(session.githubRunnerId, intentId);
+  await deregisterQuietly(session.githubRunnerId, intentId, session.runnerTarget ?? undefined);
 
   if (usage) {
     await recordContainerUsage(usage);
@@ -1516,10 +1597,14 @@ async function teardownQuietly(
 /** De-register the GitHub runner. Idempotent and best-effort: on the happy path
  *  the ephemeral runner already de-registered itself and GitHub answers 404,
  *  which the client treats as success. */
-async function deregisterQuietly(runnerId: number | null, intentId: string): Promise<void> {
+async function deregisterQuietly(
+  runnerId: number | null,
+  intentId: string,
+  target: GithubOrgTarget | undefined,
+): Promise<void> {
   if (runnerId === null) return;
   try {
-    await runnerJitConfigClient.deleteRunner(runnerId);
+    await runnerJitConfigClient.deleteRunner(runnerId, target);
   } catch (err) {
     console.error(
       '[ciRunnerBootService] could not de-register a runner — it may be left dangling',
@@ -1537,9 +1622,13 @@ async function deregisterQuietly(runnerId: number | null, intentId: string): Pro
  * would replace a retryable outcome with an untyped one. A runner that could not
  * be removed is logged loudly and left to `sweepStaleClaims`.
  */
-async function deregisterByNameQuietly(runnerName: string, intentId: string): Promise<void> {
+async function deregisterByNameQuietly(
+  runnerName: string,
+  intentId: string,
+  target: GithubOrgTarget | undefined,
+): Promise<void> {
   try {
-    const removed = await runnerJitConfigClient.deleteRunnersNamed(runnerName);
+    const removed = await runnerJitConfigClient.deleteRunnersNamed(runnerName, target);
     if (removed.length > 0) {
       console.warn('[ciRunnerBootService] de-registered a runner left by a timed-out mint', {
         intentId,
@@ -1688,7 +1777,7 @@ async function sweepStaleClaims(now: () => Date): Promise<number> {
   const claimedBefore = new Date(now().getTime() - STALE_CLAIM_MS);
   const stale = await withSystemContext((tx) => intents.listStaleClaims(claimedBefore, 50, tx));
   for (const intent of stale) {
-    await deregisterQuietly(intent.githubRunnerId, intent.id);
+    await deregisterQuietly(intent.githubRunnerId, intent.id, fleetRunnerTargetFor(intent));
     await settleIntent(intent.id, intent.projectId, {
       status: CI_RUNNER_INTENT_FAILED,
       teardownReason: 'provision_failed',

@@ -274,7 +274,7 @@ describe('the canvas pane', () => {
     handler = ordinary({ before: [], after: [] });
     renderHost({ ...CARD, identifier: 'PROD-88', title: 'A very long card title '.repeat(20) });
     await waitFor(() => expect(posted('/api/ai/guide/settle')).toHaveLength(1));
-    const frame = screen.getByTestId('planning-resizable-frame');
+    const frame = screen.getByTestId('resizable-split');
     const canvasPane = screen.getByTestId('guide-crumb').parentElement?.parentElement;
     expect(canvasPane?.parentElement).toBe(frame);
     expect(canvasPane?.className).toContain('min-w-0');
@@ -563,5 +563,135 @@ describe('the person on the canvas and in the rail', () => {
     expect(reread).toHaveBeenCalledTimes(1);
     // The card's own page is re-read by the overlay's close, not by the host.
     expect(refresh).not.toHaveBeenCalled();
+  });
+});
+
+describe('a re-plan offer (Story MOTIR-8684 · MOTIR-8694)', () => {
+  const OFFER = {
+    reason: 'The key was already rotated.',
+    requestMd: 'SECRET-REQUEST-TEXT: re-plan PROD-7.',
+    requestedTargetKey: null,
+    targetKey: 'PROD-7',
+    targetResolution: 'guided_card' as const,
+    declinedAt: null,
+    declinedById: null,
+    confirmedAt: null,
+    confirmedById: null,
+    confirmedSessionId: null,
+  };
+  const OFFER_TURN = turn(1, {
+    role: 'assistant',
+    body: 'PROD-7 is wrong.',
+    authorId: null,
+    guide: { ...record([{ type: 'needs_replan', reason: OFFER.reason }]), replanOffer: OFFER },
+  });
+
+  /** The ordinary server, except the opening turn lands the offer. */
+  function offered(extra?: Handler): Handler {
+    listTodosAction.mockResolvedValue({
+      ok: true,
+      items: [todo('r1', 'One', true), todo('r2', 'Two')],
+      progress: { done: 1, total: 2 },
+    });
+    return (method, path, body) => {
+      if (method === 'POST' && path === '/api/ai/guide') {
+        return json({
+          outcome: 'guiding',
+          jobId: 'job-1',
+          turnId: 't0',
+          started: true,
+          session: thread([OPENING]),
+          planning: { canPlan: true, reason: null },
+        });
+      }
+      if (method === 'GET' && path === '/api/ai/ask/job-1/stream') {
+        return sse('event: done\ndata: {}\n\n');
+      }
+      if (method === 'POST' && path === '/api/ai/guide/settle') {
+        return json({
+          outcome: 'guided',
+          session: thread([OPENING, OFFER_TURN]),
+          record: OFFER_TURN.guide,
+        });
+      }
+      return extra?.(method, path, body);
+    };
+  }
+
+  it('Decline posts once with the session and turn ids, then the offer reads Declined', async () => {
+    handler = offered((method, path) =>
+      method === 'POST' && path === '/api/ai/guide/offer/decline'
+        ? json(
+            thread([
+              OPENING,
+              {
+                ...OFFER_TURN,
+                guide: {
+                  ...OFFER_TURN.guide!,
+                  replanOffer: { ...OFFER, declinedAt: '2026-10-15T11:00:00.000Z' },
+                },
+              },
+            ]),
+          )
+        : undefined,
+    );
+    renderHost({ ...CARD, identifier: 'PROD-81' });
+    fireEvent.click(await screen.findByTestId('guide-offer-decline'));
+    await waitFor(() =>
+      expect(screen.getByTestId('guide-offer').getAttribute('data-offer-state')).toBe('declined'),
+    );
+    expect(posted('/api/ai/guide/offer/decline')).toHaveLength(1);
+    expect(posted('/api/ai/guide/offer/decline')[0]!.body).toEqual({
+      sessionId: 's1',
+      turnId: 't1',
+    });
+    // Declining plans nothing: no turn ran for it.
+    expect(posted('/api/ai/guide')).toHaveLength(1);
+    expect(screen.getByTestId('guide-offer-resume').textContent).toContain('step 2');
+  });
+
+  it('Confirm rewrites the address to the offer launch: the turn id, never the request text', async () => {
+    handler = offered();
+    renderHost({ ...CARD, identifier: 'PROD-82' });
+    fireEvent.click(await screen.findByTestId('guide-offer-confirm'));
+    const href = decodeURIComponent(window.location.href);
+    expect(href).toContain('planFrom=guide-offer');
+    expect(href).toContain('planOffer=t1');
+    expect(href).not.toContain('SECRET-REQUEST-TEXT');
+    // Navigation, not a write: the rail made no planning request of its own.
+    expect(sent.filter((r) => /plan/.test(r.path) && r.method === 'POST')).toEqual([]);
+  });
+
+  it('a refused decline (the offer was already decided) speaks in the closed words', async () => {
+    handler = offered((method, path) =>
+      method === 'POST' && path === '/api/ai/guide/offer/decline'
+        ? json({ code: 'GUIDE_REPLAN_OFFER_NOT_OPEN' }, 409)
+        : undefined,
+    );
+    renderHost({ ...CARD, identifier: 'PROD-83' });
+    fireEvent.click(await screen.findByTestId('guide-offer-decline'));
+    await waitFor(() => expect(screen.getByTestId('guide-error').textContent).toContain('decided'));
+    expect(screen.getByTestId('guide-offer').getAttribute('data-offer-state')).toBe('undecided');
+  });
+
+  it('Motir AI not configured: the reason line, no Confirm, Decline stays', async () => {
+    const base = offered();
+    handler = (method, path, body) =>
+      method === 'POST' && path === '/api/ai/guide'
+        ? json({
+            outcome: 'guiding',
+            jobId: 'job-1',
+            turnId: 't0',
+            started: true,
+            session: thread([OPENING]),
+            planning: { canPlan: false, reason: 'ai_not_configured' },
+          })
+        : base(method, path, body);
+    renderHost({ ...CARD, identifier: 'PROD-84' });
+    expect((await screen.findByTestId('guide-offer-cannot-plan')).textContent).toContain(
+      'isn’t set up',
+    );
+    expect(screen.queryByTestId('guide-offer-confirm')).toBeNull();
+    expect(screen.getByTestId('guide-offer-decline')).toBeTruthy();
   });
 });

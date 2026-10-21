@@ -182,6 +182,7 @@ const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   skeleton: true,
   // MOTIR-5409 — the folder tools.
   list_folders: true,
+  get_section_sets: true,
   create_folder: true,
   update_folder: true,
   delete_folder: true,
@@ -875,6 +876,7 @@ describe('presentMcpProjectRow', () => {
     onboardingRanAt: null,
     aiGenerateExplanations: false,
     prMergeMode: 'manual' as const,
+    autoTranslateWorkContent: false,
   };
 
   it('is a pure WIDENING — it validates against v1’s `Project`', () => {

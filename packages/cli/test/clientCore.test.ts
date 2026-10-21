@@ -581,6 +581,46 @@ describe('typed wrappers — each names its operation and forwards its arguments
     await expect(connected().heartbeatDispatchRun('run_1')).rejects.toThrow('No such run.');
   });
 
+  // ── The run's build-through record and STOP report (MOTIR-8722) ───────────
+  it('posts a run’s discrepancy points and its STOP on the run’s own paths', async () => {
+    const points = [{ planAsked: 'a', built: 'b', why: 'c' }];
+    server.scriptV1({
+      'POST /api/v1/dispatch-runs/{id}/discrepancy': { body: { commentId: 'c1', recorded: true } },
+      'POST /api/v1/dispatch-runs/{id}/stop': { body: { commentId: 'c2', movedToPlanning: true } },
+    });
+    await expect(
+      connected().recordDispatchRunDiscrepancy({ runId: 'run_1', key: 'PROD-1', points }),
+    ).resolves.toEqual({ commentId: 'c1', recorded: true });
+    expect(server.v1Calls[0]?.path).toBe('/api/v1/dispatch-runs/run_1/discrepancy');
+    expect(server.v1Calls[0]?.body).toEqual({ key: 'PROD-1', points });
+
+    await expect(
+      connected().reportDispatchRunStop({
+        runId: 'run_1',
+        key: 'PROD-1',
+        comment: 'no such table',
+        toPlanning: true,
+        requirement: { outcome: 'O' },
+      }),
+    ).resolves.toEqual({ commentId: 'c2', movedToPlanning: true });
+    expect(server.v1Calls[1]?.path).toBe('/api/v1/dispatch-runs/run_1/stop');
+    expect(server.v1Calls[1]?.body).toEqual({
+      key: 'PROD-1',
+      comment: 'no such table',
+      toPlanning: true,
+      requirement: { outcome: 'O' },
+    });
+
+    // No brief: the body carries no `requirement` key at all.
+    await connected().reportDispatchRunStop({
+      runId: 'run_1',
+      key: 'PROD-1',
+      comment: 'x',
+      toPlanning: false,
+    });
+    expect(server.v1Calls[2]?.body).toEqual({ key: 'PROD-1', comment: 'x', toPlanning: false });
+  });
+
   // ── The REPAIR claim (MOTIR-5464 / MOTIR-5465) ────────────────────────────
   it('claims a REPAIR on the work item’s own path and restates every pull request', async () => {
     const pullRequest = {
@@ -1101,6 +1141,10 @@ describe('typed wrappers — each names its operation and forwards its arguments
     expect(server.v1Calls[0]?.query.get('sessionBranch')).toBeNull();
     expect(server.v1Calls[1]?.query.get('sessionBranch')).toBe('motir/auto-1');
     expect(server.v1Calls[2]?.query.get('sessionBranch')).toBeNull();
+    // EVERY read declares that this CLI posts the agent's self-report (MOTIR-8810):
+    // without it the server routes the unbuildable report through the MCP tool,
+    // which is right for 0.12.0 and wrong for a CLI that makes the post itself.
+    expect(server.v1Calls.map((c) => c.query.get('agentReport'))).toEqual(['1', '1', '1']);
     // The field-with-no-reader rule, and what it looks like once a reader
     // arrives. The two SCALAR repo-plumbing fields were dropped while nothing
     // routed on them; MOTIR-3588 made the resolution read them — a missing

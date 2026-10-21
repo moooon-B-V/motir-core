@@ -45,10 +45,15 @@ function DataExportReadyEmail({
   recipientName,
   paneUrl,
   retentionDays,
+  locale,
   t,
 }: DataExportReadyEmailProps & { t: T }) {
   return (
-    <EmailLayout preview={t('preview')} footer={t('retention', { days: retentionDays })}>
+    <EmailLayout
+      locale={locale}
+      preview={t('preview')}
+      footer={t('retention', { days: retentionDays })}
+    >
       <Text style={greeting}>{t('greeting', { name: recipientName })}</Text>
       <Text style={lede}>{t('lede')}</Text>
       <Section style={cta}>

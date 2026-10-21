@@ -314,7 +314,7 @@ export function PublicSubdomainCard({
             spellCheck={false}
             autoComplete="off"
           />
-          <div className="flex flex-col gap-1.5 rounded-(--radius-control) bg-(--el-tint-yellow) px-4 py-3">
+          <div className="flex flex-col gap-1.5 rounded-(--radius-control) bg-(--el-tint-yellow) px-(--spacing-control-x-16) py-(--spacing-card-padding-12)">
             <span className="font-sans text-[13px] font-semibold text-(--el-text-strong)">
               {t('rename.warningTitle')}
             </span>
@@ -370,7 +370,7 @@ export function PublicSubdomainCard({
             ))}
           </div>
 
-          <div className="flex flex-col gap-1.5 rounded-(--radius-control) bg-(--el-tint-rose) px-4 py-3">
+          <div className="flex flex-col gap-1.5 rounded-(--radius-control) bg-(--el-tint-rose) px-(--spacing-control-x-16) py-(--spacing-card-padding-12)">
             <span className="font-sans text-[13px] font-semibold text-(--el-text-strong)">
               {t('release.warningTitle', { count: releasedHostnames.length })}
             </span>
@@ -528,7 +528,7 @@ function ClaimedRows({
 function ReleasedRow({ host, live }: { host: string; live: boolean }) {
   const t = useTranslations('settings.publicAddress');
   return (
-    <div className="flex min-h-(--height-control) items-center gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface-soft) px-3 py-2">
+    <div className="flex min-h-(--height-control) items-center gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x-12) py-(--spacing-control-y-8)">
       <span className="min-w-0 flex-1 font-mono text-[13px] break-words text-(--el-text)">
         {host}
       </span>
@@ -554,7 +554,7 @@ function AddressRow({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-(--height-control) items-center gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface-soft) px-3 py-2">
+    <div className="flex min-h-(--height-control) items-center gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x-12) py-(--spacing-control-y-8)">
       <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text)">{host}</span>
       {pill}
       {actions}

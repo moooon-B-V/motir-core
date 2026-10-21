@@ -27,7 +27,62 @@ export const REPORT_DEFAULTS = {
   /** The workload report's default measure (Subtask 8.8.13) — story points,
    * Motir's workload unit. */
   measure: 'story_points' as WorkloadMeasureDto,
+  /** Velocity's default window — the last 7 completed sprints (mirrors the
+   * service's `DEFAULT_LAST_N`). */
+  velocityCount: 7,
+  /** Created vs Resolved: the difference-area LINE form. */
+  form: 'line' as CvrChartForm,
 } as const;
+
+/** Created vs Resolved's chart form: the difference-area line, or grouped bars. */
+export type CvrChartForm = 'line' | 'bars';
+/** Which Created vs Resolved series are drawn — never "none". */
+export type CvrSeries = 'both' | 'created' | 'resolved';
+
+/** Coerce a raw `?form` to a chart form; anything but `bars` is the line. */
+export function coerceChartForm(raw: string | null | undefined): CvrChartForm {
+  return raw === 'bars' ? 'bars' : REPORT_DEFAULTS.form;
+}
+
+/** Coerce a raw `?series` to a series choice. Missing, unknown, empty and `none`
+ * all mean both — a URL can never express zero series. */
+export function coerceCvrSeries(raw: string | null | undefined): CvrSeries {
+  return raw === 'created' || raw === 'resolved' ? raw : 'both';
+}
+
+/**
+ * The sprint counts Velocity's "Sprints" stepper moves through (design notes,
+ * "Sprint pickers"): 3 · 5 · 7 · 10 · 15 · 26 · 52. The top rung is the
+ * service's `MAX_LAST_N`, so the control can never ask for more than the read
+ * will return.
+ */
+export const VELOCITY_COUNT_LADDER = [3, 5, 7, 10, 15, 26, 52] as const;
+
+/** Coerce a raw `?count` to a valid Velocity window: the default for anything
+ * that is not a whole number ≥ 1, clamped to the ladder's top (52). Never
+ * throws — a hand-edited link degrades instead of erroring. */
+export function coerceVelocityCount(raw: string | null | undefined): number {
+  if (raw === null || raw === undefined || !/^-?\d+$/.test(raw.trim())) {
+    return REPORT_DEFAULTS.velocityCount;
+  }
+  const n = Number(raw);
+  if (n < 1) return REPORT_DEFAULTS.velocityCount;
+  return Math.min(n, VELOCITY_COUNT_LADDER[VELOCITY_COUNT_LADDER.length - 1]!);
+}
+
+/** Step the Velocity count one rung along {@link VELOCITY_COUNT_LADDER}; an
+ * off-ladder value snaps to the nearest rung first (ties → the larger). */
+export function stepVelocityCount(current: number, dir: -1 | 1): number {
+  const ladder = VELOCITY_COUNT_LADDER;
+  const snapped = ladder.reduce((best, rung) =>
+    Math.abs(rung - current) < Math.abs(best - current) ||
+    (Math.abs(rung - current) === Math.abs(best - current) && rung > best)
+      ? rung
+      : best,
+  );
+  const i = ladder.indexOf(snapped);
+  return ladder[Math.min(Math.max(i + dir, 0), ladder.length - 1)] ?? snapped;
+}
 
 /** Coerce a raw `?measure` to a valid workload measure, defaulting (never
  * throwing — the page-level forgiving parse; the widget route keeps the strict
@@ -112,6 +167,14 @@ export interface ReportPageParams {
   statistic?: string;
   /** The workload report's measure (Subtask 8.8.13). */
   measure?: WorkloadMeasureDto;
+  /** Velocity: the completed sprint the window ends at (omitted = the latest). */
+  endingAt?: string | null;
+  /** Velocity: how many completed sprints the window covers (omitted at 7). */
+  count?: number;
+  /** Created vs Resolved: the chart form (omitted for the line). */
+  form?: CvrChartForm;
+  /** Created vs Resolved: the visible series (omitted when both). */
+  series?: CvrSeries;
 }
 
 /**
@@ -133,6 +196,14 @@ export function buildReportHref(pathname: string, params: ReportPageParams): str
   }
   if (params.measure && params.measure !== REPORT_DEFAULTS.measure) {
     sp.set('measure', params.measure);
+  }
+  if (params.endingAt) sp.set('endingAt', params.endingAt);
+  if (params.count !== undefined && params.count !== REPORT_DEFAULTS.velocityCount) {
+    sp.set('count', String(params.count));
+  }
+  if (params.form === 'bars') sp.set('form', 'bars');
+  if (params.series === 'created' || params.series === 'resolved') {
+    sp.set('series', params.series);
   }
   const qs = sp.toString();
   return qs ? `${pathname}?${qs}` : pathname;

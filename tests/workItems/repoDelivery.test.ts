@@ -22,7 +22,8 @@ const fact = (
   merged: boolean,
   baseRef: string | null,
   repoDefaultBranch = 'main',
-): LinkedChangeRequestCompletionFact => ({ repoName, merged, baseRef, repoDefaultBranch });
+  open = false,
+): LinkedChangeRequestCompletionFact => ({ repoName, merged, baseRef, repoDefaultBranch, open });
 
 const delivery = (repo: string, state: RepoDeliveryState): RepoDelivery => ({
   repo,
@@ -342,5 +343,84 @@ describe('delivered_without_change_request', () => {
     expect(
       awaitingRepoRows([delivery('motir-skills', 'delivered_without_change_request')], []),
     ).toEqual([delivery('motir-skills', 'delivered_without_change_request')]);
+  });
+});
+
+// MOTIR-8811 — a repository a container's CHILD delivered through its own merged
+// pull request. The evidence is computed from the tree by `resolveExpectedRepos`
+// (merged onto that repository's default branch, nothing still open); these pin
+// what the classifier does with it.
+describe('delivered_by_child', () => {
+  const byChild = (repo: string) => ({ repo, deliveredByChild: true });
+
+  it('promotes an AWAITING repository a child delivered — the card’s reproduction', () => {
+    expect(
+      classifyRepoDelivery(['motir-core', byChild('motir-ai')], [fact('motir-core', true, 'main')]),
+    ).toEqual([
+      { repo: 'motir-core', state: 'delivered', primary: true },
+      { repo: 'motir-ai', role: undefined, state: 'delivered_by_child', primary: false },
+    ]);
+  });
+
+  it('does NOT hold the item — it is in no shortfall list', () => {
+    const shortfall = repoSetShortfall(
+      classifyRepoDelivery(['motir-core', byChild('motir-ai')], [fact('motir-core', true, 'main')]),
+    );
+    expect(hasRepoSetShortfall(shortfall)).toBe(false);
+  });
+
+  it('keeps holding without the evidence', () => {
+    const shortfall = repoSetShortfall(
+      classifyRepoDelivery(
+        ['motir-core', { repo: 'motir-ai', deliveredByChild: false }],
+        [fact('motir-core', true, 'main')],
+      ),
+    );
+    expect(shortfall.outstanding).toEqual(['motir-ai']);
+  });
+
+  it('wins over shippedWithoutChangeRequest — a merge reached the trunk', () => {
+    expect(
+      classifyRepoDelivery(
+        [{ repo: 'motir-ai', deliveredByChild: true, shippedWithoutChangeRequest: true }],
+        [],
+      )[0]!.state,
+    ).toBe('delivered_by_child');
+  });
+
+  it('stays awaiting while the item has an OPEN change request of its own there', () => {
+    expect(
+      classifyRepoDelivery(
+        [byChild('motir-ai')],
+        [fact('motir-ai', false, 'main', 'main', true)],
+      )[0]!.state,
+    ).toBe('awaiting');
+  });
+
+  it('an abandoned closed attempt of the item’s own does not take it back', () => {
+    expect(
+      classifyRepoDelivery([byChild('motir-ai')], [fact('motir-ai', false, 'main')])[0]!.state,
+    ).toBe('delivered_by_child');
+  });
+
+  it('the item’s own merge with an UNRECORDED base stays unknown', () => {
+    expect(
+      classifyRepoDelivery([byChild('motir-ai')], [fact('motir-ai', true, null)])[0]!.state,
+    ).toBe('unknown');
+  });
+
+  it('the row’s own establish state still decides first', () => {
+    expect(
+      classifyRepoDelivery(
+        [{ repo: 'motir-ai', establishState: 'proposed', deliveredByChild: true }],
+        [],
+      )[0]!.state,
+    ).toBe('unestablished');
+  });
+
+  it('keeps a placeholder row in the Development section — the item has no pull request there', () => {
+    expect(awaitingRepoRows([delivery('motir-ai', 'delivered_by_child')], [])).toEqual([
+      delivery('motir-ai', 'delivered_by_child'),
+    ]);
   });
 });

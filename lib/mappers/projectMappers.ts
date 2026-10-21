@@ -37,6 +37,7 @@ export function toProjectDTO(project: Project, aliases?: ProjectKeyAlias[]): Pro
     onboardingRanAt: project.onboardingRanAt ? project.onboardingRanAt.toISOString() : null,
     aiGenerateExplanations: project.aiGenerateExplanations,
     prMergeMode: project.prMergeMode,
+    autoTranslateWorkContent: project.autoTranslateWorkContent,
     ...(aliases
       ? {
           createdAt: project.createdAt.toISOString(),

@@ -3,10 +3,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { Cloud, CloudOff, TriangleAlert } from 'lucide-react';
+import { Cloud, CloudOff, List, TriangleAlert, Workflow } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { Segmented } from '@/components/ui/Segmented';
+import { OverlayExitButton } from '@/components/ui/OverlayExitButton';
+import { ResizableSplit } from '@/components/split/ResizableSplit';
 import { RunTonePill } from '@/components/runs/RunTonePill';
+import { FixInMyAgentControl } from '@/components/agentRuns/FixInMyAgentControl';
+import { announceRunsChanged } from '@/components/hosted/runsChangedSignal';
 import { RunCanvasPane } from '@/app/(authed)/runs/_components/RunCanvasPane';
+import { RunSetListPane } from '@/app/(authed)/runs/_components/RunSetListPane';
+import { useRunSetLevel } from '@/app/(authed)/runs/_components/useRunSetLevel';
 import { RunFindings } from '@/app/(authed)/runs/_components/RunFindings';
 import { RunLogPane } from '@/app/(authed)/runs/_components/RunLogPane';
 import { HostedRunCancel } from '@/app/(authed)/runs/_components/HostedRunCancel';
@@ -19,6 +26,10 @@ import {
   agentOf,
   agentPanelHref,
 } from '@/app/(authed)/runs/_components/AgentRunParts';
+import {
+  RUN_FRAME_STACKED_ROWS,
+  RUN_LOG_WIDTH_STORAGE_KEY,
+} from '@/app/(authed)/runs/_components/runFrameRows';
 import { useRunEvents } from '@/app/(authed)/runs/_components/useRunEvents';
 import type { DispatchRunDetailDto, DispatchRunEventDto } from '@/lib/dto/dispatchRuns';
 import { formatRunDuration, formatRunInstant } from '@/lib/runs/runClock';
@@ -36,7 +47,7 @@ import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 // server has nothing to answer.
 //
 // The dialog's a11y is the SHIPPED `Modal`'s (Radix): focus is trapped while
-// open, ESC closes, and focus RETURNS to the row that opened it. The canvas
+// open, ESC closes, and focus RETURNS to the row that opened it (restored by hand below, as no Trigger exists). The canvas
 // inside owns `/` for search and does NOT take ESC — a full-screen canvas in a
 // dialog is exactly where two key handlers collide, and the dialog's must win.
 
@@ -57,6 +68,8 @@ export interface RunModalProps {
   viewerId?: string | null;
 }
 
+const NO_CARDS: DispatchRunDetailDto['cards'] = [];
+
 type Load =
   | { state: 'loading' }
   | { state: 'ready'; run: DispatchRunDetailDto }
@@ -65,7 +78,22 @@ type Load =
 
 export function RunModal({ runId, projectKey, onClose, viewerId = null }: RunModalProps) {
   const t = useTranslations('runs');
+  const tc = useTranslations('common');
   const [load, setLoad] = useState<Load>({ state: 'loading' });
+  // Radix returns focus to a Dialog.Trigger, and this dialog has none: the modal
+  // is mounted by the URL, so the element that held focus (the row's door) is
+  // remembered here, before the dialog takes focus, and restored on unmount.
+  const opener = useRef<Element | null>(
+    typeof document === 'undefined' ? null : document.activeElement,
+  );
+  useEffect(() => {
+    const el = opener.current;
+    return () => {
+      setTimeout(() => {
+        if (el instanceof HTMLElement && el.isConnected) el.focus();
+      }, 0);
+    };
+  }, []);
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
   // ONE connection for the whole modal (MOTIR-3983): the findings strip and the
   // log pane are two readers of the same stream, not two streams.
@@ -75,6 +103,12 @@ export function RunModal({ runId, projectKey, onClose, viewerId = null }: RunMod
   const [reloadKey, setReloadKey] = useState(0);
 
   const run = load.state === 'ready' ? load.run : null;
+  const [setView, setSetView] = useState<'list' | 'canvas'>('canvas');
+  const { read: readSet, byId: setById } = useRunSetLevel(
+    run?.cards ?? NO_CARDS,
+    projectKey,
+    reloadKey,
+  );
 
   const fetchRun = useCallback(async (): Promise<void> => {
     try {
@@ -177,7 +211,13 @@ export function RunModal({ runId, projectKey, onClose, viewerId = null }: RunMod
       // the border/radius/padding a `md` dialog wants would draw a frame around
       // the whole viewport.
       className="flex flex-col rounded-none border-0 p-0"
+      // The Modal's own corner X comes off: the exit is drawn top left, the way the
+      // plan overlay draws it, so Close and Esc land in one place (MOTIR-9070).
+      hideClose
     >
+      <div className="flex shrink-0 items-center gap-3 border-b border-(--el-border-soft) bg-(--el-surface) px-4 py-2">
+        <OverlayExitButton onClose={onClose} label={tc('close')} escLabel={t('escKey')} />
+      </div>
       {/* modal-scroll-container: measured 1280x700, tallest = a live run with 60 streamed log lines; the full-size panel IS the viewport and the canvas and log panes scroll (min-h-0 flex-1 overflow-auto), panel 700px */}
       {load.state === 'loading' ? (
         <div
@@ -202,7 +242,20 @@ export function RunModal({ runId, projectKey, onClose, viewerId = null }: RunMod
               on the agent's own interval (MOTIR-7023, Q3.3). */}
           {run.origin === 'instance' ? (
             <>
-              <AgentEndStrip run={run} />
+              <AgentEndStrip
+                run={run}
+                fixDoor={
+                  run.cards[0]?.key ? (
+                    <FixInMyAgentControl
+                      itemKey={run.cards[0].key}
+                      viewerId={viewerId}
+                      variant="modal"
+                      onStarted={() => announceRunsChanged(run.cards[0]!.key!)}
+                      onStateMoved={() => announceRunsChanged(run.cards[0]!.key!)}
+                    />
+                  ) : null
+                }
+              />
               <AgentRunCost run={run} live={isLiveRun(run.status)} variant="strip" />
             </>
           ) : null}
@@ -230,59 +283,102 @@ export function RunModal({ runId, projectKey, onClose, viewerId = null }: RunMod
               {t('reportingOffline')}
             </p>
           ) : null}
-          <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-            <section
-              className="flex min-h-0 min-w-0 flex-1 flex-col border-(--el-border-soft) lg:border-r"
-              aria-label={t('paneSet')}
-            >
-              <h2 className="border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2 text-xs font-semibold text-(--el-text-secondary)">
-                {run.cards.length === 0
-                  ? t('tookNone')
-                  : t('paneSetCount', { count: run.cards.length })}
-              </h2>
-              {run.cards.length === 0 ? (
-                // A run that took no work items is a REAL outcome — never an
-                // error face, and never an empty canvas the reader has to
-                // interpret.
-                <p
-                  className="flex flex-1 items-center justify-center p-(--spacing-card-padding) text-sm text-(--el-text-secondary)"
-                  data-testid="run-modal-no-members"
-                >
-                  {t('tookNoneBody')}
-                </p>
-              ) : (
-                <div className="min-h-0 flex-1">
-                  <RunCanvasPane
-                    run={run}
-                    projectKey={projectKey}
-                    onSelectWorkItem={setSelectedWorkItemId}
-                    reloadKey={reloadKey}
+          <ResizableSplit
+            className="min-h-0 flex-1"
+            storageKey={RUN_LOG_WIDTH_STORAGE_KEY}
+            dividerLabel={t('logDividerAria')}
+            stackedRows={RUN_FRAME_STACKED_ROWS}
+            left={
+              <section className="flex min-h-0 min-w-0 flex-col" aria-label={t('paneSet')}>
+                <div className="flex items-center justify-between gap-2 border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2">
+                  <h2 className="text-xs font-semibold text-(--el-text-secondary)">
+                    {run.cards.length === 0
+                      ? t('tookNone')
+                      : t('paneSetCount', { count: run.cards.length })}
+                  </h2>
+                  <Segmented<'list' | 'canvas'>
+                    label={t('viewSwitchAria')}
+                    value={setView}
+                    onChange={setSetView}
+                    options={[
+                      { value: 'list', label: t('viewList'), icon: <List className="size-3.5" /> },
+                      {
+                        value: 'canvas',
+                        label: t('viewCanvas'),
+                        icon: <Workflow className="size-3.5" />,
+                      },
+                    ]}
                   />
                 </div>
-              )}
-            </section>
-            {/* The right-hand REGION. The log pane itself is MOTIR-3962's; this
-                lays out the space and holds the selection it will consume, so
-                the two land independently. */}
-            <section
-              className="flex min-h-0 w-full shrink-0 flex-col lg:w-[26rem]"
-              aria-label={t('paneLog')}
-              data-testid="run-modal-log-region"
-              data-selected-work-item={selectedWorkItemId ?? ''}
-            >
-              <h2 className="flex items-center gap-2 border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2 text-xs font-semibold text-(--el-text-secondary)">
-                {t('paneLog')}
-                {/* Both paths run in Motir's cloud and walk the same phases. */}
-                {run.origin === 'hosted' || run.origin === 'instance' ? (
-                  <HostedPhaseChip run={run} events={events} />
-                ) : null}
-              </h2>
-              {/* PINNED ABOVE THE LOG, and absent entirely when the run
+                {run.cards.length === 0 ? (
+                  // A run that took no work items is a REAL outcome — never an
+                  // error face, and never an empty canvas the reader has to
+                  // interpret.
+                  <p
+                    className="flex flex-1 items-center justify-center p-(--spacing-card-padding) text-sm text-(--el-text-secondary)"
+                    data-testid="run-modal-no-members"
+                  >
+                    {t('tookNoneBody')}
+                  </p>
+                ) : (
+                  <div className="relative min-h-0 flex-1">
+                    {/* KEPT ALIVE, NOT UNMOUNTED: the canvas owns its zoom, focus
+                      and drill, and a switch to List and back must not lose them
+                      (the plan overlay's pattern, `PlanProposalViews`). */}
+                    <div
+                      className={
+                        setView === 'list'
+                          ? 'pointer-events-none invisible absolute inset-0'
+                          : 'h-full'
+                      }
+                      inert={setView === 'list'}
+                      aria-hidden={setView === 'list' || undefined}
+                      data-testid="run-canvas-keepalive"
+                    >
+                      <RunCanvasPane
+                        run={run}
+                        projectKey={projectKey}
+                        onSelectWorkItem={setSelectedWorkItemId}
+                        reloadKey={reloadKey}
+                        readSet={readSet}
+                      />
+                    </div>
+                    {setView === 'list' ? (
+                      <RunSetListPane
+                        run={run}
+                        byId={setById}
+                        selectedWorkItemId={selectedWorkItemId}
+                        onSelectWorkItem={setSelectedWorkItemId}
+                      />
+                    ) : null}
+                  </div>
+                )}
+              </section>
+            }
+            right={
+              // The right-hand REGION — the pane the divider sizes. The log pane
+              // itself is MOTIR-3962's; this lays out the space and holds the
+              // selection it will consume, so the two land independently.
+              <section
+                className="flex min-h-0 flex-col border-(--el-border-soft) md:border-l"
+                aria-label={t('paneLog')}
+                data-testid="run-modal-log-region"
+                data-selected-work-item={selectedWorkItemId ?? ''}
+              >
+                <h2 className="flex items-center gap-2 border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2 text-xs font-semibold text-(--el-text-secondary)">
+                  {t('paneLog')}
+                  {/* Both paths run in Motir's cloud and walk the same phases. */}
+                  {run.origin === 'hosted' || run.origin === 'instance' ? (
+                    <HostedPhaseChip run={run} events={events} />
+                  ) : null}
+                </h2>
+                {/* PINNED ABOVE THE LOG, and absent entirely when the run
                   produced nothing — which is most runs. See `RunFindings`. */}
-              <RunFindings events={events} />
-              <RunLogPane run={run} events={events} selectedWorkItemId={selectedWorkItemId} />
-            </section>
-          </div>
+                <RunFindings events={events} cards={run.cards} />
+                <RunLogPane run={run} events={events} selectedWorkItemId={selectedWorkItemId} />
+              </section>
+            }
+          />
         </>
       ) : null}
     </Modal>

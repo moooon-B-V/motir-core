@@ -8,6 +8,7 @@ import {
   isBodyAboveFieldMoveAdvisory,
   isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
+  isUnderAuthoredAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
 import { describeBodyAboveFieldMove } from '@/lib/workItems/bodyAboveFieldMove';
@@ -24,6 +25,7 @@ import { splitPlanBody } from '@/lib/markdown/planBody';
 import type { DesignVerdictDto } from '@/lib/dto/designAccess';
 import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
 import type { LatestRefusalDTO } from '@/lib/dto/approvalGate';
+import type { Locale } from '@/lib/i18n/locales';
 
 // The canonical DISPATCH-PROMPT grammar (Story 7.9 · MOTIR-1802) — the
 // open-core, deterministic rebuild of the cancelled 7.7.2 `generate_prompt` job.
@@ -99,6 +101,14 @@ export const RENDERED_SURFACE_TRIGGER =
 export const HOW_TO_TEST_TOOL_NAME = 'publish_test_instructions';
 
 /**
+ * The tool BUILD THROUGH names (Story MOTIR-8651 · MOTIR-8658). A literal for the same reason
+ * {@link HOW_TO_TEST_TOOL_NAME} is one, and `tests/dispatch/promptTemplate.test.ts` asserts it
+ * equals the REGISTERED tool name, so a rename fails there rather than in a prompt an agent reads
+ * weeks later.
+ */
+export const RECORD_DISCREPANCY_TOOL_NAME = 'record_run_discrepancy';
+
+/**
  * The two DESIGN tools this prompt names, and the variable the CLI sets
  * (Story MOTIR-5553 · Subtask MOTIR-5563).
  *
@@ -110,6 +120,8 @@ export const HOW_TO_TEST_TOOL_NAME = 'publish_test_instructions';
  */
 export const GET_DESIGN_TOOL_NAME = 'get_design';
 export const LIST_DESIGNS_TOOL_NAME = 'list_designs';
+/** The MCP read that returns a repository's coding convention (MOTIR-9084). */
+export const GET_CODING_CONVENTION_TOOL_NAME = 'get_coding_convention';
 
 /**
  * The environment variable the CLI sets when it has put the design on disk.
@@ -132,11 +144,6 @@ export const DESIGN_DIR_ENV = 'MOTIR_DESIGN_DIR';
  */
 export interface DispatchPromptInjections {
   /**
-   * The project's STANDARD convention — the productized `CLAUDE.md` (MOTIR-927).
-   * Blocked under Story 9.1 pending exactly this seam.
-   */
-  conventions: string[];
-  /**
    * Retrieved `coding`-type lessons relevant to this item (MOTIR-1191), so a
    * known past mistake is never repeated. Blocked under Story 9.1 likewise.
    */
@@ -144,7 +151,7 @@ export interface DispatchPromptInjections {
 }
 
 /** The no-op injection set — what `motir-core` alone can supply today. */
-export const NO_INJECTIONS: DispatchPromptInjections = { conventions: [], lessons: [] };
+export const NO_INJECTIONS: DispatchPromptInjections = { lessons: [] };
 
 /** Everything the prompt is assembled from. Resolved by the service; the
  *  assembly reads nothing else. */
@@ -454,6 +461,14 @@ export interface DispatchPromptSource {
    */
   errorEvidence?: MonitorIssueLinkDto[];
   /**
+   * The organisation's CONTENT LANGUAGE (Story MOTIR-7734 · MOTIR-8745) — the
+   * language any work item or to-do the agent writes through Motir is written in.
+   * Rendered as the WORK CONTENT LANGUAGE section. Omitted renders nothing, so a
+   * caller that does not pass it gets byte-identically the prompt it got before
+   * the field existed; a MANUAL item never renders it (no agent writes on it).
+   */
+  contentLanguage?: Locale;
+  /**
    * The LATEST REFUSALS this run must answer (Story MOTIR-6070 · MOTIR-6422; ADR
    * `approval-gates.md` §10h note 4) — for this card, and for its run target when the
    * run was launched against another item — each present only when that card's most
@@ -528,6 +543,21 @@ export interface DispatchPromptSource {
    * instead of cutting one. Absent for every fresh run.
    */
   continueFrom?: ContinueFromForPrompt | null;
+  /**
+   * Does the RUNNER that will launch the agent post what the agent writes into
+   * `$MOTIR_AGENT_REPORT` as `unbuildable`, `discrepancy` and `stop` (MOTIR-8810)?
+   * Only `true` renders those file routes; omitted means NO.
+   *
+   * ⚠️ NO IS THE DEFAULT BECAUSE THE CLI PEOPLE RUN DID NOT POST. `@motir/cli` 0.12.0
+   * sets `$MOTIR_AGENT_REPORT` and reads only `model` from it, so an agent told to
+   * put its unbuildable reason there lost it: no report, no planning bug, nothing to
+   * tell anyone. The `/api/v1` route passes `true` only when the client DECLARES the
+   * capability, which only a CLI that posts all three does. The MCP tool never does:
+   * nobody reading a prompt through it is the runner that would post. Without it the
+   * prompt routes the report through `report_unbuildable_target` and names neither
+   * NO MOTIR TOOLS file route. See {@link agentReportStep}.
+   */
+  runnerPostsAgentReport?: boolean;
 }
 
 /** The assembled prompt plus the workflow variant it ended up carrying. */
@@ -563,6 +593,39 @@ export interface AssembledDispatchPrompt {
 }
 
 /**
+ * A placeholder line in a step list, replaced at assembly by
+ * {@link conventionStepLines}: the convention read names the card's project and
+ * target repository, which a static step list cannot (MOTIR-9084).
+ */
+const CONVENTION_STEP = '@@CONVENTION_STEP@@';
+
+/**
+ * The repository's coding convention is read through the MCP door, not from a file
+ * in the checkout (Story MOTIR-9079). A file in the checkout reaches only an agent
+ * whose harness auto-loads it, and only in a repository whose owner wrote one; the
+ * door reaches every run token and returns the text the team keeps on the Code
+ * page. Each fallback is named so an agent does not stall on a missing answer.
+ */
+function conventionStepLines(src: DispatchPromptSource): string[] {
+  const repo = src.targetRepo
+    ? `repo: "${src.targetRepo}"`
+    : 'repo: <the repository you are working in>';
+  return [
+    '   BEFORE you build, read the repository’s coding convention and follow it:',
+    `   ${GET_CODING_CONVENTION_TOOL_NAME} { projectKey: "${src.projectKey}", ${repo} }`,
+    '   If it says no convention is recorded, follow the patterns of the surrounding',
+    '   code. If the call fails, say so in your report and follow the surrounding code.',
+    '   The repository’s own instruction files may also apply where your harness loads',
+    '   them, but this prompt never relies on one.',
+  ];
+}
+
+/** Replace each {@link CONVENTION_STEP} placeholder with the card's own read. */
+function withConventionStep(steps: readonly string[], src: DispatchPromptSource): string[] {
+  return steps.flatMap((line) => (line === CONVENTION_STEP ? conventionStepLines(src) : [line]));
+}
+
+/**
  * The per-`type` WHAT-TO-DO steps. TOTAL over `WorkItemTypeDto` by construction
  * (`Record<WorkItemTypeDto, …>`), so adding a work-item type without deciding
  * how it dispatches is a COMPILE error here — the same totality guarantee
@@ -571,8 +634,8 @@ export interface AssembledDispatchPrompt {
 const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
   code: [
     '1. Read the card description above and every file it names under "Context refs".',
-    '2. Implement the change, following the repository conventions in its CLAUDE.md',
-    '   (auto-loaded when you enter the repo) — do not restate or re-derive them.',
+    '2. Implement the change.',
+    CONVENTION_STEP,
     `   ⚠️ If this change ${RENDERED_SURFACE_TRIGGER}`,
     '   and NO DESIGN REFERENCE is listed in CONTEXT above, do not draw it from',
     `   imagination: look first with the ${LIST_DESIGNS_TOOL_NAME} tool (\`blockersOf\` this`,
@@ -644,6 +707,7 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '1. Read the card description above and the behaviour under test.',
     '2. Write the tests it names, against the real dependencies this repository',
     '   uses for tests — not mocks of the thing being verified.',
+    CONVENTION_STEP,
     '3. Make each test fail for the right reason first, so it can actually catch the',
     '   regression it claims to cover.',
     '4. Run the test files you added or changed and leave them green.',
@@ -652,6 +716,7 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '1. Read the card description above for the audience, surface, and voice.',
     '2. Write the copy to the existing product vocabulary — match the terms the app',
     '   already uses on screen; do not coin a synonym for a shipped term.',
+    CONVENTION_STEP,
     '3. Land the copy where the product reads it from (the message catalogue or the',
     '   content file), not inline in a component, and keep every locale in parity.',
   ],
@@ -659,6 +724,7 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '1. Read the card description above for the surface, the audience and the voice.',
     '2. Write the strings to the product vocabulary already on screen — match the',
     '   terms the app uses; never coin a synonym for a shipped term.',
+    CONVENTION_STEP,
     '3. Land them where the product reads them from (the message catalogue), keyed',
     '   the way its neighbours are — never inline in a component.',
     '4. Every locale the catalogue ships stays in parity: a new key needs its twin',
@@ -668,6 +734,7 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '1. Read the card description above for the target locale and the source strings.',
     '2. Translate ONLY what already exists — a translation card authors no new',
     '   meaning. If a source string is missing or wrong, say so; do not invent it.',
+    CONVENTION_STEP,
     '3. Follow the locale style guide the repository records (register, tone, and',
     '   the glossary of terms that must not be translated).',
     '4. Leave the catalogue at exact key parity with the source locale.',
@@ -788,6 +855,7 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
   chore: [
     '1. Read the card description above for the exact maintenance change.',
     '2. Make it mechanically and keep the diff to that change alone.',
+    CONVENTION_STEP,
     '3. Run the repository checks and leave everything green.',
   ],
 };
@@ -853,6 +921,22 @@ function designResultSteps(openDependentKeys: readonly string[]): string[] {
     '   (curl -X PUT --upload-file <file> -H "Content-Type: <type>" "<url>"),',
     '   and then send each grant’s pathname to publish_design_result instead of',
     '   contentBase64. One publish uses one form for all of its assets.',
+    '',
+    '   WHAT A PUBLISH STARTS, AND WHAT IT DOES NOT DO:',
+    '   - Publishing raises an approval gate on this card. A person decides it;',
+    '     you never approve it and have no way to.',
+    '   - A card with an open pull request holds two gates and asks ONE question:',
+    '     the design gate is the primary, and one Approve decides both. Approve',
+    '     moves the card to done only when no pull request is open; with one open,',
+    '     the merge is what writes done.',
+    '   - Your publish does NOT release a blocked_by on this card. Readiness reads',
+    '     done, so work that waits on this design continues after the approval or',
+    '     the merge, never after your commit.',
+    '   - Republish only because the design CHANGED. A second publish retires the',
+    '     pending question, so a reviewer mid-review loses it. Never republish to',
+    '     refresh.',
+    '   - A superseded design’s missing files are expected: a version that was sent',
+    '     back loses its bytes on the ordinary sweep. It is not a defect.',
   ];
 }
 
@@ -926,6 +1010,18 @@ const ACCEPTANCE_PUBLISH_STEPS = [
   '   checks green, pull request merged, and a story nobody can watch working. A',
   '   red run publishes nothing, and that is correct: the receipt records a GREEN',
   '   run or it records nothing.',
+  '',
+  '   AN ACCEPTANCE SPEC IS A RECEIPT, NOT A REGRESSION TEST:',
+  '   - It records ONE watchable run of a story working, which a person then',
+  '     approves. Approving pins the recording; it does not freeze the story. To',
+  '     record again, the story goes back below implemented.',
+  '   - Only the spec’s AUTHOR moves it out of the acceptance lane, by promoting',
+  '     it into a lane that runs on every pull request or by retiring it. A signed',
+  '     receipt never moves it.',
+  '   - If an acceptance spec goes red on a pull request that did not change its',
+  '     story, do NOT edit the assertion to match today. That rewrites history to',
+  '     agree with the present. Give it a disposition (promote or retire) and',
+  '     say which.',
 ];
 
 /**
@@ -997,8 +1093,8 @@ const BUG_REPRODUCTION_STEPS = [
 /** WHAT TO DO for an item with no `type` set — the card body is all we have. */
 const UNTYPED_WHAT_TO_DO = [
   '1. Read the card description above; it is the specification for this work.',
-  '2. Do exactly what it asks, following the repository conventions in its',
-  '   CLAUDE.md (auto-loaded when you enter the repo).',
+  '2. Do exactly what it asks.',
+  CONVENTION_STEP,
   '3. Stop when every acceptance criterion below holds.',
   '',
   'NOTE: this work item has no `type` set, so these steps are the generic form.',
@@ -1087,7 +1183,18 @@ function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
   const selfBlocking = advisories.filter(isSelfBlockingDesignAdvisory);
   const bodyAbove = advisories.filter(isBodyAboveFieldMoveAdvisory);
   const blockerCounts = advisories.filter(isBlockerCountAdvisory);
+  const underAuthored = advisories.filter(isUnderAuthoredAdvisory);
   const lines: string[] = [];
+
+  if (underAuthored.length > 0) {
+    lines.push(
+      '',
+      'THIS CARD IS UNDER-AUTHORED — no acceptance criteria and no sizing, type or executor:',
+      '  There is no list of criteria to build to. Work out what "done" means from the description',
+      '  and the repository, state your reading in the pull request, and proceed. This is not a',
+      '  reason to stop; the card needs authoring afterwards, not before you start.',
+    );
+  }
 
   if (blockerCounts.length > 0) {
     lines.push(
@@ -1438,7 +1545,6 @@ function contextSection(
   facts.push(...obsoleteNeighbourLines(src.obsoleteNeighbours ?? []));
 
   // The Epic-9 enrichment slots (empty in motir-core — see the module header).
-  for (const block of injections.conventions) facts.push('', block);
   for (const block of injections.lessons) facts.push('', block);
 
   // Sibling to the lessons slot, and for the same reason: something the agent
@@ -2123,7 +2229,8 @@ function modelSelfReport(): string[] {
     "  only chance to record it, and it becomes the work item's implementation",
     '  provenance.',
     '',
-    '  If you genuinely cannot tell, write no file at all: an empty record is honest,',
+    '  If you genuinely cannot tell, leave "model" out — write no file at all unless',
+    '  a step below asks you to add to it: an empty record is honest,',
     '  and a guessed one is not. If the variable is unset, skip this entirely.',
   ];
 }
@@ -2191,9 +2298,11 @@ function decisionOutcomeProtocol(src: DispatchPromptSource): string[] {
     '  and the approval moves it to done; any status you write asserts a decision',
     '  nobody has made. Do NOT publish How to test: a decision has nothing to run.',
     '',
-    'THE CARD IS WRONG — its premise is false, a precondition it names has not',
-    'shipped, or an acceptance criterion cannot be satisfied. Do NOT find the',
-    'nearest thing that works and decide that. In order:',
+    ...cardIsWrongHeader(),
+    ...whatTest(src),
+    ...buildThroughSteps(src, { lane: 'decision' }),
+    '',
+    'STOP — the WHAT itself breaks. In order:',
     '',
     '  1. PUBLISH NOTHING. A page you have started may stay as a draft, but do not',
     '     call publish_decision_page: the publish is what asks a person to approve.',
@@ -2261,9 +2370,17 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
     '  and after you have exited. Setting it yourself asserts a green run that has',
     '  not happened yet.',
     '',
-    'THE CARD IS WRONG — its premise is false, a precondition it names has not',
-    'shipped, or an acceptance criterion cannot be satisfied. Do NOT find the',
-    'nearest thing that works and build that. In order:',
+    '  In your report, never say a card is finished or a pull request is merged',
+    '  when a person still has to act. A project in manual merge mode raises ONE',
+    '  approval question over a run’s whole set of pull requests once they are',
+    '  green, and a person presses Approve and merge; report them as OPEN AND',
+    '  AWAITING APPROVAL. You never approve a gate or merge a pull request.',
+    '',
+    ...cardIsWrongHeader(),
+    ...whatTest(src),
+    ...buildThroughSteps(src, { lane: 'code', sessionBranch }),
+    '',
+    'STOP — the WHAT itself breaks. In order:',
     '',
     '  1. REVERT FIRST. Put the tree back the way you found it and commit',
     '     NOTHING. Do this before anything else — every later step is a step in',
@@ -2353,6 +2470,155 @@ function openPullRequestStep(): string[] {
 }
 
 /**
+ * THE CARD IS WRONG, in two ways (Story MOTIR-8651 · MOTIR-8658; the decision page _A run builds
+ * through a wrong HOW — the discrepancy record_, MOTIR-8654, which wins wherever this text and it
+ * differ).
+ *
+ * This block used to end *"Do NOT find the nearest thing that works and build that"*, and every
+ * wrong card, whether the WHAT or only the HOW was wrong, went down STOP. It now says the card can
+ * be wrong in two ways and that the first thing to do is decide which: {@link whatTest} asks the
+ * one question, {@link buildThroughSteps} is the YES branch, and {@link cardIsWrongSteps} is the
+ * NO branch (STOP) with its text unchanged in substance.
+ *
+ * Both lanes (code, decision page) and both re-plan policies render the SAME three pieces. The
+ * build-through block is NOT switched by {@link FindingsPolicy}: `logBug` and `replan` switch
+ * filing and re-planning off, not recording, and `autoApproveReplan` has no bearing on it.
+ */
+function cardIsWrongHeader(): string[] {
+  return [
+    'THE CARD IS WRONG — its premise is false, a precondition it names has not',
+    'shipped, or an acceptance criterion cannot be satisfied. It can be wrong in two',
+    'different ways, and the first thing to do is decide which. Do NOT improvise a',
+    'fix that changes what the card asks for.',
+    '',
+  ];
+}
+
+/**
+ * The ONE question a run asks when it finds its card wrong. The question is quoted VERBATIM from
+ * the decision page (MOTIR-8654), so that every runner text — this prompt, `run.md`, the
+ * `motir-run` skill — asks the same thing; the sorting lines are the page's stop-site table, cut
+ * to the rows a dispatched agent can meet.
+ */
+function whatTest(src: DispatchPromptSource): string[] {
+  return [
+    `Decide which FIRST, before you change anything. The WHAT of ${src.key} is its outcome`,
+    'and its acceptance criteria; everything else it says — the route, the helper it',
+    'names, the file it says to edit — is the HOW. Ask ONE question:',
+    '',
+    "  Is the WHAT — the card's outcome and its acceptance criteria — unchanged,",
+    "  consistent with itself and with shipped reality and other cards' scope, and",
+    '  reachable by this run alone?',
+    '',
+    '  YES means BUILD THROUGH. For example: a precondition the card names is false',
+    '  but you can work around it inside this card; existing code the plan never',
+    '  said to change conflicts with it; or a planned HOW cannot be built as written',
+    '  while the outcome is reachable another way.',
+    '  NO means STOP. The WHAT must change; its criteria contradict each other,',
+    "  shipped reality or another card's scope; it needs a person's decision, a",
+    "  credential, or another card's unbuilt work; or it cannot ship as one piece.",
+    '',
+  ];
+}
+
+/**
+ * BUILD THROUGH — the YES branch (Story MOTIR-8651 · MOTIR-8658).
+ *
+ * ⚠️ IT CHANGES THE ROUTE, NEVER THE WHAT. What survives from STOP is the half that was
+ * load-bearing: no adjacent fix, no widening, nothing outside what the WHAT needs, and no editing,
+ * re-scoping, re-parenting or archiving any card. An agent allowed to "build through" without that
+ * sentence would use it to widen a card.
+ *
+ * ⚠️ THE FINISHED ORDER IS POINTED AT, NOT COPIED. `howToTestStep`, `openPullRequestStep` and the
+ * session-branch variant stay single-sourced; the discrepancy is recorded BEFORE the lane's
+ * delivery step so the pull request can say whether the record is missing.
+ *
+ * ⚠️ THE RUNNER CLASSIFIES NOTHING. The text names no verdict, no planning bug and no
+ * classification: an agent told a bug may be filed writes its points for that audience.
+ */
+function buildThroughSteps(
+  src: DispatchPromptSource,
+  where: { lane: 'decision' } | { lane: 'code'; sessionBranch: string | null },
+): string[] {
+  const decision = where.lane === 'decision';
+  const beforeDelivery = decision ? 'publish_decision_page' : 'you commit';
+  const finish = decision
+    ? [
+        '  3. Finish through the FINISHED order above, exactly as written: publish the',
+        '     page, and do NOT transition the card.',
+      ]
+    : [
+        '  3. Finish through the FINISHED order above, exactly as written: push, open',
+        '     or join the pull request, link it, publish How to test, and move the',
+        '     card to Implemented.',
+      ];
+  const stated = decision
+    ? [
+        '  4. State the deviations where the page is reviewed: list the same points in',
+        '     your FINISHED report.',
+      ]
+    : where.sessionBranch
+      ? [
+          '  4. State the deviations where the work is reviewed: add a',
+          `     "## Deviations from the plan" section for ${src.key} to the BODY of the`,
+          '     session pull request, listing the same points.',
+        ]
+      : [
+          '  4. State the deviations where the work is reviewed: the pull request body',
+          '     carries a "## Deviations from the plan" section listing the same points.',
+        ];
+  return [
+    'BUILD THROUGH — the WHAT holds. You are not stopping. In order:',
+    '',
+    "  1. Do NOT revert. Build to the card's outcome and acceptance criteria, by the",
+    '     route that reaches them. What still holds from STOP: no adjacent fix, no',
+    '     widening of the WHAT, nothing outside what the WHAT needs. You change the',
+    '     ROUTE, never the WHAT. Never edit, re-scope, re-parent or archive any card.',
+    `  2. Call the ${RECORD_DISCREPANCY_TOOL_NAME} tool ONCE, after you have built and`,
+    `     before ${beforeDelivery}:`,
+    '',
+    `         key:    ${src.key}`,
+    '         points: one entry per deviation, each { planAsked, built, why } —',
+    '                 what the plan asked, what you built instead, and why the',
+    "                 plan's way could not be followed",
+    '',
+    '     1–20 points, each field 1–2000 characters. Put EVERY deviation in this one',
+    '     call, never one call per point. Do not repeat it: a second call is refused',
+    '     DISCREPANCY_ALREADY_RECORDED and writes nothing. It answers',
+    `     { commentId, recorded }; recorded: false means ${src.key} has no open run leg.`,
+    '     The comment was still written, and that is NOT a failure. A point that',
+    '     describes something STILL broken after this card is done is a defect: file',
+    '     it as a bug first, by the defect branch that follows this section, and cite',
+    "     its key in that point's why.",
+    // MOTIR-8810: only a runner that posts `discrepancy` may be named as the route.
+    ...(src.runnerPostsAgentReport !== true
+      ? []
+      : [
+          '     NO MOTIR TOOLS? If the record_run_discrepancy tool is not available to you',
+          '     (a hosted run, or a run inside an agent, gives you none) and the',
+          '     environment variable MOTIR_AGENT_REPORT is set, put the same points into the',
+          '     JSON file at that path instead, as "discrepancy" beside "model":',
+          '',
+          '         {"model": "<as above>", "discrepancy": [{"planAsked": "…", "built": "…", "why": "…"}]}',
+          '',
+          '     and the run records them on the card and its run when you exit. Then the',
+          '     Deviations list says the run records them, and step 5 does not apply.',
+        ]),
+    ...finish,
+    ...stated,
+    '  5. If the call errors or is refused, still deliver. Write the exact line',
+    '         Discrepancy record missing: <the error code or message>',
+    '     both in the Deviations list and in your FINISHED report.',
+    '  6. Say BUILD THROUGH in your FINISHED report. Do NOT report the card as',
+    '     unbuildable, do NOT move it to Planning, and do NOT send anything to the',
+    '     planner: the card is being built, not handed back.',
+    '  7. If, while building through, the WHAT turns out to be unreachable after all,',
+    '     switch to STOP below, from its step 1. A discrepancy you already recorded',
+    '     stays; do not try to undo it.',
+  ];
+}
+
+/**
  * The steps after the revert, which is where the re-plan switch lives.
  *
  * ⚠️ THE PROHIBITION IS REPLACED, NOT DELETED, and what survives is the half that
@@ -2426,6 +2692,23 @@ function openPullRequestStep(): string[] {
  * One composition, every dispatching path: `run`, `batch`, `auto` and `next` all
  * fetch this same server-assembled prompt, so the instruction is written here
  * and nowhere per command.
+ *
+ * ⚠️ THE TOOL IS THE FALLBACK, NOT THE ROUTE (MOTIR-8698, the record's AMENDMENT 1).
+ * A dispatched agent is handed `$MOTIR_AGENT_REPORT`, so step 4 tells it to write its
+ * reason there as `unbuildable`; the CLI reads it after the exit and posts the report
+ * with the RUN's credential (`POST /api/v1/dispatch-runs/{id}/unbuildable`). A hosted
+ * agent holds no Motir token and `/api/mcp` refuses the run token, and a local agent
+ * may have no Motir MCP — the tool reached neither. The tool stays for a reader with
+ * no such file (a `--print` prompt pasted into a session that has the MCP).
+ *
+ * ── NARROWED (2026-10, Story MOTIR-8651 · MOTIR-8658) ───────────────────────
+ *
+ * These steps are now the STOP branch ONLY: the one a run takes when the WHAT itself breaks,
+ * after {@link whatTest} says so. *"Do not improvise"* governs this branch, and
+ * {@link buildThroughSteps} is the route-only exception for a card whose HOW alone is wrong
+ * (decision page _A run builds through a wrong HOW — the discrepancy record_, MOTIR-8654). The
+ * text below is unchanged in substance; the caller renders the `STOP` sub-heading and the
+ * lane's own step 1.
  */
 function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): string[] {
   const permitted = policy.replan
@@ -2438,14 +2721,7 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
     `     ${permitted}`,
     `  3. Comment the finding on ${src.key}: what is false, and the evidence — the`,
     '     file you read, the command you ran, what it said.',
-    '  4. Report it with the report_unbuildable_target tool:',
-    '',
-    `         projectKey: ${src.projectKey}`,
-    `         targetKey:  ${src.key}`,
-    '         reason:     the SAME text as your step-3 comment',
-    '',
-    '     It spends nothing. It is safe to repeat: the server keeps one record per',
-    '     run. It returns nothing to act on.',
+    ...agentReportStep(src),
   ];
 
   // The switch. With re-planning disabled there is nothing to submit and nowhere
@@ -2454,6 +2730,7 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
   if (!policy.replan) {
     return [
       ...restructuring,
+      ...(src.runnerPostsAgentReport === true ? noToolsStop(policy) : []),
       '  5. Stop, and leave the card In Progress. Do not move its status: this run',
       '     was launched without re-planning, so there is no plan to submit and no',
       '     decision for anyone to make yet. Your comment is the whole report:',
@@ -2464,6 +2741,7 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
 
   return [
     ...restructuring,
+    ...(src.runnerPostsAgentReport === true ? noToolsStop(policy) : []),
     `  5. Move ${src.key} to Planning with the transition_status tool (key`,
     `     ${src.key}, status planning). That status is in the in-progress`,
     '     category, which is what actually takes the card out of the pickable set',
@@ -2508,6 +2786,102 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
     '     nothing happened — no job was created and no credits were spent — so',
     '     re-submit once, WITHOUT the requirement. That is the only retry there is.',
     '  9. Stop. Do not pick up other work.',
+  ];
+}
+
+/**
+ * STOP step 4 — the report, routed by WHO WILL POST IT (MOTIR-8810).
+ *
+ * MOTIR-8698 made `$MOTIR_AGENT_REPORT` the route: the agent writes its reason there as
+ * `unbuildable` and the CLI posts it with the run's credential. That holds only for a CLI
+ * that does the posting. The published `@motir/cli` 0.12.0 predates it and reads `model`
+ * alone, so the deployed prompt sent every report it handled into a file nothing read.
+ *
+ * So the file route renders only when the runner said it posts (`runnerPostsAgentReport`,
+ * which the `/api/v1` route sets from the client's declaration); otherwise step 4 is the
+ * tool call it was before MOTIR-8698, word for word.
+ *
+ * ⚠️ THIS IS THE GUARD THE NEXT PROMPT CHANGE NEEDS TOO. A prompt that routes work through
+ * the runner is a contract with a CLI release, and the server is deployed before anyone
+ * installs that release. A new route the runner owns renders behind the client's own
+ * declaration, never on the assumption that the CLI on `main` is the CLI people run.
+ */
+function agentReportStep(src: DispatchPromptSource): string[] {
+  const call = [
+    '',
+    `         projectKey: ${src.projectKey}`,
+    `         targetKey:  ${src.key}`,
+    '         reason:     the SAME text as your step-3 comment',
+    '',
+  ];
+  if (src.runnerPostsAgentReport !== true) {
+    return [
+      '  4. Report it with the report_unbuildable_target tool:',
+      ...call,
+      '     It spends nothing. It is safe to repeat: the server keeps one record per',
+      '     run. It returns nothing to act on.',
+    ];
+  }
+  return [
+    '  4. Report it. If the environment variable MOTIR_AGENT_REPORT is set, put the',
+    '     SAME text as your step-3 comment into the JSON file at that path, as',
+    '     "unbuildable" beside "model":',
+    '',
+    '         {"model": "<as above>", "unbuildable": "<the SAME text as your step-3 comment>"}',
+    '',
+    '     and the run makes the report for you when you exit — no Motir tool needed.',
+    '     If the variable is unset, report it with the report_unbuildable_target tool:',
+    ...call,
+    '     Either way it is one report. It spends nothing. It is safe to repeat: the',
+    '     server keeps one record per run. It returns nothing to act on.',
+  ];
+}
+
+/**
+ * A STOP WITH NO MOTIR TOOLS (MOTIR-8722, `run-found-trigger-dispatched-path.md` AMENDMENT 2).
+ *
+ * Every write the STOP branch asks for — the comment, the move to Planning, the plan turn and
+ * the submit — is a Motir MCP call, and a hosted run's agent and an agent-instance run's agent
+ * have none (`AGENT_RUN_WITHHELD_ENV`; `/api/mcp` refuses a run token). So the agent puts them
+ * into `$MOTIR_AGENT_REPORT` as `stop`, and the CLI makes the comment and the move with the
+ * run's credential (`POST /api/v1/dispatch-runs/{id}/stop`).
+ *
+ * ⚠️ THE RE-PLAN IS NOT SUBMITTED ON THIS PATH, AND THE TEXT SAYS SO. A run's credential holds
+ * no `ai:*` key by decision (`HOSTED_RUN_TOKEN_GRANT`), and submitting is the act that spends
+ * the owner's credits; the brief is kept on the card for the person who submits it. An agent
+ * told the re-plan went out would report a submit nobody made.
+ */
+function noToolsStop(policy: FindingsPolicy): string[] {
+  const head = [
+    '  NO MOTIR TOOLS? If the Motir tools are not available to you (a hosted run, or',
+    '  a run inside an agent, gives you none), you cannot write the step-3 comment',
+  ];
+  if (!policy.replan) {
+    return [
+      ...head,
+      '  yourself. With MOTIR_AGENT_REPORT set, add "stop" to the same JSON file:',
+      '',
+      '         {"model": "…", "unbuildable": "<your step-3 comment>", "stop": {"toPlanning": false}}',
+      '',
+      '  and the run comments the card with your "unbuildable" text when you exit.',
+      '  Then stop as below, leaving the card In Progress.',
+    ];
+  }
+  return [
+    ...head,
+    '  or make the Planning, planning-thread and submit calls below yourself. With',
+    '  MOTIR_AGENT_REPORT set, add "stop" to the same JSON file, with the six',
+    '  requirement fields step 7 describes:',
+    '',
+    '         {"model": "…", "unbuildable": "<your step-3 comment>",',
+    '          "stop": {"toPlanning": true, "requirement": {"outcome": "…", "behaviour": "…",',
+    '                   "scopeEdge": "", "constraints": "", "acceptance": "…", "assumptions": ""}}}',
+    '',
+    '  When you exit, the run comments the card with your "unbuildable" text, moves',
+    '  it to Planning and keeps your requirement on the card. It does NOT submit the',
+    "  re-plan: a run's own credential cannot start planning, so a person submits it",
+    '  from the card, and the comment says so. Do not report a re-plan as submitted.',
+    '  Then stop. Do not pick up other work.',
   ];
 }
 
@@ -2676,7 +3050,8 @@ function foundADefect(src: DispatchPromptSource, policy: FindingsPolicy): string
     'FOUND A DEFECT — your card is fine, and something ELSE is broken. This is NOT',
     'an ending: it does not finish your card, it does not fail it, and it does not',
     'change which of the two outcomes above you report. You record what you found',
-    'and CARRY ON with the card in hand.',
+    'and CARRY ON with the card in hand. It applies during a BUILD THROUGH as well,',
+    'and filing a bug never turns a build-through into STOP.',
     '',
   ];
 
@@ -3035,6 +3410,46 @@ function errorEvidenceBlock(links: readonly MonitorIssueLinkDto[]): string[] {
     : [...section('ERROR EVIDENCE — what the monitor recorded for this work item', body), ''];
 }
 
+/** Each content language's English name, for the WORK CONTENT LANGUAGE section. */
+const LANGUAGE_NAMES: Record<Locale, string> = {
+  en: 'English',
+  zh: 'Chinese',
+  ja: 'Japanese',
+  ko: 'Korean',
+  de: 'German',
+  fr: 'French',
+  es: 'Spanish',
+  it: 'Italian',
+  nl: 'Dutch',
+  pl: 'Polish',
+  pt: 'Portuguese',
+};
+
+/**
+ * The WORK CONTENT LANGUAGE section with its trailing separator (MOTIR-8745), or
+ * nothing when no language was passed or the item is MANUAL. A FACT stated to the
+ * agent, not an instruction to translate: the MCP door already records the
+ * organisation's language on what the agent writes.
+ */
+function contentLanguageBlock(src: DispatchPromptSource, manual: boolean): string[] {
+  const code = src.contentLanguage;
+  if (manual || code === undefined) return [];
+  return [
+    ...section('WORK CONTENT LANGUAGE', [
+      `This organisation writes its work content in ${LANGUAGE_NAMES[code]} (\`${code}\`).`,
+      'Any work item or to-do you write through Motir — a bug you file, an item you',
+      'create, a to-do you add — has its title, description, acceptance criteria,',
+      `explanation, and to-do text and notes written in ${LANGUAGE_NAMES[code]}, whatever`,
+      'language this card or the conversation is in.',
+      'Identifiers, file paths, code, commands, work item keys and quoted text keep',
+      'their original form.',
+      'The MCP door records that language for you: pass no language yourself unless',
+      'you deliberately write a field in another one.',
+    ]),
+    '',
+  ];
+}
+
 export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDispatchPrompt {
   const injections = src.injections ?? NO_INJECTIONS;
   const { body, acceptanceCriteria, contextRefs } = splitPlanBody(src.descriptionMd);
@@ -3066,6 +3481,7 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
   let whatToDo = UNTYPED_WHAT_TO_DO;
   if (manual) whatToDo = MANUAL_WHAT_TO_DO;
   else if (src.type) whatToDo = WHAT_TO_DO[src.type];
+  whatToDo = withConventionStep(whatToDo, src);
   // The acceptance-receipt steps (MOTIR-4704) — appended, never substituted: an
   // acceptance card still writes and greens its spec, and the publish is the
   // step AFTER that. A manual item is excluded by construction (it took
@@ -3125,6 +3541,9 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
     '',
     ...section('CONTEXT', contextSection(src, body, contextRefs, injections)),
     '',
+    // The WORK CONTENT LANGUAGE (MOTIR-8745) sits between the card's context and
+    // its steps, and renders NOTHING when the caller passed no language.
+    ...contentLanguageBlock(src, manual),
     ...section('WHAT TO DO', whatToDo),
     '',
     ...section('ACCEPTANCE CRITERIA — every one must hold', acceptanceSection(acceptanceCriteria)),

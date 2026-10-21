@@ -23,6 +23,7 @@ import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
 import { AiPaywall } from '@/components/ai/AiPaywall';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import { Bubble } from '@/components/planning/PlanChangeRail';
+import { GuideReplanOffer } from '@/components/planning/GuideReplanOffer';
 import {
   GuideDropOverlay,
   GuideFileRefusals,
@@ -39,6 +40,7 @@ import type { WorkItemRefSummaryDto } from '@/lib/dto/workItems';
 import type { GuidePersonMarker, GuidePhase } from '@/lib/hooks/useGuideConversation';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
 import { guideRailBody } from '@/lib/planning/guideReplyNotes';
+import { replanOfferOf, replanOfferStateOf } from '@/lib/planning/guideReplanOffer';
 import {
   guideOutcomeLines,
   type GuideOutcomeLine,
@@ -86,6 +88,14 @@ export interface GuideRailProps {
   onSend: (text: string, attachmentIds?: readonly string[]) => void;
   onRetry: () => void;
   onReload: () => void;
+  /** The viewer may start planning (`ai:plan`) — Confirm is withheld without it. */
+  canPlan?: boolean;
+  cannotPlanReason?: 'no_permission' | 'ai_not_configured' | null;
+  /** The offer turn whose Decline is in flight, or null. */
+  decliningTurnId?: string | null;
+  /** Open the planner from an offer's turn (Confirm, and a confirmed offer's link). */
+  onOpenOffer?: (turnId: string) => boolean | void;
+  onDeclineOffer?: (turnId: string) => void;
 }
 
 const REPLY_TURN_KEY: Record<Exclude<GuideReply, 'reload'>, string> = {
@@ -102,6 +112,7 @@ function errorKey(code: string): string {
   if (code === 'GUIDE_CARD_NOT_MANUAL') return 'errors.notManual';
   if (code === 'GUIDE_CARD_CLOSED') return 'errors.closed';
   if (code === 'FORBIDDEN' || code === 'PERMISSION_DENIED') return 'errors.forbidden';
+  if (code === 'GUIDE_REPLAN_OFFER_NOT_OPEN') return 'errors.offerClosed';
   return 'failed';
 }
 
@@ -116,6 +127,11 @@ export function GuideRail({
   onSend,
   onRetry,
   onReload,
+  canPlan = true,
+  cannotPlanReason = null,
+  decliningTurnId = null,
+  onOpenOffer,
+  onDeclineOffer,
 }: GuideRailProps) {
   const t = useTranslations('planningWorkspace');
   const tg = useTranslations('planningWorkspace.guide');
@@ -221,7 +237,11 @@ export function GuideRail({
           const el = e.currentTarget;
           stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= 48;
         }}
-        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4"
+        // `overflow-x-hidden`, stated (MOTIR-8725): with only `overflow-y-auto`
+        // the unstated axis computes to `auto`, so one over-wide reply drew a
+        // scrollbar along the whole log. The log holds prose that wraps; a code
+        // block scrolls inside its own frame. Same choice as MOTIR-4578.
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto px-4 py-4"
         role="log"
         data-testid="guide-rail-log"
       >
@@ -254,6 +274,22 @@ export function GuideRail({
                 workItemRefs={session?.workItemRefs ?? {}}
               />
             ) : null}
+            {turn.role === 'assistant' && replanOfferOf(turns, turn.id) ? (
+              <GuideReplanOffer
+                turnId={turn.id}
+                offer={replanOfferOf(turns, turn.id)!}
+                state={replanOfferStateOf(turns, turn.id)!}
+                cardKey={card.identifier}
+                resumeStep={view.resumeStep}
+                canPlan={canPlan}
+                cannotPlanReason={cannotPlanReason}
+                busy={running}
+                declining={decliningTurnId === turn.id}
+                workItemRefs={session?.workItemRefs ?? {}}
+                onOpen={(id) => onOpenOffer?.(id)}
+                onDecline={(id) => onDeclineOffer?.(id)}
+              />
+            ) : null}
             {turn.id === latestAssistantId && view.stale ? (
               <p
                 data-testid="guide-stale"
@@ -281,7 +317,7 @@ export function GuideRail({
             the shipped act rail's shape with its one live line. */}
         <div aria-live="polite" data-testid="guide-progress-line">
           {running ? (
-            <ol className="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2">
+            <ol className="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)">
               <li className="flex items-start gap-2 text-xs text-(--el-text)">
                 <Spinner size="sm" aria-hidden="true" />
                 <span className="mt-px w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
@@ -302,7 +338,7 @@ export function GuideRail({
             <p
               role="alert"
               data-testid="guide-error"
-              className="rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)"
+              className="rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)"
             >
               {tg(errorKey(errorCode))}
             </p>
@@ -503,13 +539,13 @@ function EditStatement({ edit }: { edit: Extract<GuideAction, { type: 'edit_item
       <span className="font-semibold">{tg('fieldTitle')}: </span>
       {edit.previous.title ? (
         <>
-          <span className="rounded-(--radius-kbd) bg-(--el-diff-removed) px-1 text-(--el-text-strong) line-through">
+          <span className="rounded-(--radius-kbd) bg-(--el-diff-removed) px-(--spacing-control-x-4) text-(--el-text-strong) line-through">
             {edit.previous.title}
           </span>{' '}
           <ArrowRight className="inline size-3 text-(--el-text-secondary)" aria-hidden />{' '}
         </>
       ) : null}
-      <span className="rounded-(--radius-kbd) bg-(--el-diff-added) px-1 text-(--el-text-strong)">
+      <span className="rounded-(--radius-kbd) bg-(--el-diff-added) px-(--spacing-control-x-4) text-(--el-text-strong)">
         {edit.title}
       </span>
     </p>

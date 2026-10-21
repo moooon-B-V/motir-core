@@ -31,13 +31,13 @@ const STATISTIC_LABEL_KEY: Record<EstimationStatisticDto, string> = {
   issue_count: 'statisticIssueCount',
 };
 
-export function VelocityChart({ velocity }: { velocity: VelocityDto }) {
+export function VelocityChart({ velocity, fit }: { velocity: VelocityDto; fit?: 'page' }) {
   const t = useTranslations('backlog');
   const tStat = useTranslations('settings.estimation');
 
   if (velocity.sprints.length < MIN_SPRINTS_FOR_TREND) {
     return (
-      <div className="flex flex-col items-center justify-center gap-1 rounded-(--radius-card) border border-dashed border-(--el-border-strong) px-(--spacing-card-padding) py-6 text-center">
+      <div className="flex flex-col items-center justify-center gap-1 rounded-(--radius-card) border border-dashed border-(--el-border-strong) px-(--spacing-card-padding) py-(--spacing-card-padding) text-center">
         <BarChart3 className="h-6 w-6 text-(--el-text-faint)" aria-hidden />
         <span className="text-sm text-(--el-text-muted)">
           {t('sprintReport.velocityLowHistoryTitle')}
@@ -76,6 +76,7 @@ export function VelocityChart({ velocity }: { velocity: VelocityDto }) {
         {t('sprintReport.velocityAverage', { average })}
       </span>
       <BarChart
+        fit={fit}
         series={[
           { label: committedLabel, color: chartColor.committed },
           { label: completedLabel, color: chartColor.completed },

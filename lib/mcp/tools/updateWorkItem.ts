@@ -24,6 +24,10 @@ import type {
 } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolError, toolOk } from '../toolResult';
+import {
+  WORK_ITEM_SECTIONS_INPUT_DESCRIPTION,
+  workItemSectionsInputSchema,
+} from '../sectionsInput';
 import { obsolescenceNoteWriteField, obsolescenceWriteField } from '../obsolescence';
 import { derived } from '../payloads/define';
 import { presentMcpWorkItem, workItemWritePayload } from '../payloads/workItems';
@@ -58,6 +62,7 @@ const inputSchema = {
     .nullable()
     .optional()
     .describe('New Markdown description body; null clears it.'),
+  sections: workItemSectionsInputSchema.optional().describe(WORK_ITEM_SECTIONS_INPUT_DESCRIPTION),
   explanationMd: z
     .string()
     .nullable()
@@ -165,6 +170,7 @@ interface UpdateWorkItemArgs {
   key: string;
   title?: string;
   descriptionMd?: string | null;
+  sections?: Record<string, unknown>;
   explanationMd?: string | null;
   language?: Locale;
   languages?: Partial<Record<WorkItemLanguageField, Locale>>;
@@ -188,6 +194,9 @@ function toPatch(args: UpdateWorkItemArgs): UpdateWorkItemInput {
   const patch: UpdateWorkItemInput = {};
   if (args.title !== undefined) patch.title = args.title;
   if (args.descriptionMd !== undefined) patch.descriptionMd = args.descriptionMd;
+  // Sections (MOTIR-9031): the service merges them over the stored body and renders.
+  if (args.sections !== undefined)
+    patch.sections = args.sections as NonNullable<UpdateWorkItemInput['sections']>;
   if (args.explanationMd !== undefined) patch.explanationMd = args.explanationMd;
   if (args.priority !== undefined) patch.priority = args.priority;
   if (args.type !== undefined) patch.type = args.type as WorkItemTypeDto | null;
@@ -254,7 +263,7 @@ export async function runUpdateWorkItem(
       return toolError(
         NO_FIELDS_TO_PATCH_CODE,
         'update_work_item was called with no field to change — only "key" was supplied. ' +
-          'Name at least one of: title, descriptionMd, explanationMd, priority, type, ' +
+          'Name at least one of: title, descriptionMd, sections, explanationMd, priority, type, ' +
           'executor, difficulty, obsolescence, obsolescenceNoteMd, estimateMinutes, ' +
           'storyPoints, targetRepo, targetRepos, ' +
           'targetRepositories, assigneeId, dueDate. (Use transition_status for the ' +
@@ -298,6 +307,10 @@ export function registerUpdateWorkItem(
         'finish instead. Clearing is always legal, and after it the item can be reopened. ' +
         'Re-parenting under a marked item is refused with MARKED_CARD_CANNOT_REOPEN. Honors the same leaf-only type/difficulty rules, ' +
         'project-repository validation, assignee-membership check, and access checks as the UI. ' +
+        'Send `sections` (see get_section_sets) instead of `descriptionMd` to merge named ' +
+        'sections over the stored body: the door checks them for the item\u2019s type after this ' +
+        'write, names a missing one (INVALID_SECTIONS) and renders them; sending both is refused ' +
+        '(SECTIONS_AND_DESCRIPTION_CONFLICT) and a plain `descriptionMd` is stored as sent. ' +
         '`language` (or per-field `languages`) names the language of the text written; an ' +
         "edited field with none records the organisation's content language, and a language " +
         'alone changes nothing (NO_FIELDS_TO_PATCH).',

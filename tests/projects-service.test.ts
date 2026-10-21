@@ -91,6 +91,7 @@ describe('createProject — happy path', () => {
       'accessMode',
       'aiGenerateExplanations',
       'archivedAt',
+      'autoTranslateWorkContent',
       'id',
       'identifier',
       'image',
@@ -103,6 +104,7 @@ describe('createProject — happy path', () => {
     expect(project.image).toBeNull();
     // A freshly created project defaults to explanations OFF (Story 7.4 / MOTIR-850).
     expect(project.aiGenerateExplanations).toBe(false);
+    expect(project.autoTranslateWorkContent).toBe(false);
     // A freshly created project has never onboarded — the marker is null until
     // its first plan is approved + materialized (Subtask 7.4 / MOTIR-1264).
     expect(project.onboardingRanAt).toBeNull();
@@ -974,7 +976,9 @@ describe('getActiveProject — resolution, archived surfacing (#29.2), recovery 
     expect(resolved).not.toBeNull();
     expect(resolved!.id).not.toBe(only.id);
     expect(resolved!.archivedAt).toBeNull();
-    // Named for its workspace, which is what `ensureDefaultProject` chooses.
-    expect(resolved!.name).toBe('Acme');
+    // A generated, random-looking name, which is what `ensureDefaultProject`
+    // draws (MOTIR-8239) — not the workspace's.
+    expect(resolved!.name).toMatch(/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/);
+    expect(resolved!.name).not.toBe('Acme');
   });
 });

@@ -127,13 +127,19 @@ echo "  note  live registration / one-job / de-register is NOT proven here — M
 echo
 echo "== 3 · a services: container reachable on localhost:5432 =="
 docker run -d --name motir-runner-svc --privileged -v /var/lib/docker --entrypoint '' "${IMAGE}" \
-  bash -c 'dockerd >/var/log/dockerd.log 2>&1 & sleep infinity' >/dev/null
+  bash -c 'motir-ci-runner-dockerd && sleep infinity' >/dev/null
 
 svc_ok=1
 docker exec motir-runner-svc bash -c '
   set -e
-  for _ in $(seq 1 30); do docker version >/dev/null 2>&1 && break; sleep 1; done
+  # The image the first production window died on (MOTIR-8821): its layers
+  # contain overlay whiteouts (`etc/alternatives/.wh.pager.1.gz`), which a Machine
+  # whose storage refuses mknod/xattr cannot unpack. Pulled through the SAME
+  # `motir-ci-runner-dockerd` the entrypoint runs, with no MOTIR_RUNNER_SKIP_DOCKER.
+  for _ in $(seq 1 120); do docker version >/dev/null 2>&1 && break; sleep 1; done
   docker version >/dev/null
+  docker pull pgvector/pgvector:pg16 >/dev/null
+  docker run --rm pgvector/pgvector:pg16 true
   docker run -d --name pg -p 5432:5432 \
     -e POSTGRES_USER=nextjs_prisma_vercel_starter \
     -e POSTGRES_PASSWORD=nextjs_prisma_vercel_starter \
@@ -149,7 +155,7 @@ docker exec motir-runner-svc bash -c '
 ' || svc_ok=0
 
 if [ "${svc_ok}" -eq 1 ]; then
-  ok "postgres:16-alpine ran and its published port is reachable on localhost:5432"
+  ok "dockerd (via motir-ci-runner-dockerd) pulled a whiteout-bearing image; postgres:16-alpine ran and is reachable on localhost:5432"
 else
   fail "a services: container is NOT usable — four of the starter's six jobs cannot run on this image"
 fi

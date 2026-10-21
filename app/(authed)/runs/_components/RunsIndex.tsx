@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { CircleSlash, TriangleAlert } from 'lucide-react';
+import { ArrowUpRight, CircleSlash, TriangleAlert } from 'lucide-react';
 import { RunModal } from '@/app/(authed)/runs/_components/RunModal';
 import { RunTonePill } from '@/components/runs/RunTonePill';
 import { Button } from '@/components/ui/Button';
@@ -259,7 +260,6 @@ export function RunsIndex({
     );
   }
 
-  const showScope = scopeKey === null;
   return (
     <div className="flex flex-col gap-6">
       <Section
@@ -267,7 +267,6 @@ export function RunsIndex({
         rows={live}
         emptyLine={view === 'mine' ? t('noneRunningMine') : t('noneRunning')}
         t={t}
-        showScope={showScope}
         onOpen={onOpenRun}
       />
       <Section
@@ -275,7 +274,6 @@ export function RunsIndex({
         rows={past}
         emptyLine={view === 'mine' ? t('nonePastMine') : t('nonePast')}
         t={t}
-        showScope={showScope}
         onOpen={onOpenRun}
         footer={
           past && past.length > 0 && !exhausted ? (
@@ -310,7 +308,6 @@ function Section({
   rows,
   emptyLine,
   t,
-  showScope,
   footer,
   onOpen,
 }: {
@@ -318,14 +315,13 @@ function Section({
   rows: DispatchRunListItemDto[] | null;
   emptyLine: string;
   t: ReturnType<typeof useTranslations>;
-  /** False under a narrowing, where every row would repeat the header's scope. */
-  showScope: boolean;
   onOpen: (id: string) => void;
   footer?: React.ReactNode;
 }) {
-  const columns = (
-    ['colCommand', 'colScope', 'colAgent', 'colStarted', 'colStatus', 'colItems'] as const
-  ).filter((k) => showScope || k !== 'colScope');
+  // ⚠️ THE TARGET COLUMN IS NEVER SUPPRESSED, narrowed or not: unlike the Scope
+  // column it replaced, its cell is the row's identity AND its only door, so
+  // dropping it under `?scope=` would leave that list with no way to open a run.
+  const columns = ['colTarget', 'colAgent', 'colStarted', 'colStatus', 'colItems'] as const;
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
@@ -359,7 +355,7 @@ function Section({
             </thead>
             <tbody>
               {rows.map((run) => (
-                <RunRow key={run.id} run={run} t={t} showScope={showScope} onOpen={onOpen} />
+                <RunRow key={run.id} run={run} t={t} onOpen={onOpen} />
               ))}
             </tbody>
           </table>
@@ -377,44 +373,63 @@ function Section({
  * one sentence and it belongs on the run, where there is room to say it in
  * words." The row carries the OUTCOME instead, as the leg summary.
  *
- * ⚠️ THE SCOPE SURVIVES ITS WORK ITEM. `scopeLabel` is stored beside the id
- * precisely so a run stays readable after its subject is deleted, so the label
- * is what renders and the id is only what makes it a link.
+ * ⚠️ THE TARGET SURVIVES ITS WORK ITEM. `targetKey` is the key (or, once the
+ * subject is gone, the stored label as TEXT) and `targetWorkItemId` is only what
+ * makes it a link — the row never tests whether a key "looks like" one.
  */
 function RunRow({
   run,
   t,
-  showScope,
   onOpen,
 }: {
   run: DispatchRunListItemDto;
   t: ReturnType<typeof useTranslations>;
-  showScope: boolean;
   onOpen: (id: string) => void;
 }) {
+  const routes = useReaderRoutes();
   const tone = RUN_STATUS_TONE[run.status];
   const agent = [run.agent, run.model].filter(Boolean).join(' · ');
   const summary = useMemo(() => legSummary(run, t), [run, t]);
   return (
     <tr className="border-b border-(--el-border-soft) last:border-b-0">
       <td className="px-(--spacing-control-x) py-(--spacing-control-y) font-mono text-xs whitespace-nowrap text-(--el-text)">
-        {/* ⚠️ A REAL BUTTON, not a click handler on the <tr>. It is what the
-            keyboard reaches, and it is what Radix returns focus TO when the
-            modal closes — the AC's "focus returns to the row that opened it"
-            is a property of there being a focusable element to return to. */}
-        <button
-          type="button"
-          onClick={() => onOpen(run.id)}
-          className="rounded-(--radius-control) text-(--el-accent-on-surface) underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-        >
-          {run.command}
-        </button>
+        <div className="flex items-center gap-2">
+          {run.targetKey === null ? null : run.targetWorkItemId !== null ? (
+            // The id decides whether a link exists; the KEY supplies both its text
+            // and its address (`routes.item` takes a key, not a cuid).
+            <Link
+              href={routes.item(run.targetKey)}
+              className="rounded-(--radius-control) text-(--el-accent-on-surface) underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            >
+              {run.targetKey}
+            </Link>
+          ) : (
+            <span>{run.targetKey}</span>
+          )}
+          {run.targetKey !== null && run.otherCardCount > 0 ? (
+            <>
+              <span className="text-(--el-text-secondary)" aria-hidden="true">
+                +{run.otherCardCount}
+              </span>
+              <span className="sr-only">{t('targetOthers', { count: run.otherCardCount })}</span>
+            </>
+          ) : null}
+          {/* ⚠️ A REAL BUTTON, not a click handler on the <tr>. It is what the
+              keyboard reaches, and it is what Radix returns focus TO when the
+              modal closes — a row handler would be neither, and would also fire
+              when the key's link above is clicked. A sibling of the link, never
+              nested in it. */}
+          <button
+            type="button"
+            data-testid="run-open"
+            aria-label={t('openRunAria')}
+            onClick={() => onOpen(run.id)}
+            className="inline-flex size-6 flex-none items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          >
+            <ArrowUpRight className="size-3.5" aria-hidden="true" />
+          </button>
+        </div>
       </td>
-      {showScope ? (
-        <td className="px-(--spacing-control-x) py-(--spacing-control-y) text-sm text-(--el-text-secondary)">
-          {run.scopeLabel ?? t('scopeNone')}
-        </td>
-      ) : null}
       <td className="px-(--spacing-control-x) py-(--spacing-control-y) text-xs whitespace-nowrap text-(--el-text-secondary)">
         {agent || '—'}
       </td>

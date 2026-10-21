@@ -589,11 +589,16 @@ describe('SEAM — the rail keeps exactly the row the departures left', () => {
     // MOTIR-5394); MOTIR-5278's browse view is reverted.
     // MOTIR-5278 had re-fixtured this floor onto an empty permission set and asserted a
     // MEMBER's section as ['Settings'].
-    renderRail({ permissions: MEMBER, workspaceTierRevealed: false });
+    //
+    // ⚠️ RE-FIXTURED (MOTIR-7738 · MOTIR-8830): a MEMBER holds a settings door again,
+    // because the Translation room is readable by anyone who can browse the project.
+    // The empty floor is the actor who holds nothing, which is what the section-absent
+    // arm was always about.
+    renderRail({ permissions: [], workspaceTierRevealed: false });
     expect(bottomSectionRowNames()).toEqual([]);
 
     cleanup();
-    renderRail({ permissions: MEMBER, workspaceTierRevealed: true });
+    renderRail({ permissions: [], workspaceTierRevealed: true });
     expect(bottomSectionRowNames()).toEqual([]);
   });
 

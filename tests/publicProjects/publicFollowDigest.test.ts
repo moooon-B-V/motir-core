@@ -31,6 +31,7 @@ type Enqueued = {
     entries?: Array<{ identifier: string }>;
     unsubscribeUrl?: string;
     changelogUrl?: string;
+    locale?: string;
   };
   followId?: string;
   occurrenceKey?: string;
@@ -403,6 +404,61 @@ describe('the account tier’s digest', () => {
     const result = await publicFollowDigestService.enqueueDueDigests(MONDAY);
     expect(result.enqueued).toBe(3);
     expect(new Set(digests().map((d) => d.followId)).size).toBe(3);
+  });
+});
+
+// Story MOTIR-7732 · MOTIR-8109 — the digest is written in the recipient's
+// language: an account follow's saved language; for an email-only follow, the
+// account now holding the address, else the language recorded on the follow,
+// else English.
+describe('the digest’s language', () => {
+  async function deliverTo(over: Record<string, unknown>) {
+    const fx = await publicFixture();
+    const row = await follower(fx, { lastDigestAt: new Date('2026-08-17T09:00:00.000Z'), ...over });
+    const item = await createTestWorkItem(fx, { kind: 'task', title: 'Shipped' });
+    await ship(fx, item.id, '2026-08-20T10:00:00.000Z');
+    await publicFollowDigestService.deliverDigest({
+      workspaceId: fx.workspaceId,
+      followId: row.id,
+      occurrenceKey: `${row.id}:2026-W35`,
+      now: MONDAY,
+    });
+    return { fx, locale: emails()[0]?.data?.locale };
+  }
+
+  it('is the language recorded on an email-only follow', async () => {
+    expect((await deliverTo({ locale: 'it' })).locale).toBe('it');
+  });
+
+  it('is English for a follow made before the language was recorded', async () => {
+    expect((await deliverTo({ locale: null })).locale).toBe('en');
+  });
+
+  it('is the saved language of the account that now holds the address', async () => {
+    await adminDb.user.create({
+      data: { email: 'reader@example.com', name: 'Reader', locale: 'fr' },
+    });
+    expect((await deliverTo({ locale: 'it' })).locale).toBe('fr');
+  });
+
+  it('is the account’s saved language for an account follow, whatever the row holds', async () => {
+    const fx = await publicFixture();
+    await adminDb.user.update({ where: { id: fx.ownerId }, data: { locale: 'ko' } });
+    const row = await follower(fx, {
+      email: null,
+      userId: fx.ownerId,
+      locale: 'it',
+      lastDigestAt: new Date('2026-08-17T09:00:00.000Z'),
+    });
+    const item = await createTestWorkItem(fx, { kind: 'task', title: 'Shipped' });
+    await ship(fx, item.id, '2026-08-20T10:00:00.000Z');
+    await publicFollowDigestService.deliverDigest({
+      workspaceId: fx.workspaceId,
+      followId: row.id,
+      occurrenceKey: `${row.id}:2026-W35`,
+      now: MONDAY,
+    });
+    expect(emails()[0]?.data?.locale).toBe('ko');
   });
 });
 

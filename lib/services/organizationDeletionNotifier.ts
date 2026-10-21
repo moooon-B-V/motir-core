@@ -12,6 +12,7 @@ import { organizationDeletionNoticeRepository } from '@/lib/repositories/organiz
 import { organizationDeletionRequestRepository } from '@/lib/repositories/organizationDeletionRequestRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import { resolveRecipientLocales } from '@/lib/services/emailRecipientLocale';
 import { DATA_PRIVACY_PANE_PATH } from '@/lib/users/dataSubjectRequests';
 import { formatDate } from '@/lib/utils/datetime';
 import { withSystemContext } from '@/lib/workspaces/context';
@@ -149,8 +150,10 @@ async function notifyScheduled(requestId: string): Promise<void> {
     const ctx = await loadContext(requestId);
     if (!ctx) return;
     const base = resolveBaseUrlTrimmed();
-    const dueDate = formatDate(ctx.request.erasureDueAt.toISOString());
+    const dueIso = ctx.request.erasureDueAt.toISOString();
+    const localeByUserId = await resolveRecipientLocales(ctx.members.map((m) => m.userId));
     for (const member of ctx.members) {
+      const locale = localeByUserId.get(member.userId);
       await enqueue({
         workspaceId: null,
         idempotencyKey: `org-deletion:${requestId}:scheduled:${member.userId}`,
@@ -165,8 +168,9 @@ async function notifyScheduled(requestId: string): Promise<void> {
             ctx.members,
             ctx.organization.name,
           ),
-          dueDate,
+          dueDate: formatDate(dueIso, locale),
           settingsUrl: `${base}/settings/organization`,
+          locale,
           exportUrl: `${base}${DATA_PRIVACY_PANE_PATH}`,
         },
       });
@@ -185,6 +189,7 @@ async function notifyCancelled(requestId: string): Promise<void> {
     const ctx = await loadContext(requestId);
     if (!ctx) return;
     const appUrl = resolveBaseUrlTrimmed();
+    const localeByUserId = await resolveRecipientLocales(ctx.members.map((m) => m.userId));
     for (const member of ctx.members) {
       await enqueue({
         workspaceId: null,
@@ -200,6 +205,7 @@ async function notifyCancelled(requestId: string): Promise<void> {
             ctx.organization.name,
           ),
           appUrl,
+          locale: localeByUserId.get(member.userId),
         },
       });
     }
@@ -224,6 +230,9 @@ async function notifyErased(input: {
     const key = { requestId: input.requestId, kind: 'erased' as const, daysLeft: 0 };
     if (await alreadySent(key)) return;
     const retentionUntilYear = retentionEndsAt(input.erasedAt).getUTCFullYear();
+    const localeByUserId = await resolveRecipientLocales(
+      input.recipients.filter((r) => audienceOf(r.role) !== 'member').map((r) => r.userId),
+    );
     for (const recipient of input.recipients) {
       if (audienceOf(recipient.role) === 'member') continue;
       await enqueue({
@@ -235,6 +244,7 @@ async function notifyErased(input: {
           recipientName: recipient.name,
           organizationName: input.organizationName,
           retentionUntilYear,
+          locale: localeByUserId.get(recipient.userId),
         },
       });
     }
@@ -270,11 +280,15 @@ async function sendDueReminders(now: Date = new Date()): Promise<{ remindersSent
       const { organization, members } = snapshot;
       const owner = members.find((m) => m.role === 'owner');
       const base = resolveBaseUrlTrimmed();
-      const dueDate = formatDate(request.erasureDueAt.toISOString());
+      const dueIso = request.erasureDueAt.toISOString();
       const daysLeft = Math.max(1, Math.ceil(msLeft / DAY_MS));
+      const localeByUserId = await resolveRecipientLocales(
+        members.filter((m) => audienceOf(m.role) !== 'member').map((m) => m.userId),
+      );
       for (const member of members) {
         const audience = audienceOf(member.role);
         if (audience === 'member') continue;
+        const locale = localeByUserId.get(member.userId);
         await enqueue({
           workspaceId: null,
           idempotencyKey: `org-deletion:${request.id}:reminder-${threshold}:${member.userId}`,
@@ -285,9 +299,10 @@ async function sendDueReminders(now: Date = new Date()): Promise<{ remindersSent
             recipientName: member.name,
             organizationName: organization.name,
             ownerName: owner?.name ?? organization.name,
-            dueDate,
+            dueDate: formatDate(dueIso, locale),
             daysLeft,
             settingsUrl: `${base}/settings/organization`,
+            locale,
           },
         });
       }

@@ -73,6 +73,11 @@ export const PLAN_ITEM_CHANGE_FIELDS = [
   'difficulty',
   'description',
   'explanation',
+  /** The STEPS a `modify` REPLACES (MOTIR-8668 · `agent-authored-plans.md`
+   *  AMENDMENT 27) — `patch.todos`. FROM is the live list's count with its ticked
+   *  count (`5 (2 ✓)`), because the replacement deletes ticked rows; TO is the new
+   *  list, numbered and previewed. A clear is an empty NEW side. */
+  'todos',
   'links',
   /** The OBSOLESCENCE mark a `modify` sets, changes or clears (Story MOTIR-6577 ·
    *  MOTIR-6632, design Part XXIV §24.3) — emitted directly after `links`. Both
@@ -188,6 +193,9 @@ export const PATCH_KEY_RAIL_ROW = {
   // denominator for every plan. The reviewer reads it as a `kind` CHANGE row on
   // the canvas node and in the list, like the bodies above.
   kind: null,
+  // The STEPS (MOTIR-8668) move no RAIL row — like the bodies, they are long and
+  // the peek's rail has no row for them. The reviewer reads a `todos` CHANGE row.
+  todos: null,
   storyPoints: 'storyPoints',
   estimateMinutes: 'estimateMinutes',
   // A leaf's DIFFICULTY (MOTIR-6133 carries it, MOTIR-6137 renders it) — the
@@ -217,7 +225,9 @@ export const PATCH_KEY_RAIL_ROW = {
   supersedesRemove: 'supersedes',
   supersededByAdd: 'supersededBy',
   supersededByRemove: 'supersededBy',
-} satisfies Record<keyof PlanItemPatch, PlanItemChangeField | null>;
+  // `languages` (MOTIR-8743) is no row and no key here: it annotates the text
+  // keys above, outside `PLAN_ITEM_PATCH_KEYS`, and changes nothing by itself.
+} satisfies Record<Exclude<keyof PlanItemPatch, 'languages'>, PlanItemChangeField | null>;
 
 /**
  * The rail rows a `modify` CAN move — the denominator of the peek's count line.
@@ -305,11 +315,12 @@ export interface PlanProposalPeekDto {
    * The card's proposed STEPS, read-only (MOTIR-4622 · Part XV).
    *
    * On an `add` that carries them; **`null` on a `modify` and a `remove`, and
-   * that is a decision rather than a gap** (AMENDMENT 14 D2 / D6). A `modify`'s
-   * target is a COMMITTED card whose list is a person's PROGRESS: `QuickViewData`
-   * carries no to-do field, and a `modify` patch carries no `todos`, so there is
-   * nothing to show and nothing this plan could change. Part XV panel 6 draws
-   * that absence deliberately, so nobody fills it in later by accident.
+   * that is a decision rather than a gap** (AMENDMENT 14 D6). A `modify`'s
+   * target is a COMMITTED card whose list is a person's PROGRESS, so its live
+   * list is not shown here as if approve would write it. Since AMENDMENT 27
+   * (MOTIR-8668) a `modify` MAY replace that list; the replacement reaches the
+   * reviewer as a `todos` CHANGE row (live count and ticked count → the new
+   * steps), not through this field.
    *
    * It rides the ENVELOPE and not the payload for the reason the header above
    * gives: the payload of a `modify` is the target's, fetched on open, and an

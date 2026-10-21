@@ -3,20 +3,34 @@ import { batchTranslateFields, type TranslatedField } from '@/lib/ai/translate';
 import { requestTranslation, type TranslateTenant } from '@/lib/ai/translateClient';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkItemTodoDto } from '@/lib/dto/workItemTodos';
-import type { TranslateResponseDTO } from '@/lib/dto/workItemTranslation';
+import type {
+  TitlesTranslateResponseDTO,
+  TranslateResponseDTO,
+} from '@/lib/dto/workItemTranslation';
 import type { Locale } from '@/lib/i18n/locales';
-import { toTranslateResponseDTO } from '@/lib/mappers/workItemTranslationMappers';
+import {
+  toTitlesTranslateResponseDTO,
+  toTranslateResponseDTO,
+} from '@/lib/mappers/workItemTranslationMappers';
 import { FieldLockTimeoutError } from '@/lib/translation/errors';
 import { hashFieldText, type TranslatableField } from '@/lib/translation/fieldRevision';
 import { assembleFields, type DoorField } from '@/lib/translation/itemFields';
-import { classifyFields } from '@/lib/translation/needsTranslation';
+import { fieldRef } from '@/lib/translation/fieldRefs';
+import { classifyFields, sourceLanguageOf } from '@/lib/translation/needsTranslation';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
-import { readProject } from '@/lib/workspaces/tenantRead';
+import type { Project } from '@/generated/prisma/client';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { readProject, readWorkItems } from '@/lib/workspaces/tenantRead';
 import { fieldLockKey, withFieldLocks } from './translationSingleFlight';
 import { workItemTodosService } from './workItemTodosService';
 import { workItemTranslationStoreService } from './workItemTranslationStoreService';
+import { projectAccessService } from './projectAccessService';
+import { billingService } from './billingService';
+import { orgCanForWorkspace } from './organizationAccessService';
+import { creditOf } from './readerTranslationContextService';
 import { workItemsService } from './workItemsService';
+import { TITLE_TRANSLATION_MAX_ITEMS } from '@/lib/translation/titleBound';
 
 // The field assembly is pure and lives in `lib/translation/itemFields.ts`, so the
 // page-read offer can use it without importing this door (MOTIR-8122).
@@ -221,6 +235,17 @@ async function translateMissing(
 }
 
 export const workItemTranslationService = {
+  /** The many-titles door (MOTIR-8829), beside {@link translateWorkItem}. */
+  async translateTitlesForReader(
+    input: TranslateTitlesInput,
+    deps?: TitleDoorDeps,
+  ): Promise<TitlesTranslateResponseDTO> {
+    return toTitlesTranslateResponseDTO(
+      input.targetLanguage,
+      await translateTitlesForReader(input, deps),
+    );
+  },
+
   /**
    * Translate a work item into `targetLanguage` for its reader. Returns one
    * result per field that needs translating, in reading order; a field already
@@ -272,3 +297,314 @@ export const workItemTranslationService = {
     return toTranslateResponseDTO(input.targetLanguage, results);
   },
 };
+
+// ─── THE MANY-TITLES DOOR (Subtask MOTIR-8829) ────────────────────────────────
+//
+// The same door, asked for many work items' TITLES in one request, for the
+// auto-translate surfaces (lists, boards, backlog …). A SECOND ENTRY POINT, not a
+// second door: it reuses `resolveTenant` (the payer is the organisation that owns
+// the project), the store, the lock helper and the client seam, and carries its
+// OWN deps so the single-item seam set above is untouched.
+//
+// ⚠️ THE SWITCH IS THE CEILING ON SPENDING. With the project's auto-translate
+// switch off the door answers `enabled: false` having read no title, no store,
+// taken no lock and called no client — so a request rendered before the switch was
+// turned off cannot charge anything. The single-item press (`translateWorkItem`)
+// stays UNGATED: with the switch off the on-demand Translate press must still work.
+//
+// ⚠️ TWO REFS. A title is SENT under `fieldRef.titleForItem(id)` (motir-ai refuses
+// a reply with a duplicate ref, so fifty titles all sent as `title` would be
+// refused whole) and KEPT under `fieldRef.title()` on its own item, so this batch
+// and the item page read and write the same rows — and the lock key is the
+// press's, so a batch and a press for one title cannot both call motir-ai.
+
+/** The most titles one request translates; the excess is `truncated`, not refused. */
+export { TITLE_TRANSLATION_MAX_ITEMS };
+
+/** One title the door may translate: the item, its stored title and its recorded language. */
+export interface TitleSubject {
+  workItemId: string;
+  title: string;
+  language: string | null;
+}
+
+export interface TranslateTitlesInput {
+  projectId: string;
+  workItemIds: readonly string[];
+  targetLanguage: Locale;
+  actor: ServiceContext;
+}
+
+/** One title's answer. Titles that need no translation, and ids not answerable, are absent. */
+export type TitleTranslationResult =
+  | {
+      workItemId: string;
+      fieldRef: string;
+      status: 'ready';
+      text: string;
+      sourceLanguage: Locale | null;
+    }
+  | { workItemId: string; fieldRef: string; status: 'failed' | 'no_credit' | 'timeout' };
+
+export interface TitleTranslationAnswer {
+  enabled: boolean;
+  truncated: boolean;
+  /** Set only when a title answered `no_credit`: the reader may add credit. */
+  canAddCredit?: boolean;
+  titles: TitleTranslationResult[];
+}
+
+/** The seams a test replaces — every one defaults to the real thing. */
+export interface TitleDoorDeps {
+  loadProject: (projectId: string, ctx: ServiceContext) => Promise<Project | null>;
+  assertCanBrowse: (projectId: string, ctx: ServiceContext) => Promise<void>;
+  isAutoTranslateOn: (project: Pick<Project, 'autoTranslateWorkContent'>) => boolean;
+  loadSubjects: (
+    projectId: string,
+    ids: readonly string[],
+    ctx: ServiceContext,
+  ) => Promise<TitleSubject[]>;
+  store: Pick<typeof workItemTranslationStoreService, 'getKeptForTitles' | 'keep'>;
+  requestTranslation: typeof requestTranslation;
+  withFieldLocks: typeof withFieldLocks;
+  resolveTenant: (ctx: ServiceContext, projectId: string) => Promise<TranslateTenant>;
+  /** Whether the organisation can pay for a translation — asked only when a title would be sent. */
+  hasCredit: (ctx: ServiceContext) => Promise<boolean>;
+  /** Whether the reader may manage billing — asked only when a title answered `no_credit`. */
+  canAddCredit: (ctx: ServiceContext) => Promise<boolean>;
+}
+
+/** The ONE definition of "the project's auto-translate switch is on". */
+export function isAutoTranslateOn(project: Pick<Project, 'autoTranslateWorkContent'>): boolean {
+  return project.autoTranslateWorkContent === true;
+}
+
+/** The items' stored titles through the context-bound batch read; foreign / missing ids are absent. */
+async function loadTitleSubjects(
+  projectId: string,
+  ids: readonly string[],
+  ctx: ServiceContext,
+): Promise<TitleSubject[]> {
+  const rows = await readWorkItems(ids, ctx);
+  return rows
+    .filter((r) => r.workspaceId === ctx.workspaceId && r.projectId === projectId)
+    .map((r) => ({ workItemId: r.id, title: r.title, language: r.titleLanguage }));
+}
+
+export const defaultTitleDoorDeps: TitleDoorDeps = {
+  loadProject: (projectId, ctx) => readProject(projectId, ctx),
+  assertCanBrowse: (projectId, ctx) => projectAccessService.assertCanBrowse(projectId, ctx),
+  isAutoTranslateOn,
+  loadSubjects: loadTitleSubjects,
+  store: workItemTranslationStoreService,
+  requestTranslation,
+  withFieldLocks,
+  resolveTenant,
+  hasCredit: async (ctx) =>
+    creditOf(
+      await billingService.getAiAccessForContext({
+        actorUserId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      }),
+    ) === 'ok',
+  canAddCredit: (ctx) => orgCanForWorkspace(ctx.userId, ctx.workspaceId, 'manageBilling'),
+};
+
+interface TitleScope {
+  projectId: string;
+  targetLanguage: Locale;
+  ctx: ServiceContext;
+  tenant: TranslateTenant;
+  deps: TitleDoorDeps;
+  sourceLanguages: ReadonlyMap<string, Locale | null>;
+}
+
+interface TitleToSend {
+  workItemId: string;
+  text: string;
+}
+
+function titleFail(
+  titles: readonly TitleToSend[],
+  status: 'failed' | 'no_credit' | 'timeout',
+): TitleTranslationResult[] {
+  return titles.map((t) => ({
+    workItemId: t.workItemId,
+    fieldRef: fieldRef.titleForItem(t.workItemId),
+    status,
+  }));
+}
+
+/** One job's worth of titles: send under the per-item refs, keep each on its own item on `ok`. */
+async function sendTitleBatch(
+  scope: TitleScope,
+  batch: readonly TitleToSend[],
+): Promise<TitleTranslationResult[]> {
+  const result = await scope.deps.requestTranslation({
+    tenant: scope.tenant,
+    actor: { userId: scope.ctx.userId },
+    targetLanguage: scope.targetLanguage,
+    fields: batch.map((t) => ({ fieldRef: fieldRef.titleForItem(t.workItemId), text: t.text })),
+  });
+  if (result.status !== 'ok') {
+    return titleFail(batch, result.status === 'failed' ? 'failed' : result.status);
+  }
+  const byRef = new Map(result.translations.map((t) => [t.fieldRef, t.text]));
+  const out: TitleTranslationResult[] = [];
+  for (const t of batch) {
+    const ref = fieldRef.titleForItem(t.workItemId);
+    const kept = await scope.deps.store.keep(
+      { id: t.workItemId },
+      { fieldRef: fieldRef.title(), text: t.text },
+      scope.targetLanguage,
+      byRef.get(ref)!,
+      scope.ctx,
+    );
+    out.push({
+      workItemId: t.workItemId,
+      fieldRef: ref,
+      status: 'ready',
+      text: kept.translatedText,
+      sourceLanguage: scope.sourceLanguages.get(t.workItemId) ?? null,
+    });
+  }
+  return out;
+}
+
+/** Inside the locks: re-read the store once, send only what is still missing. */
+async function sendTitlesUnderLock(
+  scope: TitleScope,
+  missing: readonly TitleToSend[],
+): Promise<TitleTranslationResult[]> {
+  const { deps, projectId, targetLanguage, ctx } = scope;
+  const kept = await deps.store.getKeptForTitles(projectId, missing, targetLanguage, ctx);
+  const ready: TitleTranslationResult[] = missing
+    .filter((t) => kept[t.workItemId] !== undefined)
+    .map((t) => ({
+      workItemId: t.workItemId,
+      fieldRef: fieldRef.titleForItem(t.workItemId),
+      status: 'ready',
+      text: kept[t.workItemId]!,
+      sourceLanguage: scope.sourceLanguages.get(t.workItemId) ?? null,
+    }));
+  const toSend = missing.filter((t) => kept[t.workItemId] === undefined);
+  if (toSend.length === 0) return ready;
+  // An organisation that cannot pay sends nothing: the surface says so once.
+  if (!(await deps.hasCredit(ctx))) return [...ready, ...titleFail(toSend, 'no_credit')];
+  const byRef = new Map(toSend.map((t) => [fieldRef.titleForItem(t.workItemId), t]));
+  const { batches, oversized } = batchTranslateFields(
+    toSend.map((t) => ({ fieldRef: fieldRef.titleForItem(t.workItemId), text: t.text })),
+  );
+  const sent = await Promise.all(
+    batches.map((b) =>
+      sendTitleBatch(
+        scope,
+        b.map((f) => byRef.get(f.fieldRef)!),
+      ),
+    ),
+  );
+  const tooLong = titleFail(
+    oversized.map((ref) => byRef.get(ref)!),
+    'failed',
+  );
+  return [...ready, ...sent.flat(), ...tooLong];
+}
+
+/** The fresh half: take the press's lock for every missing title, then {@link sendTitlesUnderLock}. */
+async function translateMissingTitles(
+  scope: TitleScope,
+  missing: readonly TitleToSend[],
+): Promise<TitleTranslationResult[]> {
+  const keys = missing.map((t) =>
+    fieldLockKey({
+      organizationId: scope.tenant.organizationId,
+      workItemId: t.workItemId,
+      fieldRef: fieldRef.title(),
+      sourceHash: hashFieldText(t.text),
+      targetLanguage: scope.targetLanguage,
+    }),
+  );
+  try {
+    return await scope.deps.withFieldLocks(
+      keys,
+      () => sendTitlesUnderLock(scope, missing),
+      scope.ctx,
+    );
+  } catch (err) {
+    if (err instanceof FieldLockTimeoutError) return titleFail(missing, 'timeout');
+    throw err;
+  }
+}
+
+/**
+ * Translate many of a project's work items' TITLES for their reader. One entry per
+ * requested title that needs translating (in the order asked, repeats collapsed,
+ * at most {@link TITLE_TRANSLATION_MAX_ITEMS}); a title already in the reader's
+ * language, or empty, or whose id this reader may not answer, is absent. A reader
+ * who cannot browse the project is refused before anything is read.
+ */
+export async function translateTitlesForReader(
+  input: TranslateTitlesInput,
+  deps: TitleDoorDeps = defaultTitleDoorDeps,
+): Promise<TitleTranslationAnswer> {
+  const { projectId, targetLanguage, actor: ctx } = input;
+  const project = await deps.loadProject(projectId, ctx);
+  if (!project || project.workspaceId !== ctx.workspaceId) {
+    throw new ProjectNotFoundError(projectId);
+  }
+  await deps.assertCanBrowse(projectId, ctx);
+  if (!deps.isAutoTranslateOn(project)) return { enabled: false, truncated: false, titles: [] };
+
+  const unique = [...new Set(input.workItemIds)];
+  const truncated = unique.length > TITLE_TRANSLATION_MAX_ITEMS;
+  const asked = unique.slice(0, TITLE_TRANSLATION_MAX_ITEMS);
+  const subjects = await deps.loadSubjects(projectId, asked, ctx);
+  const byId = new Map(subjects.map((s) => [s.workItemId, s]));
+  const ordered = asked.map((id) => byId.get(id)).filter((s): s is TitleSubject => s !== undefined);
+
+  const verdicts = classifyFields(
+    ordered.map((s) => ({ id: s.workItemId, text: s.title, language: s.language })),
+    targetLanguage,
+  );
+  const needing: TitleSubject[] = [];
+  const sourceLanguages = new Map<string, Locale | null>();
+  ordered.forEach((s, i) => {
+    const verdict = verdicts[i]!;
+    if (!verdict.needsTranslation) return;
+    needing.push(s);
+    sourceLanguages.set(
+      s.workItemId,
+      sourceLanguageOf({ text: s.title, language: s.language }, verdict),
+    );
+  });
+  if (needing.length === 0) return { enabled: true, truncated, titles: [] };
+
+  const texts: TitleToSend[] = needing.map((s) => ({ workItemId: s.workItemId, text: s.title }));
+  const kept = await deps.store.getKeptForTitles(projectId, texts, targetLanguage, ctx);
+  const missing = texts.filter((t) => kept[t.workItemId] === undefined);
+  const fresh = new Map<string, TitleTranslationResult>();
+  if (missing.length > 0) {
+    const tenant = await deps.resolveTenant(ctx, projectId);
+    const scope: TitleScope = { projectId, targetLanguage, ctx, tenant, deps, sourceLanguages };
+    for (const r of await translateMissingTitles(scope, missing)) fresh.set(r.workItemId, r);
+  }
+  const titles = texts.map(
+    (t): TitleTranslationResult =>
+      kept[t.workItemId] !== undefined
+        ? {
+            workItemId: t.workItemId,
+            fieldRef: fieldRef.titleForItem(t.workItemId),
+            status: 'ready',
+            text: kept[t.workItemId]!,
+            sourceLanguage: sourceLanguages.get(t.workItemId) ?? null,
+          }
+        : fresh.get(t.workItemId)!,
+  );
+  const noCredit = titles.some((t) => t.status === 'no_credit');
+  return {
+    enabled: true,
+    truncated,
+    titles,
+    ...(noCredit && (await deps.canAddCredit(ctx)) ? { canAddCredit: true } : {}),
+  };
+}

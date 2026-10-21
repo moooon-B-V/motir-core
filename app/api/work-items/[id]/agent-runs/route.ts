@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isAgentRunCommand, type AgentRunCommand } from '@/lib/agentInstances/runCommand';
 import { mapAgentInstanceError } from '@/lib/agentInstances/errorResponse';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
@@ -9,7 +10,7 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 
 // POST /api/work-items/[id]/agent-runs (Story MOTIR-6864 · MOTIR-7026,
 // `docs/decisions/agent-instance-run.md` §4) — START a card's run in one of the
-// caller's own agents: `{ agentInstanceId, idempotencyKey? }` →
+// caller's own agents: `{ agentInstanceId, idempotencyKey?, command? }` →
 // `201 { dispatchRunId, created, woke }` (200 for a repeated key).
 //
 // Thin HTTP layer (CLAUDE.md 4-layer): the compliant-session gate, the body, ONE
@@ -37,6 +38,7 @@ export async function POST(
   const body = (await req.json().catch(() => null)) as {
     agentInstanceId?: unknown;
     idempotencyKey?: unknown;
+    command?: unknown;
   } | null;
   const agentInstanceId =
     typeof body?.agentInstanceId === 'string' ? body.agentInstanceId.trim() : '';
@@ -47,10 +49,15 @@ export async function POST(
     typeof body?.idempotencyKey === 'string' && body.idempotencyKey.trim()
       ? body.idempotencyKey.trim()
       : undefined;
+  // MOTIR-9045: what the run is for — `run` (the default), `fix` or `continue`.
+  if (body?.command !== undefined && !isAgentRunCommand(body.command)) {
+    return problem('BAD_REQUEST', '`command` must be one of run, fix or continue.', 400);
+  }
+  const command = body?.command as AgentRunCommand | undefined;
 
   try {
     const started = await agentInstanceRunService.start(
-      { workItemKey: key, agentInstanceId, idempotencyKey },
+      { workItemKey: key, agentInstanceId, idempotencyKey, command },
       gate.ctx,
     );
     return NextResponse.json(started, {

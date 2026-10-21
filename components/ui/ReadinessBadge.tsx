@@ -1,3 +1,4 @@
+import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { CircleAlert, CircleCheckBig } from 'lucide-react';
@@ -45,7 +46,7 @@ export interface ReadinessBadgeProps {
    * `blockerLinksNewTab` for its link the same way. Without it, a cascade-blocked
    * item would render a bare "Blocked" with nothing to point at.
    */
-  blockedByAncestor?: { identifier: string; href: string; title: string } | null;
+  blockedByAncestor?: { id?: string; identifier: string; href: string; title: string } | null;
   className?: string;
 }
 
@@ -61,7 +62,7 @@ export function ReadinessBadge({
     return (
       <div
         className={cn(
-          'bg-(--el-tint-mint) flex items-start gap-2.5 rounded-(--radius-card) px-3.5 py-3',
+          'bg-(--el-tint-mint) flex items-start gap-2.5 rounded-(--radius-card) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12)',
           className,
         )}
       >
@@ -93,7 +94,7 @@ export function ReadinessBadge({
       data-readiness={soft ? 'soft' : 'hard'}
       className={cn(
         soft ? 'bg-(--el-tint-yellow)' : 'bg-(--el-tint-peach)',
-        'flex items-start gap-2.5 rounded-(--radius-card) px-3.5 py-3',
+        'flex items-start gap-2.5 rounded-(--radius-card) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12)',
         className,
       )}
     >
@@ -137,7 +138,14 @@ export function ReadinessBadge({
             >
               {blockedByAncestor.identifier}
             </Link>{' '}
-            <span className="text-(--el-text-strong)">· {blockedByAncestor.title}</span>
+            <span className="text-(--el-text-strong)">
+              ·{' '}
+              {blockedByAncestor.id ? (
+                <SurfaceTitle id={blockedByAncestor.id} title={blockedByAncestor.title} />
+              ) : (
+                blockedByAncestor.title
+              )}
+            </span>
           </span>
         ) : null}
       </div>

@@ -7,6 +7,8 @@ import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { explanationLanguageFromClient } from '@/lib/ai/explanationSource';
+import type { Locale } from '@/lib/i18n/locales';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import type { PendingDecisionMap } from './_components/issueRows';
 import { isIssueType } from '@/lib/issues/parentRules';
@@ -81,6 +83,10 @@ export interface CreateIssueInput {
   // otherwise an AI draft would persist as `user_authored` (create-action
   // whitelist drops un-listed fields).
   explanationSource?: WorkItemExplanationSourceDto;
+  // The language a drafted explanation was written in (MOTIR-8744). Only
+  // `explanation` is honoured (`explanationLanguageFromClient`); a hand-typed
+  // explanation sends none and records the organisation's content language.
+  languages?: { explanation?: Locale };
   priority?: WorkItemPriorityDto;
   // Accepted for forward-compat but NOT yet surfaced in the modal: the filtered
   // parent picker is 2.3.4, the assignee combobox a later subtask. Until those
@@ -142,6 +148,7 @@ export async function createIssueAction(input: CreateIssueInput): Promise<Create
         ...(input.explanationSource && input.explanationMd?.trim()
           ? { explanationSource: input.explanationSource }
           : {}),
+        ...explanationLanguageFromClient(input.languages, input.explanationMd),
         parentId: input.parentId ?? null,
         assigneeId: input.assigneeId ?? null,
         ...(input.priority ? { priority: input.priority } : {}),

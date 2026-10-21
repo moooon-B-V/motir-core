@@ -405,3 +405,22 @@ also what makes `max_entries_to_merge: 5` reachable for the first time.
   the gate, and the deploy follows it", which still holds; the suite moved, the order did not
 - `motir-core` PRs #2480, #2486, #2490 — the instance, end to end
 - MOTIR-4047 (the patch) · MOTIR-2003, MOTIR-3106, MOTIR-3148, MOTIR-3760 (the lineage)
+
+## §9 — AMENDMENT 2026-10-20: the queue runs the acceptance lane only for an entry that touches it
+
+**What changed.** `acceptance-tests.yml`'s `membership` gate now reads a `merge_group` entry's own
+`base_sha...head_sha` diff, as a pull request's file list is read, and runs the lane only when that
+diff touches a lane path (a spec, the workflow, its config, or the two helpers). Otherwise `run=false`:
+no build, no legs, and `Acceptance complete` still reports green. A payload without shas, or a diff
+that cannot be taken, fails open and runs the lane. `push: main` is unchanged and still runs the whole
+lane on the merged result.
+
+**Why.** Measured over the 30 most recent queue entries (2026-10-19/20): the `CI` run took 27–38 min
+(median ~34), the `Acceptance tests` run 54–67 min (median ~58), with 148 specs on at most 6 legs. The
+queue's `check_response_timeout_minutes` is 60, so acceptance runs finishing past 60 min were thrown
+out as `CI_TIMEOUT` with nothing red, and acceptance held a `max_entries_to_build` slot (§7.6) about
+twice as long as the rest of the gate. The lane's specs are acceptance receipts, not a regression
+suite (`CLAUDE.md`), and a spec change already ran on its own PR.
+
+**Cost.** A change elsewhere that breaks an acceptance spec in the composed tree is now found by the
+`push: main` baseline, after the merge, instead of by ejection before it.

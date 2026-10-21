@@ -317,7 +317,7 @@ function EstimateBadgeEditor({
             }}
             className="h-(--height-control) flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) font-mono text-[13px] text-(--el-text) outline-none focus-visible:border-(--el-accent) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
-          <kbd className="rounded-(--radius-control) border border-(--el-border) bg-(--el-surface-soft) px-1.5 py-0.5 font-mono text-[10.5px] text-(--el-text-secondary)">
+          <kbd className="rounded-(--radius-control) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x-6) py-(--spacing-control-y-2) font-mono text-[10.5px] text-(--el-text-secondary)">
             ↵
           </kbd>
         </div>
@@ -326,7 +326,7 @@ function EstimateBadgeEditor({
           <button
             type="button"
             onClick={() => commit(null)}
-            className="inline-flex h-7 items-center gap-1.5 rounded-(--radius-btn) px-2.5 font-sans text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text-strong)"
+            className="inline-flex h-(--height-control-28) items-center gap-1.5 rounded-(--radius-btn) px-(--spacing-control-x) font-sans text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text-strong)"
           >
             <X className="h-3 w-3" aria-hidden />
             {t('clear')}

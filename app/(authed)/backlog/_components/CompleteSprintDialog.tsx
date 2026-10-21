@@ -380,7 +380,7 @@ function SplitStat({
   sub: string;
 }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-card-padding) py-3">
+    <div className="flex flex-col gap-0.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-card-padding) py-(--spacing-card-padding-12)">
       <span
         className={`font-serif text-2xl font-semibold ${tone === 'done' ? 'text-(--el-success)' : 'text-(--el-text-strong)'}`}
       >

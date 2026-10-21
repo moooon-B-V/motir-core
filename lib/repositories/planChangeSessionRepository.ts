@@ -65,6 +65,16 @@ function failedOpenForOwnerWhere(args: {
     // sweep records a silent plan's failure on, so both must be where it is seen.
     origin: { in: ['conversation', 'mcp'] },
     ...FAILED_WAITING_WHERE,
+    // A failure that cannot be resumed and has no plan waiting beside it asks nothing of its
+    // person (MOTIR-9121): its attempt was released when it was recorded, and the session's
+    // next turn simply plans again. Listing it would offer an entry with nothing to press.
+    // ⚠️ Spelled as an OR, never `NOT { failureResumable: false, … }`: on a NULL (unknown)
+    // verdict that NOT evaluates to NULL and drops every failure recorded before the column.
+    OR: [
+      { failureResumable: null },
+      { failureResumable: true },
+      { plans: { some: { status: { in: ['generating', 'planned', 'stale'] } } } },
+    ],
   };
 }
 
@@ -94,7 +104,9 @@ function endedWithWaitingPlanForOwnerWhere(args: {
 // app-level scope (a cross-tenant project id returns null → 404, never 403).
 export const planChangeSessionRepository = {
   /** Create a session. `seedGateId` is set ONLY by a seeded first turn
-   *  (`planChangeSessionsService.startSeededWithFirstTurn`, AMENDMENT 17 §9). */
+   *  (`planChangeSessionsService.startSeededWithFirstTurn`, AMENDMENT 17 §9), and
+   *  `seedGuideTurnId` ONLY by a guide-seeded one (`startGuideSeededWithFirstTurn`,
+   *  MOTIR-8691). At most one of the two is set (the `one_seed` CHECK). */
   async create(
     data: Prisma.PlanChangeSessionUncheckedCreateInput,
     tx: Prisma.TransactionClient,
@@ -288,6 +300,23 @@ export const planChangeSessionRepository = {
         createdById: userId,
         endedAt: null,
       },
+      orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
+    });
+  },
+
+  /** The guide-seeded twin of {@link findSeededForUser} (MOTIR-8691): this member's
+   *  OWN most recent session seeded by the guide reply turn `seedGuideTurnId`,
+   *  open OR ended, newest first. Served by the
+   *  `(seed_guide_turn_id, created_by_id, last_activity_at)` index. */
+  async findSeededByGuideTurnForUser(
+    projectId: string,
+    seedGuideTurnId: string,
+    userId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeSession | null> {
+    return tx.planChangeSession.findFirst({
+      where: { projectId, workspaceId, seedGuideTurnId, createdById: userId },
       orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
     });
   },
@@ -572,6 +601,24 @@ export const planChangeSessionRepository = {
     return result.count > 0;
   },
 
+  /**
+   * Mark a recorded failure as one that cannot be resumed (MOTIR-9121) — motir-ai refused a
+   * resume of it for want of a settled conversation. Guarded on the failure still being the
+   * one the caller judged (`failedJobId`) on an open session, so a newer attempt or an end
+   * is never overwritten. Returns whether a row moved.
+   */
+  async markFailureUnresumable(
+    id: string,
+    failedJobId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.planChangeSession.updateMany({
+      where: { id, endedAt: null, failedAt: { not: null }, failedJobId },
+      data: { failureResumable: false },
+    });
+    return result.count > 0;
+  },
+
   /** Null the seven failure columns — a resume's new attempt has bound. */
   async clearFailure(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
     const result = await tx.planChangeSession.updateMany({
@@ -845,6 +892,17 @@ export const planChangeSessionRepository = {
    * `seedCardInProject` is the browse fact the mapper keys off — see
    * `toPlanSessionRowDto`.
    *
+   * A GUIDE seed (MOTIR-8697) rides it too: `seed_guide_turn_id → turn → its
+   * guide session → the guided work item`, three more plain joins on keys, so a
+   * guide-seeded row still costs no query of its own. The guided card is the
+   * guide session's `target_keys[1]` (SQL arrays are 1-based): the guide door,
+   * `planChangeSessionsService.openGuideWithFirstTurn`, refuses any scope that is
+   * not exactly ONE card and writes `targetKeys: scope.targetKeys` with
+   * `origin: 'guide'`, and `findLatestGuideForUser` reads a guide back by that one
+   * card's `scopeKey` — the same `targetKeys[0]` read `planningSeedService`'s
+   * guide seed read makes. The `gs.origin = 'guide'` guard keeps a turn of any
+   * other session from ever resolving as a guide seed.
+   *
    * A `guide` conversation (MOTIR-7464; ADR `conversation-turn-intent.md`
    * AMENDMENT 2, A2.2) is NOT a planning session — it submits no plan — so it is
    * left out of the Plans room, here and in {@link countByLatestPlanState} alike.
@@ -887,7 +945,10 @@ export const planChangeSessionRepository = {
              sg."state"::text AS "seedGateState",
              sg."chosen_option"->>'label' AS "seedChosenLabel",
              sw."identifier" AS "seedCardKey",
-             (sw."id" IS NOT NULL AND sw."projectId" = s."project_id") AS "seedCardInProject"
+             (sw."id" IS NOT NULL AND sw."projectId" = s."project_id") AS "seedCardInProject",
+             s."seed_guide_turn_id" AS "seedGuideTurnId",
+             gw."identifier" AS "seedGuideCardKey",
+             (gw."id" IS NOT NULL AND gw."projectId" = s."project_id") AS "seedGuideCardInProject"
       FROM "plan_change_session" s
       LEFT JOIN "user" u ON u."id" = s."created_by_id"
       LEFT JOIN "user" eb ON eb."id" = s."ended_by_id"
@@ -898,6 +959,13 @@ export const planChangeSessionRepository = {
         ON sg."id" = s."seed_gate_id" AND sg."workspace_id" = s."workspace_id"
       LEFT JOIN "work_item" sw
         ON sw."id" = sg."work_item_id" AND sw."workspaceId" = s."workspace_id"
+      LEFT JOIN "plan_change_turn" gt
+        ON gt."id" = s."seed_guide_turn_id" AND gt."workspace_id" = s."workspace_id"
+      LEFT JOIN "plan_change_session" gs
+        ON gs."id" = gt."session_id" AND gs."workspace_id" = s."workspace_id"
+       AND gs."origin" = 'guide'
+      LEFT JOIN "work_item" gw
+        ON gw."identifier" = gs."target_keys"[1] AND gw."workspaceId" = s."workspace_id"
       LEFT JOIN LATERAL (
         SELECT t."body" FROM "plan_change_turn" t
         WHERE t."session_id" = s."id" AND t."role" = 'user'
@@ -1061,6 +1129,16 @@ export interface PlanSessionListRow {
   /** Whether that work item is in the SESSION's project — the one the list is
    *  browse-gated on. False when there is no such work item. */
   seedCardInProject: boolean;
+  /** MOTIR-8691's `seed_guide_turn_id` — the guide reply turn whose re-plan offer
+   *  seeded this session; still set when the guided work item moved away. Null on
+   *  every other session (exclusive with `seedGateId`). */
+  seedGuideTurnId: string | null;
+  /** The GUIDED work item's identifier — the card the seeding guide conversation
+   *  walked (its `target_keys[1]`) — when it still exists; else null. */
+  seedGuideCardKey: string | null;
+  /** Whether that guided work item is in the SESSION's project, the one the list
+   *  is browse-gated on. False when there is no such work item. */
+  seedGuideCardInProject: boolean;
 }
 
 /**
@@ -1071,6 +1149,9 @@ export interface PlanSessionListRow {
  *
  * - its `target_keys` name a hidden work item;
  * - its seeding gate sits on a hidden work item;
+ * - its GUIDE seed's guide conversation (`seed_guide_turn_id → turn → session`,
+ *   MOTIR-8697) names a hidden work item in its `target_keys` — the guided card,
+ *   which the session's first turn quotes, exactly as a gate seed's;
  * - ANY of its plans holds a proposal whose `work_item_id`, `parent_ref`,
  *   `blocked_by_refs`, or a `modify` patch's `parentRef` / `blockedByAdd`, names
  *   a hidden id.
@@ -1088,6 +1169,14 @@ export function sessionWithheldSql(hiddenIds: readonly string[] | undefined): Pr
         AND NOT EXISTS (
           SELECT 1 FROM "approval_gate" hg
            WHERE hg."id" = s."seed_gate_id" AND hg."work_item_id" = ANY(${hidden})
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM "plan_change_turn" hgt
+            JOIN "plan_change_session" hgs ON hgs."id" = hgt."session_id"
+            JOIN "work_item" hgw ON hgw."identifier" = ANY(hgs."target_keys")
+           WHERE hgt."id" = s."seed_guide_turn_id"
+             AND hgs."origin" = 'guide'
+             AND hgw."id" = ANY(${hidden})
         )
         AND NOT EXISTS (
           SELECT 1 FROM "plan" hp

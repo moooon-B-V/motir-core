@@ -146,6 +146,24 @@ The parent run does not resume when the gate is decided. The person runs it agai
 > Workbench's **To resume** tab for `motir continue <KEY>`. The sentence above is kept as the record
 > of what this decision first said; it now holds only for a run that is not hosted.
 
+> **AMENDED 2026-10-15 (Bug MOTIR-8670).** The row _"the card moved to Blocked or In Progress —
+> stays"_ is overturned for **Blocked**. Waiting on you asks a person to do the work now, and a card
+> nobody can start asks them something they cannot act on — MOTIR-8529 sat there for hours after a
+> re-plan rewrote it and blocked it on new, unstarted work. Rule 6 still keeps every OTHER kind's
+> question through `blocked`: they judge a result, this one asks for the work. The gate is now also
+> withdrawn, in the triggering write's transaction:
+>
+> | event                                                                                                                             | outcome                           |
+> | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+> | the card moved to Blocked, by any writer                                                                                          | superseded, NEW cause `not_ready` |
+> | a `blocked_by` written from the card to OPEN work (`isOpenBlocker`) — the link door, a create's `blocks`, a plan's `blockedByAdd` | superseded, `not_ready`           |
+> | the card moved to Planning, by any writer — a plan's append parks it there                                                        | superseded, NEW cause `replanned` |
+> | a plan approval's `modify` changed the card's title, body or repository (`patchRescopes`)                                         | superseded, `replanned`           |
+>
+> Still kept: a move to In Progress, a `blocked_by` to finished or integrated work, and every edit to
+> a field the stamp does not hash (assignee, priority, labels). **Nothing re-raises a withdrawn
+> gate**: the next run that reaches the card raises it through §2, exactly as for a card never asked.
+
 ### 7. Listing
 
 | surface                    | pinned value                                                                                                                                                                                |

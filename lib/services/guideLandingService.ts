@@ -10,13 +10,17 @@ import {
   type GuideActionOutcome,
   type GuideRowInput,
   type GuideTurn,
+  type GuideReplanOffer,
+  type GuideReplanTargetResolution,
   type GuideTurnRecord,
 } from '@/lib/ai/guideWorkItem';
 import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChange';
 import { guideReplyBody } from '@/lib/planning/guideReplyNotes';
+import { toSeedAncestors } from '@/lib/planning/refusalSeed';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkItemTodoDto } from '@/lib/dto/workItemTodos';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { deliveryMemberState } from '@/lib/workItems/deliverySet';
 import { commentsService } from '@/lib/services/commentsService';
@@ -133,6 +137,8 @@ interface LandingCard {
   sessionId: string;
   /** How many bugs THIS turn has filed so far (`GUIDE_BUGS_PER_TURN`). */
   bugsFiledThisTurn: number;
+  /** The re-plan offer THIS turn has landed (MOTIR-8689) — one per turn. */
+  replanOffer: GuideReplanOffer | null;
 }
 
 function actorOf(ctx: ProjectContext): ServiceContext {
@@ -226,13 +232,95 @@ export function guideCannotDoComment(reason: string, step: string | null): strin
 
 /** The comment `needs_replan` leaves on the card (A3.9 (b)): the change asked for
  *  would alter what the card is for, so nothing was changed and the walk stopped. */
-export function guideNeedsReplanComment(reason: string): string {
+export function guideNeedsReplanComment(reason: string, targetKey?: string | null): string {
   return [
     '**Motir AI stopped: this card needs a re-plan.**',
     '',
     'The change asked for in the guided walk would alter what this card is for, so nothing on the card was changed.',
     `Reason: ${reason}`,
+    ...(targetKey === undefined
+      ? []
+      : [
+          '',
+          targetKey === null
+            ? 'No open work item to re-plan on.'
+            : `Re-plan offered on: ${targetKey}`,
+        ]),
   ].join('\n');
+}
+
+/**
+ * Where a `needs_replan` offer plans (MOTIR-8685 Q4), resolved ONCE at landing, as
+ * the person whose turn it was:
+ *
+ *  1. the key the guide asked for, else the guided card;
+ *  2. a key that cannot be read (unknown, not browsable, another project) falls
+ *     back to the guided card — nothing of the unreadable card is kept;
+ *  3. a target that is archived or in the done category walks UP its ancestors to
+ *     the nearest one that is neither; every one done ⇒ no target;
+ *  4. otherwise it stands as asked.
+ */
+export async function resolveReplanTarget(
+  requestedKey: string | null,
+  card: WorkItemDto,
+  ctx: ProjectContext,
+): Promise<{ targetKey: string | null; targetResolution: GuideReplanTargetResolution }> {
+  let target = card;
+  let resolution: GuideReplanTargetResolution = 'guided_card';
+  // Keys are case-insensitive, folded the way the guide door folds `itemKey`
+  // (`requireGuidableCard`), so a guide asking for `motir-9` reaches `MOTIR-9`.
+  const askedKey = requestedKey === null ? null : requestedKey.trim().toUpperCase();
+  if (askedKey !== null && askedKey !== card.identifier.toUpperCase()) {
+    try {
+      const asked = await workItemsService.getWorkItemByIdentifier(
+        ctx.projectId,
+        askedKey,
+        actorOf(ctx),
+      );
+      if (asked.projectId === ctx.projectId) {
+        target = asked;
+        resolution = 'as_asked';
+      }
+    } catch (err) {
+      // Not found, or not browsable by this person: indistinguishable, and both
+      // fall back to the guided card.
+      if (
+        !(
+          err instanceof WorkItemError ||
+          err instanceof PermissionDeniedError ||
+          err instanceof ProjectAccessDeniedError
+        )
+      ) {
+        throw err;
+      }
+    }
+  } else if (askedKey !== null) {
+    resolution = 'as_asked';
+  }
+  const [statuses, ancestorRows] = await Promise.all([
+    workflowsService.listStatusesByProject(ctx.projectId, ctx.workspaceId),
+    target.parentId
+      ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+          workItemRepository.findAncestors(target.id, ctx.workspaceId, tx),
+        )
+      : Promise.resolve([]),
+  ]);
+  const doneKeys = new Set(statuses.filter((st) => st.category === 'done').map((st) => st.key));
+  if (target.archivedAt === null && !doneKeys.has(target.status)) {
+    return { targetKey: target.identifier, targetResolution: resolution };
+  }
+  // `findAncestors` is root → parent; walk it from the parent up.
+  const ancestors = toSeedAncestors(
+    ancestorRows.filter((row) => row.projectId === ctx.projectId),
+    statuses,
+  );
+  for (let i = ancestors.length - 1; i >= 0; i -= 1) {
+    const a = ancestors[i]!;
+    if (!a.archived && a.statusCategory !== 'done') {
+      return { targetKey: a.key, targetResolution: 'nearest_open_ancestor' };
+    }
+  }
+  return { targetKey: null, targetResolution: 'none' };
 }
 
 /** The comment `close` leaves on the card — the turn's own summary. */
@@ -427,11 +515,39 @@ async function landOne(
     }
 
     case 'needs_replan': {
+      // A reason-only `needs_replan` comments exactly as it always has.
+      if (action.requestMd === undefined) {
+        await commentsService.addComment(
+          card.item.id,
+          { bodyMd: guideNeedsReplanComment(action.reason) },
+          actor,
+        );
+        return landed();
+      }
+      if (card.replanOffer) throw new Skip('a guide turn carries one re-plan offer');
+      const requestedTargetKey = action.targetKey ?? null;
+      const { targetKey, targetResolution } = await resolveReplanTarget(
+        requestedTargetKey,
+        card.item,
+        ctx,
+      );
       await commentsService.addComment(
         card.item.id,
-        { bodyMd: guideNeedsReplanComment(action.reason) },
+        { bodyMd: guideNeedsReplanComment(action.reason, targetKey) },
         actor,
       );
+      card.replanOffer = {
+        reason: action.reason,
+        requestMd: action.requestMd,
+        requestedTargetKey,
+        targetKey,
+        targetResolution,
+        declinedAt: null,
+        declinedById: null,
+        confirmedAt: null,
+        confirmedById: null,
+        confirmedSessionId: null,
+      };
       return landed();
     }
 
@@ -577,6 +693,7 @@ export const guideLandingService = {
       rows: await readRows(item, ctx),
       sessionId: session.id,
       bugsFiledThisTurn: 0,
+      replanOffer: null,
     };
     const derived = deriveTemporaryList(recordsOf(session));
     const temporary = { active: card.rows.length === 0 && derived.length > 0, rows: derived };
@@ -633,6 +750,7 @@ export const guideLandingService = {
         !outcomes.some(
           (o, i) => o.outcome === 'landed' && input.result.actions[i]!.type === 'write_todos',
         ),
+      replanOffer: card.replanOffer,
     };
     const updated = await planChangeSessionsService.appendGuideReplyTurn(
       {
@@ -644,6 +762,20 @@ export const guideLandingService = {
       address,
     );
     return { outcome: 'guided', session: updated, record };
+  },
+
+  /**
+   * Decline the re-plan offer on a guide reply turn (MOTIR-8689). Stored under the
+   * conversation's own lock; plans nothing, spends nothing, writes nothing else.
+   */
+  async declineReplanOffer(
+    turnId: string,
+    ctx: ProjectContext,
+    opts: { sessionId: string },
+  ): Promise<PlanChangeSessionDto> {
+    return planChangeSessionsService.declineGuideReplanOffer(turnId, ctx, {
+      sessionId: opts.sessionId,
+    });
   },
 
   /**

@@ -1,5 +1,6 @@
 'use client';
 
+import { useSurfaceTitleResolver } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -63,6 +64,7 @@ export function IssueListTable({
   const router = useRouter();
   const pathname = usePathname();
   const t = useTranslations();
+  const resolveTitle = useSurfaceTitleResolver();
   const columns = buildIssueColumns(t);
   // A plain click on the whole-row link opens the quick-view peek (the eye
   // trigger was removed in MOTIR-1306); ⌘/ctrl/middle-click still opens the
@@ -203,7 +205,7 @@ export function IssueListTable({
                   {i === 0 ? (
                     <Link
                       href={routes.item(row.identifier)}
-                      aria-label={`${row.identifier} ${row.title}`}
+                      aria-label={`${row.identifier} ${resolveTitle(row.id, row.title).name}`}
                       onClick={(e) => onPeekClick(e, row.identifier)}
                       className="absolute inset-0 z-0 focus:outline-none"
                     />

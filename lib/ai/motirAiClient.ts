@@ -405,7 +405,31 @@ export async function getJob(jobId: string, coreProjectId: string): Promise<JobV
     // Read from the RAW problem: once mapped, an abandoned job's error is the same
     // `MotirAiUnavailableError` an outage produces (MOTIR-8304).
     lostMachine: body.status === 'failed' && body.error?.code === AI_JOB_ABANDONED_PROBLEM_CODE,
+    // motir-ai's own verdict on a failed planning job (MOTIR-9121); anything that is not a
+    // boolean reads as "did not say", never as `false`.
+    ...(typeof body.resumable === 'boolean' ? { resumable: body.resumable } : {}),
   };
+}
+
+// DELETE /v1/jobs/:id — cancel a job core has given up on (MOTIR-9065), so a job
+// still waiting in motir-ai's queue cannot start later against a session core has
+// already recorded failed. The route is the one `docs/contract.md` names
+// (`200 { jobId, status: "canceled" }`); it carries the same project scope as
+// `getJob`. A non-2xx throws the typed error, which the caller reports — a cancel
+// that could not be made is said, never swallowed.
+export async function cancelJob(
+  jobId: string,
+  coreProjectId: string,
+): Promise<{ jobId: string; status: string }> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({ [JOB_SCOPE_QUERY_PARAM]: coreProjectId });
+  const res = await aiFetch(`${url}/v1/jobs/${encodeURIComponent(jobId)}?${params.toString()}`, {
+    method: 'DELETE',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json()) as { jobId: string; status: string };
+  return { jobId: body.jobId, status: body.status };
 }
 
 // GET /v1/usage — the org cost rollup for the cost dashboard (Subtask 7.2.11),
@@ -1218,6 +1242,12 @@ export interface RawConvention {
   contentMd: string;
   provenance: RawConventionProvenance[];
   sourceAuditId: string | null;
+  // Who wrote this version (MOTIR-9080). Optional on the wire: a motir-ai that
+  // predates the editable convention sends none of the three, and reads as
+  // `derived` with nothing waiting.
+  authorKind?: 'derived' | 'edited';
+  editedByUserId?: string | null;
+  pendingDerivedMd?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1390,6 +1420,30 @@ export async function getConvention(query: ConventionQuery): Promise<RawConventi
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawConventionSurface;
+}
+
+export interface PutConventionInput {
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  repoKey: string;
+  contentMd: string;
+  editedByUserId: string;
+  // The version the editor loaded (0 when the repository had none).
+  baseVersion: number;
+}
+
+// PUT /v1/convention — a person's save: motir-ai records version + 1 as an `edited`
+// version, or refuses a stale `baseVersion` as a 409 (MOTIR-9080), which
+// `errorFromProblem` maps to `MotirAiConventionConflictError`.
+export async function putConvention(input: PutConventionInput): Promise<RawConvention> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/convention`, {
+    method: 'PUT',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawConvention;
 }
 
 // The RUN-SCOPED CREDENTIAL a fleet index container presents to motir-ai

@@ -290,6 +290,10 @@ function SeedLink({ seed }: { seed: PlanSessionSeedDto }) {
   const routes = useReaderRoutes();
   const t = useTranslations('aiPlanning.sessions');
   if (seed.origin === 'pick') return <PickSeedLink seed={seed} />;
+  if (seed.origin === 'guide') return <GuideSeedLink seed={seed} />;
+  // A refusal always carries its gate's kind; a seed without one names no verb
+  // rather than reading `SEED_VERB_KEY` off a null (MOTIR-8697).
+  const verbKey = seed.gateKind === null ? null : SEED_VERB_KEY[seed.gateKind];
   return (
     <Link
       href={routes.item(seed.cardKey)}
@@ -303,10 +307,14 @@ function SeedLink({ seed }: { seed: PlanSessionSeedDto }) {
           mono: (chunks) => <span className="font-mono">{chunks}</span>,
         })}
       </span>
-      <span className="text-(--el-text-faint)" aria-hidden>
-        ·
-      </span>
-      <span>{t(SEED_VERB_KEY[seed.gateKind])}</span>
+      {verbKey ? (
+        <>
+          <span className="text-(--el-text-faint)" aria-hidden>
+            ·
+          </span>
+          <span>{t(verbKey)}</span>
+        </>
+      ) : null}
     </Link>
   );
 }
@@ -337,6 +345,33 @@ function PickSeedLink({ seed }: { seed: PlanSessionSeedDto }) {
         ·
       </span>
       <span className="max-w-[10rem] truncate">{t('seed.chose', { label })}</span>
+    </Link>
+  );
+}
+
+/** A GUIDE-seeded session (MOTIR-8697; MOTIR-8686's design,
+ *  `plans-sessions--guide-seeded.mock.html`): `From the guide on {KEY}`, a link to
+ *  the GUIDED work item — the one the person was walking through when Motir AI
+ *  offered the re-plan — never the row's anchor. A guide refuses nothing and
+ *  picks nothing, so there is no gate verb and no chosen label. The label
+ *  truncates as the pick row's does; the full text is the accessible name. */
+function GuideSeedLink({ seed }: { seed: PlanSessionSeedDto }) {
+  const routes = useReaderRoutes();
+  const t = useTranslations('aiPlanning.sessions');
+  return (
+    <Link
+      href={routes.item(seed.cardKey)}
+      aria-label={t('seed.guideAria', { key: seed.cardKey })}
+      data-testid="plan-session-seed"
+      data-seed-origin="guide"
+      className="relative z-10 inline-flex min-w-0 items-center gap-1 rounded-(--radius-control) text-(--el-text-secondary) underline decoration-(--el-border-strong) underline-offset-2 hover:text-(--el-text) hover:decoration-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+    >
+      <span className="max-w-[16rem] truncate">
+        {t.rich('seed.guideLabel', {
+          key: seed.cardKey,
+          mono: (chunks) => <span className="font-mono">{chunks}</span>,
+        })}
+      </span>
     </Link>
   );
 }
@@ -414,7 +449,7 @@ export function SessionRow({
       )}
     >
       <span
-        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-muted)"
+        className="inline-flex h-(--height-control-32) w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-muted)"
         aria-hidden
       >
         <Icon className="h-4 w-4 text-(--el-text-strong)" aria-hidden />

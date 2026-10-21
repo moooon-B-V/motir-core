@@ -68,7 +68,7 @@ export function FieldCard({
               aria-label={`${label} — ${readOnlyReason}`}
               data-read-only-field=""
               onClick={(e) => e.preventDefault()}
-              className="-mt-0.5 cursor-not-allowed rounded-(--radius-control) p-0.5 text-(--el-text-faint) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              className="-mt-0.5 cursor-not-allowed rounded-(--radius-control) p-(--spacing-control-x-2) text-(--el-text-faint) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             >
               <ChevronDown className="h-4 w-4" aria-hidden />
             </button>
@@ -84,7 +84,7 @@ export function FieldCard({
             onClick={onToggle}
             aria-expanded={editing}
             aria-label={`${editing ? tc('close') : t('edit')} ${label}`}
-            className="-mt-0.5 rounded-(--radius-control) p-0.5 text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            className="-mt-0.5 rounded-(--radius-control) p-(--spacing-control-x-2) text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >
             <ChevronDown
               className={cn('h-4 w-4 transition-transform', editing && 'rotate-180')}

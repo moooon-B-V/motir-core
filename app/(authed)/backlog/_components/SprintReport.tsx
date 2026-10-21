@@ -1,5 +1,7 @@
 'use client';
 
+import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
+
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import {
@@ -83,6 +85,8 @@ export interface SprintReportProps {
    * just-completed sprint (see `ReportBurndownSection`).
    */
   cycle?: CycleGraphDto;
+  /** Page mode for the two charts — passed only by the report page (Story MOTIR-8919). */
+  fit?: 'page';
 }
 
 export function SprintReport({
@@ -92,6 +96,7 @@ export function SprintReport({
   carryOverLabel,
   velocity,
   cycle,
+  fit,
 }: SprintReportProps) {
   const t = useTranslations('backlog');
   const locale = useLocale();
@@ -183,7 +188,7 @@ export function SprintReport({
             <TrendingUp className="h-4 w-4 shrink-0 text-(--el-warning)" aria-hidden />
             {t('sprintReport.burndown')}
           </span>
-          <ReportBurndownSection sprintId={report.sprintId} cycle={cycle} />
+          <ReportBurndownSection sprintId={report.sprintId} cycle={cycle} fit={fit} />
         </section>
 
         {velocity ? (
@@ -192,7 +197,7 @@ export function SprintReport({
               <BarChart3 className="h-4 w-4 shrink-0 text-(--el-success)" aria-hidden />
               {t('sprintReport.velocity')}
             </span>
-            <VelocityChart velocity={velocity} />
+            <VelocityChart velocity={velocity} fit={fit} />
           </section>
         ) : null}
       </div>
@@ -210,7 +215,7 @@ function PointStat({
   done?: boolean;
 }) {
   return (
-    <div className="flex flex-col items-center gap-0.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-card-padding) py-3">
+    <div className="flex flex-col items-center gap-0.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-card-padding) py-(--spacing-card-padding-12)">
       <span
         className={`font-serif text-2xl font-semibold ${done ? 'text-(--el-success)' : 'text-(--el-text-strong)'}`}
       >
@@ -274,7 +279,7 @@ function ReportSection({
       </div>
 
       {page.items.length === 0 ? (
-        <p className="rounded-(--radius-card) border border-dashed border-(--el-border) px-(--spacing-control-x) py-4 text-center text-xs text-(--el-text-muted)">
+        <p className="rounded-(--radius-card) border border-dashed border-(--el-border) px-(--spacing-control-x) py-(--spacing-card-padding-16) text-center text-xs text-(--el-text-muted)">
           {emptyLabel}
         </p>
       ) : (
@@ -318,7 +323,11 @@ function ReportIssueRow({
       <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
         {item.identifier}
       </span>
-      <span className="min-w-0 flex-1 truncate text-sm text-(--el-text)">{item.title}</span>
+      <SurfaceTitle
+        id={item.id}
+        title={item.title}
+        className="min-w-0 flex-1 truncate text-sm text-(--el-text)"
+      />
       <span className="shrink-0">
         {status ? (
           <StatusValue statusKey={status.key} category={status.category} label={status.label} />

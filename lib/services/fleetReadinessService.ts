@@ -1,0 +1,740 @@
+import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { fleetKillSwitchEngaged } from '@/lib/ciFleet/limits';
+import { isMotirFleetJob, MOTIR_RUNNER_VARIABLE } from '@/lib/ciFleet/config';
+import inventoryManifest from '@/lib/ciFleet/fleetJobInventory.json';
+import type { FleetJobInventory, FleetInventoryRepo } from '@/lib/ciFleet/fleetJobInventoryTypes';
+import {
+  getOrgInstallation,
+  latestWorkflowCommit,
+  listInstallationRepositoryIds,
+  readWorkflowSources,
+  OrgInstallationReadError,
+  type OrgInstallation,
+} from '@/lib/github/orgInstallation';
+import { OrgTargetAuthError, type GithubOrgTarget } from '@/lib/github/orgTarget';
+import { repoVisibilityClient, RepoVisibilityApiError } from '@/lib/github/repoVisibility';
+import { workflowFingerprint } from '@/lib/ciFleet/workflowFingerprint';
+import { projectRepository } from '@/lib/repositories/projectRepository';
+import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
+import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
+
+// CAN THE FLEET SERVE THIS CONNECTED ORG'S CI RIGHT NOW? (Story MOTIR-8699 ·
+// MOTIR-8713)
+//
+// One READ-ONLY verdict over nine conditions, each predicting whether a line of
+// production code will refuse a job, in the order a job meets them:
+//
+//   1 kill_switch               boot allowed       `lib/ciFleet/limits.ts` fleetKillSwitchEngaged
+//   2 app_installed             GitHub delivers    the App is on the org at all
+//   3 app_runner_permission     a runner registers runnerJitConfigClient / runnerGroupClient
+//   4 app_variables_permission  the flip writes MOTIR_RUNNER (actionsVariablesClient)
+//   5 workflow_job_subscription GitHub delivers    the App receives `workflow_job`
+//   6 app_repositories          GitHub delivers    the installation reaches each repo
+//   7 delivery_attributable     Motir attributes   ciRunnerProvisioningService.recordQueuedJob
+//   8 runner_group              a runner registers ciRunnerBootService → requireRunnerGroupIdFor
+//   9 image_coverage            the job can run    lib/ciFleet/fleetJobInventory.json
+//
+// ⚠️ FAILS CLOSED. A read that failed is `unknown`, never `met`, and `ready` is
+// true only when all nine are `met`. `unknown` is its own state so a page can
+// tell "GitHub did not answer" apart from "the App lacks the permission"; both
+// block ON.
+//
+// ⚠️ NAMES NO ORG. The org arrives as data; there is no `isMeta`, no login
+// constant and no org id here. Credits are deliberately NOT a condition: an
+// internally-billed org bypasses admission, so reading admission here would put
+// an org-identity branch into a service that must have none.
+//
+// Only PRIVATE repositories count anywhere: the runner group access-lists private
+// repositories only, so a public one never requests the fleet.
+
+export type FleetReadinessState = 'met' | 'unmet' | 'unknown';
+
+export type FleetReadinessKey =
+  | 'kill_switch'
+  | 'app_installed'
+  | 'app_runner_permission'
+  | 'app_variables_permission'
+  | 'workflow_job_subscription'
+  | 'app_repositories'
+  | 'delivery_attributable'
+  | 'runner_group'
+  | 'image_coverage';
+
+export interface FleetReadinessCondition {
+  key: FleetReadinessKey;
+  state: FleetReadinessState;
+  reasonCode: string;
+  params: Record<string, unknown>;
+  /** English, for logs, audit reasons and refusals. The UI renders `reasonCode`. */
+  message: string;
+}
+
+export interface FleetReadiness {
+  ready: boolean;
+  org: string;
+  /** ISO-8601. */
+  checkedAt: string;
+  conditions: FleetReadinessCondition[];
+}
+
+export interface FleetReadinessTarget {
+  projectId: string;
+  workspaceId: string;
+  org: string;
+}
+
+/** The project the verdict was asked about does not exist in that workspace — a
+ *  programmer error, the one thing `readinessFor` throws. */
+export class FleetReadinessTargetNotFoundError extends Error {
+  readonly code = 'FLEET_READINESS_TARGET_NOT_FOUND' as const;
+  constructor(readonly projectId: string) {
+    super(`Project ${projectId} was not found; the readiness verdict has nothing to check.`);
+    this.name = 'FleetReadinessTargetNotFoundError';
+  }
+}
+
+export interface FleetReadinessOptions {
+  /** Override the checked-in manifest — tests only. */
+  inventory?: FleetJobInventory;
+  now?: () => Date;
+}
+
+const SYNC_SCRIPT = 'scripts/ci-fleet/sync-project-runner-groups.ts';
+const RUNNER_PERMISSION = 'organization_self_hosted_runners';
+const VARIABLES_PERMISSION = 'organization_actions_variables';
+
+interface OrgRepo {
+  owner: string;
+  name: string;
+  providerRepoId: string;
+}
+
+function condition(
+  key: FleetReadinessKey,
+  state: FleetReadinessState,
+  reasonCode: string,
+  message: string,
+  params: Record<string, unknown> = {},
+): FleetReadinessCondition {
+  return { key, state, reasonCode, params, message };
+}
+
+/** A failure's status, without its message — a thrown GitHub error's text is
+ *  never copied into a verdict. */
+function statusOf(err: unknown): number | null {
+  if (
+    err instanceof OrgInstallationReadError ||
+    err instanceof OrgTargetAuthError ||
+    err instanceof RepoVisibilityApiError
+  ) {
+    return err.status;
+  }
+  return null;
+}
+
+function failedRead(key: FleetReadinessKey, what: string, err: unknown): FleetReadinessCondition {
+  const status = statusOf(err);
+  console.warn('[fleetReadinessService] a readiness read failed', { key, status });
+  return condition(
+    key,
+    'unknown',
+    'read_failed',
+    status === null
+      ? `Could not check ${what}: GitHub could not be reached.`
+      : `Could not check ${what}: GitHub answered HTTP ${status}.`,
+    { status },
+  );
+}
+
+const fullName = (r: { owner: string; name: string }) => `${r.owner}/${r.name}`;
+
+/**
+ * Can a job's recorded `runs-on` resolve to the fleet? (MOTIR-8813)
+ *
+ * The switch moves a job only by writing `MOTIR_RUNNER`, so only a job that reads
+ * that variable — or names the fleet label outright — can land on a fleet
+ * machine. Any other job (`macos-latest`, a literal `ubuntu-latest`) stays on
+ * GitHub-hosted runners whether the switch is ON or OFF, so whether the image can
+ * run it says nothing about whether the fleet can serve the org's CI.
+ */
+export function requestsFleetRunner(runsOn: unknown): boolean {
+  if (typeof runsOn === 'string') {
+    return runsOn.includes(`vars.${MOTIR_RUNNER_VARIABLE}`) || isMotirFleetJob([runsOn]);
+  }
+  if (Array.isArray(runsOn)) return runsOn.some(requestsFleetRunner);
+  if (runsOn !== null && typeof runsOn === 'object' && 'labels' in runsOn) {
+    return requestsFleetRunner((runsOn as { labels: unknown }).labels);
+  }
+  return false;
+}
+
+export const fleetReadinessService = {
+  async readinessFor(
+    target: FleetReadinessTarget,
+    options: FleetReadinessOptions = {},
+  ): Promise<FleetReadiness> {
+    const inventory = options.inventory ?? (inventoryManifest as FleetJobInventory);
+    const now = options.now ?? (() => new Date());
+    const org = target.org.trim();
+    const orgKey = org.toLowerCase();
+
+    const loaded = await withWorkspaceServiceContext(target.workspaceId, async (tx) => {
+      const project = await projectRepository.findById(target.projectId, tx);
+      if (!project || project.workspaceId !== target.workspaceId) return null;
+      const realized = await projectRepoRepository.listEstablishedRealizedRepos(
+        target.projectId,
+        target.workspaceId,
+        tx,
+      );
+      return { identifier: project.identifier, realized };
+    });
+    if (!loaded) throw new FleetReadinessTargetNotFoundError(target.projectId);
+    const orgRepos: OrgRepo[] = loaded.realized.filter(
+      (r) => r.owner.trim().toLowerCase() === orgKey,
+    );
+
+    const conditions: FleetReadinessCondition[] = [];
+
+    // ── 1 · kill_switch ──────────────────────────────────────────────────────
+    conditions.push(
+      fleetKillSwitchEngaged()
+        ? condition(
+            'kill_switch',
+            'unmet',
+            'kill_switch_engaged',
+            'The fleet kill switch is engaged (MOTIR_FLEET_MAX_IN_FLIGHT=0); no fleet machine will boot. An operator must unset or raise it.',
+          )
+        : condition('kill_switch', 'met', 'kill_switch_off', 'The fleet kill switch is off.'),
+    );
+
+    // ── 2 · app_installed — ONE read answers conditions 2–5 ──────────────────
+    let installation: OrgInstallation | null = null;
+    let installRead: FleetReadinessCondition;
+    try {
+      installation = await getOrgInstallation(org, 'provisioning');
+      if (!installation) {
+        installRead = condition(
+          'app_installed',
+          'unmet',
+          'app_not_installed',
+          `The motir-studio App is not installed on ${org}. An owner of ${org} must install it.`,
+          { org },
+        );
+      } else if (installation.suspendedAt) {
+        installRead = condition(
+          'app_installed',
+          'unmet',
+          'app_suspended',
+          `The motir-studio App is installed on ${org} but suspended since ${installation.suspendedAt}. An owner of ${org} must unsuspend it.`,
+          { org, suspendedAt: installation.suspendedAt },
+        );
+      } else {
+        installRead = condition(
+          'app_installed',
+          'met',
+          'app_installed',
+          `The motir-studio App is installed on ${org}.`,
+          { org, installationId: installation.id },
+        );
+      }
+    } catch (err) {
+      installRead = failedRead(
+        'app_installed',
+        `whether the motir-studio App is installed on ${org}`,
+        err,
+      );
+    }
+    conditions.push(installRead);
+
+    const usable = installRead.state === 'met' && installation !== null ? installation : null;
+    if (!usable) {
+      // Everything that depends on the installation is unknown, never met.
+      for (const key of [
+        'app_runner_permission',
+        'app_variables_permission',
+        'workflow_job_subscription',
+        'app_repositories',
+        'delivery_attributable',
+      ] as const) {
+        conditions.push(
+          condition(
+            key,
+            'unknown',
+            'app_not_readable',
+            `Cannot be checked until the motir-studio App is installed and readable on ${org}.`,
+            { org },
+          ),
+        );
+      }
+      conditions.push(await runnerGroupCondition(target, org, loaded.identifier));
+      conditions.push(
+        condition(
+          'image_coverage',
+          'unknown',
+          'app_not_readable',
+          `Cannot be checked until the motir-studio App is installed and readable on ${org}: which repositories are private is read through it.`,
+          { org },
+        ),
+      );
+      return finish(org, now, conditions);
+    }
+    const orgTarget: GithubOrgTarget = { org, installationId: usable.id, role: 'provisioning' };
+
+    // ── 3 · app_runner_permission ────────────────────────────────────────────
+    conditions.push(
+      permissionCondition(
+        'app_runner_permission',
+        usable,
+        RUNNER_PERMISSION,
+        org,
+        'Self-hosted runners',
+      ),
+    );
+    // ── 4 · app_variables_permission ─────────────────────────────────────────
+    conditions.push(
+      permissionCondition(
+        'app_variables_permission',
+        usable,
+        VARIABLES_PERMISSION,
+        org,
+        'Variables',
+      ),
+    );
+    // ── 5 · workflow_job_subscription ────────────────────────────────────────
+    // The delivering installation needs NO mirror row: the intake attributes an
+    // unmirrored provisioning-App installation through the repository's own row.
+    // Condition 7 checks that path.
+    conditions.push(
+      usable.events.includes('workflow_job')
+        ? condition(
+            'workflow_job_subscription',
+            'met',
+            'subscribed',
+            'The motir-studio App receives workflow_job events.',
+          )
+        : condition(
+            'workflow_job_subscription',
+            'unmet',
+            'not_subscribed',
+            `The motir-studio App installation on ${org} is not subscribed to workflow_job events, so GitHub never tells Motir a job is queued. Subscribe it in motir-studio's App settings.`,
+            { org },
+          ),
+    );
+
+    // The private set, which conditions 6, 7 and 9 consider.
+    let privateRepos: OrgRepo[] | null = null;
+    let visibilityFailure: unknown = null;
+    try {
+      privateRepos = [];
+      for (const repo of orgRepos) {
+        if (await repoVisibilityClient.isPrivate(repo.owner, repo.name, orgTarget)) {
+          privateRepos.push(repo);
+        }
+      }
+    } catch (err) {
+      privateRepos = null;
+      visibilityFailure = err;
+    }
+
+    if (privateRepos === null) {
+      conditions.push(
+        failedRead(
+          'app_repositories',
+          `which of the project's repositories are private`,
+          visibilityFailure,
+        ),
+      );
+      conditions.push(
+        failedRead(
+          'delivery_attributable',
+          `which of the project's repositories are private`,
+          visibilityFailure,
+        ),
+      );
+      conditions.push(await runnerGroupCondition(target, org, loaded.identifier));
+      conditions.push(
+        failedRead(
+          'image_coverage',
+          `which of the project's repositories are private`,
+          visibilityFailure,
+        ),
+      );
+      return finish(org, now, conditions);
+    }
+
+    if (privateRepos.length === 0) {
+      const message = `The project has no private repository in ${org}, so there is nothing for the fleet to run.`;
+      conditions.push(
+        condition('app_repositories', 'unmet', 'no_private_repositories', message, { org }),
+      );
+      conditions.push(
+        condition('delivery_attributable', 'unmet', 'no_private_repositories', message, { org }),
+      );
+      conditions.push(await runnerGroupCondition(target, org, loaded.identifier));
+      conditions.push(
+        condition('image_coverage', 'unmet', 'no_private_repositories', message, { org }),
+      );
+      return finish(org, now, conditions);
+    }
+
+    // ── 6 · app_repositories ─────────────────────────────────────────────────
+    conditions.push(await repositoriesCondition(orgTarget, privateRepos, org));
+    // ── 7 · delivery_attributable ────────────────────────────────────────────
+    conditions.push(await attributableCondition(target, usable.id, privateRepos, org));
+    // ── 8 · runner_group ─────────────────────────────────────────────────────
+    conditions.push(await runnerGroupCondition(target, org, loaded.identifier));
+    // ── 9 · image_coverage ───────────────────────────────────────────────────
+    conditions.push(await imageCoverageCondition(orgTarget, privateRepos, inventory));
+
+    return finish(org, now, conditions);
+  },
+};
+
+function finish(
+  org: string,
+  now: () => Date,
+  conditions: FleetReadinessCondition[],
+): FleetReadiness {
+  return {
+    ready: conditions.every((c) => c.state === 'met'),
+    org,
+    checkedAt: now().toISOString(),
+    conditions,
+  };
+}
+
+function permissionCondition(
+  key: 'app_runner_permission' | 'app_variables_permission',
+  installation: OrgInstallation,
+  permission: string,
+  org: string,
+  label: string,
+): FleetReadinessCondition {
+  const granted = installation.permissions[permission] ?? null;
+  if (granted === 'write') {
+    return condition(
+      key,
+      'met',
+      'granted',
+      `The motir-studio App holds ${label}: write on ${org}.`,
+      {
+        permission,
+        granted,
+      },
+    );
+  }
+  return condition(
+    key,
+    'unmet',
+    granted === null ? 'permission_missing' : 'permission_insufficient',
+    `The motir-studio App installation on ${org} holds ${label}: ${granted ?? 'none'}, and needs write. An owner of ${org} must accept the permission request.`,
+    { permission, granted, org },
+  );
+}
+
+async function repositoriesCondition(
+  orgTarget: GithubOrgTarget,
+  privateRepos: OrgRepo[],
+  org: string,
+): Promise<FleetReadinessCondition> {
+  let reachable: Set<number>;
+  try {
+    reachable = new Set(await listInstallationRepositoryIds(orgTarget));
+  } catch (err) {
+    return failedRead(
+      'app_repositories',
+      `which repositories the installation on ${org} reaches`,
+      err,
+    );
+  }
+  const missing = privateRepos
+    .filter((r) => !reachable.has(Number(r.providerRepoId)))
+    .map(fullName);
+  if (missing.length === 0) {
+    return condition(
+      'app_repositories',
+      'met',
+      'all_reachable',
+      `The installation on ${org} reaches every private repository of the project.`,
+      { repositories: privateRepos.map(fullName) },
+    );
+  }
+  return condition(
+    'app_repositories',
+    'unmet',
+    'repositories_not_granted',
+    `The motir-studio App installation on ${org} does not reach ${missing.join(', ')}. An owner of ${org} must add them to the installation's repository access.`,
+    { missing, org },
+  );
+}
+
+/**
+ * The lookup `recordQueuedJob` will make for a delivery on this installation —
+ * the SAME repository functions, under the same system context, so the verdict
+ * cannot drift from the code it predicts.
+ */
+async function attributableCondition(
+  target: FleetReadinessTarget,
+  installationId: string,
+  privateRepos: OrgRepo[],
+  org: string,
+): Promise<FleetReadinessCondition> {
+  const orgKey = org.toLowerCase();
+  let failures: Array<{
+    repository: string;
+    reason: 'no_row' | 'several_rows' | 'owner_mismatch' | 'other_workspace';
+  }>;
+  let path: 'mirrored' | 'unmirrored';
+  try {
+    ({ failures, path } = await withSystemContext(async (tx) => {
+      const mirror = await githubInstallationRepository.findByInstallationId(installationId, tx);
+      const out: typeof failures = [];
+      for (const repo of privateRepos) {
+        const repository = fullName(repo);
+        if (mirror) {
+          const row = await githubRepoRepository.findByInstallationAndRepoId(
+            mirror.id,
+            repo.providerRepoId,
+            tx,
+          );
+          if (!row) out.push({ repository, reason: 'no_row' });
+          else if (row.workspaceId !== target.workspaceId) {
+            out.push({ repository, reason: 'other_workspace' });
+          }
+          continue;
+        }
+        const rows = await githubRepoRepository.listByRepoId(repo.providerRepoId, tx);
+        if (rows.length === 0) out.push({ repository, reason: 'no_row' });
+        else if (rows.length > 1) out.push({ repository, reason: 'several_rows' });
+        else if (rows[0]!.owner.trim().toLowerCase() !== orgKey) {
+          out.push({ repository, reason: 'owner_mismatch' });
+        } else if (rows[0]!.workspaceId !== target.workspaceId) {
+          out.push({ repository, reason: 'other_workspace' });
+        }
+      }
+      return { failures: out, path: mirror ? ('mirrored' as const) : ('unmirrored' as const) };
+    }));
+  } catch (err) {
+    console.warn('[fleetReadinessService] the attribution read failed', {
+      key: 'delivery_attributable',
+    });
+    return condition(
+      'delivery_attributable',
+      'unknown',
+      'read_failed',
+      `Could not check how Motir would attribute a job from ${org}: ${err instanceof Error ? err.name : 'read failed'}.`,
+    );
+  }
+  if (failures.length === 0) {
+    return condition(
+      'delivery_attributable',
+      'met',
+      'attributable',
+      `A queued job from each private repository in ${org} resolves to this project.`,
+      { path },
+    );
+  }
+  const words: Record<string, string> = {
+    no_row: 'no mirror row',
+    several_rows: 'several mirror rows',
+    owner_mismatch: `a mirror row whose owner is not ${org}`,
+    other_workspace: 'a mirror row in another workspace',
+  };
+  return condition(
+    'delivery_attributable',
+    'unmet',
+    'not_attributable',
+    `A queued job from ${failures
+      .map((f) => `${f.repository} (${words[f.reason]})`)
+      .join(
+        ', ',
+      )} would not be attributed to this project, so it would stay queued until GitHub expires it. Reconnect the repository to the project so its mirror row is current.`,
+    { failures, path, org },
+  );
+}
+
+async function runnerGroupCondition(
+  target: FleetReadinessTarget,
+  org: string,
+  projectKey: string,
+): Promise<FleetReadinessCondition> {
+  const fix = `Run ${SYNC_SCRIPT} --project ${projectKey}.`;
+  let row: Awaited<ReturnType<typeof projectRunnerGroupService.readForOrg>>;
+  try {
+    row = await projectRunnerGroupService.readForOrg(
+      { projectId: target.projectId, workspaceId: target.workspaceId },
+      org,
+    );
+  } catch (err) {
+    console.warn('[fleetReadinessService] the runner-group read failed', { key: 'runner_group' });
+    return condition(
+      'runner_group',
+      'unknown',
+      'read_failed',
+      `Could not read the project's runner group in ${org} (${err instanceof Error ? err.name : 'read failed'}).`,
+    );
+  }
+  if (!row) {
+    return condition(
+      'runner_group',
+      'unmet',
+      'no_runner_group',
+      `The project has no runner group in ${org}. ${fix}`,
+      { org, script: SYNC_SCRIPT, projectKey },
+    );
+  }
+  if (row.syncPending) {
+    return condition(
+      'runner_group',
+      'unmet',
+      'sync_pending',
+      `The project's runner group in ${org} is out of sync with its repositories. ${fix}`,
+      { org, script: SYNC_SCRIPT, projectKey, runnerGroupId: row.runnerGroupId },
+    );
+  }
+  return condition(
+    'runner_group',
+    'met',
+    'group_synced',
+    `The project's runner group in ${org} exists and is in sync.`,
+    { org, runnerGroupId: row.runnerGroupId, runnerGroupName: row.runnerGroupName },
+  );
+}
+
+/**
+ * A newer workflow commit does not move a verdict unless it changes a runner, a
+ * reusable workflow, an action or an executable (MOTIR-8870). True only when the
+ * entry recorded a fingerprint AND the head's workflows digest to the same one.
+ * ⚠️ FAILS CLOSED: no recorded fingerprint, an unreadable file or invalid YAML
+ * all answer false, so the entry is stale exactly as it was before this check.
+ */
+async function structureUnchanged(
+  orgTarget: GithubOrgTarget,
+  repo: OrgRepo,
+  headSha: string,
+  entry: FleetInventoryRepo,
+): Promise<boolean> {
+  if (!entry.structureFingerprint) return false;
+  try {
+    const files = await readWorkflowSources(orgTarget, repo.owner, repo.name, headSha);
+    return workflowFingerprint(files) === entry.structureFingerprint;
+  } catch (err) {
+    console.warn('[fleetReadinessService] the workflow structure read failed', {
+      repository: fullName(repo),
+      status: statusOf(err),
+    });
+    return false;
+  }
+}
+
+async function imageCoverageCondition(
+  orgTarget: GithubOrgTarget,
+  privateRepos: OrgRepo[],
+  inventory: FleetJobInventory,
+): Promise<FleetReadinessCondition> {
+  const byKey = new Map<string, FleetInventoryRepo>();
+  for (const [key, entry] of Object.entries(inventory.repos)) byKey.set(key.toLowerCase(), entry);
+
+  const notInventoried: string[] = [];
+  const stale: Array<{ repository: string; measuredSha: string; headSha: string }> = [];
+  const jobs: Array<{
+    repoRef: string;
+    workflow: string;
+    jobId: string;
+    verdict: string;
+    missing: string[];
+    reason: string | null;
+  }> = [];
+  const githubHostedJobs: Array<{ repoRef: string; workflow: string; jobId: string }> = [];
+
+  for (const repo of privateRepos) {
+    const entry = byKey.get(fullName(repo).toLowerCase());
+    if (!entry) {
+      notInventoried.push(fullName(repo));
+      continue;
+    }
+    let head;
+    try {
+      head = await latestWorkflowCommit(orgTarget, repo.owner, repo.name);
+    } catch (err) {
+      return failedRead(
+        'image_coverage',
+        `whether ${fullName(repo)}'s workflows changed since they were inventoried`,
+        err,
+      );
+    }
+    if (
+      head &&
+      head.sha !== entry.sha &&
+      new Date(head.committedAt).getTime() > new Date(entry.measuredAt).getTime() &&
+      !(await structureUnchanged(orgTarget, repo, head.sha, entry))
+    ) {
+      stale.push({ repository: fullName(repo), measuredSha: entry.sha, headSha: head.sha });
+    }
+    for (const workflow of entry.workflows) {
+      for (const job of workflow.jobs) {
+        if (!requestsFleetRunner(job.runsOn)) {
+          githubHostedJobs.push({
+            repoRef: entry.repoRef,
+            workflow: workflow.path,
+            jobId: job.jobId,
+          });
+          continue;
+        }
+        if (job.verdict === 'runnable' && !job.missing.includes('unverified')) continue;
+        jobs.push({
+          repoRef: entry.repoRef,
+          workflow: workflow.path,
+          jobId: job.jobId,
+          verdict: job.verdict,
+          missing: job.missing,
+          reason: job.reason ?? null,
+        });
+      }
+    }
+  }
+
+  const scope =
+    'This covers the inventoried image built from main, not the image production boots.';
+  if (notInventoried.length > 0) {
+    return condition(
+      'image_coverage',
+      'unmet',
+      'not_inventoried',
+      `${notInventoried.join(', ')} ${notInventoried.length === 1 ? 'is' : 'are'} not in the fleet job inventory, so nobody has checked the runner image can run ${notInventoried.length === 1 ? 'its' : 'their'} jobs. ${scope}`,
+      { repositories: notInventoried, jobs, stale, githubHostedJobs },
+    );
+  }
+  if (stale.length > 0) {
+    return condition(
+      'image_coverage',
+      'unmet',
+      'inventory_stale',
+      `The workflows of ${stale.map((s) => s.repository).join(', ')} changed after the fleet job inventory measured them; re-run the inventory. ${scope}`,
+      { stale, jobs, githubHostedJobs },
+    );
+  }
+  if (jobs.length > 0) {
+    return condition(
+      'image_coverage',
+      'unmet',
+      'jobs_not_runnable',
+      `${jobs.length} job${jobs.length === 1 ? '' : 's'} cannot run on the fleet runner image yet: ${jobs
+        .map(
+          (j) =>
+            `${j.repoRef} ${j.workflow.split('/').pop()} ${j.jobId} (${j.verdict}${j.missing.length ? `: ${j.missing.join(', ')}` : ''})`,
+        )
+        .join('; ')}. ${scope}`,
+      { jobs, githubHostedJobs },
+    );
+  }
+  return condition(
+    'image_coverage',
+    'met',
+    'all_runnable',
+    `Every job the project's private repositories send to the fleet can run on the fleet runner image. ${scope}`,
+    { repositories: privateRepos.map(fullName), githubHostedJobs },
+  );
+}

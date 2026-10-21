@@ -3,7 +3,7 @@ import type { WorkspaceAccessScope } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
-import { currentLocale } from '@/lib/i18n/serverLocale';
+import { resolveRecipientLocale } from '@/lib/services/emailRecipientLocale';
 import type {
   AcceptInviteResultDTO,
   InspectInviteResultDTO,
@@ -125,6 +125,7 @@ async function enqueueInviteEmail(args: {
   inviterName: string;
   workspaceName: string;
   recipientEmail: string;
+  inviterUserId: string;
   token: string;
 }): Promise<void> {
   // Enqueue the send (Story 1.6.3) instead of dispatching inline: the
@@ -146,10 +147,14 @@ async function enqueueInviteEmail(args: {
       inviterName: args.inviterName,
       workspaceName: args.workspaceName,
       acceptUrl: buildInviteAcceptUrl(args.token),
-      // The inviter's current UI locale — the best available signal, since the
-      // recipient may not exist yet (no persisted per-user locale). Rendered
-      // off-request in the email.send job, so the locale must ride the payload.
-      locale: await currentLocale(),
+      // The RECIPIENT's language: the saved language of the account that holds
+      // the invited address, else (no account yet) the inviter's saved
+      // language, else English. Never the inviter's request. Rendered
+      // off-request in the email.send job, so the locale rides the payload.
+      locale: await resolveRecipientLocale({
+        email: args.recipientEmail,
+        recordedLocale: await resolveRecipientLocale({ userId: args.inviterUserId }),
+      }),
     },
   });
 }
@@ -293,6 +298,7 @@ export const workspaceInvitesService = {
       inviterName: args.inviterName,
       workspaceName: workspace.name,
       recipientEmail: email,
+      inviterUserId: args.inviterUserId,
       token,
     });
 

@@ -45,7 +45,8 @@ async function prompt(caller: V1ProjectCaller, key: string, query = ''): Promise
 
 async function makeItem(caller: V1ProjectCaller, title: string, kind: 'task' | 'subtask' = 'task') {
   return workItemsService.createWorkItem(
-    { projectId: caller.fixture.projectId, kind, title },
+    // Typed so the fixture is not UNDER-AUTHORED (MOTIR-5427).
+    { projectId: caller.fixture.projectId, kind, title, type: 'code' },
     caller.ctx,
   );
 }
@@ -232,6 +233,38 @@ describe('GET /api/v1/work-items/{key}/dispatch-prompt', () => {
 
     expect(result.isError).toBe(true);
     expect(JSON.stringify(result.content)).toContain('nonsense');
+  });
+
+  // ── ?agentReport (MOTIR-8810) ─────────────────────────────────────────────
+  //
+  // The client's declaration that it posts what its agent writes into
+  // `$MOTIR_AGENT_REPORT`. `@motir/cli` 0.12.0 sends none and posts nothing but the
+  // model, so a prompt that sent the unbuildable report into that file lost it.
+
+  it('routes the unbuildable report through the tool when the client does not declare it posts', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'an old cli');
+
+    const text = (await prompt(caller, item.identifier)).prompt;
+
+    expect(text).toContain('  4. Report it with the report_unbuildable_target tool:');
+    expect(text).not.toContain('no Motir tool needed');
+    expect(text).not.toContain('NO MOTIR TOOLS?');
+    for (const query of ['?agentReport=', '?agentReport=0', '?agentReport=yes']) {
+      expect((await prompt(caller, item.identifier, query)).prompt).toBe(text);
+    }
+  });
+
+  it('names the report file as the route for `?agentReport=1`', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'a cli that posts');
+
+    const text = (await prompt(caller, item.identifier, '?agentReport=1')).prompt;
+
+    expect(text).toContain('"unbuildable": "<the SAME text as your step-3 comment>"');
+    expect(text).toContain('no Motir tool needed');
+    expect(text).toContain('NO MOTIR TOOLS?');
+    expect(text).toContain('"discrepancy": [{"planAsked"');
   });
 
   // ── ?autoApproveReplan (MOTIR-4085) ─────────────────────────────────────

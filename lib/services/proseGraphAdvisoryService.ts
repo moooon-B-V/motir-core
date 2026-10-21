@@ -11,17 +11,23 @@ import {
   bodyFilePaths,
   bodyReferenceSeverities,
   firstBlockerCountClaim,
+  firstPostMergeChildTell,
   firstPostMergeCriterion,
   firstRepoStraddleCriterion,
   hasCriterionPathTokens,
   isOrderingCheckExempt,
+  isPostMergeChildCandidate,
+  isPostMergeChildCheckExemptContainer,
   isSelfBlockingDesignCheckExempt,
+  isMislabelledLink,
   isSubsumptionCheckExempt,
   overGateSizing,
+  underAuthored,
   selfBlockingDesignCriteria,
   type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
 import { listConnectedRepoNames } from '@/lib/workItems/targetRepo';
+import { parseWorkItemLinks, type WorkItemLink } from '@/lib/mentions/workItemRefs';
 import {
   BODY_ABOVE_FIELD_MOVE_SCAN,
   bodyEditAboveFieldMove,
@@ -65,6 +71,12 @@ export interface ProseAdvisorySubject {
   item: string;
   /** Its body. `null` / empty simply yields no references. */
   descriptionMd: string | null;
+  /**
+   * Its kind — read ONLY by the UNDER-AUTHORED check (MOTIR-5427), which exempts a
+   * container kind because it cannot carry a `type` or `executor`. Optional: a
+   * caller that does not know is not exempt.
+   */
+  kind?: string | null;
   /**
    * References that are legitimately edge-free: the card ITSELF, its ANCESTORS,
    * and everything already in its `blocked_by` set. Keyed the same way
@@ -169,6 +181,13 @@ export interface ProseAdvisorySubject {
    * caller reads the committed tree, where the stored trail IS the answer.
    */
   trailSuperseded?: boolean;
+  /**
+   * The card's PARENT — read ONLY by the POST-MERGE-CHILD check (MOTIR-8863),
+   * which asks whether a card that waits on the deployment sits inside the
+   * runnable container whose merge it waits on. `null` / absent is a root, which
+   * has no container to be inside.
+   */
+  parent?: { identifier: string; kind: string } | null;
 }
 
 /**
@@ -210,12 +229,17 @@ export async function buildProseVsGraphAdvisories(
   subjects: ProseAdvisorySubject[],
   ctx: ServiceContext,
   localRefs?: ReadonlyMap<string, ProseAdvisoryLocalRef>,
+  options: { mislabelledLinks?: boolean } = {},
 ): Promise<WorkItemProseAdvisoryDto[]> {
-  // Scan every body once, dropping the exempt references as we go.
+  const checkLinks = options.mislabelledLinks ?? true;
+  // Scan every body once, dropping the exempt references as we go. The LINKS
+  // (MOTIR-9007) are scanned separately and keep the exempt ones: a link to the
+  // card's own blocker with the wrong label is as wrong as any other.
   const scanned = subjects.map((s) => {
     const refs = new Map(bodyReferenceSeverities(s.descriptionMd));
     for (const id of s.exemptIds) refs.delete(id);
-    return { item: s.item, refs, subject: s };
+    const links: WorkItemLink[] = checkLinks ? parseWorkItemLinks(s.descriptionMd ?? '') : [];
+    return { item: s.item, refs, links, subject: s };
   });
 
   const unresolved = new Set<string>();
@@ -223,7 +247,20 @@ export async function buildProseVsGraphAdvisories(
     for (const id of s.refs.keys()) {
       if (!localRefs?.has(id)) unresolved.add(id);
     }
+    for (const link of s.links) {
+      if (!localRefs?.has(link.id)) unresolved.add(link.id);
+    }
   }
+
+  // The workspace's projects, read at most ONCE: the browse gate below needs
+  // them, and so does the mislabelled-link check (the prefixes that make a label
+  // token a KEY rather than a word).
+  let workspaceProjects: Awaited<ReturnType<typeof projectRepository.findByWorkspace>> | null =
+    null;
+  const readProjects = async () =>
+    (workspaceProjects ??= await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      projectRepository.findByWorkspace(ctx.workspaceId, tx),
+    ));
 
   // ONE batched read for everything the caller could not resolve locally, then
   // the browse gate, then per-project done-ness.
@@ -233,9 +270,7 @@ export async function buildProseVsGraphAdvisories(
       workItemRepository.findByIdsInWorkspace([...unresolved], ctx.workspaceId, tx),
     );
     if (rows.length > 0) {
-      const projects = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-        projectRepository.findByWorkspace(ctx.workspaceId, tx),
-      );
+      const projects = await readProjects();
       const browsable = await projectAccessService.filterBrowsable(projects, ctx);
       const browsableProjectIds = new Set(browsable.map((p) => p.id));
       const visible = rows.filter((r) => browsableProjectIds.has(r.projectId));
@@ -287,8 +322,24 @@ export async function buildProseVsGraphAdvisories(
     ctx,
   );
 
+  // The MISLABELLED-LINK check's prefixes (MOTIR-9007): every project key in the
+  // workspace, so a label naming another project's card is still read as a key.
+  // Read only when some body carries a link at all.
+  const knownPrefixes = scanned.some((s) => s.links.length > 0)
+    ? new Set((await readProjects()).map((p) => p.identifier.toUpperCase()))
+    : new Set<string>();
+
   const advisories: WorkItemProseAdvisoryDto[] = [];
   for (const s of scanned) {
+    for (const link of s.links) {
+      const mislabelled = mislabelledLinkAdvisory(
+        s.item,
+        link,
+        (localRefs?.get(link.id) ?? resolved.get(link.id))?.identifier ?? null,
+        knownPrefixes,
+      );
+      if (mislabelled) advisories.push(mislabelled);
+    }
     // The SHAPE advisories first: they need no reference resolution at all (each
     // is a property of this body alone), so they are emitted even for a card
     // that names nothing. A card can carry BOTH — they are different defects.
@@ -298,8 +349,12 @@ export async function buildProseVsGraphAdvisories(
     if (straddle) advisories.push(straddle);
     const sizing = sizingAdvisory(s.subject);
     if (sizing) advisories.push(sizing);
+    const underAuthoredFound = underAuthoredAdvisory(s.subject);
+    if (underAuthoredFound) advisories.push(underAuthoredFound);
     const selfBlocking = selfBlockingDesignAdvisory(s.subject);
     if (selfBlocking) advisories.push(selfBlocking);
+    const postMergeChild = postMergeChildAdvisory(s.subject);
+    if (postMergeChild) advisories.push(postMergeChild);
     const bodyAbove = bodyAboveFieldMoveAdvisory(
       s.item,
       s.subject.id == null ? undefined : trails.get(s.subject.id),
@@ -353,7 +408,43 @@ const familyRank = (a: WorkItemProseAdvisoryDto): number =>
  * card, so this only has to be total, not discriminating).
  */
 const tieKey = (a: WorkItemProseAdvisoryDto): string =>
-  a.kind === 'shape' ? a.severity : a.kind === 'subsumption' ? a.path : a.referenced;
+  a.kind === 'shape'
+    ? a.severity === 'likely-mislabelled-link'
+      ? `${a.severity}\u0000${a.targetId}\u0000${a.label}`
+      : a.severity
+    : a.kind === 'subsumption'
+      ? a.path
+      : a.referenced;
+
+/**
+ * THE MISLABELLED-LINK advisory for ONE link (MOTIR-9007) — the label says one
+ * key, the id opens another card or none. `targetKey` is the key the id resolved
+ * to: from the caller's projection, else from the batched read behind its browse
+ * gate, so a card the reader cannot see reads exactly like one that does not
+ * exist (`null`) and the finding leaks nothing. The judgement is
+ * {@link isMislabelledLink}'s.
+ */
+function mislabelledLinkAdvisory(
+  item: string,
+  link: WorkItemLink,
+  targetKey: string | null,
+  knownPrefixes: ReadonlySet<string>,
+): WorkItemProseAdvisoryDto | null {
+  // The target's own prefix always counts, so a projected sibling resolves the
+  // same way before and after the projects read.
+  const prefixes = targetKey
+    ? new Set([...knownPrefixes, targetKey.slice(0, targetKey.lastIndexOf('-')).toUpperCase()])
+    : knownPrefixes;
+  if (!isMislabelledLink(link.label, targetKey, prefixes)) return null;
+  return {
+    kind: 'shape',
+    item,
+    severity: 'likely-mislabelled-link',
+    label: link.label,
+    targetId: link.id,
+    targetKey,
+  };
+}
 
 /**
  * The ORDERING advisory for ONE subject (MOTIR-2175) — gate 14's third axis.
@@ -466,6 +557,34 @@ function sizingAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryDto
 }
 
 /**
+ * THE UNDER-AUTHORED advisory for ONE subject (MOTIR-5427) — a childless card
+ * with no enumerated acceptance criterion and null sizing, type and executor.
+ *
+ * A pure null check over columns the subject already carries; like
+ * {@link sizingAdvisory} it fires on a card that names nothing and has no edges,
+ * which is the MOTIR-4956 fixture. ADVISORY ONLY, never a readiness change: a card
+ * is routinely saved mid-authoring (`docs/decisions/under-authored-shape-family.md`).
+ */
+function underAuthoredAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryDto | null {
+  const found = underAuthored({
+    kind: subject.kind,
+    descriptionMd: subject.descriptionMd,
+    hasChildren: subject.hasChildren,
+    storyPoints: subject.storyPoints,
+    estimateMinutes: subject.estimateMinutes,
+    type: subject.type,
+    executor: subject.executor,
+  });
+  if (!found) return null;
+  return {
+    kind: 'shape',
+    item: subject.item,
+    severity: 'under-authored',
+    criteria: found.criteria,
+  };
+}
+
+/**
  * THE SELF-BLOCKING-DESIGN advisory for ONE subject (MOTIR-3178) — the design
  * gate's degenerate reading, asked of the card's own criteria.
  *
@@ -522,6 +641,29 @@ function selfBlockingDesignAdvisory(
     severity: 'likely-self-blocking-design',
     designCriterionIndex: found.designCriterionIndex,
     surfaceCriterionIndex: found.surfaceCriterionIndex,
+  };
+}
+
+/**
+ * THE POST-MERGE-CHILD advisory for ONE subject (MOTIR-8863) — a card that waits
+ * on the deployment, laid inside the runnable container whose merge it waits on.
+ *
+ * Pure: type, executor, body and the parent's kind. Scope is the child's
+ * type/executor ({@link isPostMergeChildCandidate}) and the container's kind
+ * (an epic's children are siblings of a story, which is the remedy's own shape).
+ */
+function postMergeChildAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryDto | null {
+  const parent = subject.parent;
+  if (!parent || isPostMergeChildCheckExemptContainer(parent.kind)) return null;
+  if (!isPostMergeChildCandidate(subject.type, subject.executor)) return null;
+  const phrase = firstPostMergeChildTell(subject.descriptionMd);
+  if (!phrase) return null;
+  return {
+    kind: 'shape',
+    item: subject.item,
+    severity: 'likely-post-merge-child-under-container',
+    phrase,
+    container: parent.identifier,
   };
 }
 
@@ -856,6 +998,7 @@ export async function buildDispatchProseAdvisories(
     id: string;
     identifier: string;
     descriptionMd: string | null;
+    kind?: string | null;
     type?: string | null;
     executor?: string | null;
     targetRepo?: string | null;
@@ -942,6 +1085,20 @@ export async function buildDispatchProseAdvisories(
   // The counted-own-blockers check's clear-ness (MOTIR-5428) — the SEVENTH pure
   // scan. A hit needs the edge read below even when every older family is clear.
   const blockerCountCandidate = firstBlockerCountClaim(item.descriptionMd) !== null;
+  // The UNDER-AUTHORED check's clear-ness (MOTIR-5427) — the EIGHTH scan, and the
+  // only one that fires on an ABSENCE. Children are ignored for the usual reason
+  // (they only SUPPRESS the finding); `undefined` sizing means the caller's row
+  // shape does not carry it, so the row is read below rather than assumed empty.
+  const underAuthoredCandidate =
+    underAuthored({
+      kind: item.kind,
+      descriptionMd: item.descriptionMd,
+      hasChildren: false,
+      storyPoints: item.storyPoints ?? null,
+      estimateMinutes: item.estimateMinutes ?? null,
+      type,
+      executor,
+    }) !== null;
   if (
     namesNothing &&
     wellOrdered &&
@@ -949,7 +1106,8 @@ export async function buildDispatchProseAdvisories(
     namesNoFile &&
     !sizingCandidate &&
     !selfBlockingCandidate &&
-    !blockerCountCandidate
+    !blockerCountCandidate &&
+    !underAuthoredCandidate
   ) {
     // The BODY-EDIT-ABOVE-FIELD-MOVE check (MOTIR-5399) is the one member no scan
     // above can clear: it reads the card's HISTORY, not its body or its columns, so
@@ -984,7 +1142,10 @@ export async function buildDispatchProseAdvisories(
         ancestors,
         blockerLinks,
         rows:
-          (suppliedCreatedAt === null && !namesNoFile) || sizingCandidate || selfBlockingCandidate
+          (suppliedCreatedAt === null && !namesNoFile) ||
+          sizingCandidate ||
+          selfBlockingCandidate ||
+          underAuthoredCandidate
             ? await workItemRepository.findDescriptionsByIds([item.id], ctx.workspaceId, tx)
             : [],
         // The SELF-BLOCKING-DESIGN check's edge half (MOTIR-3625): the TYPES
@@ -1028,6 +1189,7 @@ export async function buildDispatchProseAdvisories(
       {
         item: item.identifier,
         descriptionMd: item.descriptionMd,
+        kind: item.kind,
         exemptIds,
         blockerCount: blockerLinks.length,
         type,
@@ -1042,6 +1204,11 @@ export async function buildDispatchProseAdvisories(
       },
     ],
     ctx,
+    undefined,
+    // The MISLABELLED-LINK check (MOTIR-9007) is an AUTHORING finding, reported by
+    // `validate_work_item` / `validate_plan` while the body is still being written.
+    // Dispatch does not run it: its wire contract carries no such member.
+    { mislabelledLinks: false },
   );
   return advisories.filter(
     (a) => a.kind === 'shape' || a.kind === 'subsumption' || a.severity === 'likely-missing-edge',

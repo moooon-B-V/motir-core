@@ -27,6 +27,7 @@ import type { LegBranch } from '../checkpoint.js';
 import { runDispatchLeg } from '../dispatchLeg.js';
 import { createDispatchRunReporter, type DispatchRunReporter } from '../dispatchRunReporter.js';
 import { bindInterruptSignals, closeRunAndExit, type InterruptSignal } from '../interrupt.js';
+import { createLegLogTee } from '../agentLogTee.js';
 import { runCiWatchPhase, type CiWatchOutcome } from '../ciWatch.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import { execCommand, runIdFromDate, sessionBranchName, type CommandRunner } from '../git.js';
@@ -230,6 +231,30 @@ export function resolveAgent(
     if (parsed) return { parsed, source };
   }
   return null;
+}
+
+/**
+ * The command that CONTINUES the run's own agent session for the CI watch's fixing
+ * iterations (MOTIR-9048), or null when a resume cannot be established — in which
+ * case the watch keeps today's fresh-agent fix.
+ */
+export function resumeFixAgent(
+  agent: ParsedAgentCommand,
+  sessionId: string | null | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): ParsedAgentCommand | null {
+  const id = sessionId?.trim();
+  // The profile comes from the launched command's OWN stamp: a command no launcher
+  // built (a typed --agent, MOTIR_AGENT, the config command) is never resumed on a guess.
+  const profile = agent.stream?.profile;
+  if (!id || !profile) return null;
+  const resumed = unattendedAgentCommand(profile, agent.env ?? env, { resumeSessionId: id });
+  // ⚠️ The launcher SILENTLY IGNORES the id for a profile with no streaming form (or
+  // under MOTIR_AGENT_OUTPUT=text) and returns a plain, unstamped command. "A session id
+  // was passed" is therefore no evidence that a resume was built — decide on what the
+  // launcher RETURNED: its stamped session must be the id asked for.
+  if (!resumed || resumed.stream?.sessionId !== id) return null;
+  return agent.promptAddendum ? { ...resumed, promptAddendum: agent.promptAddendum } : resumed;
 }
 
 /**
@@ -652,17 +677,28 @@ export async function deliver(input: DeliverInput): Promise<void> {
     // green ends the run, red dispatches a fixing iteration, and the sixth red
     // gives up non-zero. A red check does NOT move the card — `implemented` is
     // exactly right for code that is committed and whose build has not spoken.
+    const ciLogTee = createLegLogTee(reporter, key);
+    const resumeAgent = resumeFixAgent(agent.parsed, verdict.sessionId);
     const watch = await runCiWatchPhase({
       client,
       key,
       title,
       agent: agent.parsed,
+      // The fix arrives in the conversation that built the branch (MOTIR-9048); a
+      // command that cannot be resumed leaves today's fresh-agent fix.
+      ...(resumeAgent ? { resumeAgent } : {}),
       cwd: target.cwd,
       report: (line) => info(line),
+      // The watch's sign of life, and the fixing agent's output (MOTIR-8979): the
+      // server reads the run's latest event to decide a run has stalled, so a
+      // watch that writes none is killed after 15 minutes of CI.
+      onEvent: (event) => reporter.event({ ...event, workItemKey: key }),
+      ...(ciLogTee ? { onOutput: ciLogTee.write } : {}),
       ...(deps.wait ? { wait: deps.wait } : {}),
       ...(deps.runAgentFn ? { runAgentFn: deps.runAgentFn } : {}),
       ...(deps.maxCiPolls === undefined ? {} : { maxPolls: deps.maxCiPolls }),
     });
+    ciLogTee?.flush();
     // ⚠️ NON-ZERO on a give-up, and it must be obvious it gave up rather than
     // succeeded: the card is at `implemented` either way, and a script wrapping
     // `motir run` can only tell the two apart by the exit code.

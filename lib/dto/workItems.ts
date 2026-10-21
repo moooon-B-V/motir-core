@@ -13,6 +13,7 @@ import type { EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { ChoiceBodyDTO } from '@/lib/dto/approvalGate';
 import type { FilterAst } from '@/lib/filters/ast';
 import type { Locale } from '@/lib/i18n/locales';
+import type { WorkItemSections } from '@/lib/workItems/sections/registry';
 import type { WorkflowDto, StatusCategoryDto } from './workflows';
 import type { SprintBlockerDto } from './sprints';
 import type { RelationshipKind } from './workItemLinks';
@@ -1292,8 +1293,24 @@ export interface WorkItemProvenanceInput {
   implementation?: WorkItemImplementationProvenanceInput;
 }
 
+/**
+ * The `sections` input of a work-item write (Story MOTIR-9023 · MOTIR-9031): the
+ * card's sections as separate typed values, rendered into `descriptionMd` by the
+ * service. On an UPDATE it is a SPARSE patch at the section key — an omitted
+ * section is kept, an explicit `null` clears it, a list replaces the list. A
+ * write input only: nothing structured is stored and no read returns it.
+ */
+export type WorkItemSectionsInput = { [K in keyof WorkItemSections]?: WorkItemSections[K] | null };
+
 export interface CreateWorkItemInput {
   projectId: string;
+  /**
+   * Sections to render into `descriptionMd` (MOTIR-9031). Checked against the
+   * registry for `kind` × `type`; a missing, unknown or invalid section is
+   * `InvalidSectionsError`, and `sections` beside `descriptionMd` is
+   * `SectionsWithDescriptionError`. Omitted, `descriptionMd` is stored as sent.
+   */
+  sections?: WorkItemSectionsInput;
   /**
    * The language this write's text is in (Story MOTIR-7731 · MOTIR-8096):
    * `language` for every text field written, `languages` per field (wins).
@@ -1510,6 +1527,12 @@ export interface CreateWorkItemLinkInput {
  * transitions the source to `user_edited`.
  */
 export interface UpdateWorkItemInput {
+  /**
+   * Sections to merge over the stored body and render into `descriptionMd`
+   * (MOTIR-9031), judged on the card's FINAL kind × type. See
+   * {@link WorkItemSectionsInput}. Refused beside `descriptionMd`.
+   */
+  sections?: WorkItemSectionsInput;
   /**
    * The language this write's text is in (Story MOTIR-7731 · MOTIR-8096):
    * `language` for every text field written, `languages` per field (wins).
@@ -1768,6 +1791,15 @@ export interface WorkItemValidityDto {
   /** The in-subtree items gated by out-of-subtree, unsatisfied work; empty when valid. */
   blockers: SprintBlockerDto[];
   /**
+   * The subset of `blockers` the plan does NOT own (MOTIR-9021) — an edge in place
+   * before the plan, on a card still being worked. A WAIT, not a defect: the
+   * subtree is finishable once that card lands, so a planner keeps the edge and
+   * must not drop it to make the verdict pass. A SUBSET, so `valid` and `blockers`
+   * are byte-identical whether or not this is present. Absent when empty, and from
+   * the committed verdict.
+   */
+  waits?: SprintBlockerDto[];
+  /**
    * Every same-level `blocked_by` FROM a not-done subtree member whose two ends
    * sit under different parents that carry no matching edge (MOTIR-6370).
    * Empty when every cross-parent edge is covered.
@@ -1797,6 +1829,39 @@ export interface WorkItemValidityDto {
    * empty when no ancestor is blocked.
    */
   softBlocks: WorkItemSoftBlockDto[];
+  /**
+   * Per-card SECTION findings (MOTIR-9032) — the body PARSED against the section
+   * registry for the card's kind × type, one entry per not-done subtree card that
+   * misses a required section or carries one it cannot read. A SEPARATE advisory
+   * channel, **never a blocker**: `valid` and `blockers` are byte-identical
+   * whether or not this array is empty. Sorted by `item`; empty when every card
+   * reads clean.
+   */
+  sectionFindings: SectionFindingDto[];
+}
+
+/**
+ * One card's section finding (MOTIR-9032): what parsing its stored (or
+ * projected) body against the registry for its kind × type found missing.
+ * Advisory — see {@link WorkItemValidityDto.sectionFindings}.
+ */
+export interface SectionFindingDto {
+  /** The card's identifier (a real key, or the plan item's projected key). */
+  item: string;
+  /** The card's kind and type — the registry cell its body was read against. */
+  kind: string;
+  type: string | null;
+  /** `unstructured` — the body has no section headings at all (or is empty);
+   *  `incomplete` — it has some, and a required one is missing or unreadable. */
+  state: 'unstructured' | 'incomplete';
+  /** Required sections absent or empty, in registry order. */
+  missing: string[];
+  /** Sections found but unreadable into their shape, with why. */
+  invalid: { section: string; message: string }[];
+  /** Headings the body carries that the registry does not define for this cell. */
+  otherHeadings: string[];
+  /** The parser's diagnostics (`empty`, `no-headings`, `quoted-gutter`, …). */
+  signals: string[];
 }
 
 /** A `{ key, title }` reference to a work item, as a soft block names one. */
@@ -1854,8 +1919,11 @@ export type WorkItemProseShapeSeverityDto =
   | 'likely-repo-straddle'
   | 'likely-over-gate-sizing'
   | 'likely-self-blocking-design'
+  | 'likely-post-merge-child-under-container'
   | 'body-edit-above-field-move'
-  | 'likely-blocker-count-mismatch';
+  | 'likely-blocker-count-mismatch'
+  | 'under-authored'
+  | 'likely-mislabelled-link';
 
 /**
  * ONE prose-vs-graph advisory (MOTIR-1969): an in-subtree card whose
@@ -2116,6 +2184,27 @@ export interface WorkItemProseSelfBlockingDesignAdvisoryDto extends WorkItemPros
   surfaceCriterionIndex: number;
 }
 
+/**
+ * A CHILD that can only start after the deployment, laid INSIDE the runnable
+ * container whose merge it waits on (MOTIR-8863). The advisory is emitted on the
+ * CHILD (`item`), naming the container.
+ *
+ * ⚠️ A runnable container is ONE deliverable that ends at its pull request; a
+ * production check in the middle means TWO containers, the second `blocked_by`
+ * the first — not a child of the first. The remedy is placement: lay the child as
+ * a sibling the container `blocks`, or split the container. Advisory like its
+ * siblings, never a gate; `validate_plan` reports it on the projected tree so a
+ * plan can be repaired before approval. A container of kind `epic` is out of
+ * scope: a card beside a story is where the remedy puts it.
+ */
+export interface WorkItemProsePostMergeChildAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+  severity: 'likely-post-merge-child-under-container';
+  /** The deployment-reading phrase the child's body carries. */
+  phrase: string;
+  /** The container (the child's parent) whose merge the child waits on. */
+  container: string;
+}
+
 /** One end of a {@link WorkItemProseBodyAboveFieldMoveAdvisoryDto}: one revision of the card. */
 export interface WorkItemRevisionEndDto {
   /** When the revision was written (ISO-8601). */
@@ -2175,6 +2264,59 @@ export interface WorkItemProseBlockerCountAdvisoryDto extends WorkItemProseShape
 }
 
 /**
+ * A CHILDLESS card carrying nothing: no enumerated acceptance criterion and null
+ * `storyPoints`, `estimateMinutes`, `type` and `executor` (MOTIR-5427).
+ *
+ * Named as a FACT, not `likely-…`, like {@link WorkItemProseBodyAboveFieldMoveAdvisoryDto}:
+ * every input is an absent field, so there is no judgement in it and no
+ * false-positive space. What it cannot tell is WHY the fields are absent.
+ *
+ * ⚠️ **Never a gate, and the reason is the scratchpad.** Plan-rules gate 20 calls
+ * such a card UNSEALABLE, which argues for a refusal; a card is also routinely
+ * saved mid-authoring, and a refusal would make the tracker unusable as a
+ * scratchpad. The advisory channel is the decided answer for every shape family
+ * (see {@link WorkItemProseSizingAdvisoryDto}): visible at seal time and at claim
+ * time, never in readiness. `docs/decisions/under-authored-shape-family.md`.
+ *
+ * ⚠️ Childless is the scope, as for the sizing and self-blocking members: gate 20
+ * is a leaf bar, so a container is never reported. No criterion index, because
+ * the finding is about the ABSENCE of criteria.
+ */
+export interface WorkItemProseUnderAuthoredAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+  severity: 'under-authored';
+  /** Whether the `## Acceptance criteria` heading is missing or just empty. */
+  criteria: 'no-heading' | 'no-criterion';
+}
+
+/**
+ * A `[label](motir:<id>)` link in the card's body whose label names one work-item
+ * key while its id opens a different card — or whose id opens no card the reader
+ * can see at all (MOTIR-9007).
+ *
+ * The reader of a body trusts the LABEL and the chip opens the ID, so a mismatch
+ * sends them, or an agent dispatched on the card, to the wrong card silently.
+ * Every author writing ids from memory makes it, and no other check reads the
+ * label. `targetKey` is the card the link really opens, or `null` when the id
+ * resolves to nothing — a deleted or invented id, another workspace's, or one in a
+ * project the reader cannot browse, which are deliberately indistinguishable so
+ * the finding leaks no existence. A label that is a NAME rather than a key is
+ * checked only for the `null` arm.
+ *
+ * ⚠️ Never a gate, like every member: a broken link is a defect in prose, and the
+ * card is as finishable with it as without. No criterion index — a link can sit
+ * anywhere in the body.
+ */
+export interface WorkItemProseMislabelledLinkAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+  severity: 'likely-mislabelled-link';
+  /** The link's label exactly as written. */
+  label: string;
+  /** The work-item id the link opens. */
+  targetId: string;
+  /** The key of the card that id opens, or `null` when it opens none. */
+  targetKey: string | null;
+}
+
+/**
  * ONE SHAPE advisory — narrowed by {@link WorkItemProseShapeAdvisoryDto.severity}
  * once `kind === 'shape'` has narrowed the outer union.
  *
@@ -2187,8 +2329,11 @@ export type WorkItemProseShapeAdvisoryDto =
   | WorkItemProseRepoStraddleAdvisoryDto
   | WorkItemProseSizingAdvisoryDto
   | WorkItemProseSelfBlockingDesignAdvisoryDto
+  | WorkItemProsePostMergeChildAdvisoryDto
   | WorkItemProseBodyAboveFieldMoveAdvisoryDto
-  | WorkItemProseBlockerCountAdvisoryDto;
+  | WorkItemProseBlockerCountAdvisoryDto
+  | WorkItemProseUnderAuthoredAdvisoryDto
+  | WorkItemProseMislabelledLinkAdvisoryDto;
 
 /**
  * The severity of a SUBSUMPTION advisory (MOTIR-2903). Named rather than inlined
@@ -2347,6 +2492,29 @@ export interface WorkItemCoverageAdvisoryDto {
 }
 
 /**
+ * A CONTAINER whose body never mentions a word its own TITLE carries (MOTIR-8647).
+ * Every work item laid under a container is laid against its body, not its title,
+ * so a body that silently drops a named part of the title narrows the requirement
+ * for the whole subtree with nothing marking it as a choice. The remedy is the
+ * author's: restore the part in the body, or state it as excluded with the work
+ * item that owns it.
+ *
+ * ⚠️ Its own `kind`, not a severity on {@link WorkItemCoverageAdvisoryDto}: that
+ * family is keyed by `criterionIndex` and `adoptedChildren`, and a reader that
+ * narrowed on `kind: 'coverage'` would print a finding about a criterion this one
+ * does not have. Rides `validate_work_item` only, advisory and never a gate.
+ */
+export interface WorkItemTitleCoverageAdvisoryDto {
+  /** The union discriminant — see {@link WorkItemValidityAdvisoryDto}. */
+  kind: 'title-coverage';
+  /** The CONTAINER whose body does not carry its title. */
+  item: string;
+  severity: 'likely-unnamed-title-part';
+  /** The title's distinguishing words (stemmed) that the body never mentions. */
+  words: string[];
+}
+
+/**
  * A criterion naming a FILE another open work item also names, where the file
  * does not exist yet and no `blocked_by` orders the two (MOTIR-5424) — the
  * reference family's PATH arm. The key-based {@link WorkItemProseReferenceAdvisoryDto}
@@ -2396,7 +2564,15 @@ export interface WorkItemPathReferenceAdvisoryDto {
 export type WorkItemValidityAdvisoryDto =
   | WorkItemProseAdvisoryDto
   | WorkItemCoverageAdvisoryDto
+  | WorkItemTitleCoverageAdvisoryDto
   | WorkItemPathReferenceAdvisoryDto;
+
+/** Narrow an advisory to the TITLE-COVERAGE family (MOTIR-8647). */
+export function isTitleCoverageAdvisory(
+  a: WorkItemValidityAdvisoryDto,
+): a is WorkItemTitleCoverageAdvisoryDto {
+  return a.kind === 'title-coverage';
+}
 
 /** Narrow an advisory to the PATH-REFERENCE family (MOTIR-5424). */
 export function isPathReferenceAdvisory(
@@ -2496,6 +2672,15 @@ export function isSelfBlockingDesignAdvisory(
 }
 
 /**
+ * Narrow an advisory to the POST-MERGE-CHILD shape (MOTIR-8863).
+ */
+export function isPostMergeChildAdvisory(
+  a: WorkItemValidityAdvisoryDto,
+): a is WorkItemProsePostMergeChildAdvisoryDto {
+  return a.kind === 'shape' && a.severity === 'likely-post-merge-child-under-container';
+}
+
+/**
  * Narrow an advisory to the BODY-EDIT-ABOVE-FIELD-MOVE shape (MOTIR-5399).
  *
  * The third shape member with no `criterionIndex`, so — like
@@ -2506,6 +2691,20 @@ export function isBodyAboveFieldMoveAdvisory(
   a: WorkItemValidityAdvisoryDto,
 ): a is WorkItemProseBodyAboveFieldMoveAdvisoryDto {
   return a.kind === 'shape' && a.severity === 'body-edit-above-field-move';
+}
+
+/** Narrow an advisory to the UNDER-AUTHORED shape (MOTIR-5427). */
+export function isUnderAuthoredAdvisory(
+  a: WorkItemValidityAdvisoryDto,
+): a is WorkItemProseUnderAuthoredAdvisoryDto {
+  return a.kind === 'shape' && a.severity === 'under-authored';
+}
+
+/** Narrow an advisory to the MISLABELLED-LINK shape (MOTIR-9007). */
+export function isMislabelledLinkAdvisory(
+  a: WorkItemValidityAdvisoryDto,
+): a is WorkItemProseMislabelledLinkAdvisoryDto {
+  return a.kind === 'shape' && a.severity === 'likely-mislabelled-link';
 }
 
 /** Narrow an advisory to the counted-own-blockers shape (MOTIR-5428). */

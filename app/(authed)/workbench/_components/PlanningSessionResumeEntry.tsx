@@ -36,9 +36,11 @@ import { PlanningSessionFormBody, useLeftLine } from './PlanningSessionResumeFor
 // ⚠️ THE STATE IS DERIVED, NOT STORED, so a re-read cannot strand it:
 //   · *waiting* — the default;
 //   · *resuming* — Resume was pressed for THIS failure (`resumedFor === failure.failedAt`).
-//     The entry is HELD in place by the list (§ 26 / § 35.5) until a refresh drops it. A
-//     failure with a newer `failedAt` is a different failure: the note clears and the entry
-//     is waiting again — that is *failed again*;
+//     The entry shows it until the re-read it asks for (`onResumed`) lands; a read that no
+//     longer lists the session CLEARS the row — § 37's "the row clears when the attempt
+//     starts", not § 35.5's gated-run hold (MOTIR-9122). A failure with a newer `failedAt`
+//     is a different failure: the note clears and the entry is waiting again — that is
+//     *failed again*;
 //   · *failed again* — `failedAt` is newer than the one this reader first saw, so a quiet
 //     *Second attempt* note shows (earlier reasons are not listed: one failure is the thing
 //     to act on);
@@ -56,6 +58,7 @@ export function PlanningSessionResumeEntry({
   arrived,
   held,
   onSettled,
+  onResumed,
 }: {
   entry: ToResumePlanningSessionDto;
   arrived: boolean;
@@ -63,6 +66,8 @@ export function PlanningSessionResumeEntry({
   held: boolean;
   /** Called when a refusal means the session is no longer waiting: the list should re-read. */
   onSettled: () => void;
+  /** Called when the attempt has started: the list re-reads, and drops the row once the read does. */
+  onResumed: (sessionId: string) => void;
 }) {
   const routes = useReaderRoutes();
   const locale = useLocale();
@@ -93,13 +98,16 @@ export function PlanningSessionResumeEntry({
     try {
       await resumePlanSession(entry.sessionId);
       setResumedFor(failedAt);
+      onResumed(entry.sessionId);
     } catch (err) {
       const code = err instanceof PlanEditsClientError ? err.code : null;
       const status = err instanceof PlanEditsClientError ? err.status : null;
       const key = resumeRefusalKeyOf(code, status);
       // A concurrent Resume won: the walk IS resuming, so this reads as resuming.
-      if (key === 'alreadyStarted') setResumedFor(failedAt);
-      else {
+      if (key === 'alreadyStarted') {
+        setResumedFor(failedAt);
+        onResumed(entry.sessionId);
+      } else {
         setRefusal(key);
         if (refusalEndsWaiting(key)) onSettled();
       }

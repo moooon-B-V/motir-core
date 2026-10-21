@@ -1,3 +1,4 @@
+import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { Fragment } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -75,7 +76,7 @@ export function ParentBreadcrumb({
             >
               <IssueTypeIcon type={ancestor.kind} className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">
-                {meta.label}: {ancestor.title}
+                {meta.label}: <SurfaceTitle id={ancestor.id} title={ancestor.title} />
               </span>
             </Link>
           </Fragment>

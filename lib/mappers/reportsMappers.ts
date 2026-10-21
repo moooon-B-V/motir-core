@@ -376,26 +376,49 @@ export function toResolutionTimeDto(input: {
   };
 }
 
+/** One grouped workload row: totals, plus the segment split on the windowed read. */
+export interface WorkloadRow {
+  assigneeId: string | null;
+  name: string | null;
+  points: number;
+  count: number;
+  assignedPoints?: number;
+  assignedCount?: number;
+  unassignedPoints?: number;
+  unassignedCount?: number;
+}
+
 /**
- * Assemble a `WorkloadDto` from the grouped `{ assigneeId, name, points, count }`
- * rows. Ranks DESCENDING by the active `measure` (story points or issue count),
- * with the unassigned ("None") bucket — `assigneeId: null` — ALWAYS LAST
- * regardless of its size (the design's neutral bucket). `points` round to one
- * decimal (story points are `Decimal(6,2)`); totals are the window sums. An
- * empty scope yields `{ assignees: [], totalPoints: 0, totalCount: 0 }` — never
+ * Assemble a `WorkloadDto` from the grouped workload rows. Ranks DESCENDING by
+ * the active `measure` (story points or issue count) over the bar's TOTAL, with
+ * the neutral "Unassigned" bucket — `assigneeId: null` — ALWAYS LAST regardless
+ * of its size. `points` round to one decimal (story points are `Decimal(6,2)`);
+ * totals are the sums. A snapshot row (no segment fields) is all-assigned:
+ * `assigned* = total`, `unassigned* = 0`; the person-less bar's segments are 0
+ * when the read left them out. `window` is the ISO-stringified span of a windowed
+ * read, else `null`. An empty scope yields `{ assignees: [], totals 0 }` — never
  * `NaN`. PURE — no I/O.
  */
 export function toWorkloadDto(
   measure: WorkloadMeasureDto,
-  rows: Array<{ assigneeId: string | null; name: string | null; points: number; count: number }>,
+  rows: WorkloadRow[],
+  window?: { period: ReportPeriodDto; daysBack: number; windowStart: Date; windowEnd: Date },
 ): WorkloadDto {
   const round1 = (n: number) => Math.round(n * 10) / 10;
-  const assignees: WorkloadAssigneeDto[] = rows.map((r) => ({
-    assigneeId: r.assigneeId,
-    name: r.name,
-    points: round1(r.points),
-    count: r.count,
-  }));
+  const assignees: WorkloadAssigneeDto[] = rows.map((r) => {
+    const windowed = r.assignedPoints !== undefined;
+    const person = r.assigneeId !== null;
+    return {
+      assigneeId: r.assigneeId,
+      name: r.name,
+      points: round1(r.points),
+      count: r.count,
+      assignedPoints: round1(windowed ? r.assignedPoints! : person ? r.points : 0),
+      assignedCount: windowed ? (r.assignedCount ?? 0) : person ? r.count : 0,
+      unassignedPoints: round1(r.unassignedPoints ?? 0),
+      unassignedCount: r.unassignedCount ?? 0,
+    };
+  });
   const measureVal = (a: WorkloadAssigneeDto) => (measure === 'issue_count' ? a.count : a.points);
   assignees.sort((a, b) => {
     // Unassigned bucket sinks to the bottom, then rank by the active measure.
@@ -410,5 +433,13 @@ export function toWorkloadDto(
     assignees,
     totalPoints: round1(assignees.reduce((sum, a) => sum + a.points, 0)),
     totalCount: assignees.reduce((sum, a) => sum + a.count, 0),
+    window: window
+      ? {
+          period: window.period,
+          daysBack: window.daysBack,
+          windowStart: window.windowStart.toISOString(),
+          windowEnd: window.windowEnd.toISOString(),
+        }
+      : null,
   };
 }

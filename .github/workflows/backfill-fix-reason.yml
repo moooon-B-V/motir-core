@@ -38,7 +38,7 @@ concurrency:
 jobs:
   backfill:
     name: Recompute WorkItem.fixReason for every live card
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # The ciState sweep's measured floor (MOTIR-5765: ~9 min over ~1,957 cards,
     # cancelled by a 10-minute ceiling) is the reason for the same 60-minute
     # headroom here. This sweep's candidates are the in-progress-category cards,

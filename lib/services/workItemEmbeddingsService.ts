@@ -1,10 +1,12 @@
 import 'server-only';
 
 import { embedTexts } from '@/lib/ai/motirAiClient';
+import { isPerInputRejection } from '@/lib/ai/errors';
 import {
   EMBEDDING_DIMENSIONS,
   efSearchForLimit,
   workItemEmbeddingRepository,
+  type BackfillScanRow,
   type WorkItemEmbeddingRankRow,
 } from '@/lib/repositories/workItemEmbeddingRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -46,6 +48,17 @@ export const EMBEDDING_BATCH_MAX_INPUTS = 64;
  *  of the two moved. */
 export const BACKFILL_PAGE_SIZE = 200;
 
+/** How many runs of the scheduled sweep may be refused for the SAME document by the
+ *  provider before the item is given up on (MOTIR-8227). Three: one rejection can
+ *  be a provider hiccup that happens to read as a 4xx, three in a row is the item.
+ *  The count lives on `work_item.embedding_failed_attempts` and restarts whenever
+ *  the item's text changes (a different hash), so giving up is never permanent. */
+export const EMBEDDING_MAX_ATTEMPTS = 3;
+
+/** The text the witness probe embeds. Fixed, short and unremarkable on purpose:
+ *  if the provider refuses THIS, the problem is not an item. */
+const WITNESS_PROBE_TEXT = 'embedding sweep witness probe';
+
 /** Why an embedding attempt wrote nothing. Every one of these is a VALUE, not an
  *  error — "not a candidate yet" is a legitimate resting state (ADR §6.3.5). */
 export type EmbeddingSkipReason =
@@ -75,6 +88,27 @@ export interface BackfillResult {
   model: string | null;
 }
 
+export interface BackfillBatchResult extends BackfillResult {
+  /** Keyset position to resume from, or null when the scan of the project is done. */
+  nextAfterId: string | null;
+  /** Items whose refused attempt was recorded in THIS run. */
+  failed: number;
+  /** Ids of those items. */
+  failedIds: string[];
+  /** Items at {@link EMBEDDING_MAX_ATTEMPTS}: skipped with no provider call, or
+   *  reaching the limit in this run. */
+  givenUp: number;
+  /** Ids of those items, so they are findable in the logs. */
+  givenUpIds: string[];
+}
+
+/** One sweep run's record of whether the provider answers a known-good input. It
+ *  is shared by every project the run visits, so the probe is made AT MOST ONCE
+ *  per run, and only after a per-input rejection. */
+export interface WitnessProbe {
+  confirmed: boolean;
+}
+
 export interface RankSimilarInput {
   workspaceId: string;
   projectId: string;
@@ -102,7 +136,7 @@ export interface RankSimilarResult {
 /** Whether the closed motir-ai backend is wired for this deployment. Mirrors
  *  `aiBugTelemetryService`'s gate, for the same reason: an open-core motir-core
  *  with no AI backend must degrade, not hard-fail. */
-function motirAiConfigured(): boolean {
+export function motirAiConfigured(): boolean {
   return Boolean(process.env['MOTIR_AI_URL'] && process.env['MOTIR_AI_SERVICE_TOKEN']);
 }
 
@@ -110,6 +144,153 @@ function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
+}
+
+/** One scanned item that needs a vector, with the document and hash it needs one for. */
+interface StaleItem {
+  id: string;
+  document: string;
+  contentHash: string;
+  /** Attempts the provider has already refused THIS document (0 for any other). */
+  failedAttempts: number;
+}
+
+/**
+ * The stale-detect step both backfills share: recompose each item's document and
+ * hash, and keep the rows whose stored hash disagrees — "never embedded" (null)
+ * and "the text has moved on since" alike. This is the SAME comparison
+ * `embedWorkItem` makes, so a backfill and a live edit can never disagree about
+ * whether a row is current.
+ */
+function selectStale(page: BackfillScanRow[]): StaleItem[] {
+  const stale: StaleItem[] = [];
+  for (const row of page) {
+    const document = composeEmbeddingDocument({
+      title: row.title,
+      descriptionMd: row.descriptionMd,
+    });
+    const contentHash = hashEmbeddingDocument(document);
+    if (row.contentHash === contentHash) continue;
+    stale.push({
+      id: row.id,
+      document,
+      contentHash,
+      // A failure recorded against any OTHER document is stale news: the item's
+      // text has changed since, so it starts again from zero.
+      failedAttempts:
+        row.embeddingFailedHash === contentHash ? (row.embeddingFailedAttempts ?? 0) : 0,
+    });
+  }
+  return stale;
+}
+
+/**
+ * The embed-and-store step both backfills share: ONE provider call for the group,
+ * then ONE short write transaction upserting every vector (and clearing any
+ * poison-item bookkeeping the item carried). The external call sits between two
+ * short transactions, never inside one — the rule this file opens with.
+ *
+ * Throws whatever `embedTexts` throws, untouched, so each caller decides what a
+ * refusal means: `backfillProject` fails the run, `backfillBatch` may isolate it.
+ * A dimension mismatch is a defect and always throws.
+ */
+async function embedAndStore(
+  workspaceId: string,
+  projectId: string,
+  group: StaleItem[],
+): Promise<string> {
+  const batch = await embedTexts(group.map((c) => c.document));
+  await withWorkspaceServiceContext(workspaceId, async (tx) => {
+    for (const [index, candidate] of group.entries()) {
+      const vector = batch.embeddings[index];
+      if (!vector || vector.length !== EMBEDDING_DIMENSIONS) {
+        throw new EmbeddingDimensionMismatchError(
+          EMBEDDING_DIMENSIONS,
+          vector?.length ?? 0,
+          batch.model,
+        );
+      }
+      await workItemEmbeddingRepository.upsert(
+        {
+          workItemId: candidate.id,
+          workspaceId,
+          projectId,
+          model: batch.model,
+          dimensions: vector.length,
+          contentHash: candidate.contentHash,
+          embeddedAt: new Date(),
+          embedding: vector,
+        },
+        tx,
+      );
+    }
+    await workItemEmbeddingRepository.clearEmbeddingFailures(
+      group.map((c) => c.id),
+      tx,
+    );
+  });
+  return batch.model;
+}
+
+/**
+ * Embed a group, and when the provider refuses it for what is in the INPUT, narrow
+ * the refusal to the item(s) responsible (MOTIR-8227).
+ *
+ * `embedTexts` is all-or-nothing per call, so one unembeddable item refuses its 63
+ * neighbours too. On a per-input rejection this:
+ *  1. runs the WITNESS PROBE once per sweep run — embeds a fixed, known-good string.
+ *     If the provider refuses that too, the fault is the provider's (a wrong key
+ *     that reads as 4xx, a misconfigured model) and the ORIGINAL error is rethrown
+ *     for the job's retry policy; no item is blamed for an outage;
+ *  2. otherwise bisects: each half is retried on its own, so the healthy half
+ *     lands and the refused half shrinks until a single item is left;
+ *  3. a single refused item gets its attempt recorded against its current text.
+ *
+ * Cost of a poison item among n: O(log n) extra calls, once per sweep run, for at
+ * most {@link EMBEDDING_MAX_ATTEMPTS} runs — after which it is skipped outright.
+ */
+async function isolateRefused(
+  input: { workspaceId: string; projectId: string; witness: WitnessProbe },
+  group: StaleItem[],
+  result: BackfillBatchResult,
+): Promise<void> {
+  try {
+    result.model = await embedAndStore(input.workspaceId, input.projectId, group);
+    result.embedded += group.length;
+    return;
+  } catch (err) {
+    if (!isPerInputRejection(err)) throw err;
+
+    if (!input.witness.confirmed) {
+      try {
+        await embedTexts([WITNESS_PROBE_TEXT]);
+      } catch {
+        throw err;
+      }
+      input.witness.confirmed = true;
+    }
+
+    if (group.length > 1) {
+      const mid = Math.ceil(group.length / 2);
+      await isolateRefused(input, group.slice(0, mid), result);
+      await isolateRefused(input, group.slice(mid), result);
+      return;
+    }
+
+    const item = group[0]!;
+    await withWorkspaceServiceContext(input.workspaceId, (tx) =>
+      workItemEmbeddingRepository.recordEmbeddingFailure(
+        { workItemId: item.id, hash: item.contentHash },
+        tx,
+      ),
+    );
+    result.failed += 1;
+    result.failedIds.push(item.id);
+    if (item.failedAttempts + 1 >= EMBEDDING_MAX_ATTEMPTS) {
+      result.givenUp += 1;
+      result.givenUpIds.push(item.id);
+    }
+  }
 }
 
 export const workItemEmbeddingsService = {
@@ -227,49 +408,9 @@ export const workItemEmbeddingsService = {
       scanned += page.length;
       afterId = page[page.length - 1]!.id;
 
-      // Recompute each item's document + hash and keep only the rows whose
-      // stored hash disagrees — which covers both "never embedded" (null) and
-      // "the text has moved on since". This is the SAME comparison
-      // `embedWorkItem` makes, so a backfill and a live edit can never disagree
-      // about whether a row is current.
-      const stale: Array<{ id: string; document: string; contentHash: string }> = [];
-      for (const row of page) {
-        const document = composeEmbeddingDocument({
-          title: row.title,
-          descriptionMd: row.descriptionMd,
-        });
-        const contentHash = hashEmbeddingDocument(document);
-        if (row.contentHash !== contentHash) stale.push({ id: row.id, document, contentHash });
-      }
-
+      const stale = selectStale(page);
       for (const group of chunk(stale, EMBEDDING_BATCH_MAX_INPUTS)) {
-        const batch = await embedTexts(group.map((c) => c.document));
-        model = batch.model;
-        await withWorkspaceServiceContext(input.workspaceId, async (tx) => {
-          for (const [index, candidate] of group.entries()) {
-            const vector = batch.embeddings[index];
-            if (!vector || vector.length !== EMBEDDING_DIMENSIONS) {
-              throw new EmbeddingDimensionMismatchError(
-                EMBEDDING_DIMENSIONS,
-                vector?.length ?? 0,
-                batch.model,
-              );
-            }
-            await workItemEmbeddingRepository.upsert(
-              {
-                workItemId: candidate.id,
-                workspaceId: input.workspaceId,
-                projectId: input.projectId,
-                model: batch.model,
-                dimensions: vector.length,
-                contentHash: candidate.contentHash,
-                embeddedAt: new Date(),
-                embedding: vector,
-              },
-              tx,
-            );
-          }
-        });
+        model = await embedAndStore(input.workspaceId, input.projectId, group);
         embedded += group.length;
       }
 
@@ -277,6 +418,76 @@ export const workItemEmbeddingsService = {
     }
 
     return { scanned, embedded, model };
+  },
+
+  /**
+   * ONE bounded page of the scheduled sweep (Story MOTIR-8226 · MOTIR-8227): scan
+   * up to {@link BACKFILL_PAGE_SIZE} live items after `afterId`, embed the stale
+   * ones, and say where to resume. The caller (the sweep service) owns the loop
+   * and the budget, so a project with a hundred thousand items is many cheap
+   * ticks rather than one that holds a worker.
+   *
+   * Differs from {@link backfillProject} in exactly the way the sweep needs:
+   *  - archived items are not scanned (they are not search candidates);
+   *  - a group the provider REFUSES is isolated instead of failing the run — see
+   *    {@link isolateRefused} — so one poison item cannot starve its neighbours
+   *    on every tick for ever;
+   *  - an item the provider has already refused {@link EMBEDDING_MAX_ATTEMPTS}
+   *    times for its current text is skipped without a provider call.
+   *
+   * ⚠️ AN OUTAGE STILL THROWS. A transport failure, a 5xx, a 401/403/429 or a
+   * dimension mismatch is not about any one item; it propagates so the job's retry
+   * policy and the dead-letter see it. Only a per-input rejection (400/413/422)
+   * that survives the witness probe is attributed to an item.
+   */
+  async backfillBatch(input: {
+    workspaceId: string;
+    projectId: string;
+    afterId: string | null;
+    witness: WitnessProbe;
+  }): Promise<BackfillBatchResult> {
+    const empty: BackfillBatchResult = {
+      scanned: 0,
+      embedded: 0,
+      model: null,
+      nextAfterId: null,
+      failed: 0,
+      failedIds: [],
+      givenUp: 0,
+      givenUpIds: [],
+    };
+    if (!motirAiConfigured()) return empty;
+
+    const page = await withWorkspaceServiceContext(input.workspaceId, (tx) =>
+      workItemEmbeddingRepository.listForBackfill(
+        {
+          projectId: input.projectId,
+          afterId: input.afterId,
+          limit: BACKFILL_PAGE_SIZE,
+          excludeArchived: true,
+          withFailureState: true,
+        },
+        tx,
+      ),
+    );
+    const result: BackfillBatchResult = { ...empty, scanned: page.length };
+    if (page.length === 0) return result;
+    result.nextAfterId = page.length < BACKFILL_PAGE_SIZE ? null : page[page.length - 1]!.id;
+
+    const eligible: StaleItem[] = [];
+    for (const item of selectStale(page)) {
+      if (item.failedAttempts >= EMBEDDING_MAX_ATTEMPTS) {
+        result.givenUp += 1;
+        result.givenUpIds.push(item.id);
+      } else {
+        eligible.push(item);
+      }
+    }
+
+    for (const group of chunk(eligible, EMBEDDING_BATCH_MAX_INPUTS)) {
+      await isolateRefused(input, group, result);
+    }
+    return result;
   },
 
   /**

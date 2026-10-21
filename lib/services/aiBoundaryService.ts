@@ -303,9 +303,12 @@ export const aiBoundaryService = {
       historyCursor?: string;
     } = {},
   ): Promise<GetItemResponse> {
-    const item = await workItemsService.getWorkItemByIdentifier(projectId, key, ctx);
+    // `key` may be the card's id as well as its key (MOTIR-8940): a plan names
+    // committed cards by id, and a planner following that ref must land here in
+    // one call rather than search by title.
+    const item = await workItemsService.getWorkItemByRef(projectId, key, ctx);
     // ALL FIVE link groups (MOTIR-4063), from the assembly the item page already
-    // uses — `getWorkItemByIdentifier` is the gate, so this read follows it.
+    // uses — `getWorkItemByRef` is the gate, so this read follows it.
     // `restrictToProjectId` is not a new rule — it is the one this boundary
     // already applies to the only link kind that could cross it.
     // `getBlockingClosure` drops an out-of-project blocker outright

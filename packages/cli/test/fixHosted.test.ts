@@ -77,6 +77,7 @@ function decision(twoRepos = false): DispatchRunRepair {
           ]
         : []),
     ],
+    resume: null,
     findings: {
       gate: 'agent_review',
       gateId: 'gate_1',
@@ -318,9 +319,111 @@ describe('hosted `motir fix` — adopts the fix run, never claims (MOTIR-6929)',
     await expect(fixCommand(KEY, {}, deps())).rejects.toThrow(/a `ci` repair/);
     expect(h.closed).toEqual(['halted']);
   });
+
+  it('a review repair that recorded no findings is refused the same way', async () => {
+    setup({ repair: { ...decision(), findings: null } });
+    await expect(fixCommand(KEY, {}, deps())).rejects.toThrow(/records no review findings/);
+    expect(h.closed).toEqual(['halted']);
+    expect(h.agentRuns).toEqual([]);
+  });
+
+  it('a repair with no pull request is refused the same way — in the person’s own agent too', async () => {
+    setup({ repair: { ...decision(), pullRequests: [] } });
+    const d = deps()!;
+    d.env = { ...HOSTED_ENV, MOTIR_AGENT_RUN: '1', MOTIR_SANDBOX_AGENT: 'claude' };
+    await expect(fixCommand(KEY, {}, d)).rejects.toThrow(/records no pull request/);
+    expect(h.closed).toEqual(['halted']);
+    expect(h.locked).toEqual([]);
+  });
+
+  it('in the person’s own agent, an explicit --agent wins over the resume choice', async () => {
+    setup({
+      repair: {
+        ...decision(),
+        resume: { profile: 'claude', sessionId: 'sess-1', canResume: true },
+      },
+    });
+    const d = deps()!;
+    d.env = { ...HOSTED_ENV, MOTIR_AGENT_RUN: '1', MOTIR_SANDBOX_AGENT: 'claude' };
+    await fixCommand(KEY, { agent: 'my-agent -p' }, d);
+    expect(h.agentRuns[0]?.command.binary).toBe('my-agent');
+    expect(h.agentRuns[0]?.command.stream?.sessionId).not.toBe('sess-1');
+  });
+
+  it('in the person’s own agent, a ci repair is admitted (the hosted lane refuses it)', async () => {
+    setup({ repair: { ...decision(), repairClass: 'ci', findings: null } });
+    const d = deps()!;
+    d.env = { ...HOSTED_ENV, MOTIR_AGENT_RUN: '1', MOTIR_SANDBOX_AGENT: 'claude' };
+    await fixCommand(KEY, {}, d);
+    expect(h.closed).not.toEqual(['halted']);
+    expect(h.locked).toHaveLength(1);
+  });
+
+  it('in the person’s own agent, a ci repair’s watch fixes in the resolved session — and in a fresh one when it resolved none', async () => {
+    const red = (): WorkItemDelivery[] => green().map((d) => ({ ...d, ci: 'failing' as const }));
+    for (const [resume, sessionId] of [
+      [{ profile: 'claude', sessionId: 'sess-1', canResume: true }, 'sess-1'],
+      [null, undefined],
+    ] as const) {
+      setup({
+        repair: { ...decision(), repairClass: 'ci', findings: null, resume },
+        verdicts: [red(), green()],
+      });
+      const d = deps()!;
+      d.env = { ...HOSTED_ENV, MOTIR_AGENT_RUN: '1', MOTIR_SANDBOX_AGENT: 'claude' };
+      await fixCommand(KEY, {}, d);
+      const fix = h.agentRuns.find((r) => r.prompt.startsWith('# Make the build pass'));
+      if (sessionId) expect(fix?.command.stream?.sessionId).toBe(sessionId);
+      else expect(fix?.command.stream?.sessionId).not.toBe('sess-1');
+      expect(fix).toBeDefined();
+    }
+  });
+
+  it('in the person’s own agent, a review repair resumes the recorded session, and a failed resume re-runs fresh once', async () => {
+    setup({
+      repair: {
+        ...decision(),
+        resume: { profile: 'claude', sessionId: 'sess-1', canResume: true },
+      },
+    });
+    const d = deps()!;
+    d.env = { ...HOSTED_ENV, MOTIR_AGENT_RUN: '1', MOTIR_SANDBOX_AGENT: 'claude' };
+    const first = d.runAgentFn!;
+    d.runAgentFn = async (opts: RunAgentOptions) => {
+      const r = await first(opts);
+      return h.agentRuns.length === 1 ? { ...r, exitCode: 1 } : r;
+    };
+    await fixCommand(KEY, {}, d);
+    expect(h.agentRuns.length).toBeGreaterThanOrEqual(2);
+    expect(h.agentRuns[0]!.command.stream?.sessionId).toBe('sess-1');
+    expect(h.agentRuns[1]!.command.stream?.sessionId).not.toBe('sess-1');
+    expect(h.agentRuns[1]!.prompt).toBe(h.agentRuns[0]!.prompt);
+  });
 });
 
 // ── The checkout and the lock ──────────────────────────────────────────────
+
+describe('hosted `motir fix` — the places a repair stops before any agent', () => {
+  it('a hosted run with no git setup to lock is refused — nothing pushed', async () => {
+    setup({});
+    const d = deps()!;
+    delete d.lockPushes;
+    await expect(fixCommand(KEY, {}, d)).rejects.toThrow(/no git setup to lock/);
+    expect(h.agentRuns).toEqual([]);
+  });
+
+  it('a repository that cannot be cloned stops the repair, and no agent is started', async () => {
+    setup({});
+    const d = deps()!;
+    const ok = d.run!;
+    d.run = (bin, args, cwd) =>
+      args[0] === 'clone' ? { exitCode: 128, stdout: '', stderr: 'denied' } : ok(bin, args, cwd);
+    await fixCommand(KEY, {}, d);
+    expect(process.exitCode).toBe(1);
+    expect(h.closed).toEqual(['halted']);
+    expect(h.agentRuns).toEqual([]);
+  });
+});
 
 describe('hosted `motir fix` — every repository, each pull request on its OWN branch', () => {
   it('two repositories: both cloned, each checked out on its own branch, pushes locked to exactly those', async () => {

@@ -56,6 +56,9 @@ describe('reasonCodeFromError — total', () => {
     ['MOTIR_AI_UNAUTHORIZED', 'token_expired'],
     ['MOTIR_AI_UNAVAILABLE', 'model_unavailable'],
     ['MOTIR_AI_JOB_FAILED', 'job_failed'],
+    // A terminal job whose problem is `validation_error` (any 4xx) reads back as
+    // MotirAiBadRequestError: the handler refused it, the provider was not down (MOTIR-9127).
+    ['MOTIR_AI_BAD_REQUEST', 'job_failed'],
     ['MOTIR_AI_JOB_NOT_FOUND', 'internal'],
     ['SOMETHING_NEW', 'internal'],
   ])('%s → %s', (code, expected) => {
@@ -81,6 +84,7 @@ describe('failureRecordFrom', () => {
       failureStopPhase: 'author',
       failureStopRef: 'planItem:abc',
       failureStopTitle: 'Export a report',
+      failureResumable: null,
     });
   });
 
@@ -109,6 +113,14 @@ describe('failureRecordFrom', () => {
     });
   });
 
+  it('carries motir-ai’s resumable verdict onto the record, and unknown as null (MOTIR-9121)', () => {
+    const b = { ...base, walkStop: null };
+    expect(failureRecordFrom({ ...b, resumable: false }).failureResumable).toBe(false);
+    expect(failureRecordFrom({ ...b, resumable: true }).failureResumable).toBe(true);
+    expect(failureRecordFrom({ ...b, resumable: null }).failureResumable).toBeNull();
+    expect(failureRecordFrom(b).failureResumable).toBeNull();
+  });
+
   it('records a plan with NO job as internal with no job and no stop point (MOTIR-8132)', () => {
     const rec = failureRecordFrom({ ...base, failedJobId: null, walkStop: null });
     expect(rec).toMatchObject({
@@ -131,6 +143,15 @@ describe('failureRecordFrom', () => {
     });
     expect(rec.failureReason).toBe('prompt_too_large');
     expect(rec.failureDetail).toMatch(/^the prompt is too large for this model/);
+  });
+
+  it('still records an unavailable provider as model_unavailable (MOTIR-9127)', () => {
+    const rec = failureRecordFrom({
+      ...base,
+      walkStop: null,
+      error: new MotirAiUnavailableError('gateway 503'),
+    });
+    expect(rec.failureReason).toBe('model_unavailable');
   });
 
   it('records an UNKNOWN reasonCode as internal, never as prose', () => {
@@ -220,6 +241,37 @@ describe('failureRecordFrom', () => {
     expect(rec.failureReason).toBe('job_failed');
     expect(rec.failureDetail).not.toContain('motir-ai is unavailable');
     expect(rec.failureDetail).toContain('HTTP 401');
+  });
+
+  it('records a job motir-ai REFUSED with validation_error as job_failed, not model_unavailable (MOTIR-9127)', async () => {
+    // The production shape: the job's read token expired in the queue, so motir-ai's
+    // handler refused it with a 4xx problem before any model was called. getJob maps
+    // that problem to MotirAiBadRequestError.
+    const detail = 'none of the target work items (MOTIR-9002) could be read for this user';
+    process.env['MOTIR_AI_URL'] = 'https://ai.example.test';
+    process.env['MOTIR_AI_SERVICE_TOKEN'] = 'svc-token';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            jobId: 'job_1',
+            status: 'failed',
+            result: null,
+            error: { type: 't', title: 'Invalid', status: 422, code: 'validation_error', detail },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ),
+    );
+    const view = await getJob('job_1', 'pj_1');
+    vi.unstubAllGlobals();
+    expect(view.error?.code).toBe('MOTIR_AI_BAD_REQUEST');
+
+    const rec = failureRecordFrom({ ...base, walkStop: view.walkStop ?? null, error: view.error });
+
+    expect(rec.failureReason).toBe('job_failed');
+    expect(rec.failureDetail).toContain('none of the target work items');
   });
 });
 

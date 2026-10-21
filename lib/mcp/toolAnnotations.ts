@@ -196,6 +196,13 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: false,
     openWorldHint: false,
   },
+  // W: recordRunDiscrepancy.ts → runDiscrepancyService.recordDiscrepancy — one comment on the card and one finding on its open leg; additive, refused (not repeated) on a second call
+  record_run_discrepancy: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
 
   // ── Plan authoring ────────────────────────────────────────────────────────
   // W: authorPlan.ts → plansService.createPlan — a new session, plan and revision row; additive
@@ -345,6 +352,16 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: false,
     openWorldHint: false,
   },
+  // `rename_page` OVERWRITES the title, and unlike a body replace there is no history row to
+  // restore it from — so it is a destructive write, as `update_folder`'s rename is. The same
+  // title twice is the same state, so it is idempotent.
+  // W: renamePage.ts → pagesService.renamePage — sets the title
+  rename_page: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   // A replay of the same version writes nothing, so it is idempotent; not destructive
   // (nothing is removed).
   // W: publishDecisionPage.ts → decisionPageService.publish — seals a version, records the publication, supersedes + raises the decision gate
@@ -475,6 +492,8 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   get_project_state: { readOnlyHint: true, openWorldHint: false },
   // R: getCodeHealth.ts → aiConventionService.getPlanningCodeHealth (Motir's own index columns + motir-ai's audit/convention stores over the private boundary — no third-party call)
   get_code_health: { readOnlyHint: true, openWorldHint: false },
+  // R: getCodingConvention.ts → aiConventionService.getPlanningConvention (motir-ai's convention store over the boundary + one user-name read).
+  get_coding_convention: { readOnlyHint: true, openWorldHint: false },
   // R: readFile.ts → repoFileReadService.readProjectFile → GitProvider.readFileAtRef (the THIRD-PARTY git host — open world, unlike get_code_health)
   read_file: { readOnlyHint: true, openWorldHint: true },
   // R: codeGraphRead.ts → codeGraphReadService.read → motir-ai POST /v1/code-graph/read (Motir's own hosted graph over the private boundary — no third-party call)
@@ -485,6 +504,8 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   skeleton: { readOnlyHint: true, openWorldHint: false },
   // R: listFolders.ts → foldersService.listProjectFolders
   list_folders: { readOnlyHint: true, openWorldHint: false },
+  // R: getSectionSets.ts → sectionSchemaService.describe (an in-memory registry read)
+  get_section_sets: { readOnlyHint: true, openWorldHint: false },
   // W: createFolder.ts → foldersService.createFolder → folderRepository.create; additive
   create_folder: {
     readOnlyHint: false,

@@ -30,6 +30,7 @@ import { RefusalReasonCell, showsRefusalReason } from './RefusalReason';
 import { subjectGoneKey } from './subjectGoneKey';
 import { useRelativeLabel } from './useRelativeLabel';
 import { PlanningSessionRow } from './PlanningSessionRow';
+import { useSurfaceTitleText } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import type {
   ApprovalGateKindDTO,
   ApprovalGateStateDTO,
@@ -676,6 +677,8 @@ export function ApprovalRow({
   const openApproval = useOpenApproval();
   const { row } = record;
   const announcedState = useDecidedGateState(row.gateId);
+  // A card-less row has no title to translate: an empty id registers nothing.
+  const shownCardTitle = useSurfaceTitleText(row.workItem?.id ?? '', row.workItem?.title ?? '');
 
   // ⚠️ A CARD-LESS ROW IS A PLAN'S (Story MOTIR-6012 · MOTIR-6037; design
   // `design/ai-planning/design-notes.md` Part XXII §22.3). A `plan_approval` gate belongs to
@@ -733,7 +736,7 @@ export function ApprovalRow({
         : sentenceKeyOf(row.kind);
   // The sentence as plain text — the row door's accessible name reads it (MOTIR-5999).
   const sentenceText = tSentence.markup(sentenceKey, {
-    name: card.title,
+    name: shownCardTitle,
     title: (chunks: string) => chunks,
   });
   // MANUAL WORK DECIDES FROM THE ROW (MOTIR-7478; ADR `manual-work-gate.md` §5) — the one
@@ -784,7 +787,7 @@ export function ApprovalRow({
         <KindGlyph kind={row.kind} />
         <Sentence
           sentenceKey={sentenceKey}
-          title={card.title}
+          title={shownCardTitle}
           identifier={card.identifier}
           quiet={settled || !renderable}
         />

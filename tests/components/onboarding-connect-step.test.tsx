@@ -68,6 +68,10 @@ function fakeRead(...answers: Array<MigrateConnectStateDto | number>) {
   const queue = [...answers];
   const spy = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
+    // The accounts read (MOTIR-8762) answers NO installed account, so the step
+    // is the shipped one these cases describe (Revision 8, 2n);
+    // `onboarding-existing-accounts.test.tsx` drives every other answer.
+    if (url.includes('/github/accounts')) return json({ state: 'ok', accounts: [] });
     if (!url.startsWith(`/api/onboarding/migrate/${RUN}/connect-state`)) return json({}, 404);
     const next = queue.length > 1 ? queue.shift()! : queue[0]!;
     return typeof next === 'number' ? json({ code: 'boom' }, next) : json(next);
@@ -75,6 +79,10 @@ function fakeRead(...answers: Array<MigrateConnectStateDto | number>) {
   vi.stubGlobal('fetch', spy);
   return spy;
 }
+
+/** The connect reads among a spy's calls — the accounts read is not one. */
+const connectReads = (spy: ReturnType<typeof fakeRead>) =>
+  spy.mock.calls.filter(([input]) => String(input).includes('/connect-state'));
 
 function arriveAt(search: string) {
   window.history.replaceState(null, '', `/onboarding/migrate${search}`);
@@ -416,13 +424,13 @@ describe('a failed read (2k)', () => {
     await settle();
     const region = screen.getByTestId('connect-state-read_failed');
     expect(within(region).getByText(c.readFailedTitle)).toBeTruthy();
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(connectReads(fetchSpy)).toHaveLength(1);
 
     await act(async () => {
       fireEvent.click(screen.getByTestId('connect-retry'));
     });
     await act(async () => {});
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(connectReads(fetchSpy)).toHaveLength(2);
     expect(screen.getByTestId('connect-state-preflight')).toBeTruthy();
   });
 
@@ -468,13 +476,13 @@ describe('Continue', () => {
     const onAdvance = vi.fn(async (): Promise<ConnectAdvanceResult> => ({ kind: 'conflict' }));
     renderStep(onAdvance);
     await settle();
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(connectReads(fetchSpy)).toHaveLength(1);
     await act(async () => {
       fireEvent.click(screen.getByTestId('connect-continue'));
     });
     await act(async () => {});
     expect(onAdvance).toHaveBeenCalledTimes(1);
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(connectReads(fetchSpy)).toHaveLength(2);
   });
 
   it('is rendered in connected and already_connected ONLY', () => {

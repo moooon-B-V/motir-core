@@ -6,6 +6,7 @@ import type {
   DispatchStopReason,
   MotirClient,
 } from './client.js';
+import type { AgentStopReport } from './agentRun.js';
 
 // THE DISPATCH RUN REPORTER (Story MOTIR-1789 · MOTIR-1794) — what turns a local
 // run into a watchable object, built to `docs/decisions/dispatch-run-record.md`.
@@ -131,6 +132,31 @@ export interface DispatchRunReporter {
   /** Flush, then close the run with its stop reason, and stop the heartbeat. Never
    *  throws; a second call is a no-op. */
   close(stopReason: DispatchStopReason): Promise<void>;
+  /**
+   * Report that the agent stopped because `targetKey` is UNBUILDABLE (MOTIR-8698) —
+   * the run-found report, made by the CLI with the run's own credential so it
+   * reaches Motir in every lane (a hosted agent holds no Motir token; a local one
+   * may have no Motir MCP). Awaited, so it lands before the leg settles; never
+   * throws. A no-op when no run is held.
+   *
+   * OPTIONAL so a hand-written fake that predates it still type-checks; the real
+   * reporter always has it.
+   */
+  reportUnbuildable?(targetKey: string, reason: string): Promise<void>;
+  /**
+   * Record the agent's BUILD-THROUGH points on `key` (MOTIR-8722), with the run's own
+   * credential. Awaited, never throws, a no-op when no run is held. OPTIONAL, as above.
+   */
+  reportDiscrepancy?(
+    key: string,
+    points: { planAsked: string; built: string; why: string }[],
+  ): Promise<void>;
+  /**
+   * Make the agent's STOP writes on `key` (MOTIR-8722) — its comment and, with
+   * `toPlanning`, the move to Planning — with the run's own credential. Awaited, never
+   * throws, a no-op when no run is held. OPTIONAL, as above.
+   */
+  reportStop?(key: string, stop: AgentStopReport): Promise<void>;
   /** True once a failure has taken reporting down for this session. */
   readonly offline: boolean;
   /** The run this reporter opened, or null when it never opened one. */
@@ -155,7 +181,15 @@ export interface DispatchRunReporterDeps {
    * still type-checks; production always passes the real client, which has it.
    */
   client: Pick<MotirClient, 'openDispatchRun' | 'appendDispatchRunEvents' | 'closeDispatchRun'> &
-    Partial<Pick<MotirClient, 'heartbeatDispatchRun'>>;
+    Partial<
+      Pick<
+        MotirClient,
+        | 'heartbeatDispatchRun'
+        | 'reportDispatchRunUnbuildable'
+        | 'recordDispatchRunDiscrepancy'
+        | 'reportDispatchRunStop'
+      >
+    >;
   /** Where the single offline warning goes. `console.error` in production. */
   warn?: (message: string) => void;
   /**
@@ -402,6 +436,57 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
 
     async flush() {
       await flushQueue();
+    },
+
+    async reportUnbuildable(targetKey, reason) {
+      const id = runId;
+      const client = deps.client;
+      if (id === null || closed || client.reportDispatchRunUnbuildable === undefined) return;
+      // ⚠️ NOT through `attempt`, and NOT gated on `offline`. This is not telemetry:
+      // it is the one way a planner's mistake found by this run reaches Motir, so a
+      // lost event batch earlier in the run must not silence it, and its own failure
+      // must not take the rest of the reporting down. Swallowed all the same — a
+      // report that cannot land never changes what the run did.
+      try {
+        await client.reportDispatchRunUnbuildable({ runId: id, targetKey, reason });
+      } catch {
+        warn(`motir: could not report ${targetKey} as unbuildable to Motir. The run continues.`);
+      }
+    },
+
+    // The agent's other two writes (MOTIR-8722), on the same terms as the report above: not
+    // telemetry, so neither through `attempt` nor gated on `offline`, and swallowed with one
+    // warning, because a write that cannot land never changes what the run did.
+    async reportDiscrepancy(key, points) {
+      const id = runId;
+      const client = deps.client;
+      if (id === null || closed || client.recordDispatchRunDiscrepancy === undefined) return;
+      try {
+        await client.recordDispatchRunDiscrepancy({ runId: id, key, points });
+      } catch {
+        warn(`motir: could not record the discrepancies on ${key} in Motir. The run continues.`);
+      }
+    },
+
+    async reportStop(key, stop) {
+      const id = runId;
+      const client = deps.client;
+      if (id === null || closed || client.reportDispatchRunStop === undefined) return;
+      try {
+        await client.reportDispatchRunStop({
+          runId: id,
+          key,
+          comment: stop.comment,
+          toPlanning: stop.toPlanning,
+          ...(stop.requirement ? { requirement: stop.requirement } : {}),
+        });
+      } catch {
+        warn(
+          `motir: could not comment on ${key}` +
+            (stop.toPlanning ? ' or move it to Planning' : '') +
+            ' in Motir. The run continues.',
+        );
+      }
     },
 
     async close(stopReason) {

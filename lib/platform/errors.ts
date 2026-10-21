@@ -617,3 +617,74 @@ export class EnterpriseRequestStaleError extends Error {
     this.name = 'EnterpriseRequestStaleError';
   }
 }
+
+/** One condition of the fleet readiness verdict that is not `met`, as the
+ *  setting's refusal carries it (MOTIR-8714). */
+export interface FleetOrgCiUnmetCondition {
+  key: string;
+  state: 'unmet' | 'unknown';
+  reasonCode: string;
+  message: string;
+}
+
+/**
+ * Turning the fleet ON for a (project, org) pair was refused because the
+ * readiness verdict is not ready (Story MOTIR-8699 · MOTIR-8714). Carries every
+ * condition that is not `met`, so the console can name each one. Thrown BEFORE
+ * any GitHub write and before the audited transaction, so nothing moved and no
+ * audit row exists. Turning the fleet OFF never raises it.
+ */
+export class FleetOrgCiNotReadyError extends Error {
+  readonly code = 'FLEET_ORG_CI_NOT_READY';
+
+  constructor(
+    readonly projectId: string,
+    readonly org: string,
+    readonly conditions: FleetOrgCiUnmetCondition[],
+  ) {
+    super(`The fleet is not ready for ${org}: ${conditions.map((c) => c.key).join(', ')} not met`);
+    this.name = 'FleetOrgCiNotReadyError';
+  }
+}
+
+/**
+ * The fleet org CI setting was asked about a (project, org) pair the console
+ * does not offer (MOTIR-8714) — not a project of the meta organisation, the
+ * provisioning org itself, or an org holding none of the project's private
+ * repositories. Refused before any GitHub call.
+ */
+export class FleetOrgCiTargetUnknownError extends Error {
+  readonly code = 'FLEET_ORG_CI_TARGET_UNKNOWN';
+
+  constructor(
+    readonly projectId: string,
+    readonly org: string,
+  ) {
+    super(`The fleet org CI setting is not offered for ${org} on project ${projectId}`);
+    this.name = 'FleetOrgCiTargetUnknownError';
+  }
+}
+
+/**
+ * A GitHub read or write of the org's `MOTIR_RUNNER` variable failed while the
+ * fleet org CI setting was being flipped (MOTIR-8714). Wraps the client's
+ * `ActionsVariableApiError` or `OrgTargetAuthError` with the org, the HTTP
+ * status (`null` when GitHub could not be reached) and the operation. Never a
+ * token or a raw body. The stored state and the audit chain are unchanged.
+ */
+export class FleetOrgCiGithubWriteError extends Error {
+  readonly code = 'FLEET_ORG_CI_GITHUB_WRITE_FAILED';
+
+  constructor(
+    readonly org: string,
+    readonly status: number | null,
+    readonly operation: 'read' | 'set' | 'delete',
+  ) {
+    super(
+      status === null
+        ? `GitHub could not be reached to ${operation} MOTIR_RUNNER on ${org}`
+        : `GitHub refused to ${operation} MOTIR_RUNNER on ${org} (HTTP ${status})`,
+    );
+    this.name = 'FleetOrgCiGithubWriteError';
+  }
+}

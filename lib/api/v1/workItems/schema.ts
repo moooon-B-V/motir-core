@@ -1067,6 +1067,13 @@ export const createWorkItemBodySchema = z
     // `PLACEMENT_CONFLICT` (422) rather than silently picking one.
     folderId: z.string().min(1).nullish(),
     descriptionMd: z.string().nullish(),
+    // The card's sections as named values (MOTIR-9031) — rendered into
+    // `descriptionMd` by the service. The wire checks ONLY that it is an object:
+    // membership, required-ness and each value's shape are the registry's, so one
+    // mistake is one `INVALID_SECTIONS` on every door. Beside `descriptionMd` it is
+    // `SECTIONS_AND_DESCRIPTION_CONFLICT` (422). On PATCH it is sparse at the
+    // section key (`null` clears one).
+    sections: z.record(z.string(), z.unknown()).optional(),
     // The language the text is written in (Story MOTIR-7731 · MOTIR-8098):
     // `language` for every text field, `languages` per field (wins). Omitted, the
     // organisation's content language is recorded. Non-nullable — the service
@@ -1125,6 +1132,9 @@ export const updateWorkItemBodySchema = z
     kind: kindSchema.optional(),
     title: z.string().min(1).optional(),
     descriptionMd: z.string().nullish(),
+    // As on create (MOTIR-9031): sparse at the section key, judged on the item's
+    // kind × type AFTER this PATCH.
+    sections: z.record(z.string(), z.unknown()).optional(),
     explanationMd: z.string().nullish(),
     // As on create, plus `explanation`. Re-records only the fields this PATCH
     // edits; a language alone changes nothing.
@@ -1191,8 +1201,14 @@ export type UpdateWorkItemBody = z.infer<typeof updateWorkItemBodySchema>;
  * the same 422 either way.
  */
 const TYPED_FIELD_REFUSALS = new WeakMap<z.ZodType, Readonly<Record<string, string>>>([
-  [createWorkItemBodySchema, { obsolescence: 'INVALID_OBSOLESCENCE' }],
-  [updateWorkItemBodySchema, { obsolescence: 'INVALID_OBSOLESCENCE' }],
+  [
+    createWorkItemBodySchema,
+    { obsolescence: 'INVALID_OBSOLESCENCE', sections: 'INVALID_SECTIONS' },
+  ],
+  [
+    updateWorkItemBodySchema,
+    { obsolescence: 'INVALID_OBSOLESCENCE', sections: 'INVALID_SECTIONS' },
+  ],
 ]);
 
 /**
@@ -1717,6 +1733,8 @@ const APPROVAL_GATE_SUPERSEDE_CAUSE_VALUES = [
   'subject_gone',
   'no_longer_manual',
   'closed_without_decision',
+  'not_ready',
+  'replanned',
   'answered',
   'session_ended',
 ] as const satisfies readonly ApprovalGateSupersedeCauseDTO[];

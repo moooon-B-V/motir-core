@@ -235,6 +235,7 @@
     "noteShowLess": "表示を減らす",
     "field_description": "説明",
     "field_explanation": "理由",
+    "field_todos": "手順",
     "field_links": "依存関係",
     "field_parent": "親",
     "field_targetRepo": "リポジトリ",
@@ -1735,7 +1736,8 @@
       "unknown": "不明",
       "unestablished": "未作成",
       "excluded": "スキップ",
-      "delivered_without_change_request": "PR なしで提供"
+      "delivered_without_change_request": "PR なしで提供",
+      "delivered_by_child": "子作業項目で提供"
     }
   },
   "comments": {
@@ -1971,6 +1973,7 @@
       "components": "コンポーネント",
       "aiPlanning": "AI 計画",
       "hostedAgent": "ホスト型エージェント",
+      "translation": "翻訳",
       "rules": "ルール",
       "repositories": "リポジトリ",
       "monitoring": "監視",
@@ -3872,6 +3875,61 @@
         "factKeptBy": "維持した人"
       }
     },
+    "translation": {
+      "title": "翻訳",
+      "pageDescription": "異なる言語で読むメンバーに、このプロジェクトの作業内容がどう表示されるか。",
+      "card": {
+        "title": "自動翻訳",
+        "subtitle": "すべてのメンバーが、このプロジェクトの作業を自分の言語で読めるようにします。原文も引き続き確認できます。"
+      },
+      "switch": {
+        "label": "作業内容を自動翻訳"
+      },
+      "hint": {
+        "off": "オフ。作業内容は書かれたとおりに表示され、各作業項目ページの<b>翻訳</b>ボタンで、メンバーが求めたときにその作業項目だけが翻訳されます。",
+        "on": "オン。すべてのメンバーが何も操作せずに、自分の表示言語で作業内容を読めます。<b>原文を表示</b>はいつでもワンクリックで使えます。"
+      },
+      "saving": "保存しています…",
+      "flipError": "自動翻訳を{to, select, on {オン} other {オフ}}にできませんでした。何も変更されていません。",
+      "retry": "再試行",
+      "loadFailed": "この設定を読み込めませんでした。",
+      "effects": {
+        "title": "読み手に届くもの",
+        "page": "作業項目ページとクイックビューでは、タイトル、説明、補足、各 To Do など、すべてのフィールドが読み手の言語で表示されます。",
+        "lists": "リスト、ボード、バックログ、Sprint、ロードマップ、準備完了、トリアージでは、タイトルが読み手の言語で表示され、各ビューに<b>原文を表示</b>の切り替えがあります。",
+        "original": "エージェント、API、メールには常に原文が渡され、編集時も常に原文が開きます。"
+      },
+      "cost": "各フィールドは言語ごとに一度だけ翻訳されて保存されるため、同じテキストを後から読む人に費用はかからず、すでに読み手の言語になっているテキストは送信されません。翻訳では、モデルのコストに 50% を加えた額で組織の AI クレジットが消費されます。<link>使用量とコスト</link>",
+      "noCredit": {
+        "body": "<b>翻訳には AI クレジットが必要です。</b>クレジットが追加されるまで、作業内容は書かれたとおりに表示されます。課金は発生しません。",
+        "add": "クレジットを追加",
+        "askAdmin": "組織のオーナーまたは管理者が追加できます。"
+      },
+      "readOnly": "閲覧のみ",
+      "readOnlyNote": "自動翻訳を変更できるのはプロジェクト管理者のみです。",
+      "readOnlyValue": {
+        "on": "このプロジェクトでは自動翻訳がオンです。作業内容は各メンバーの言語で表示されます。",
+        "off": "このプロジェクトでは自動翻訳がオフです。作業内容は書かれたとおりに表示されます。"
+      },
+      "value": {
+        "on": "オン",
+        "off": "オフ"
+      },
+      "history": {
+        "title": "変更履歴",
+        "subtitle": "自動翻訳を誰がいつオン・オフにしたか。",
+        "col": {
+          "who": "変更者",
+          "change": "変更",
+          "when": "日時"
+        },
+        "row": "{who}が{when}に自動翻訳を{from}から{to}に変更しました。",
+        "unknownActor": "退会したメンバー",
+        "empty": "変更はまだありません。このプロジェクトの自動翻訳は一度も変更されていません。",
+        "capped": "{total} 件中、新しい順に {shown} 件を表示しています。",
+        "failed": "<b>変更履歴を読み込めませんでした。</b>上の設定は変わっていません。"
+      }
+    },
     "hostedAgent": {
       "title": "ホスト型エージェント",
       "pageDescription": "ホスト型の実行で使用するモデルです。「ホストで実行」は作業項目の難易度からモデルを事前選択しますが、実行を開始する人は別のモデルを選ぶこともできます。",
@@ -3899,7 +3957,11 @@
       "savedTitle": "ホスト型エージェントの設定を保存しました",
       "savedDesc": "新しいホスト型の実行では、これらのモデルが使用されます。",
       "errorTitle": "保存できませんでした",
-      "saveError": "ホスト型エージェントの設定は保存されませんでした。もう一度お試しください。"
+      "saveError": "ホスト型エージェントの設定は保存されませんでした。もう一度お試しください。",
+      "autoFix": {
+        "label": "プルリクエストが赤になったら、作業項目自身のエージェントで修正する。",
+        "help": "プルリクエストが赤になり、作業項目の前回の実行がサインイン済みで稼働中のエージェントで行われていた場合、Motir はそのエージェントで修正を開始します。オフ（既定）のときは、何も自動では開始されません。"
+      }
     },
     "connectedApps": {
       "title": "接続済みアプリ",
@@ -4157,6 +4219,7 @@
         "bugs": "このプロジェクトのバグの登録先は、プロジェクト管理者が管理しています。登録先の変更が必要な場合は管理者に依頼してください。",
         "ai-planning": "このプロジェクトの AI 計画（実行頻度）は、プロジェクト管理者が設定しています。変更が必要な場合は管理者に依頼してください。",
         "hosted-agent": "ホスト型の実行で使用するモデルは、このプロジェクトでホスト型の実行を開始できるユーザーに表示されます。確認が必要な場合はプロジェクト管理者に依頼してください。",
+        "translation": "このプロジェクトの作業内容が読み手ごとに翻訳されるかどうかは、プロジェクトの作業項目を閲覧できる人に表示されます。確認が必要な場合は、プロジェクト管理者にお問い合わせください。",
         "automation": "プロジェクトの自動化はプロジェクト管理者が管理しています。ルールの変更が必要な場合は管理者に依頼してください。",
         "monitoring": "このプロジェクトのエラー監視ツールとの接続は、連携を管理できるユーザーが管理しています。Sentry の接続や再接続が必要な場合はプロジェクト管理者に依頼してください。"
       }
@@ -4690,7 +4753,13 @@
       "velocityTableCaption": "ベロシティ — Sprint ごとのコミットと完了の{statistic}。平均完了: {average}。",
       "velocityTableSprint": "Sprint",
       "notFound": "この Sprint レポートは利用できません。",
-      "backToBacklog": "バックログに戻る"
+      "backToBacklog": "バックログに戻る",
+      "sprintLabel": "Sprint",
+      "activeGroup": "アクティブ",
+      "completedGroup": "完了済み",
+      "sprintSearch": "Sprint を検索…",
+      "noSprintsTitle": "レポート対象の Sprint はまだありません",
+      "noSprintsBody": "バックログから Sprint を開始すると、そのレポートがここに表示されます。"
     },
     "aiPlan": {
       "cta": "Motir で Sprint を計画",
@@ -5053,7 +5122,16 @@
       "chartDesc": "直近 {count} 区間における {period} ごとの作成数と解決数。作成は合計 {created}、解決は合計 {resolved} です。差分は、バックログが増加している箇所が赤、チームが追いついている箇所が緑で表示されます。",
       "tableCaption": "期間ごとの作成数と解決数（期間ごとの件数）。",
       "tableCaptionCumulative": "期間ごとの作成数と解決数（累計）。",
-      "subWindow": "過去 {days} 日間"
+      "subWindow": "過去 {days} 日間",
+      "chartFormLabel": "チャート",
+      "formLine": "折れ線",
+      "formBars": "棒",
+      "seriesLabel": "系列",
+      "seriesLocked": "少なくとも 1 つの系列をオンにしておく必要があります。",
+      "subCreatedOnly": "作成のみ",
+      "subResolvedOnly": "解決のみ",
+      "chartDescBars": "直近 {count} 区間における {period} ごとの作成数と解決数を棒で表示。作成は合計 {created}、解決は合計 {resolved} です。",
+      "chartDescSingle": "直近 {count} 区間における {period} ごとの{series}。合計 {total} です。"
     },
     "distribution": {
       "title": "ステータス分布",
@@ -5077,7 +5155,18 @@
       "noSprintsBody": "バックログから Sprint を開始すると、その Sprint グラフが表示されます。"
     },
     "velocity": {
-      "title": "ベロシティチャート"
+      "title": "ベロシティチャート",
+      "endingAtLabel": "終了位置",
+      "endingAtHint": "完了した Sprint を選択します。空欄の場合は最新です。",
+      "latest": "最新の完了済み",
+      "latestNamed": "最新の完了済み — {name}",
+      "endingAtSearch": "Sprint を検索…",
+      "countLabel": "Sprint 数",
+      "countFewer": "Sprint を減らす",
+      "countMore": "Sprint を増やす",
+      "countHint": "3～52 · 既定は 7。",
+      "rangeSubLine": "{project} · {from} – {to}",
+      "chartLoading": "ベロシティチャートを読み込んでいます"
     },
     "controls": {
       "periodLabel": "期間の単位",
@@ -5134,13 +5223,20 @@
       "xPoints": "ストーリーポイント（未完了）",
       "xCount": "作業項目（未完了）",
       "unassigned": "未割り当て",
-      "chartDesc": "担当者ごとの未完了の{measure}（順位順）: {breakdown}。未解決の作業項目 {count} 件で合計 {total}。",
-      "tableCaption": "担当者ごとの未完了（未解決）の作業 — ストーリーポイントと作業項目数。",
+      "chartDesc": "選択した期間における、担当者ごとの未完了の{measure}（順位順）: {breakdown}。作業項目 {count} 件で合計 {total}。",
+      "tableCaption": "選択した期間における、担当者ごとの未完了の作業 — 割り当て済み、未割り当て（報告者別）、およびアクティブな指標の合計。",
       "tableAssignee": "担当者",
       "tablePoints": "ストーリーポイント",
       "tableIssues": "作業項目",
       "emptyTitle": "割り当てられた未完了の作業はまだありません",
-      "emptyBody": "未解決の作業項目はすべて未割り当てか、未完了の作業がありません。別の対象範囲を選択してください。"
+      "emptyBody": "未解決の作業項目はすべて未割り当てか、未完了の作業がありません。別の対象範囲を選択してください。",
+      "legendAssigned": "割り当て済み",
+      "legendUnassigned": "未割り当て — 報告者別",
+      "tableAssigned": "割り当て済み",
+      "tableUnassigned": "未割り当て（報告者）",
+      "tableTotal": "合計",
+      "subWindow": "過去 {days} 日間",
+      "chartDescPerson": "{name} {total}（割り当て済み {assigned}、未割り当てで報告 {unassigned}）"
     },
     "statistic": {
       "kind": "種類",
@@ -5151,6 +5247,45 @@
       "sprint": "Sprint",
       "label": "ラベル",
       "component": "コンポーネント"
+    },
+    "help": {
+      "hide": "ヘルプを非表示",
+      "show": "ヘルプを表示",
+      "regionLabel": "このレポートについて",
+      "whatLabel": "表示内容:",
+      "howLabel": "見方:",
+      "burndown": {
+        "what": "Sprint のスコープ、完了、開始済みの作業が、開始から終了までどのように推移するかを、目標ラインと今日のマーカーとともに表示します。",
+        "how": "完了がスコープに向かって伸びていれば、Sprint は順調です。開始後にスコープのラインが上がる場合はスコープ増加で、完了のラインが目標を下回っている場合は遅れています。"
+      },
+      "velocity": {
+        "what": "チームがコミットしたストーリーポイントと、完了したポイントを Sprint ごとに表示します。",
+        "how": "各 Sprint の 2 本の棒を比較します。完了の棒が安定していれば、次の Sprint の計画に使える信頼できるペースです。過去の Sprint を選ぶと、そこから遡って確認できます。"
+      },
+      "sprintReport": {
+        "what": "完了済みまたは実行中の Sprint を 1 ページにまとめます。完了した作業、未完了の作業、開始後に追加された作業、そして Sprint グラフを確認できます。",
+        "how": "まず完了と未完了を比べ、次に Sprint の途中で追加された作業を確認します。タイトルの下の選択欄で Sprint を切り替えられます。"
+      },
+      "createdVsResolved": {
+        "what": "期間ごとに、作成された作業項目の数と解決された作業項目の数を表示します。",
+        "how": "作成の棒が解決の棒より高い場合はバックログが増えており、低い場合はチームが追いついています。系列の切り替えで、どちらか一方だけを表示できます。"
+      },
+      "distribution": {
+        "what": "プロジェクトの作業項目が、ステータス、種別、担当者など 1 つのフィールドの値ごとにどう分かれているかを表示します。",
+        "how": "スライスが広いほど、その値を持つ作業項目が多いことを示します。統計の種類を変えると、同じ作業を別の切り口で見られます。"
+      },
+      "averageAge": {
+        "what": "各期間の終了時点で、未解決の作業項目が開いていた日数の平均を表示します。",
+        "how": "線が上がり続けている場合は、作業が未解決のまま残されています。期間平均と比べると、直近の期間が普段と違うかどうかがわかります。"
+      },
+      "resolutionTime": {
+        "what": "各期間に解決された作業項目を解決するまでにかかった日数の平均を表示します。",
+        "how": "線が下がっている場合は、作業がより早く完了しています。期間は解決日で数えるため、古い項目を今日解決すると今日の期間の値が上がります。"
+      },
+      "workload": {
+        "what": "選択した期間に各メンバーが抱えている未完了の作業を、ストーリーポイントまたは作業項目数で表示します。担当者のいない作業は報告者に数えられます。",
+        "how": "棒が最も長い人が、最も多くの未完了の作業を抱えています。作業を追加で割り当てる前に、偏りが大きくないか確認してください。"
+      }
     }
   },
   "dashboards": {
@@ -6278,8 +6413,11 @@
       "stateDrawing": "クレジットを消費中",
       "statePaused": "CI 一時停止中",
       "stateNothing": "請求対象なし",
+      "stateInternal": "社内",
       "usedLabel": "今月の使用分数",
       "usedOfPool": "{pool} 分中 {used} 分",
+      "internalUsed": "{used} 分",
+      "internalNote": "この組織は Motir 自身のものです。含まれる分数も、消費されるクレジットも、請求もありません。チームが自社の CI ランナーのコストを確認できるよう、分数だけを記録しています。集計は暦月単位です。",
       "minutesLeft": "残り {left} 分",
       "minutesOver": "{over} 分超過",
       "creditsDrawn": "{credits} クレジット消費",
@@ -7168,6 +7306,43 @@
               "body": "何も起動されず、料金も発生していません。組織にクレジットが補充されれば、ホスト型エージェントでの修正を再び利用できます。または、ターミナルから修正してください。"
             }
           }
+        },
+        "myAgent": {
+          "lead": "自分のエージェントで修正します: <b>{agent}</b>、この作業項目の前回の実行で使われたエージェントです。",
+          "door": {
+            "label": "自分のエージェントで修正",
+            "starting": "修正を開始しています…",
+            "why": "修正は同じエージェント・同じブランチで実行されるため、白紙ではなく、その実行自身のコンテキストから始まります。"
+          },
+          "fixing": {
+            "by": "<b>{name}</b> が <when></when>に <b>{agent}</b> で修正を開始しました — <run>{label}</run>。",
+            "byYou": "あなたが <when></when>に <b>{agent}</b> で修正を開始しました — <run>{label}</run>。",
+            "why": "修正は一度に 1 つだけです: この実行が終わるまで修正を保持するため、その上に 2 つ目の修正は開始できません。"
+          },
+          "refused": {
+            "busy": {
+              "title": "開始されませんでした — この作業項目ではすでに修正が実行中です。",
+              "body": "<b>{name}</b> が <when></when>に開始しました — <run>{label}</run>。何も起動されず、何も請求されていません。",
+              "bodyYou": "あなたが <when></when>に開始しました — <run>{label}</run>。何も起動されず、何も請求されていません。"
+            },
+            "signedOut": {
+              "title": "開始されませんでした — <b>{agent}</b> はサインアウトしています。",
+              "body": "<b>{agent}</b> にサインインしてから、もう一度「自分のエージェントで修正」を押してください。<link>エージェントを開く</link>と、<cmd>{cmd}</cmd> でサインインできます。何も起動されず、何も請求されていません。"
+            }
+          },
+          "fellBack": {
+            "notice": "<b>{agent}</b> はこの作業項目の実行セッションを再開できなかったため、修正は同じブランチ（<b>{branch}</b>）で新しいセッションを開始しました。"
+          },
+          "settled": {
+            "notice": "この作業項目のプルリクエストはグリーンになったため、修正は開始されませんでした。"
+          },
+          "gaveUp": {
+            "note": "<b>{agent}</b> での前回の修正は {attempts, plural, other {# 回の試行}}の後に <when></when>断念しました。もう一度「自分のエージェントで修正」を押せます。",
+            "noteNoCount": "<b>{agent}</b> での前回の修正は <when></when>断念しました。もう一度「自分のエージェントで修正」を押せます。"
+          },
+          "modal": {
+            "lead": "この実行は赤のプルリクエストで終了しました。失敗を新しいエージェントにコピーせず、同じエージェントで修正します。"
+          }
         }
       },
       "continue": {
@@ -7285,11 +7460,13 @@
         "delivered": "提供済み",
         "unestablished": "未作成",
         "excluded": "スキップ",
-        "delivered_without_change_request": "PR なしで出荷"
+        "delivered_without_change_request": "PR なしで出荷",
+        "delivered_by_child": "子作業項目で提供"
       },
       "repositoryNotCreated": "リポジトリはまだ作成されていません",
       "repositorySkipped": "このプロジェクトではスキップ",
       "shippedWithoutPullRequest": "プルリクエストなしで出荷",
+      "deliveredByChildPullRequest": "子作業項目のプルリクエストで出荷",
       "unlinkAria": "{target} へのリンクを削除",
       "unlinkConfirmBefore": "次へのリンクを削除しますか:",
       "unlinkConfirmAfter": "? GitHub 上のプルリクエストには影響せず、リンクだけが削除されます。",
@@ -7541,7 +7718,9 @@
         "aria": "この会話が再計画する作業項目 {key} を開く",
         "pickLabel": "<mono>{key}</mono> のフォローアップ",
         "chose": "{label} を選択",
-        "pickAria": "この会話がフォローアップしている選択 {key} を開く({label} を選択)"
+        "pickAria": "この会話がフォローアップしている選択 {key} を開く({label} を選択)",
+        "guideLabel": "<mono>{key}</mono> のガイドから",
+        "guideAria": "{key} を開く（Motir AI がこの再計画を提案したときにガイドしていた作業項目）"
       },
       "end": {
         "failed": "終了 · 試行が失敗 · {time}",
@@ -7806,7 +7985,6 @@
       "replan": "{project} の既存の計画を変更するために開きました。",
       "contextual": "{project} のコンテキストで開きました。",
       "contextualItem": "{item} のコンテキストで開きました。",
-      "conventionRefine": "{repo} のコーディング規約を調整するために開きました。",
       "roadmap": "ロードマップから開きました。",
       "followUp": "{item} で、{choice} のフォローアップを計画するために開きました。",
       "followUpProject": "{project} で、{choice} のフォローアップを計画するために開きました。"
@@ -7971,6 +8149,16 @@
     "followUpCard": {
       "label": "選択のフォローアップ"
     },
+    "guideSeed": {
+      "chip": "ガイドから",
+      "lead": "{guided} に関する Motir AI のガイドから {target} で開始しました。",
+      "card": "ガイドから",
+      "cardBy": "{who} が確認済み · {when}",
+      "justNow": "たった今",
+      "you": "あなた",
+      "status": "計画中",
+      "offerClosed": "この再計画の提案はすでに終了しています。ガイドに戻って状況を確認してください。"
+    },
     "guide": {
       "openedFrom": "{key} から開きました",
       "reading": "{key} とその ToDo リストを読み取っています…",
@@ -8002,7 +8190,8 @@
       "errors": {
         "notManual": "Motir AI は人が行う手作業をガイドします。この作業項目はエージェント向けのため、ここでガイドするものはありません。",
         "closed": "この作業項目は完了またはアーカイブ済みのため、ガイドするものは残っていません。",
-        "forbidden": "ガイドを受けるには、この作業項目を編集する権限と、Motir AI で計画する権限が必要です。"
+        "forbidden": "ガイドを受けるには、この作業項目を編集する権限と、Motir AI で計画する権限が必要です。",
+        "offerClosed": "この提案はすでに決定済みのため、変更できません。作業項目を再読み込みして状況を確認してください。"
       },
       "youTicked": "リストのステップ {n} にチェックを入れました",
       "youUnticked": "リストのステップ {n} のチェックを外しました",
@@ -8057,6 +8246,32 @@
         "typeText": "テキスト",
         "typeMarkdown": "Markdown",
         "typeFile": "ファイル"
+      },
+      "offer": {
+        "label": "再計画のリクエスト",
+        "target": "対象",
+        "targetElsewhere": "再計画は、この作業項目ではなく {key} から始まります。",
+        "resolved": "{done} は完了しているため、再計画は {open} から始まります。",
+        "noTarget": "再計画の起点にできる未完了の作業項目がありません。",
+        "confirm": "確定",
+        "confirming": "開始しています…",
+        "openSession": "計画セッションを開く",
+        "decline": "却下",
+        "declining": "却下しています…",
+        "showAll": "すべて表示",
+        "showLess": "表示を減らす",
+        "confirmHelp": "このリクエストを送信して、{key} で Motir AI の計画を開きます。クレジットを消費します。",
+        "declineHelp": "この提案を閉じます。何も計画されません。",
+        "replaced": "新しい提案に置き換えられました",
+        "started": "再計画を開始しました",
+        "startedBy": "確定済み · {when}",
+        "declined": "却下しました",
+        "declinedBy": "却下済み · {when}",
+        "recorded": "作業項目に記録されました",
+        "resumeAt": "「ガイドしてもらう」はステップ {n} から再開します。",
+        "walkStopped": "ウォークスルーは停止しています。",
+        "cannotPlan": "ここでは計画を開始できません。開始できる人に依頼するか、このリクエストを共有してください。",
+        "noAi": "ここでは Motir AI が設定されていないため、計画を開始できません。このリクエストは共有できます。"
       }
     },
     "restart": {
@@ -8079,7 +8294,9 @@
       "onlyStarter": "再開できるのは {name} またはプロジェクトマネージャーのみです。",
       "onlyStarterAnon": "再開できるのは開始した本人またはプロジェクトマネージャーのみです。",
       "failureLine": "この計画への直前の変更を反映できませんでした · {when}",
-      "failureLineAgain": "直前の変更を再び反映できませんでした · {when}"
+      "failureLineAgain": "直前の変更を再び反映できませんでした · {when}",
+      "failureLinePlanAgain": "この試行は続行できませんでした · {when}。次のメッセージで計画し直します。",
+      "failureLinePlanAgainAgain": "この試行は再び続行できませんでした · {when}。次のメッセージで計画し直します。"
     },
     "grill": {
       "control": {
@@ -8093,6 +8310,11 @@
         },
         "hint": "次のメッセージで質問が始まります。"
       }
+    },
+    "follow": {
+      "following": "プランナーを追従中",
+      "resume": "プランナーを追従",
+      "resumedAnnouncement": "プランナーの追従を再開しました"
     }
   },
   "codeHealth": {
@@ -8179,13 +8401,40 @@
       }
     },
     "convention": {
+      "versionEdited": "v{version} · 編集済み",
+      "bylineDerived": "コードから導出",
+      "bylineEdited": "{name} が編集 · {date}",
+      "bylineEditedUnknown": "チームメンバーが編集 · {date}",
+      "edit": "編集",
+      "writeFirst": "規約を書く",
+      "editFieldLabel": "規約（Markdown）",
+      "editingVersion": "v{version} を編集中",
+      "saveCreates": "保存すると v{next} が作成されます。{count} / {max} 文字。",
+      "editHelper": "このリポジトリの新しいプロンプトはすべて、保存されたテキストを読み取ります。新しい導出バージョンがこれを置き換えることはありません。",
+      "save": "保存",
+      "cancel": "キャンセル",
+      "saving": "保存中…",
+      "saveFailed": "規約を保存できませんでした。入力したテキストはそのまま残っています。もう一度お試しください。",
+      "tooLong": "規約が {max} 文字を超えています。保存するには短くしてください。",
+      "blank": "保存する内容を入力してください。",
+      "conflictTitle": "新しいバージョンが保存されました",
+      "conflictBody": "{name} さんが、あなたが v{base} を編集している間に {date} に v{latest} を保存しました。あなたの変更は保存されていません。",
+      "conflictLoadTheirs": "相手のバージョンを読み込む",
+      "conflictKeepMine": "自分のものをコピーとして残す",
+      "conflictCopyLabel": "あなたのテキスト — コピーしてから相手のバージョンを読み込んでください",
+      "conflictCopyHint": "読み取り専用のコピーです。相手のバージョンを読み込むと、このエディターは閉じます。",
+      "copy": "クリップボードにコピー",
+      "pendingTitle": "コードから新しいバージョンが導出されました",
+      "pendingBody": "{date} の再監査で導出バージョンが作成されました。これは使用されていません。使用されているのは下のテキストです。編集しない限り何も変わりません。",
+      "pendingCompare": "並べて比較",
+      "pendingInUse": "使用中 · v{version} 編集済み",
+      "pendingWaiting": "待機中 · 導出",
+      "emptyWriteBody": "このリポジトリには、まだ規約ルールが導出されていません。ここに最初のバージョンを書くか、Motir がコードから導出するまでお待ちください。",
       "emptyTitle": "規約はまだありません",
       "emptyDescription": "リポジトリが接続されると、Motir はコードからコーディング規約を導き出します。ここで確認してください。",
       "defaultRepo": "コード",
       "noRules": "このリポジトリではまだ規約のルールが導き出されていません。",
       "versionDerived": "v{version} · 導出済み",
-      "bannerDerivedTitle": "コードから導出 — 自動で使用",
-      "bannerDerivedBody": "この規約はコードベースから導き出されたもので、新しいコードのためのすべてのプロンプトに組み込まれます。調整するには、上の「Motir で調整」から AI チャットを開いてください。",
       "provenanceTitle": "ルールの出所",
       "provenanceLegend": "採用 — コードがすでにそうなっているため、それを文書化しました。提案 — コードに記載がないか一貫していなかったため、クリーンコードのデフォルトを配置しました。",
       "provenance": {
@@ -8491,7 +8740,12 @@
       "answeredGroup": "プロジェクトからすでに回答済み",
       "answeredMeta": "Motir がコードと作業項目を読み取りました",
       "discoveryStep": "いくつかの質問",
-      "directionGroup": "方向性"
+      "directionGroup": "方向性",
+      "subtitle": "インデックス作成とインポートはバックグラウンドで実行されます。いつでも Motir に入れます。",
+      "background": "バックグラウンド · {detail}",
+      "backgroundInProgress": "進行中",
+      "backgroundQueued": "待機中",
+      "backgroundFailed": "失敗"
     },
     "common": {
       "back": "戻る",
@@ -8514,8 +8768,8 @@
       "body": "Motir は GitHub で接続したリポジトリを読み込み、プロジェクト全体のコードを 1 つのマップにまとめます。",
       "gitlabNote": "GitLab の接続は近日対応予定です。",
       "checking": "接続済みのリポジトリを確認しています…",
-      "missingTitle": "GitHub を接続したら、すぐにここへ戻ります",
-      "missingHint": "GitHub が新しいタブで 1 分ほど開きます。そこで行うことは次のとおりです。戻ってきたとき、このステップはそのまま待っています。",
+      "missingTitle": "GitHub を連携したら、すぐここに戻ります",
+      "missingHint": "GitHub は新しいタブで約 1 分間開きます。そこで行うことはこの内容で、このステップは戻ってくるまで待機しています。",
       "connectCta": "GitHub を接続",
       "newTab": "（新しいタブで開きます）",
       "waitingTitle": "GitHub を待っています",
@@ -8573,6 +8827,58 @@
         "installation_not_accessibleHint": "あなたの GitHub ユーザーからこのインストールが見えないため、何もリンクされていません。GitHub アカウントのオーナーがアクセス権を付与できます。",
         "not_configuredTitle": "このデプロイでは GitHub が設定されていません",
         "not_configuredHint": "この Motir のデプロイにはまだ GitHub App がないため、ここから GitHub を接続できません。デプロイの運用者が設定できます。"
+      },
+      "existing": {
+        "title": "Motir アプリがインストールされている GitHub アカウント",
+        "hint": "これらのアカウントには Motir アプリがすでにインストールされています。アカウントを選ぶと、そのリポジトリをここに接続できます。もう一度インストールする必要はありません。",
+        "loading": "GitHub アカウントを探しています…",
+        "typeUser": "個人アカウント",
+        "typeOrg": "GitHub 組織",
+        "linkedHere": "この組織にリンク済み",
+        "pickCta": "リポジトリを選択",
+        "pickAria": "{login}からリポジトリを選択",
+        "installAnotherCta": "別のアカウントにインストール",
+        "installAnotherHint": "目的のアカウントが一覧にない場合はこちらを使います。",
+        "loadErrorTitle": "GitHub アカウントを読み込めませんでした",
+        "loadErrorHint": "何も変更されていません。もう一度試すか、別のアカウントにインストールしてください。",
+        "retryCta": "もう一度試す",
+        "identity": {
+          "title": "GitHub でサインインして、インストール済みのアカウントを探します。",
+          "hint": "Motir が確認するのは、Motir アプリがどのアカウントにインストールされているか、そのうちどれにあなたがアクセスできるかだけです。この手順をスキップして、新しいアカウントにインストールすることもできます。",
+          "cta": "GitHub でサインイン",
+          "skipCta": "スキップしてインストール",
+          "declinedHint": "GitHub でサインインが完了しなかったため、何も変更されていません。もう一度試すか、スキップしてインストールしてください。"
+        },
+        "picker": {
+          "heading": "{login}のリポジトリ",
+          "hint": "この組織に接続するリポジトリを選択してください。確定するまで何も接続されません。",
+          "fromInstallHint": "Motir アプリがすでにインストールされているアカウントが選ばれました。この組織に接続するリポジトリを選択してください。",
+          "loading": "リポジトリを読み込んでいます…",
+          "available": "接続可能",
+          "connectedHere": "この組織に接続済み",
+          "connectedElsewhere": "別の組織に接続済み",
+          "connectedElsewhereHint": "このリポジトリはここでは選択できません。",
+          "selectedCount": "{count, plural, other {# 件のリポジトリを選択中}}",
+          "confirmCta": "{count, plural, other {# 件のリポジトリを接続}}",
+          "backCta": "アカウント一覧に戻る",
+          "nothingLeftTitle": "このアカウントから接続できるリポジトリはもうありません",
+          "nothingLeftHint": "ここにあるリポジトリはすべて、この組織か別の組織にすでに接続されています。さらに追加するには、GitHub でインストールにリポジトリを追加してください。",
+          "nothingLeftCta": "GitHub でリポジトリを追加"
+        },
+        "outcome": {
+          "linkedTitle": "リポジトリを接続しました",
+          "linkedHint": "Motir は選択したリポジトリを読み込めるようになりました。このアカウントのそれ以外のリポジトリは接続されていません。",
+          "takenTitle": "選択中にリポジトリが別の組織に接続されました",
+          "takenHint": "別の組織が{repos}を接続しました。何も接続されていません。一覧を更新したので、もう一度選択してください。",
+          "notAccessibleTitle": "そのアカウントにアクセスできなくなりました",
+          "notAccessibleHint": "GitHub でこのインストールが表示できなくなったため、一覧から削除しました。GitHub アカウントのオーナーにアクセスを依頼するか、別のアカウントにインストールしてください。",
+          "notAdminTitle": "既存のインストールをリンクできるのは組織の管理者だけです",
+          "notAdminHint": "この組織の管理者にリンクを依頼するか、ご自身で別のアカウントにインストールしてください。",
+          "selectionRequiredTitle": "リポジトリを 1 つ以上選択してください",
+          "selectionRequiredHint": "何も接続されていません。接続したいリポジトリにチェックを入れてから確定してください。",
+          "notVisibleTitle": "このインストールに含まれなくなったリポジトリがあります",
+          "notVisibleHint": "何も接続されていません。一覧を更新したので、もう一度選択してください。"
+        }
       }
     },
     "index": {
@@ -8585,7 +8891,9 @@
       "perRepo": "リポジトリごと",
       "state": {
         "indexed": "インデックス済み",
-        "queued": "キュー待ち"
+        "queued": "キュー待ち",
+        "indexing": "処理中",
+        "failed": "失敗"
       },
       "callout": "Motir は規約とコードヘルスチェック(と計画)をプロジェクト全体から導き出すため、すべてのリポジトリのインデックスが必要です。すべてのリポジトリが完了するまで「次へ」は無効のままです。",
       "completeTitle": "コードグラフを作成しました",
@@ -8595,11 +8903,13 @@
     "import": {
       "eyebrow": "任意 · インポートと計画",
       "heading": "既存のバックログを取り込む",
-      "body": "すでに Jira、Linear、GitHub、Plane、CSV で作業を管理していますか? このプロジェクトにインポートしましょう。何かが書き込まれる前に、ドライランのプレビューを確認できます。取り込むバックログがなければスキップしてください。",
+      "body": "Jira、Linear、Plane からインポートするか、先に Motir に入って後で行えます。インポートはバックグラウンドで続きます。",
       "reconcile": "その後計画を生成すると、Motir が両者を調整し、重複が生じないようにします。",
       "skip": "インポートをスキップ",
       "bodyInline": "Jira、Linear、GitHub、Plane、CSV ですでに作業を管理していますか？ここで取り込めます。何かが書き込まれる前に、ドライランのプレビューを確認できます。取り込むバックログがなければ、この手順は飛ばしてください。",
-      "continue": "続行"
+      "continue": "続行",
+      "running": "{source} からインポート中 · これまでに {done} 件の作業項目",
+      "runningBody": "これはバックグラウンドで続きます。完了を待つ必要はありません。"
     },
     "decision": {
       "eyebrow": "セットアップ完了",
@@ -8625,6 +8935,26 @@
       "readyTitle": "最初の計画ができました",
       "readyBody": "{project}向けに {count, plural, other {# 件の項目}}を作成しました。承認するまで確定ではありません。",
       "readyCta": "計画を確認する"
+    },
+    "indexing": {
+      "doneTitle": "{repos} のインデックスが完了しました",
+      "repoCount": "{count, plural, other {# 件のリポジトリ}}",
+      "aggregateTail": "{total} 件中 {done} 件完了",
+      "failedTail": "{count} 件失敗",
+      "detailBody": "これはバックグラウンドで続きます。今すぐ Motir に入れます。完了を待つものはありません。",
+      "rowFailed": "Motir はこのリポジトリをインデックスできませんでした。これまでの作業は失われていません。",
+      "checkConnection": "接続を確認",
+      "close": "閉じる",
+      "retrying": "再試行しています…",
+      "refusedNotConnected": "このリポジトリはもうプロジェクトに接続されていません。接続を確認してから、もう一度お試しください。",
+      "refusedTooLarge": "このリポジトリは大きすぎて、Motir ではインデックスできません。",
+      "retryError": "Motir は再開できませんでした。少ししてからもう一度お試しください。",
+      "importHeading": "作業項目のインポート",
+      "importProgress": "これまでに {done} 件"
+    },
+    "enter": {
+      "cta": "Motir に入る",
+      "hint": "入った後も、インデックス作成とインポートは続きます。"
     }
   },
   "repositorySet": {
@@ -9247,6 +9577,7 @@
         "token_expired": "AIプロバイダーとの接続の有効期限が切れたため",
         "prompt_too_large": "プランのコンテキストがモデルの上限を超えたため",
         "job_failed": "計画ジョブが失敗したため",
+        "stalled": "計画が進まなくなったため",
         "internal": "こちら側で問題が発生したため"
       },
       "refusal": {
@@ -9331,7 +9662,8 @@
       "navPlanningLessons": "計画の教訓",
       "navIdeas": "アイデア",
       "navEnterpriseRequests": "Enterprise のリクエスト",
-      "navRunModels": "ホスト型実行のモデル"
+      "navRunModels": "ホスト型実行のモデル",
+      "navFleetSettings": "フリート設定"
     },
     "nav": {
       "overview": "概要",
@@ -9511,7 +9843,11 @@
             }
           },
           "fleet": {
-            "stop": "フリートのコンテナーを停止"
+            "stop": "フリートのコンテナーを停止",
+            "org_ci": {
+              "enable": "フリート CI をオンにした",
+              "disable": "フリート CI をオフにした"
+            }
           },
           "enterprise_request": {
             "transition": "Enterprise のリクエストを移動"
@@ -11438,6 +11774,186 @@
         "notFound": "このアイデアはすでに存在しません。ページを開いている間に誰かが削除しました。",
         "failed": "問題が発生したため、何も変更されていません。もう一度お試しください。"
       }
+    },
+    "fleetSettings": {
+      "breadcrumb": "運用 · フリート設定",
+      "title": "フリート設定",
+      "subtitle": "スーパー管理者が、誰の CI を Motir 自身のマシンで実行するかを決める場所です。変更のたびに理由の入力が必要で、監査ログに記録されます。",
+      "empty": "フリート CI を提供しているプロジェクトはありません。接続済みの組織にプライベートリポジトリを持つメタ組織のプロジェクトがありません。",
+      "setting": {
+        "title": "Motir のプライベートリポジトリの CI をフリートで実行する",
+        "pair": "プロジェクト {project} · GitHub 組織 {org}",
+        "superadminOnly": "スーパー管理者のみ",
+        "explanation": "オンにすると、{org} 上の Motir のプライベートリポジトリのすべての CI ジョブが {label} ラベルを要求し、共有の {fleet} マシンで実行され、moooon B.V. に計上されます。オフにすると、GitHub ホストのランナーで実行されます。どちらの場合もワークフローファイルは変更されません。"
+      },
+      "state": {
+        "on": "オン",
+        "off": "オフ"
+      },
+      "action": {
+        "turnOn": "オンにする",
+        "turnOff": "オフにする"
+      },
+      "blocked": "すべての条件が満たされるまでオンにできません。",
+      "offNeverBlocked": "オフにする操作は準備状況を待ちません。",
+      "meta": {
+        "lastChanged": "最終変更",
+        "changedBy": "{email}、{when} — 「{reason}」",
+        "neverChanged": "変更なし",
+        "auditLink": "監査ログ",
+        "variable": "GitHub 変数",
+        "repositories": "リポジトリ"
+      },
+      "variable": {
+        "present": "{org} の {name} = {value}（プライベートリポジトリ）— 新しいジョブはフリートを要求します。",
+        "absent": "{org} に {name} は設定されていません — ジョブは GitHub ホストのランナーにフォールバックします。",
+        "unknown": "{org} の {name} を読み取れませんでした — GitHub は HTTP {status} を返しました。",
+        "unreachable": "{org} の {name} を読み取れませんでした — GitHub に接続できませんでした。"
+      },
+      "drift": {
+        "onAbsent": {
+          "title": "オンとして保存されていますが、GitHub と一致しません。",
+          "body": "{org} に {name} が設定されていないため、新しいジョブは引き続き GitHub ホストのランナーで実行されます。設定をオフにしてから再びオンにすると書き込まれます。"
+        },
+        "offPresent": {
+          "title": "オフとして保存されていますが、GitHub と一致しません。",
+          "body": "{org} に {name} がまだ設定されているため、新しいジョブは引き続きフリートを要求します。設定をオンにしてから再びオフにすると削除されます。"
+        }
+      },
+      "repositories": {
+        "count": "{count, plural, other {# 件のプライベートリポジトリ}}（実行時に {org} 上のプロジェクト {project} のプライベートリポジトリから読み取り）"
+      },
+      "monitoringLine": "Motir のマシンは モニタリング › フリート の moooon B.V. の下に表示されます",
+      "onCallout": {
+        "title": "Motir の CI はフリートで実行されています。",
+        "link": "モニタリング › フリート を開く"
+      },
+      "degraded": {
+        "title": "オンの状態で準備ができていません。",
+        "body": "これが修正されるか設定がオフになるまで、新しいジョブはキューで待機します。"
+      },
+      "readiness": {
+        "title": "準備状況",
+        "subtitle": "ジョブが通過する順に並んだ 9 つの条件です。確認できなかった条件は未達として数えます。",
+        "ready": "準備完了",
+        "readySub": "{count} 件の条件をすべて満たしています",
+        "notReady": "準備未完了 — {count, plural, other {# 件の条件}}が未達",
+        "unmetCount": "未達 {count} 件",
+        "unknownCount": "確認できず {count} 件",
+        "checked": "{when}に確認",
+        "checkedAgain": "{when}に再確認",
+        "recheck": "再確認"
+      },
+      "mark": {
+        "met": "達成",
+        "unmet": "未達",
+        "unknown": "確認できず"
+      },
+      "cond": {
+        "kill_switch": {
+          "label": "フリートのキルスイッチ"
+        },
+        "app_installed": {
+          "label": "App のインストール"
+        },
+        "app_runner_permission": {
+          "label": "App の権限: セルフホストランナー"
+        },
+        "app_variables_permission": {
+          "label": "App の権限: 変数（書き込み）"
+        },
+        "workflow_job_subscription": {
+          "label": "workflow_job の配信"
+        },
+        "app_repositories": {
+          "label": "App がリポジトリにアクセスできる"
+        },
+        "delivery_attributable": {
+          "label": "ジョブがプロジェクト {project} に帰属する"
+        },
+        "runner_group": {
+          "label": "ランナーグループ"
+        },
+        "image_coverage": {
+          "label": "イメージのカバレッジ"
+        }
+      },
+      "why": {
+        "kill_switch_engaged": "フリートのキルスイッチが有効（{variable}=0）なため、フリートのマシンは起動しません。運用担当者が設定を解除するか値を上げます。",
+        "app_not_installed": "motir-studio App が {org} にインストールされていません。{org} のオーナーがインストールします。",
+        "app_suspended": "{org} の motir-studio App は {date} から停止されています。{org} のオーナーが停止を解除します。",
+        "permission_missing": "{org} の motir-studio App の {permission} 権限は なし で、書き込みが必要です。{org} のオーナーが権限リクエストを承認します。",
+        "permission_insufficient": "{org} の motir-studio App の {permission} 権限は {granted} で、書き込みが必要です。{org} のオーナーが権限リクエストを承認します。",
+        "not_subscribed": "App が workflow_job イベントを購読していないため、ジョブがキューに入ったことを GitHub が Motir に通知しません。motir-studio App の管理者が App の設定で購読します。",
+        "repositories_not_granted": "{org} 上の App のインストールは {repositories} にアクセスできません。{org} のオーナーがインストールのリポジトリアクセスに追加します。",
+        "no_private_repositories": "プロジェクト {project} には {org} のプライベートリポジトリがないため、フリートで実行するものはありません。",
+        "not_attributable": "{repositories} からキューに入ったジョブはプロジェクト {project} に帰属しないため、GitHub が期限切れにするまでキューに残ります。ミラー行が最新になるよう、リポジトリをプロジェクトに再接続してください。",
+        "no_runner_group": "プロジェクト {project} には {org} のランナーグループがありません。運用担当者が {script} --project {project} を実行します。",
+        "sync_pending": "{org} にあるプロジェクトのランナーグループがリポジトリと同期していません。運用担当者が {script} --project {project} を実行します。",
+        "jobs_not_runnable": "{count, plural, other {# 件のジョブ}}はまだフリートのランナーイメージで実行できません。フリートイメージの保守担当者が不足しているツールを追加します。別の OS が必要なジョブは、プライベートの対象から外れるまで実行できません。",
+        "not_inventoried": "{repositories} はフリートのジョブ一覧に含まれていないため、ランナーイメージで{count, plural, other {そのジョブ}}を実行できるかまだ誰も確認していません。一覧の保守担当者が再実行します。",
+        "inventory_stale": "{repositories} のワークフローは、フリートのジョブ一覧が計測した後に変更されました。一覧の保守担当者が再実行します。",
+        "read_failed": "確認できませんでした: GitHub は HTTP {status} を返しました。確認が成功するまで未達として数えます。",
+        "read_unreachable": "確認できませんでした: GitHub に接続できませんでした。確認が成功するまで未達として数えます。",
+        "read_failedNoStatus": "確認できませんでした。確認が成功するまで未達として数えます。",
+        "app_not_readable": "motir-studio App が {org} にインストールされ読み取り可能になるまで確認できません。"
+      },
+      "jobs": {
+        "missing": "{repo} · {workflow} · {job} — {tools} が不足",
+        "cannotHost": "{repo} · {workflow} · {job} — ホストできません: {reason}",
+        "more": "ほか {count} 件",
+        "scope": "これは main からビルドされた一覧作成済みのイメージを対象としており、本番で起動するイメージではありません。"
+      },
+      "confirm": {
+        "onTitle": "{org} のフリート CI をオンにしますか？",
+        "onBody": "オフ → オン。{count, plural, other {# 件のリポジトリ}}の新しい CI ジョブはすべてフリートで実行され、moooon B.V. のプールに計上されます: {repositories}。実行中のジョブは開始した場所で完了します。",
+        "offTitle": "{org} のフリート CI をオフにしますか？",
+        "offBody": "オン → オフ。新しいジョブは GitHub ホストのランナーに戻ります。フリートで実行中のジョブはそこで完了します。オフにする操作は準備状況を待ちません。",
+        "reasonLabel": "理由 — 必須、監査ログに記録されます",
+        "reasonPlaceholderOn": "オンにする理由は？",
+        "reasonPlaceholderOff": "オフにする理由は？",
+        "reasonHint": "後でこの変更を読む運用担当者に表示されます。「テスト」だけでは何も伝わりません。",
+        "reasonHintEmpty": "理由を入力するまでボタンは無効のままです — サーバーが適用するのと同じルールです。",
+        "cancel": "キャンセル",
+        "confirmOn": "オンにする",
+        "confirmOff": "オフにする"
+      },
+      "refused": {
+        "reasonMissing": "{direction}にしませんでした: 理由は必須で、この変更とともに監査ログに記録されます。何も変更されていません。",
+        "alreadyOn": "すでにオンです — 何も変更されていません。",
+        "alreadyOff": "すでにオフです — 何も変更されていません。",
+        "alreadyBody": "別のスーパー管理者が先に変更したため、何も書き込まれず、監査行も追加されていません。",
+        "githubStatus": "{direction}にしませんでした: GitHub は {org} の {name} の{operation}を拒否しました（HTTP {status}）。",
+        "githubUnreachable": "{direction}にしませんでした: {org} の {name} を{operation}するために GitHub に接続できませんでした。",
+        "nothingChanged": "何も変更されていません: 設定と GitHub 変数は元のままです。",
+        "notReady": "オンにしませんでした: このページの読み込み後にフリートの準備が整わなくなりました。",
+        "notReadyList": "現在未達: {conditions}。何も変更されていません。下の準備状況を再確認しました。",
+        "notPermitted": "変更していません: この設定を変更できるのはスーパー管理者のみです。",
+        "targetUnknown": "変更していません: このプロジェクトと組織にはこの設定が提供されなくなりました。ページを再読み込みしてください。",
+        "failed": "{direction}にしませんでした: 問題が発生しました。ページを再読み込みして現在の設定を確認してください。"
+      },
+      "done": {
+        "on": "オンにしました。今後、新しいジョブはフリートを要求します。",
+        "off": "オフにしました。新しいジョブは GitHub ホストのランナーに戻ります。"
+      },
+      "direction": {
+        "on": "オン",
+        "off": "オフ"
+      },
+      "operation": {
+        "read": "読み取り",
+        "set": "設定",
+        "delete": "削除"
+      },
+      "permission": {
+        "organization_self_hosted_runners": "セルフホストランナー",
+        "organization_actions_variables": "変数"
+      },
+      "unavailable": {
+        "title": "フリート設定を読み込めませんでした",
+        "body": "設定またはその準備状況を読み取れなかったため、状態は表示されず、スイッチも提供されません。これは読み取りエラーです — 何も変更されておらず、値も推測していません。",
+        "retry": "再試行"
+      }
     }
   },
   "legal": {
@@ -11883,6 +12399,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "実行",
     "searchLabel": "この実行を検索",
     "gloss": "エージェントが行ったこと",
@@ -11958,8 +12476,9 @@
     "sectionPast": "過去の実行",
     "noneRunning": "実行中のものはありません。",
     "nonePast": "まだ完了した実行はありません。",
-    "colCommand": "コマンド",
-    "colScope": "スコープ",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, other {and # more work items}}",
     "colAgent": "エージェント",
     "colStarted": "開始",
     "colStatus": "ステータス",
@@ -12007,6 +12526,10 @@
       "expired": {
         "title": "保持期間を過ぎています",
         "body": "ログ本文は実行から 30 日後に削除されます。この実行のログ本文は削除済みです。"
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12020,6 +12543,8 @@
       "approvedFor": "{key} について承認済み",
       "materialized": "{count, plural, other {# 件の提案}}を具体化しました",
       "bugFiled": "バグを登録しました",
+      "discrepancy": "計画と異なる実装",
+      "discrepancyPoints": "{count, plural, other {#件の相違}}",
       "open": "開く →"
     },
     "scope": {
@@ -12345,7 +12870,10 @@
       "progressAria": "{total} 手順中 {done} 手順完了",
       "progressAllDone": "{total} 手順中 {total} 手順完了",
       "door": "ガイドしてもらう"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "リポジトリを追加",
@@ -12511,6 +13039,8 @@
         "subject_gone": "この質問の対象がなくなったため、この質問は取り下げられました。",
         "no_longer_manual": "作業項目が手作業ではなくなったため、この質問は取り下げられました。",
         "closed_without_decision": "誰も完了にしないまま作業項目がクローズされたため、この質問は取り下げられました。",
+        "not_ready": "作業項目が他の作業でブロックされているため、着手できるようになるまでこの質問は取り下げられました。",
+        "replanned": "作業項目が再計画されたため、この質問は取り下げられました。",
         "unknown": "この質問は取り下げられました。理由は記録されていません。"
       },
       "causeByKind": {
@@ -14234,7 +14764,9 @@
       "completed": "聞くべきことはすべて聞きました。",
       "nothingToAsk": "聞くことはありません。計画できるだけ明確です。今から計画を書きます。",
       "stopped": "質問を止めました。",
-      "stoppedNoAnswer": "回答する前に質問を止めました。何も書き込まれていません。"
+      "stoppedNoAnswer": "回答する前に質問を止めました。何も書き込まれていません。",
+      "handoffFailed": "質問攻めは質問できなかったため、質問なしで計画を作成しています。リクエストは書かれたとおりのままです。",
+      "handoffNoCredit": "質問攻めで質問するには AI クレジットが必要なため、質問なしで計画を作成しています。"
     },
     "summary": {
       "title": "決まったこと",
@@ -14263,6 +14795,8 @@
     "translate": "翻訳",
     "translating": "翻訳しています…",
     "showOriginal": "原文を表示",
+    "originalIn": "原文の言語：{language}",
+    "originalNotRecorded": "原文の言語は記録されていません",
     "showTranslation": "翻訳を表示",
     "retry": "再試行",
     "hintInto": "{language}に翻訳",
@@ -14295,5 +14829,18 @@
     "liveFailedCount": "{n, plural, other {# 件のフィールドを翻訳できませんでした。}}",
     "liveNoCredits": "翻訳には AI クレジットが必要です。",
     "liveEdited": "{field}が編集され、再度翻訳されました。"
+  },
+  "titleTranslation": {
+    "addCredit": "クレジットを追加",
+    "liveDone": "タイトルを翻訳しました",
+    "liveFailed": "翻訳できなかったタイトルがあります",
+    "liveNoCredit": "タイトルは元の言語で表示しています。クレジットがありません",
+    "livePending": "タイトルを翻訳しています…",
+    "marked": "翻訳済み",
+    "markedFrom": "{language}から翻訳",
+    "noCredit": "組織のクレジットが残っていないため、タイトルは元の言語のままです。",
+    "pendingMark": "翻訳中",
+    "showOriginal": "原文を表示",
+    "showTranslation": "翻訳を表示"
   }
 }

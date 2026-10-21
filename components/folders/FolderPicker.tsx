@@ -157,7 +157,7 @@ export function FolderPickerPanel({
       {refusal ? (
         <div
           role="alert"
-          className="mx-1 mt-0.5 mb-1.5 flex items-start gap-1.5 rounded-(--radius-control) border border-(--el-danger) bg-(--el-tint-rose) px-2.5 py-2 text-xs text-(--el-text-strong)"
+          className="mx-1 mt-0.5 mb-1.5 flex items-start gap-1.5 rounded-(--radius-control) border border-(--el-danger) bg-(--el-tint-rose) px-(--spacing-control-x) py-(--spacing-control-y-8) text-xs text-(--el-text-strong)"
         >
           <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0 text-(--el-danger)" aria-hidden />
           <span>{refusal}</span>

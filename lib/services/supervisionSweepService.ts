@@ -3,6 +3,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import { jobSupervisionRepository } from '@/lib/repositories/jobSupervisionRepository';
 import { jobStepRepository } from '@/lib/repositories/jobStepRepository';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
+import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
 import {
   codeGraphIndexDispatchService,
   type IndexSession,
@@ -204,6 +205,17 @@ export interface SupervisionSweepResult {
 }
 
 export const supervisionSweepService = {
+  /**
+   * Settle the index usage rows a lost settle write stranded (MOTIR-8913). It
+   * rides this sweep's tick because it is the same failure one step later: the
+   * supervision ended, and the record of what it cost did not.
+   */
+  async repairStrandedUsage(
+    options: { now?: () => Date } = {},
+  ): Promise<{ scanned: number; settled: number }> {
+    return ciFleetCostMeterService.settleStrandedIndexUsage(options);
+  },
+
   /**
    * Find supervisions whose chain stopped and settle each one.
    *

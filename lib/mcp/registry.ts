@@ -33,6 +33,10 @@ import {
   registerReportUnbuildableTarget,
 } from './tools/reportUnbuildableTarget';
 import {
+  RECORD_RUN_DISCREPANCY_TOOL_NAME,
+  registerRecordRunDiscrepancy,
+} from './tools/recordRunDiscrepancy';
+import {
   ADD_PLAN_ITEMS_TOOL_NAME,
   CREATE_PLAN_TOOL_NAME,
   UPDATE_PLAN_ITEM_TOOL_NAME,
@@ -104,6 +108,10 @@ import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
 import { LIST_PROJECTS_TOOL_NAME, registerListProjects } from './tools/listProjects';
 import { GET_PROJECT_STATE_TOOL_NAME, registerGetProjectState } from './tools/getProjectState';
 import { GET_CODE_HEALTH_TOOL_NAME, registerGetCodeHealth } from './tools/getCodeHealth';
+import {
+  GET_CODING_CONVENTION_TOOL_NAME,
+  registerGetCodingConvention,
+} from './tools/getCodingConvention';
 import { READ_FILE_TOOL_NAME, registerReadFile } from './tools/readFile';
 import {
   CODE_EXPLORE_TOOL_NAME,
@@ -112,12 +120,14 @@ import {
 } from './tools/codeGraphRead';
 import { SKELETON_TOOL_NAME, registerSkeleton } from './tools/skeleton';
 import { LIST_FOLDERS_TOOL_NAME, registerListFolders } from './tools/listFolders';
+import { GET_SECTION_SETS_TOOL_NAME, registerGetSectionSets } from './tools/getSectionSets';
 import { CREATE_FOLDER_TOOL_NAME, registerCreateFolder } from './tools/createFolder';
 import { UPDATE_FOLDER_TOOL_NAME, registerUpdateFolder } from './tools/updateFolder';
 import { DELETE_FOLDER_TOOL_NAME, registerDeleteFolder } from './tools/deleteFolder';
 import { GET_PAGE_TOOL_NAME, registerGetPage } from './tools/getPage';
 import { CREATE_PAGE_TOOL_NAME, registerCreatePage } from './tools/createPage';
 import { UPDATE_PAGE_TOOL_NAME, registerUpdatePage } from './tools/updatePage';
+import { RENAME_PAGE_TOOL_NAME, registerRenamePage } from './tools/renamePage';
 import {
   PUBLISH_DECISION_PAGE_TOOL_NAME,
   registerPublishDecisionPage,
@@ -208,6 +218,7 @@ export const MCP_TOOL_NAMES = [
   GET_PLAN_TOOL_NAME,
   GET_APPROVED_SHAPE_VERDICT_TOOL_NAME,
   REPORT_UNBUILDABLE_TARGET_TOOL_NAME,
+  RECORD_RUN_DISCREPANCY_TOOL_NAME,
   CREATE_PLAN_TOOL_NAME,
   ADD_PLAN_ITEMS_TOOL_NAME,
   UPDATE_PLAN_ITEM_TOOL_NAME,
@@ -248,17 +259,20 @@ export const MCP_TOOL_NAMES = [
   LIST_PROJECTS_TOOL_NAME,
   GET_PROJECT_STATE_TOOL_NAME,
   GET_CODE_HEALTH_TOOL_NAME,
+  GET_CODING_CONVENTION_TOOL_NAME,
   READ_FILE_TOOL_NAME,
   CODE_EXPLORE_TOOL_NAME,
   CODE_SEARCH_TOOL_NAME,
   SKELETON_TOOL_NAME,
   LIST_FOLDERS_TOOL_NAME,
+  GET_SECTION_SETS_TOOL_NAME,
   CREATE_FOLDER_TOOL_NAME,
   UPDATE_FOLDER_TOOL_NAME,
   DELETE_FOLDER_TOOL_NAME,
   GET_PAGE_TOOL_NAME,
   CREATE_PAGE_TOOL_NAME,
   UPDATE_PAGE_TOOL_NAME,
+  RENAME_PAGE_TOOL_NAME,
   PUBLISH_DECISION_PAGE_TOOL_NAME,
   LIST_SPRINTS_TOOL_NAME,
   VALIDATE_SPRINT_TOOL_NAME,
@@ -400,6 +414,10 @@ export function registerMcpTools(
   // the approving plan's author, whether a planning bug is filed) and answers an
   // acknowledgement only; `docs/decisions/run-found-trigger-dispatched-path.md`.
   registerReportUnbuildableTarget(target, resolveContext);
+  // The RUN DISCREPANCY record (MOTIR-8657) — the runner's one call after it builds a card
+  // through a plan that was wrong only about the HOW. A comment on the card and, on an open
+  // leg, a server-written finding on the run; decision page MOTIR-8654.
+  registerRecordRunDiscrepancy(target, resolveContext);
   // The plan AUTHORING door (MOTIR-2988) — `create_plan` + `add_plan_items`, so
   // an agent can PROPOSE a tree the user reviews instead of writing work items
   // straight into it. The third door beside `create_work_item` (writes now, no
@@ -487,6 +505,10 @@ export function registerMcpTools(
   // audit summary and derived convention: what the hosted planner reads for
   // every session, for an agent planning over the MCP. Gated on `ai:plan`.
   registerGetCodeHealth(target, resolveContext);
+  // MOTIR-9083 — ONE repository's coding convention in full, so a run prompt can
+  // point the agent at the stored convention instead of a file in the checkout.
+  // Gated on `ai:plan`; the repo resolves against the PROJECT's set.
+  registerGetCodingConvention(target, resolveContext);
   // MOTIR-7861 — one file's TEXT from one of the project's repositories at a
   // ref: the read the hosted planner's `read_file` makes, for an agent planning
   // over the MCP. Gated on `ai:plan`; the repo resolves against the PROJECT's set.
@@ -505,6 +527,8 @@ export function registerMcpTools(
   // folder service (MOTIR-5313). Placing a WORK ITEM in a folder is the work-item
   // tools' job (MOTIR-5413), not these.
   registerListFolders(target, resolveContext);
+  // Story MOTIR-9023's section registry read (MOTIR-9029) — project-less.
+  registerGetSectionSets(target, resolveContext);
   registerCreateFolder(target, resolveContext);
   registerUpdateFolder(target, resolveContext);
   registerDeleteFolder(target, resolveContext);
@@ -513,6 +537,7 @@ export function registerMcpTools(
   registerGetPage(target, resolveContext);
   registerCreatePage(target, resolveContext);
   registerUpdatePage(target, resolveContext);
+  registerRenamePage(target, resolveContext);
   // A page as a decision card's decision (MOTIR-7434; approval-gates.md §8 NINTH AMENDMENT).
   registerPublishDecisionPage(target, resolveContext);
   // Sprint tools (7.8.10) — the Scrum cadence over the shipped Epic-4 services.

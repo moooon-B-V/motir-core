@@ -6,6 +6,8 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { isHostedRunsAvailable } from '@/lib/hostedRuns/availability';
 import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 import { guardSettingsPage, settingsEntryKeys } from '../_guard';
+import { projectAgentAutoFixSettingsService } from '@/lib/services/projectAgentAutoFixSettingsService';
+import { AgentAutoFixRow } from './_components/AgentAutoFixRow';
 import { HostedAgentSettingsEditor } from './_components/HostedAgentSettingsEditor';
 
 // The Hosted agent settings room (Story MOTIR-6989 · MOTIR-6995), drawn by
@@ -40,12 +42,12 @@ export default async function ProjectHostedAgentPage() {
   const refused = await guardSettingsPage('hosted-agent', ctx);
   if (refused) return refused;
 
-  const [t, held] = await Promise.all([
+  const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  const [t, held, autoFix] = await Promise.all([
     getTranslations('settings'),
-    projectAccessService.getPermissions(ctx.projectId, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    }),
+    projectAccessService.getPermissions(ctx.projectId, actor),
+    // The switch's STORED value (MOTIR-9060), read under the room's own view key.
+    projectAgentAutoFixSettingsService.getSettings(ctx.projectId, actor),
   ]);
   const canConfigure = held.has(settingsEntryKeys('hosted-agent').write);
 
@@ -61,6 +63,11 @@ export default async function ProjectHostedAgentPage() {
       </header>
 
       <HostedAgentSettingsEditor projectKey={ctx.project.identifier} canConfigure={canConfigure} />
+      <AgentAutoFixRow
+        projectKey={ctx.project.identifier}
+        initial={autoFix.agentAutoFixEnabled}
+        canConfigure={canConfigure}
+      />
     </div>
   );
 }

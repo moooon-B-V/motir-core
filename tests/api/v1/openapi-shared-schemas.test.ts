@@ -492,7 +492,15 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     // the flat `GET …/ready` the lanes replaced.
     // 70 with MOTIR-6821's review run's two routes — `getWorkItemReviewPrompt`
     // (`project:browse`) and `submitWorkItemAgentReview` (`work_item:edit`).
-    expect(V1_OPERATIONS.length).toBe(70);
+    // 71 with MOTIR-8698's `POST …/dispatch-runs/{id}/unbuildable`
+    // (`reportDispatchRunUnbuildable`, `work_item:edit`) — the run-found report,
+    // answered to a hosted run's own credential.
+    // 73 with MOTIR-8722's `…/discrepancy` (`recordDispatchRunDiscrepancy`) and `…/stop`
+    // (`reportDispatchRunStop`), both `work_item:edit` — a run's own credential's doors for
+    // what its agent cannot call over MCP.
+    // 74 with MOTIR-9029's `GET /api/v1/section-sets` (`getSectionSets`, `project:browse`) —
+    // the section registry read, the same for every tenant.
+    expect(V1_OPERATIONS.length).toBe(74);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),

@@ -231,6 +231,26 @@ const WORK_LOOP_UNMIRRORED: Record<string, string> = {
     'is its only caller, and an MCP tool would put a gate decision in reach of an agent ' +
     'credential that is not the review run’s. `work_item:edit`, the key every other work-loop ' +
     'write asserts.',
+  reportDispatchRunUnbuildable:
+    'MOTIR-8698 — the run’s UNBUILDABLE report, posted by the process AROUND the agent: the CLI ' +
+    'reads the reason the agent wrote into `$MOTIR_AGENT_REPORT` and posts it with the run’s own ' +
+    'credential, because a hosted or agent-instance agent holds no Motir token and `/api/mcp` ' +
+    'refuses a run-bound one. `report_unbuildable_target` is the AGENT’s door to the same finding ' +
+    'and stays its fallback; it is not this route’s mirror, because it addresses the card through ' +
+    'the agent’s own open leg rather than a named run. `work_item:edit`, the key ' +
+    '`report_unbuildable_target` and every other work-loop write assert.',
+  recordDispatchRunDiscrepancy:
+    'MOTIR-8722 — the run’s DISCREPANCY record, posted by the process AROUND the agent: the CLI ' +
+    'reads the points the agent wrote into `$MOTIR_AGENT_REPORT` and posts them with the run’s ' +
+    'own credential, because a hosted or agent-instance agent holds no Motir token and ' +
+    '`/api/mcp` refuses a run-bound one. `record_run_discrepancy` is the AGENT’s door to the ' +
+    'same record and stays its route when it has the tools; it addresses the card’s newest open ' +
+    'leg rather than a named run. `work_item:edit`, the key it asserts.',
+  reportDispatchRunStop:
+    'MOTIR-8722 — the run’s STOP report, posted by the process AROUND the agent from what it ' +
+    'wrote into `$MOTIR_AGENT_REPORT`: one comment and the move to Planning, with the run’s own ' +
+    'credential. An agent with the Motir tools makes the same writes through `add_comment` and ' +
+    '`transition_status`; no single tool mirrors the pair. `work_item:edit`, the key both assert.',
 };
 
 /**
@@ -294,7 +314,9 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     // 23 since MOTIR-6538: a hosted run's git credentials, for its credential helper.
     // 25 since MOTIR-6526: the HEARTBEAT (MOTIR-6528) and the CONTINUE claim (MOTIR-6532).
     // 27 since MOTIR-6821: the hosted REVIEW run's prompt read and its verdict.
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(27);
+    // 28 since MOTIR-8698: the run's unbuildable report the CLI posts.
+    // 30 since MOTIR-8722: the run's discrepancy record and its STOP report.
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(30);
   });
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {

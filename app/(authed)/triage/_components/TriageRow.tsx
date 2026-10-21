@@ -1,5 +1,6 @@
 'use client';
 
+import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { useFormatter, useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { cn } from '@/lib/utils/cn';
@@ -46,9 +47,12 @@ export function TriageRow({ item, active, onSelect }: TriageRowProps) {
     >
       <div className="flex items-start gap-2">
         <IssueTypeIcon type={item.kind} className="mt-0.5 h-4 w-4 shrink-0" />
-        <span className="line-clamp-2 flex-1 text-sm font-medium text-(--el-text)">
-          {item.title}
-        </span>
+        <SurfaceTitle
+          id={item.id}
+          title={item.title}
+          layout="clamp"
+          className="line-clamp-2 flex-1 text-sm font-medium text-(--el-text)"
+        />
         <span className="shrink-0 text-xs text-(--el-text-secondary)">
           {format.relativeTime(new Date(item.triagedAt))}
         </span>

@@ -4,6 +4,7 @@ import type { PlanStatus, WorkItem } from '@/generated/prisma/client';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
 import { fullestContainer } from '@/lib/planning/planShape';
 import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -85,6 +86,7 @@ import { visitorServiceContext, type VisitorReadContext } from '@/lib/visitor/co
 import { isVisitorContext, openVisitorRead } from '@/lib/visitor/readScope';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { PlanNotFoundError } from '@/lib/plans/errors';
+import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { folderRefId, isFolderRef, isTempRef, SUPERSEDES_PATCH_SITES } from '@/lib/plans/refs';
 import type { WorkItemObsolescenceDto } from '@/lib/dto/workItems';
@@ -295,6 +297,7 @@ function buildChanges(
   statusByKey: ReadonlyMap<string, WorkflowStatusDto>,
   placementSides: PlacementSides,
   refChipOf: (ref: string) => PlanRefChipDto,
+  targetTodos?: { total: number; done: number },
 ): PlanItemChangeDto[] {
   if (!patch) return [];
   // Typed to the CLOSED wire vocabulary, so a new `field:` literal here is a
@@ -393,6 +396,24 @@ function buildChanges(
       from: prosePreview(target?.explanationMd),
       to: prosePreview(patch.explanationMd),
     });
+  }
+  // THE STEPS a `modify` REPLACES (MOTIR-8668 · AMENDMENT 27) — the row that
+  // makes D2's cost visible instead of forbidden. FROM is the live list as a
+  // count, with how many of those steps are ticked (`5 (2 ✓)`), because ticked
+  // rows are a person's progress and the replacement deletes them; TO is the new
+  // list itself, numbered, previewed like a body, so the reviewer reads WHICH
+  // steps rather than how many. A clear (`[]` / `null`) is an empty NEW side.
+  if (patch.todos !== undefined) {
+    const total = targetTodos?.total ?? 0;
+    const done = targetTodos?.done ?? 0;
+    const incoming = patch.todos ?? [];
+    if (total > 0 || incoming.length > 0) {
+      changes.push({
+        field: 'todos',
+        from: total === 0 ? null : done > 0 ? `${total} (${done} ✓)` : String(total),
+        to: prosePreview(incoming.map((t, i) => `${i + 1}. ${t.text}`).join(' · ')),
+      });
+    }
   }
   // WHERE THE CARD SITS (MOTIR-3859) — the SITS half of D3's pair, and the most
   // structural thing a `modify` can now say. It is listed for the same reason the
@@ -845,17 +866,64 @@ export const planReviewService = {
   ): Promise<{
     keyById: Map<string, string>;
     markById: Map<string, WorkItemObsolescenceDto | null>;
+    todoCountById: Map<string, { total: number; done: number }>;
   }> {
     const ids = markRefIdsOf(plan);
-    if (ids.size === 0) return { keyById: new Map(), markById: new Map() };
-    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      workItemRepository.findByIdsInWorkspace([...ids], ctx.workspaceId, tx),
-    );
+    // …and the `modify` targets whose patch REPLACES the step list (MOTIR-8668),
+    // whose live count and ticked count the line prints beside the change.
+    const todoTargetIds = plan.items
+      .filter((i) => i.op === 'modify' && i.workItemId && i.patch?.todos !== undefined)
+      .map((i) => i.workItemId!);
+    if (ids.size === 0 && todoTargetIds.length === 0) {
+      return { keyById: new Map(), markById: new Map(), todoCountById: new Map() };
+    }
+    const { rows, counts } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
+      rows:
+        ids.size === 0
+          ? []
+          : await workItemRepository.findByIdsInWorkspace([...ids], ctx.workspaceId, tx),
+      counts: await workItemTodoRepository.countByWorkItems(todoTargetIds, tx),
+    }));
     const own = rows.filter((row) => row.projectId === plan.projectId);
     return {
       keyById: new Map(own.map((row) => [row.id, row.identifier])),
       markById: new Map(own.map((row) => [row.id, row.obsolescence ?? null])),
+      todoCountById: counts,
     };
+  },
+
+  /**
+   * THE LIVE STREAM'S PLAN READ (Story MOTIR-8542 · MOTIR-8730): a watched plan's
+   * status and review version, for this reader — or `null`.
+   *
+   * ⚠️ `null` FOR EVERY REFUSAL AND FOR A PLAN THAT IS GONE, never an error. The
+   * stream writes a frame only for a version it read, so a plan the reader may
+   * not browse produces no frame, no error frame and no hint that it exists. The
+   * admission is the review read's own ({@link readerContextOf} then
+   * `plansService.admitPlanReader`), so the stream can never see a plan the review
+   * read would refuse. Any other error propagates.
+   */
+  async readReviewVersionForReader(
+    planId: string,
+    reader: ServiceContext | VisitorReadContext,
+  ): Promise<{ status: PlanStatus; reviewVersion: string } | null> {
+    try {
+      const ctx = await readerContextOf(planId, reader);
+      await plansService.admitPlanReader(planId, ctx);
+      const version = await readReviewVersion(planId, ctx);
+      return version ? { status: version.status, reviewVersion: version.token } : null;
+    } catch (err) {
+      // `ProjectNotFoundError` is how a project-bound token is refused a plan in
+      // another project — a refusal like the other two, so the same `null`.
+      if (
+        err instanceof PlanNotFoundError ||
+        err instanceof ProjectAccessDeniedError ||
+        err instanceof ProjectNotFoundError
+      ) {
+        return null;
+      }
+      throw err;
+    }
   },
 
   /**
@@ -1042,7 +1110,7 @@ export const planReviewService = {
     // target read's parents seed the walk — with only pure id arithmetic between them, and they
     // used to open a transaction EACH (the walk one per tree level). Every one is a BEGIN, a
     // `set_config` and a COMMIT paid on every tick of the poll.
-    const { committedBlockersByItemId, targetById, ancestorById } =
+    const { committedBlockersByItemId, targetById, ancestorById, todoCountById } =
       await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
         const committedEdgeRows = await workItemLinkRepository.findBlockerEdgesForItems(
           targetIds,
@@ -1161,7 +1229,17 @@ export const planReviewService = {
             new Set(rows.map((r) => r.parentId).filter((id): id is string => !!id)),
           );
         }
-        return { committedBlockersByItemId, targetById, ancestorById };
+        // …AND the live STEP COUNT of every target a `modify` REPLACES the list of
+        // (MOTIR-8668 · AMENDMENT 27), so the `todos` change row can say how many
+        // steps the replacement drops and how many of them were ticked. One
+        // grouped read, and only when a patch carries `todos`.
+        const todoCountById = await workItemTodoRepository.countByWorkItems(
+          plan.items
+            .filter((i) => i.op === 'modify' && i.workItemId && i.patch?.todos !== undefined)
+            .map((i) => i.workItemId!),
+          tx,
+        );
+        return { committedBlockersByItemId, targetById, ancestorById, todoCountById };
       });
 
     /**
@@ -1548,7 +1626,15 @@ export const planReviewService = {
       // them separately is the drift this card exists to make impossible.
       const changes =
         item.op === 'modify'
-          ? buildChanges(item.patch, target, nameParent, statusByKey, placementSides, refChipOf)
+          ? buildChanges(
+              item.patch,
+              target,
+              nameParent,
+              statusByKey,
+              placementSides,
+              refChipOf,
+              item.workItemId ? todoCountById.get(item.workItemId) : undefined,
+            )
           : [];
       // An `add`'s SUPERSEDES chips (MOTIR-6632, Part XXIV §24.8) — ONE local, two
       // carriers (the item and the envelope), as `resolvedTodos` below.

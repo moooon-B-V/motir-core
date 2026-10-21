@@ -7,6 +7,7 @@ import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
+import { resolveRecipientLocales } from '@/lib/services/emailRecipientLocale';
 import { formatDate } from '@/lib/utils/datetime';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
@@ -138,11 +139,13 @@ export const agentInstanceLapseService = {
       userRepository.findByIds([...byOwner.keys()], tx),
     );
     const billingUrl = `${resolveBaseUrlTrimmed()}/settings/organization/billing`;
+    const localeByUserId = await resolveRecipientLocales(owners.map((o) => o.id));
     let sent = 0;
     // One owner at a time, each on its own: one failed send never skips another.
     for (const owner of owners) {
       const rows = byOwner.get(owner.id) ?? [];
       const deletesOn = rows[0]!.scheduledDeletionAt!;
+      const locale = localeByUserId.get(owner.id);
       try {
         if (owner.email) {
           await sendEvent('email.send', {
@@ -151,9 +154,10 @@ export const agentInstanceLapseService = {
             data: {
               recipientName: owner.name,
               organizationName,
-              deletionDate: formatDate(deletesOn.toISOString()),
+              deletionDate: formatDate(deletesOn.toISOString(), locale),
               agentNames: rows.map((r) => r.name),
               billingUrl,
+              locale,
             },
             workspaceId: rows[0]!.workspaceId,
             idempotencyKey: `agent-plan-lapse:${organizationId}:${deletesOn.toISOString()}:${owner.id}`,

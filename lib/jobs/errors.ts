@@ -31,8 +31,8 @@ export class DlqEntryNotFoundError extends Error {
 }
 
 /**
- * Thrown when someone other than the platform operator (`PLATFORM_ADMIN_EMAIL`)
- * asks to replay a dead letter that has no workspace (MOTIR-8083). The System
+ * Thrown when someone below the `operator` platform role (`User.platformRole`,
+ * MOTIR-8197) asks to replay a dead letter that has no workspace (MOTIR-8083). The System
  * tab hides the control from everyone else, and the service re-checks, so a
  * posted action cannot reach a system row from a tenant session.
  */

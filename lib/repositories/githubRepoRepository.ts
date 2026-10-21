@@ -330,6 +330,27 @@ export const githubRepoRepository = {
     return result.count;
   },
 
+  /** Release a claim that a DEAD run still holds (MOTIR-8769): clear
+   *  `indexingRunId` only while it still names `runId`, so a run that claimed the
+   *  repository since the caller read the pointer keeps its claim. A failed run
+   *  never reaches `markIndexSettled`, so its pointer stays until the next run is
+   *  claimed; a retry clears it so the repository reads `queued`, not `failed`,
+   *  while the re-enqueued run waits. Returns how many rows it released, which is
+   *  what lets two racing retries enqueue once. */
+  async releaseIndexClaim(
+    repoRef: string,
+    runId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const [owner, name] = splitRepoRef(repoRef);
+    if (!owner) return 0;
+    const result = await tx.githubRepo.updateMany({
+      where: { owner, name, indexingRunId: runId },
+      data: { indexingRunId: null },
+    });
+    return result.count;
+  },
+
   /** Record that indexing is PAUSED for a repository by a hard stop of its
    *  organisation's internal index allowance (MOTIR-4593), and release any claim —
    *  a refused dispatch booted nothing, so no run is in flight for it. The
@@ -552,6 +573,27 @@ export const githubRepoRepository = {
     });
   },
 
+  /** The connected repository COORDINATES of several organisations at once — the
+   *  set motir-ai's code-graph reconciler subtracts its stored graphs from
+   *  (MOTIR-9137). Every provider's rows, GitLab included, because a code graph
+   *  is keyed by the same `owner/name` whichever host it came from. Projected to
+   *  the three columns the ref is built from; nothing else leaves the row.
+   *
+   *  ⚠️ `tx` IS REQUIRED and must be a `withSystemContext` transaction: the read
+   *  spans tenants, and on any narrower context RLS returns a SUBSET with no
+   *  error — which the caller would read as "these repositories are gone". */
+  async listRefsByOrganizations(
+    organizationIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ organizationId: string; owner: string; name: string }>> {
+    if (organizationIds.length === 0) return [];
+    return tx.githubRepo.findMany({
+      where: { organizationId: { in: organizationIds } },
+      select: { organizationId: true, owner: true, name: true },
+      orderBy: [{ organizationId: 'asc' }, { owner: 'asc' }, { name: 'asc' }],
+    });
+  },
+
   /**
    * Every repository row of `organizationId` WITH its parent installation — the
    * organization Git offboarding's work set (MOTIR-6306 · MOTIR-6397). The
@@ -627,6 +669,16 @@ export const githubRepoRepository = {
     return tx.githubRepo.findUnique({
       where: { installationId_repoId: { installationId, repoId } },
     });
+  },
+
+  /** Every mirror row for one GitHub repository id, across installations,
+   *  oldest first. The fleet intake's connected-org fallback (MOTIR-8720) reads it
+   *  to find the ONE row a repository is mirrored under when the delivery came in
+   *  on an installation that has no mirror row of its own; the caller refuses
+   *  zero or several. `tx` because `github_repo`'s RLS admits it only under
+   *  `withSystemContext`. */
+  async listByRepoId(repoId: string, tx: Prisma.TransactionClient): Promise<GithubRepo[]> {
+    return tx.githubRepo.findMany({ where: { repoId }, orderBy: { id: 'asc' } });
   },
 
   /** Create-or-refresh one selected repo, keyed on the unique

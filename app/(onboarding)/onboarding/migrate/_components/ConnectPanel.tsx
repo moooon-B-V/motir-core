@@ -39,6 +39,12 @@ import type {
   MigrateConnectStateDto,
 } from '@/lib/dto/migrateOnboarding';
 import { StepHead } from './StepHead';
+import { ExistingAccounts, InstallRow, existingAccountsShown } from './ExistingAccounts';
+import { ExistingRepositoryPicker } from './ExistingRepositoryPicker';
+import { useAccountRepositories } from './useAccountRepositories';
+import { ConnectOutcome } from './ConnectOutcome';
+import { useLinkInstallation, type LinkResult } from './useLinkInstallation';
+import { useInstalledAccounts } from './useInstalledAccounts';
 
 // THE CONNECT STEP (Story MOTIR-8241 · MOTIR-8475), built on
 // `design/onboarding-migrate/` Revision 7 (MOTIR-8469) and its delta mock
@@ -90,8 +96,10 @@ export type ConnectFailedStatus =
  *   - `read` — the report defers to the read, which alone knows whether usable
  *     repositories exist (`installed`, `repos_updated`, `select_repos`). The
  *     identity-grant statuses (`connected`, `denied`, `state_error`, `error`)
- *     never return to this step — the OAuth grant does not start here — so a
- *     hand-typed one is ignored the same way.
+ *     come back from the GitHub sign-in the accounts list offers (MOTIR-8762);
+ *     they say nothing about the install, so they defer to the read too — the
+ *     accounts read re-reads on that arrival, and `IDENTITY_DECLINED` below is
+ *     the one thing a refused sign-in changes.
  *   - `owner_pending` — `setup_action=request`: an owner must approve.
  *   - `install_cancelled` — `install_unbound` from this step's own state: GitHub
  *     came back with nothing installed (a `deny`), which is the cancelled panel's
@@ -136,6 +144,10 @@ export function connectReportFrom(raw: string | null | undefined): ConnectReport
   if (meaning === 'owner_pending' || meaning === 'install_cancelled') return { kind: meaning };
   return { kind: 'failed', status: meaning };
 }
+
+/** A sign-in that came back refused or unfinished: the identity prompt stays up
+ *  with one benign line (Revision 8, 2o.iv) — never a danger tone. */
+const IDENTITY_DECLINED: ReadonlySet<string> = new Set(['denied', 'state_error', 'error']);
 
 /** The send phase — client-only, invisible to both producers. */
 type SendPhase = 'idle' | 'starting' | 'waiting';
@@ -259,6 +271,32 @@ export function ConnectPanel({
   const [report, setReport] = useState<ConnectReport | null>(() =>
     connectReportFrom(searchParams.get('github')),
   );
+  // Revision 8: the accounts the App is already installed on (MOTIR-8762).
+  const accounts = useInstalledAccounts(read?.organizationId ?? null);
+  const [identitySkipped, setIdentitySkipped] = useState(false);
+  const [identityDeclined] = useState(() =>
+    IDENTITY_DECLINED.has(searchParams.get('github') ?? ''),
+  );
+  // The account whose repositories the picker shows (MOTIR-8763): a pick from
+  // the list, or the install round trip's `select_repos` + `installation_id`,
+  // read ONCE here beside the report (`select_repos` stays a `read` status
+  // there) and dropped from the address with the rest of `RETURN_PARAMS`.
+  const [pickTarget, setPickTarget] = useState<{
+    installationId: string;
+    fromInstall: boolean;
+  } | null>(() => {
+    const id = searchParams.get('installation_id');
+    return searchParams.get('github') === 'select_repos' && id
+      ? { installationId: id, fromInstall: true }
+      : null;
+  });
+  const repositories = useAccountRepositories(
+    read?.organizationId ?? null,
+    pickTarget?.installationId ?? null,
+  );
+  // The link write and what it last answered (MOTIR-8764).
+  const linking = useLinkInstallation(read?.organizationId ?? null);
+  const [linkResult, setLinkResult] = useState<LinkResult | null>(null);
 
   const phaseRef = useRef<SendPhase>('idle');
   const beforeRef = useRef<string | null>(null);
@@ -394,6 +432,140 @@ export function ConnectPanel({
   };
 
   const state = connectStepState({ hasRun: runId !== null, read, readFailed, phase, report });
+  const retry = () => {
+    void readNow('retry');
+    accounts.reload();
+  };
+  /** Link the chosen repositories, and say what happened (2s). */
+  const confirm = async (chosen: string[]) => {
+    if (!pickTarget) return;
+    const installationId = pickTarget.installationId;
+    // ⚠️ THE BODY IS THIS ORGANISATION'S WHOLE SET ON THE ACCOUNT: the link
+    // replaces the organisation's repositories with exactly `repoIds` (it
+    // answers `released`), so the ones already connected here ride along —
+    // the picker only adds, as Settings' does.
+    const here =
+      repositories.state.kind === 'ok'
+        ? repositories.state.rows
+            .filter((r) => r.availability === 'connected_here')
+            .map((r) => r.repoId)
+        : [];
+    setLinkResult(null);
+    const result = await linking.link({ installationId, repoIds: [...here, ...chosen] });
+    if (!result) return;
+    setLinkResult(result);
+    switch (result.kind) {
+      case 'linked':
+        // The connect read decides what is connected now; Continue appears
+        // through the same gate a reload would pass.
+        setPickTarget(null);
+        void readNow('retry');
+        break;
+      case 'taken':
+        repositories.markTaken(result.repos.map((r) => r.repoId));
+        repositories.refresh();
+        break;
+      case 'not_visible':
+        repositories.refresh();
+        break;
+      case 'not_accessible':
+        accounts.dropAccount(installationId);
+        setPickTarget(null);
+        break;
+      case 'not_admin':
+        setPickTarget(null);
+        break;
+      case 'selection_required':
+      case 'failed':
+        break;
+    }
+  };
+
+  const accountsBlock =
+    read !== null && existingAccountsShown(accounts.state, identitySkipped) ? (
+      <ExistingAccounts
+        state={accounts.state}
+        identitySkipped={identitySkipped}
+        identityDeclined={identityDeclined}
+        onSkipIdentity={() => setIdentitySkipped(true)}
+        onRetry={accounts.reload}
+        onPickAccount={(installationId) => {
+          setLinkResult(null);
+          setPickTarget({ installationId, fromInstall: false });
+        }}
+        onInstall={send}
+      />
+    ) : null;
+  // 2r.ii: the install round trip named an installation this person cannot
+  // reach — the picker does not open; the shipped line sits above whatever the
+  // accounts read gives, and an install control is always there.
+  const arrivalUnreachable =
+    pickTarget?.fromInstall === true && repositories.state.kind === 'not_accessible';
+  const pickedAccount =
+    pickTarget && accounts.state.kind === 'ok'
+      ? accounts.state.accounts.find((a) => a.installationId === pickTarget.installationId)
+      : undefined;
+  const firstRow =
+    repositories.state.kind === 'ok' ? repositories.state.rows[0]?.fullName : undefined;
+  const pickedLogin =
+    pickedAccount?.accountLogin ?? firstRow?.split('/')[0] ?? pickTarget?.installationId ?? '';
+  const existing =
+    read === null ? null : pickTarget && !arrivalUnreachable ? (
+      <ExistingRepositoryPicker
+        accountLogin={pickedLogin}
+        state={repositories.state}
+        selected={repositories.selected}
+        taken={repositories.taken}
+        fromInstall={pickTarget.fromInstall}
+        manageUrl={githubInstallationManageUrl({
+          accountLogin: pickedLogin,
+          accountType: pickedAccount?.accountType ?? 'User',
+          installationId: pickTarget.installationId,
+        })}
+        onToggle={repositories.toggle}
+        onToggleAll={repositories.toggleAll}
+        onBack={() => {
+          setLinkResult(null);
+          setPickTarget(null);
+        }}
+        onRetry={repositories.refresh}
+        confirming={linking.pending}
+        notice={
+          linkResult && linkResult.kind !== 'linked' ? (
+            <ConnectOutcome
+              result={linkResult}
+              onRetry={() => void confirm([...repositories.selected])}
+            />
+          ) : null
+        }
+        onConfirm={(chosen) => void confirm(chosen)}
+      />
+    ) : arrivalUnreachable ? (
+      <>
+        <StatusBlock
+          pill={{ tone: 'info', label: t('pill.notConnected') }}
+          glyph={<Info className="size-4" />}
+          title={t('outcome.installation_not_accessibleTitle')}
+          hint={t('outcome.installation_not_accessibleHint')}
+        />
+        {accountsBlock ?? <InstallRow onInstall={send} />}
+      </>
+    ) : linkResult?.kind === 'not_admin' ? (
+      // 2s.vii: the refusal replaces the list; the install row stays.
+      <>
+        <ConnectOutcome result={linkResult} />
+        <InstallRow onInstall={send} />
+      </>
+    ) : linkResult?.kind === 'not_accessible' ? (
+      // 2s.v / 2s.vi: the account is gone from the list, and an install
+      // control is there whether or not any account is left.
+      <>
+        <ConnectOutcome result={linkResult} />
+        {accountsBlock ?? <InstallRow onInstall={send} />}
+      </>
+    ) : (
+      accountsBlock
+    );
   const account = read?.installation.accounts[0];
   const manageUrl = manageUrlFor(account);
   const repos = read?.repositories ?? [];
@@ -416,8 +588,10 @@ export function ConnectPanel({
             report={report}
             repos={repos}
             manageUrl={manageUrl}
+            existing={existing}
+            linked={linkResult?.kind === 'linked' ? <ConnectOutcome result={linkResult} /> : null}
             onSend={send}
-            onRetry={() => void readNow('retry')}
+            onRetry={retry}
           />
         </div>
       </Card>
@@ -475,6 +649,8 @@ function ConnectBody({
   report,
   repos,
   manageUrl,
+  existing,
+  linked,
   onSend,
   onRetry,
 }: {
@@ -482,6 +658,12 @@ function ConnectBody({
   report: ConnectReport | null;
   repos: MigrateConnectStateDto['repositories'];
   manageUrl: string | null;
+  /** The already-installed accounts (Revision 8), or null when they add nothing
+   *  — an empty list, a skipped sign-in. When present it OWNS the install
+   *  control (its install row), so a state drops its own install button. */
+  existing: ReactNode | null;
+  /** 2s.i: the link landed — said above the connected summary. */
+  linked: ReactNode | null;
   onSend: () => void;
   onRetry: () => void;
 }) {
@@ -505,6 +687,24 @@ function ConnectBody({
     case 'preflight':
     case 'starting':
     case 'install_cancelled':
+      // 2l / 2t.iii: the list leads; a cancel keeps its line below it, and the
+      // list's install row is the retry.
+      if (existing && state !== 'starting') {
+        return (
+          <>
+            {existing}
+            {state === 'install_cancelled' ? (
+              <StatusBlock
+                glyph={<Undo2 className="size-4" />}
+                title={t('cancelledTitle')}
+                hint={t('cancelledHint')}
+              />
+            ) : null}
+            {gitlabNote}
+          </>
+        );
+      }
+      // No accounts (2n), or the press is out: the shipped pre-flight.
       return (
         <>
           {state === 'install_cancelled' ? (
@@ -566,6 +766,7 @@ function ConnectBody({
     case 'already_connected':
       return (
         <>
+          {linked}
           <StatusBlock
             pill={{
               tone: 'success',
@@ -581,12 +782,14 @@ function ConnectBody({
             hint={state === 'connected' ? t('detectedHint') : t('alreadyConnectedHint')}
           />
           <RepoList repos={repos} />
+          {state === 'already_connected' ? existing : null}
         </>
       );
 
     case 'no_repositories_selected':
       return (
         <>
+          {existing}
           <StatusBlock
             pill={{ tone: GITHUB_BANNER_TONE.select_repos, label: t('pill.chooseRepos') }}
             glyph={<FolderX className="size-4" />}
@@ -595,7 +798,7 @@ function ConnectBody({
           />
           {manageUrl ? (
             <ChooseReposLink href={manageUrl} />
-          ) : (
+          ) : existing ? null : (
             <SendButton onSend={onSend} label={t('preflightCta')} />
           )}
           {gitlabNote}
@@ -605,23 +808,26 @@ function ConnectBody({
     case 'owner_pending':
       return (
         <>
+          {existing}
           <StatusBlock
             pill={{ tone: GITHUB_BANNER_TONE.install_requested, label: t('pill.ownerPending') }}
             glyph={<Hourglass className="size-4" />}
             title={t('ownerPendingTitle')}
             hint={t('ownerPendingHint')}
           />
-          <span>
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={onSend}
-              rightIcon={<ArrowUpRight className="size-4" />}
-            >
-              {t('ownerPendingOpenCta')}
-              <span className="sr-only"> {t('newTab')}</span>
-            </Button>
-          </span>
+          {existing ? null : (
+            <span>
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={onSend}
+                rightIcon={<ArrowUpRight className="size-4" />}
+              >
+                {t('ownerPendingOpenCta')}
+                <span className="sr-only"> {t('newTab')}</span>
+              </Button>
+            </span>
+          )}
         </>
       );
 
@@ -653,6 +859,10 @@ function ConnectBody({
           />
           {action === 'chooseRepos' && manageUrl ? (
             <ChooseReposLink href={manageUrl} />
+          ) : action && existing ? (
+            // 2r.ii: the line stays above whatever the accounts read gives, and
+            // the list's install row is the way forward.
+            existing
           ) : action === 'tryAgain' ? (
             <SendButton onSend={onSend} label={t('tryAgainCta')} />
           ) : action ? (
@@ -676,6 +886,7 @@ function ConnectBody({
               {t('recheckCta')}
             </Button>
           </span>
+          {existing}
           {gitlabNote}
         </>
       );
@@ -811,7 +1022,7 @@ function RepoList({ repos }: { repos: MigrateConnectStateDto['repositories'] }) 
         return (
           <li
             key={`${repo.provider}:${repo.repoRef}`}
-            className="flex items-center gap-3 rounded-(--radius-control) border border-(--el-border-soft) px-(--spacing-control-x) py-2.5"
+            className="flex items-center gap-3 rounded-(--radius-control) border border-(--el-border-soft) px-(--spacing-control-x) py-(--spacing-control-y-8)"
           >
             <span className="flex flex-none items-center text-(--el-text-secondary)">
               {repo.provider === 'github' ? (

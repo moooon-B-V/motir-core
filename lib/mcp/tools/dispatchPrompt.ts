@@ -12,6 +12,7 @@ import {
   isBodyAboveFieldMoveAdvisory,
   isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
+  isUnderAuthoredAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
 import { describeBodyAboveFieldMove } from '@/lib/workItems/bodyAboveFieldMove';
@@ -114,7 +115,13 @@ function advisorySummary(dto: DispatchPromptDto): string[] {
   const selfBlocking = dto.advisories.filter(isSelfBlockingDesignAdvisory);
   const bodyAbove = dto.advisories.filter(isBodyAboveFieldMoveAdvisory);
   const blockerCounts = dto.advisories.filter(isBlockerCountAdvisory);
+  const underAuthored = dto.advisories.filter(isUnderAuthoredAdvisory);
   const lines: string[] = [];
+  if (underAuthored.length > 0) {
+    lines.push(
+      `Advisory (NOT a blocker — ${dto.key} still dispatches): it is UNDER-AUTHORED — no acceptance criteria and no sizing, type or executor. Work out what "done" means from the description and say so in the pull request.`,
+    );
+  }
   for (const a of blockerCounts) {
     lines.push(
       `Advisory (NOT a blocker — ${dto.key} still dispatches): it claims "${a.claim}" (${a.claimedCount}), but its graph holds ${a.blockerCount} blocked_by edge${a.blockerCount === 1 ? '' : 's'}. Check which side is stale.`,

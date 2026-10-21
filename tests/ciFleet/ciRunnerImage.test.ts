@@ -24,6 +24,8 @@ const ROOT = process.cwd();
 const IMAGE_DIR = join(ROOT, 'infra/ci-runner');
 const dockerfile = readFileSync(join(IMAGE_DIR, 'Dockerfile'), 'utf8');
 const entrypoint = readFileSync(join(IMAGE_DIR, 'entrypoint.sh'), 'utf8');
+const startDockerd = readFileSync(join(IMAGE_DIR, 'start-dockerd.sh'), 'utf8');
+const proveBoot = readFileSync(join(IMAGE_DIR, 'smoke/prove-boot.sh'), 'utf8');
 const ciYml = readFileSync(join(ROOT, '.github/workflows/ci.yml'), 'utf8');
 const imageYml = readFileSync(join(ROOT, '.github/workflows/runner-image.yml'), 'utf8');
 const releaseYml = readFileSync(join(ROOT, '.github/workflows/release-runner-image.yml'), 'utf8');
@@ -167,6 +169,54 @@ describe('the boot contract — the orchestrator and the entrypoint agree', () =
   });
 });
 
+describe('dockerd must be able to unpack a layer, not merely answer (MOTIR-8821)', () => {
+  it('the entrypoint starts dockerd through the script that proves a whiteout unpack', () => {
+    expect(code(entrypoint)).toContain('motir-ci-runner-dockerd');
+    expect(code(entrypoint)).not.toMatch(/^\s*dockerd /m);
+    expect(code(dockerfile)).toContain('start-dockerd.sh /usr/local/bin/motir-ci-runner-dockerd');
+  });
+
+  it('probes with a layer that deletes a file, and falls back through the storage candidates', () => {
+    const body = code(startDockerd);
+    expect(body).toContain('.wh.gone');
+    expect(body).toContain('docker create');
+    for (const candidate of ['default', 'overlay2', 'vfs']) {
+      expect(body).toMatch(new RegExp(`${candidate}\\)`));
+    }
+    // A boot that finds no working candidate fails rather than serving jobs.
+    expect(body).toMatch(/die "no dockerd storage candidate/);
+  });
+
+  it('prints the storage outcome into the job log through the runner hook', () => {
+    expect(code(entrypoint)).toContain(
+      'ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/bin/motir-ci-runner-job-started.sh',
+    );
+    expect(code(dockerfile)).toContain(
+      'job-started.sh /usr/local/bin/motir-ci-runner-job-started.sh',
+    );
+    expect(code(startDockerd)).toContain('/run/motir-ci-runner-docker-storage');
+  });
+
+  it('the boot smoke pulls a whiteout-bearing image through the production script', () => {
+    expect(code(proveBoot)).toContain('motir-ci-runner-dockerd');
+    expect(code(proveBoot)).toContain('docker pull pgvector/pgvector:pg16');
+    expect(code(proveBoot)).not.toContain('MOTIR_RUNNER_SKIP_DOCKER');
+  });
+});
+
+describe('containers dockerd starts can resolve names (MOTIR-8899)', () => {
+  it('passes explicit resolvers to dockerd, since the Machine resolver is unreachable from the bridge', () => {
+    const body = code(startDockerd);
+    expect(body).toContain('DOCKER_DNS="${MOTIR_RUNNER_DOCKER_DNS-1.1.1.1 8.8.8.8}"');
+    expect(body).toMatch(/dockerd --host=unix:\/\/\$\{SOCK\} \$\(dns_args\)/);
+    expect(body).toContain('--dns=');
+  });
+
+  it('reports the resolvers in the storage line the job log prints', () => {
+    expect(code(startDockerd)).toContain('container dns:');
+  });
+});
+
 describe('the derived toolchain — every entry traces to a starter workflow', () => {
   // The card's rule: the toolchain is the UNION of what the two starters'
   // workflows actually install, and "a toolchain entry with no evidence line is
@@ -191,6 +241,18 @@ describe('the derived toolchain — every entry traces to a starter workflow', (
     // justified it without re-deriving the whole set.
     expect(dockerfile).toContain('ci.yml:');
     expect(dockerfile).toContain('nextjs-prisma-vercel-starter');
+  });
+
+  it('bakes pipx with venv support and puts its install dir on PATH (MOTIR-8884)', () => {
+    // motir-ai's Vitest shards run `pipx install lizard` with no setup step; the
+    // fleet died there with `pipx: command not found`.
+    const run = code(dockerfile);
+    expect(run).toMatch(/^\s+pipx \\$/m);
+    expect(run).toMatch(/^\s+python3-venv \\$/m);
+    expect(run).toContain('ENV PATH="/home/runner/.local/bin:${PATH}"');
+    expect(readFileSync(join(IMAGE_DIR, 'smoke/assert-image.sh'), 'utf8')).toContain(
+      "'pipx --version'",
+    );
   });
 
   it('does NOT bake a chromium binary — it is version-coupled to the repo', () => {

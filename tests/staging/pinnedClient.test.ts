@@ -3,13 +3,13 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   WORKBENCH_STREAM_FRAME as APP_STREAM_FRAME,
-  WORKBENCH_STREAM_POLL_MS as APP_STREAM_POLL_MS,
+  WORKBENCH_STREAM_COALESCE_MS as APP_STREAM_COALESCE_MS,
 } from '@/app/api/workbench/stream/route';
 import { CLI_CLIENT_ID as APP_CLI_CLIENT_ID } from '@/lib/cliDevice/constants';
 import {
   CLI_CLIENT_ID,
   WORKBENCH_STREAM_FRAME,
-  WORKBENCH_STREAM_POLL_MS,
+  WORKBENCH_STREAM_COALESCE_MS,
 } from '@/scripts/staging/lib/cases';
 import {
   AttributionError,
@@ -204,7 +204,7 @@ describe('the pinned client', () => {
 
 describe('the constants the staging cases copy from the app', () => {
   it('match the app’s own values', () => {
-    expect(WORKBENCH_STREAM_POLL_MS).toBe(APP_STREAM_POLL_MS);
+    expect(WORKBENCH_STREAM_COALESCE_MS).toBe(APP_STREAM_COALESCE_MS);
     expect(WORKBENCH_STREAM_FRAME).toBe(APP_STREAM_FRAME);
     expect(CLI_CLIENT_ID).toBe(APP_CLI_CLIENT_ID);
   });

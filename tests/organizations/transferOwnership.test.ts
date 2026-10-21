@@ -140,6 +140,26 @@ describe('transferOwnership — the Owner hands the organization over whole', ()
     }
   });
 
+  // Story MOTIR-7732 · MOTIR-8108 — each side in their own saved language.
+  it('writes each person’s email in their own saved language, English when none', async () => {
+    const org = await makeOrgWithRoles();
+    await adminDb.user.update({ where: { id: org.owner.id }, data: { locale: 'ja' } });
+    await adminDb.user.update({ where: { id: org.admin.id }, data: { locale: null } });
+    await organizationsService.transferOwnership({
+      organizationId: org.organizationId,
+      actorUserId: org.owner.id,
+      toUserId: org.admin.id,
+      confirmName: ORG_NAME,
+    });
+    const localeTo = Object.fromEntries(
+      sendEventImpl.current.mock.calls.map(([, data]) => [
+        data['to'],
+        (data['data'] as { locale?: string }).locale,
+      ]),
+    );
+    expect(localeTo).toEqual({ [org.owner.email]: 'ja', [org.admin.email]: 'en' });
+  });
+
   it('a forced send failure leaves the transfer committed and logs the failure', async () => {
     const org = await makeOrgWithRoles();
     sendEventImpl.current = vi.fn(async () => {

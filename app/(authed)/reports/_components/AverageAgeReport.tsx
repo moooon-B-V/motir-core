@@ -182,6 +182,7 @@ function AverageAgeBody({
 
   return (
     <BarChart
+      fit="page"
       series={[{ label: t('averageAge.legendLabel'), color: chartColor.age }]}
       groups={buckets.map((b) => ({
         label: bucketLabel(b.date, period, locale),

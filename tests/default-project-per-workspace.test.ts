@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectsService } from '@/lib/services/projectsService';
+import { deriveIdentifierBase, projectsService, slugify } from '@/lib/services/projectsService';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
@@ -36,6 +36,13 @@ async function allProjects() {
   return adminDb.project.findMany({ orderBy: { createdAt: 'asc' } });
 }
 
+/**
+ * The generated default-project name (Story MOTIR-8239): lowercase,
+ * hyphenated, four digits on the end — "quiet-harbor-4821" — never the
+ * workspace's name.
+ */
+const GENERATED_NAME = /^[a-z]+-[a-z]+-[1-9][0-9]{3}$/;
+
 async function firstWorkspaceOf(userId: string) {
   const membership = await adminDb.workspaceMembership.findFirst({
     where: { userId },
@@ -53,7 +60,7 @@ describe('door 1 — REGISTRATION', () => {
   // close an import cycle back through `lib/workspaces` (see that hook's own
   // note), so the enforcement points are the create-workspace action and this
   // resolver — which every authed request goes through.
-  it('a newly registered account has exactly one project, named for its workspace', async () => {
+  it('a newly registered account has exactly one project, with a generated name', async () => {
     await auth.api.signUpEmail({
       body: { email: 'alice@example.com', password: 'hunter2hunter2', name: 'Alice' },
       headers: { origin: BASE_URL },
@@ -68,7 +75,20 @@ describe('door 1 — REGISTRATION', () => {
     const projects = await allProjects();
     expect(projects).toHaveLength(1);
     expect(projects[0]!.workspaceId).toBe(workspace.id);
-    expect(projects[0]!.name).toBe(workspace.name);
+    // MOTIR-8239 — a generated, random-looking name, not the workspace's name,
+    // and the identifier and slug are derived from that name, so all three
+    // handles agree.
+    expect(projects[0]!.name).toMatch(GENERATED_NAME);
+    expect(projects[0]!.name).not.toBe(workspace.name);
+    expect(projects[0]!.identifier).toBe(deriveIdentifierBase(projects[0]!.name));
+    expect(projects[0]!.slug).toBe(slugify(projects[0]!.name));
+  });
+
+  it('derives the handles of a generated name the way the seeding relies on', () => {
+    // The two helpers the seeding derives the handles with, pinned on a known
+    // name: the identifier is the first five letters, the slug the name itself.
+    expect(deriveIdentifierBase('quiet-harbor-4821')).toBe('QUIET');
+    expect(slugify('quiet-harbor-4821')).toBe('quiet-harbor-4821');
   });
 
   it('the project is COMPLETE at birth — its workflow and its board are seeded with it', async () => {
@@ -132,7 +152,8 @@ describe('door 2 — A WORKSPACE CREATED LATER', () => {
     const active = await projectsService.getActiveProject(user.id, second.id);
 
     expect(active).not.toBeNull();
-    expect(active!.name).toBe('Side project');
+    expect(active!.name).toMatch(GENERATED_NAME);
+    expect(active!.name).not.toBe('Side project');
     const inSecond = (await allProjects()).filter((p) => p.workspaceId === second.id);
     expect(inSecond).toHaveLength(1);
   });

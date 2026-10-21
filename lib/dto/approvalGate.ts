@@ -197,6 +197,11 @@ export type ApprovalGateSupersedeCauseDTO =
   | 'no_longer_manual'
   /** A `manual_work` card reached a done status by a write nobody decided (MOTIR-7474). */
   | 'closed_without_decision'
+  /** A `manual_work` card stopped being ready for a person — Blocked, or an open
+   *  `blocked_by` (MOTIR-8670). */
+  | 'not_ready'
+  /** A `manual_work` card was re-planned — Planning, or a plan rewrote it (MOTIR-8670). */
+  | 'replanned'
   /** The person sent a turn on the planning session a `planning_session` gate asked
    *  about — the question is answered (MOTIR-7913). */
   | 'answered'

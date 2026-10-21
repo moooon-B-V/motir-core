@@ -171,8 +171,8 @@ export function AcceptancePanel({
   // ── State C · no paid plan → the upsell ────────────────────────────────────
   if (eligibility.applicable && eligibility.reason === 'no_plan') {
     return (
-      <div className="flex gap-3.5 rounded-(--radius-input) bg-(--el-tint-lavender) p-4">
-        <span className="flex h-9 w-9 flex-none items-center justify-center rounded-(--radius-control) bg-(--el-page-bg)">
+      <div className="flex gap-3.5 rounded-(--radius-input) bg-(--el-tint-lavender) p-(--spacing-control-x-16)">
+        <span className="flex h-(--height-control) w-9 flex-none items-center justify-center rounded-(--radius-control) bg-(--el-page-bg)">
           <Sparkles className="h-[18px] w-[18px] text-(--el-accent-on-surface)" aria-hidden />
         </span>
         <div className="min-w-0">
@@ -200,8 +200,8 @@ export function AcceptancePanel({
   // ── State B · toggle off ───────────────────────────────────────────────────
   if (eligibility.applicable && eligibility.reason === 'toggle_off') {
     return (
-      <div className="flex gap-3.5 rounded-(--radius-input) border border-(--el-border-soft) bg-(--el-surface-soft) p-4">
-        <span className="flex h-9 w-9 flex-none items-center justify-center rounded-(--radius-control) bg-(--el-muted)">
+      <div className="flex gap-3.5 rounded-(--radius-input) border border-(--el-border-soft) bg-(--el-surface-soft) p-(--spacing-control-x-16)">
+        <span className="flex h-(--height-control) w-9 flex-none items-center justify-center rounded-(--radius-control) bg-(--el-muted)">
           <VideoOff className="h-[18px] w-[18px] text-(--el-text-muted)" aria-hidden />
         </span>
         <div className="min-w-0">
@@ -253,7 +253,7 @@ export function AcceptancePanel({
   if (!evidence) {
     // Pending — in_review, no video yet.
     return (
-      <div className="rounded-(--radius-input) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) px-4 py-7 text-center">
+      <div className="rounded-(--radius-input) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) px-(--spacing-control-x-16) py-7 text-center">
         <span className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-(--el-tint-sky)">
           <Clock className="h-5 w-5 text-(--el-info)" aria-hidden />
         </span>

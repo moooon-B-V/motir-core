@@ -84,6 +84,21 @@ describe('email.send job — handler', () => {
     expect(run.failure).toBeNull();
   });
 
+  // Story MOTIR-7732 · MOTIR-8104 — the recipient's language rides on the
+  // payload's `data.locale`, so the job (and a retry of it) renders in it.
+  it('renders in the locale the payload carries', async () => {
+    await runEmailSendJob(
+      passwordResetEvent({
+        data: { recipientName: 'Reset User', resetUrl: RESET_URL, locale: 'ja' },
+      } as Partial<EmailSendData>),
+    );
+
+    expect(emails.lines).toHaveLength(1);
+    expect(emails.lines[0]).toContain('Motir のパスワードをリセット');
+    expect(emails.lines[0]).not.toContain('Reset your Motir password');
+    expect(emails.lines[0]).toContain(RESET_URL);
+  });
+
   it('renders + sends the workspace-invite template scoped to a real workspace', async () => {
     const inviter = await usersService.createUser({
       email: 'inviter@example.com',

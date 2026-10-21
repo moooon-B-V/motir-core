@@ -227,9 +227,14 @@ export function planPolled(
   );
 }
 
-/** The Planning tab's poll cadence is `PLANNING_POLL_MS` (10 s, a client module
- *  the runner does not load); three of them is the budget for the next read. */
-export const WORKBENCH_READ_BUDGET_MS = 35_000;
+/** The Planning tab's poll cadence is `PLANNING_POLL_MS` (10 s, in a client
+ *  component the runner does not load, so this is a copy that can drift). Six of
+ *  them is the budget for the next read: on a loaded CI shard one slow
+ *  `/api/workbench/window` read, or a tick that lands before the write the
+ *  predicate waits for, costs a poll or two, and three left no room for that
+ *  (MOTIR-8898). The spec's own timeout is 420 s, so the budget is cheap. */
+const WORKBENCH_POLL_MS = 10_000;
+export const WORKBENCH_READ_BUDGET_MS = 6 * WORKBENCH_POLL_MS;
 
 /**
  * The NEXT Planning read whose page satisfies `until`. The tab's poll asks the

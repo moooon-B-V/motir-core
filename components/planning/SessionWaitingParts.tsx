@@ -64,7 +64,7 @@ export function FailedWaitingNotice({
       aria-label={tw('failedHead')}
       data-testid="planning-failed-waiting"
       data-state={resuming ? 'resuming' : failedAgain ? 'failed-again' : 'waiting'}
-      className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) px-3 py-2.5"
+      className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
     >
       <div className="flex flex-wrap items-center gap-2">
         <Hourglass className="size-4 flex-none text-(--el-icon-muted)" aria-hidden />
@@ -133,22 +133,36 @@ export function FailedWaitingNotice({
 export function WaitingPlanFailureLine({
   failure,
   again,
+  planAgain = false,
 }: {
   failure: PlanSessionFailureDto;
   again: boolean;
+  /**
+   * The attempt cannot be resumed and no plan waits beside it (MOTIR-9121): its cards were
+   * given back, and the person's next message plans again — the same line, saying THAT
+   * instead of naming a plan that is not there.
+   */
+  planAgain?: boolean;
 }) {
   const tw = useTranslations('planningWorkspace.waiting');
   const format = useFormatter();
   const when = format.relativeTime(new Date(failure.failedAt));
+  const text = planAgain
+    ? again
+      ? tw('failureLinePlanAgainAgain', { when })
+      : tw('failureLinePlanAgain', { when })
+    : again
+      ? tw('failureLineAgain', { when })
+      : tw('failureLine', { when });
   return (
     <p
       role="status"
       data-testid="planning-failure-line"
       data-again={again ? 'true' : undefined}
-      className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)"
+      className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)"
     >
       <TriangleAlert className="mt-0.5 size-4 flex-none text-(--el-icon-muted)" aria-hidden />
-      <span>{again ? tw('failureLineAgain', { when }) : tw('failureLine', { when })}</span>
+      <span>{text}</span>
     </p>
   );
 }

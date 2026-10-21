@@ -1,5 +1,6 @@
 'use client';
 
+import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -161,10 +162,10 @@ function LinkRow({
   const { item } = link;
   const statusMeta = workflow.statuses.find((s) => s.key === item.status);
   return (
-    <li className="hover:bg-(--el-surface) flex items-center gap-1 rounded-(--radius-control) pr-1">
+    <li className="hover:bg-(--el-surface) flex items-center gap-1 rounded-(--radius-control) pr-(--spacing-control-x-4)">
       <RelationshipPeekLink
         identifier={item.identifier}
-        className="group flex min-w-0 flex-1 items-center gap-2 rounded-(--radius-control) px-2 py-1.5 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        className="group flex min-w-0 flex-1 items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x-8) py-(--spacing-control-y) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
         {isOpenBlocker ? (
           <span
@@ -177,7 +178,7 @@ function LinkRow({
         <span className="min-w-0 flex-1 truncate">
           <span className="text-(--el-text-secondary) font-mono text-xs">{item.identifier}</span>
           <span className="text-(--el-text) ml-2 font-sans text-sm group-hover:underline">
-            {item.title}
+            <SurfaceTitle id={item.id} title={item.title} />
           </span>
         </span>
         {statusMeta ? (
@@ -440,6 +441,7 @@ export function RelationshipsPanel({
             blockedByAncestor={
               effectiveReadiness.blockedByAncestor
                 ? {
+                    id: effectiveReadiness.blockedByAncestor.id,
                     identifier: effectiveReadiness.blockedByAncestor.identifier,
                     title: effectiveReadiness.blockedByAncestor.title,
                     href: routes.item(effectiveReadiness.blockedByAncestor.identifier),

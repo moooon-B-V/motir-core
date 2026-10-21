@@ -67,13 +67,37 @@ export type TranslationAction =
   | { type: 'offer'; offer: TranslationOfferDTO }
   | { type: 'dequeue'; refs: readonly string[] };
 
-/** The state an offer opens on: every differing field idle, the original shown. */
-export function initialTranslationState(offer: TranslationOfferDTO): TranslationState {
+/**
+ * How a host that AUTO-translates (Story MOTIR-7738 · MOTIR-8832; design
+ * MOTIR-8823 A1/A4) opens. `start`: the press, entered at mount — every
+ * differing field pending and the bar busy, so no first frame can wear the
+ * offered face. `no_credit`: the organisation cannot pay, so the state opens in
+ * the no-credit phase and NO request is made. Absent: the on-demand host.
+ */
+export type AutoEntry = 'start' | 'no_credit';
+
+/**
+ * The state an offer opens on. On demand: every differing field idle, the
+ * original shown until a press. Auto: see {@link AutoEntry}; the view is the
+ * translated one, `pressed` is set (the staleness queue is live from mount) and
+ * no transition below changes.
+ */
+export function initialTranslationState(
+  offer: TranslationOfferDTO,
+  auto?: AutoEntry | null,
+): TranslationState {
   const fields: Record<string, FieldEntry> = {};
   for (const [ref, f] of Object.entries(offer.fields)) {
-    if (f.needsTranslation) fields[ref] = idleEntry(f.revision);
+    if (!f.needsTranslation) continue;
+    fields[ref] =
+      auto === 'start'
+        ? { state: 'pending', text: null, revision: f.revision, edited: false }
+        : auto === 'no_credit'
+          ? { state: 'no_credit', text: null, revision: f.revision, edited: false }
+          : idleEntry(f.revision);
   }
-  return { fields, view: 'translated', busy: false, pressed: false, queue: [] };
+  const starting = auto === 'start';
+  return { fields, view: 'translated', busy: starting, pressed: starting, queue: [] };
 }
 
 function idleEntry(revision: string): FieldEntry {

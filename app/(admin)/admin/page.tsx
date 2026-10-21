@@ -88,8 +88,8 @@ export default async function AdminOverviewPage({
               aria-current={p === period ? 'page' : undefined}
               className={
                 p === period
-                  ? 'rounded-(--radius-input) bg-(--el-page-bg) shadow-(--shadow-subtle) px-3 py-1 font-sans text-sm text-(--el-text)'
-                  : 'rounded-(--radius-input) px-3 py-1 font-sans text-sm text-(--el-text-secondary) hover:text-(--el-text)'
+                  ? 'rounded-(--radius-input) bg-(--el-page-bg) shadow-(--shadow-subtle) px-(--spacing-control-x-12) py-(--spacing-control-y-4) font-sans text-sm text-(--el-text)'
+                  : 'rounded-(--radius-input) px-(--spacing-control-x-12) py-(--spacing-control-y-4) font-sans text-sm text-(--el-text-secondary) hover:text-(--el-text)'
               }
             >
               {t(`period.${p}`)}
@@ -124,7 +124,7 @@ export default async function AdminOverviewPage({
         {overview.feed.runsUnavailable ? (
           <p
             role="status"
-            className="flex items-center gap-2 rounded-(--radius-input) bg-(--el-tint-peach) px-3 py-2 font-sans text-sm text-(--el-text-strong)"
+            className="flex items-center gap-2 rounded-(--radius-input) bg-(--el-tint-peach) px-(--spacing-control-x-12) py-(--spacing-control-y-8) font-sans text-sm text-(--el-text-strong)"
           >
             <CloudOff className="h-4 w-4" aria-hidden />
             {t('feed.runsUnavailable')}

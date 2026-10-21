@@ -20,7 +20,7 @@ import type { DispatchPromptDto, DispatchRepoDto } from '@/lib/dto/dispatch';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { listDispatchRepoNames, resolveDispatchRepoForItem } from '@/lib/workItems/dispatchRepo';
 import { resolveDispatchRepo } from '@/lib/workItems/targetRepo';
-import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
+import type { RepoDelivery, RepoDeliveryState } from '@/lib/workItems/repoDelivery';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { designAccessService } from '@/lib/services/designAccessService';
 import { monitorIssueService } from '@/lib/services/monitorIssueService';
@@ -28,6 +28,9 @@ import type { DesignVerdictDto } from '@/lib/dto/designAccess';
 import { readProject } from '@/lib/workspaces/tenantRead';
 import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import { toOrgContentLanguage } from '@/lib/workItems/contentLanguage';
+import { defaultLocale, type Locale } from '@/lib/i18n/locales';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { parseDecisionRecord } from '@/lib/approvalGates/decisionRecord';
 import {
@@ -104,6 +107,11 @@ async function resolveObsoleteNeighbours(
   // order the card names them.
   const named: Array<{ id: string } | { key: string }> = [];
   for (const ref of refs) {
+    // A chip bullet reads back as its link TARGET (`motir:<id>`, MOTIR-9027 — a
+    // chip's label and why are never the ref); a hand-written one may still carry
+    // the whole `[KEY](motir:<id>)` token.
+    const chipTarget = ref.match(/^motir:(\S+)$/)?.[1];
+    if (chipTarget) named.push({ id: chipTarget });
     for (const id of parseWorkItemTokenIds(ref)) named.push({ id });
     for (const key of parseWorkItemKeys(ref, projectIdentifier)) named.push({ key });
   }
@@ -208,6 +216,18 @@ async function resolveOpenDependentKeys(
  * second rung — the set is that one repository with a `null` delivery state, so
  * `targetRepos[0]?.name ?? null === targetRepo` stays total.
  */
+/**
+ * A repository a CHILD card's own pull request delivered (MOTIR-8811) is
+ * `delivered` on the wire. The distinction is the item panel's — it explains why
+ * the item has no pull-request row of its own there — and what a dispatched run
+ * needs is only that a merge reached that trunk. Keeping it off the `/api/v1`
+ * enum also keeps every published CLI parsing the payload: its generated
+ * validators reject an enum member they were not generated with.
+ */
+function toDispatchDelivery(state: RepoDeliveryState): DispatchRepoDto['delivery'] {
+  return state === 'delivered_by_child' ? 'delivered' : state;
+}
+
 async function resolveDispatchRepos(
   delivery: readonly RepoDelivery[],
   projectId: string,
@@ -233,7 +253,7 @@ async function resolveDispatchRepos(
       name: resolved.name,
       cloneUrl: resolved.cloneUrl,
       defaultBranch: resolved.defaultBranch,
-      delivery: d.state,
+      delivery: toDispatchDelivery(d.state),
     };
   });
 }
@@ -278,6 +298,12 @@ export interface DispatchPromptOptions {
    * have ended without success, else `ContinueFromInvalidError` (422).
    */
   continueFrom?: string;
+  /**
+   * Whether the runner posts the `$MOTIR_AGENT_REPORT` findings (MOTIR-8810) — see
+   * {@link import('@/lib/dispatch/promptTemplate').DispatchPromptSource.runnerPostsAgentReport}.
+   * Passed through undefaulted, for the same reason as `findingsPolicy`.
+   */
+  runnerPostsAgentReport?: boolean;
 }
 
 /**
@@ -406,6 +432,7 @@ export const dispatchPromptService = {
       errorEvidence,
       ownRefusal,
       obsoleteNeighbours,
+      contentLanguage,
     ] = await allSettledOrThrow([
       item.parentId
         ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -473,6 +500,14 @@ export const dispatchPromptService = {
       resolveObsoleteNeighbours(item, project.identifier, ctx.workspaceId).catch(
         () => [] as ObsoleteNeighbour[],
       ),
+      // The organisation's CONTENT LANGUAGE (MOTIR-8745) — the language any work
+      // item or to-do the agent writes is written in. No refusal path: a language
+      // that could not be read never stops a dispatch; it falls back to the default.
+      withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        organizationRepository.findContentLanguageByWorkspaceId(ctx.workspaceId, tx),
+      )
+        .then(toOrgContentLanguage)
+        .catch((): Locale => defaultLocale),
     ]);
 
     // …and its RUN TARGET's, when this card is a leg of a run launched against
@@ -509,6 +544,7 @@ export const dispatchPromptService = {
       errorEvidence,
       changesRequested,
       obsoleteNeighbours,
+      contentLanguage,
       continueFrom,
       parent: parentRow ? { key: parentRow.identifier, title: parentRow.title } : null,
       projectName: project.name,
@@ -536,6 +572,9 @@ export const dispatchPromptService = {
       // "the full protocol", so defaulting it here would put a second copy of
       // that decision in a second place.
       ...(opts.findingsPolicy ? { findingsPolicy: opts.findingsPolicy } : {}),
+      ...(opts.runnerPostsAgentReport === undefined
+        ? {}
+        : { runnerPostsAgentReport: opts.runnerPostsAgentReport }),
     });
 
     return {

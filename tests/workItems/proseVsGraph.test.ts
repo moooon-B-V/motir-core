@@ -18,6 +18,9 @@ import {
   isSubsumptionCheckExempt,
   overGateSizing,
   resolvePathRepo,
+  underAuthored,
+  isMislabelledLink,
+  labelWorkItemKeys,
   selfBlockingDesignCriteria,
   namesDesignAsset,
   namesDesignDocumentAmendment,
@@ -1157,6 +1160,77 @@ describe('selfBlockingDesignCriteria — a card that is its OWN design blocker (
     });
   });
 
+  it('does not read a TEST DOUBLE as a design asset — plan cmvez6dl300gmhmrffl127q95', () => {
+    // Four test and route cards in that plan were reported as their own design
+    // blocker, and `check-plan` read each as a guard #3 stop: a bare `mock` in a
+    // criterion that asserts on a test double made it the DESIGN half, and an
+    // ordinary render criterion the SURFACE half. The criteria are quoted from
+    // MOTIR-8637 and MOTIR-8643, trimmed, with one render criterion each.
+    const routeCard = [
+      '## Acceptance criteria',
+      '',
+      '- Both answers carry `Cache-Control: no-store`: a second identical call reaches the',
+      '  boundary again (asserted on the boundary mock).',
+      '- A body the input schema refuses answers 400 and the boundary is NEVER called',
+      '  (asserted on the mock).',
+      '- The Calculator view renders the answer the route returns.',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(routeCard)).toBeNull();
+
+    const testCard = [
+      '## Acceptance criteria',
+      '',
+      '- The only stubbed boundary is the global `fetch`, and no test mocks the helper or',
+      '  the route module wholesale.',
+      '- The Calculator tab shows the recorded credit range for the pinned input.',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(testCard)).toBeNull();
+  });
+
+  it.each([
+    'asserted on the boundary mock',
+    'no test mocks the helper wholesale',
+    "the lane's `E2E_TEST_BILLING` boundary mock",
+    'the client is mocked at the transport',
+    '`vi.mock` replaces the session reader',
+    'a mock client answers every call',
+    'tests/x.test.tsx mocks @/lib/foo and is not modified',
+    'it mocks @/app/(authed)/runs/_components/RunsIndex and asserts nothing about the columns',
+    'the suite mocks ./foo and ../bar',
+    'the test mocks lib/x directly',
+  ])('a test-double "mock" is not a design asset: %s', (line) => {
+    expect(namesDesignAsset(line)).toBe(false);
+  });
+
+  it('does not read "mocks <module path>" as a design asset — MOTIR-9077', () => {
+    // MOTIR-8982's runs-index card: criterion 12 names the module its suite mocks,
+    // criterion 1 is an ordinary render criterion. The card draws nothing.
+    const card = [
+      '## Acceptance criteria',
+      '',
+      '- No `Command` or `Scope` header renders anywhere on the page.',
+      '- `tests/components/runsPage-scope.test.tsx` is not modified: it **mocks** ' +
+        "`@/app/(authed)/runs/_components/RunsIndex` and asserts nothing about the index's columns.",
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(card)).toBeNull();
+  });
+
+  it.each(['the delta mock draws the Target column', 'the mock and/or the export is committed'])(
+    'a drawing "mock" followed by prose is still a design asset: %s',
+    (line) => {
+      expect(namesDesignAsset(line)).toBe(true);
+    },
+  );
+
+  it.each([
+    'each panel is drawn in the mock',
+    'the mocks of every state are committed',
+    'a mockup of the empty state',
+    '`design/billing/calculator.mock.html` is added',
+  ])('a drawing "mock" is still a design asset: %s', (line) => {
+    expect(namesDesignAsset(line)).toBe(true);
+  });
+
   it('reports the FIRST criterion of each role when several qualify', () => {
     const many = [
       '## Acceptance criteria',
@@ -1319,5 +1393,116 @@ describe('isSelfBlockingDesignCheckExempt — the TYPE scope test (MOTIR-6245)',
       designCriterionIndex: 1,
       surfaceCriterionIndex: 2,
     });
+  });
+});
+
+describe('underAuthored — a childless leaf carrying nothing, as a NULL CHECK (MOTIR-5427)', () => {
+  /** The MOTIR-4956 shape: prose only, no heading, every column null. */
+  const bare = {
+    descriptionMd: 'A careful diagnosis, reproduced both ways, with the root cause named.',
+    hasChildren: false,
+    storyPoints: null,
+    estimateMinutes: null,
+    type: null,
+    executor: null,
+  } as const;
+
+  it('fires on the MOTIR-4956 shape: prose, no heading, every column null', () => {
+    expect(underAuthored(bare)).toEqual({ criteria: 'no-heading' });
+  });
+
+  it('fires on an empty or absent body too', () => {
+    expect(underAuthored({ ...bare, descriptionMd: null })).toEqual({ criteria: 'no-heading' });
+    expect(underAuthored({ ...bare, descriptionMd: '' })).toEqual({ criteria: 'no-heading' });
+  });
+
+  it('names a heading with nothing enumerated under it as `no-criterion`', () => {
+    const md = 'Why.\n\n## Acceptance criteria\n\n## Notes\n\nSome context.\n';
+    expect(underAuthored({ ...bare, descriptionMd: md })).toEqual({ criteria: 'no-criterion' });
+  });
+
+  it('reads prose under the heading as a criterion — the parser decides, not a list scan (MOTIR-9032)', () => {
+    const md = 'Why.\n\n## Acceptance criteria\n\nIt should work well.\n';
+    expect(underAuthored({ ...bare, descriptionMd: md })).toBeNull();
+  });
+
+  it('is silent for a `| `-prefixed framing above real criteria (MOTIR-9032)', () => {
+    const md =
+      '| Why this exists.\n| Second line.\n\n## Acceptance criteria\n\n- The thing works.\n';
+    expect(underAuthored({ ...bare, descriptionMd: md })).toBeNull();
+  });
+
+  it('fires `no-heading` on a body whose every line is `| `-prefixed (MOTIR-9032)', () => {
+    const md = '| Why.\n|\n| ## Acceptance criteria\n|\n| - The thing works.\n';
+    expect(underAuthored({ ...bare, descriptionMd: md })).toEqual({ criteria: 'no-heading' });
+  });
+
+  it('is silent once the body enumerates ONE criterion', () => {
+    const md = 'Why.\n\n## Acceptance criteria\n\n1. The thing works.\n';
+    expect(underAuthored({ ...bare, descriptionMd: md })).toBeNull();
+    const bullet = 'Why.\n\n## Acceptance criteria\n\n- The thing works.\n';
+    expect(underAuthored({ ...bare, descriptionMd: bullet })).toBeNull();
+  });
+
+  it.each([
+    ['storyPoints', { storyPoints: 3 }],
+    ['estimateMinutes', { estimateMinutes: 30 }],
+    ['type', { type: 'code' }],
+    ['executor', { executor: 'coding_agent' }],
+  ])('is silent when %s alone is set — the conjunction is deliberate', (_name, patch) => {
+    expect(underAuthored({ ...bare, ...patch })).toBeNull();
+  });
+
+  it('treats a zero as a value, never as absent', () => {
+    expect(underAuthored({ ...bare, storyPoints: 0 })).toBeNull();
+  });
+
+  it('EXEMPTS a container KIND even while childless — it can never carry a type or executor', () => {
+    expect(underAuthored({ ...bare, kind: 'story' })).toBeNull();
+    expect(underAuthored({ ...bare, kind: 'epic' })).toBeNull();
+    expect(underAuthored({ ...bare, kind: 'task' })).toEqual({ criteria: 'no-heading' });
+    expect(underAuthored({ ...bare, kind: 'bug' })).toEqual({ criteria: 'no-heading' });
+    expect(underAuthored({ ...bare, kind: 'subtask' })).toEqual({ criteria: 'no-heading' });
+  });
+
+  it('EXEMPTS A CONTAINER by construction — gate 20 is a leaf bar', () => {
+    expect(underAuthored({ ...bare, hasChildren: true })).toBeNull();
+    expect(underAuthored({ ...bare, hasChildren: true, descriptionMd: null })).toBeNull();
+  });
+});
+
+describe('the MISLABELLED-LINK check (MOTIR-9007) — pure', () => {
+  const projects = new Set(['MOTIR', 'ACME']);
+
+  it('reads only keys whose prefix is a project, upper-cased and deduped', () => {
+    expect(labelWorkItemKeys('MOTIR-7656', projects)).toEqual(['MOTIR-7656']);
+    expect(labelWorkItemKeys('acme-12 and ACME-12, then MOTIR-3', projects)).toEqual([
+      'ACME-12',
+      'MOTIR-3',
+    ]);
+    // Key-shaped words no project carries are words, not keys.
+    expect(labelWorkItemKeys('UTF-8 per RFC-9110', projects)).toEqual([]);
+    expect(labelWorkItemKeys('Epic 10', projects)).toEqual([]);
+  });
+
+  it('the MOTIR-714 instance: a label naming MOTIR-7656 on a link that opens MOTIR-7324', () => {
+    expect(isMislabelledLink('MOTIR-7656', 'MOTIR-7324', projects)).toBe(true);
+    expect(isMislabelledLink('MOTIR-7656', 'MOTIR-7656', projects)).toBe(false);
+    expect(isMislabelledLink('motir-7656', 'MOTIR-7656', projects)).toBe(false);
+  });
+
+  it('a label naming SEVERAL keys passes when any one of them is the target', () => {
+    expect(isMislabelledLink('MOTIR-1 / MOTIR-2', 'MOTIR-2', projects)).toBe(false);
+    expect(isMislabelledLink('MOTIR-1 / MOTIR-2', 'MOTIR-3', projects)).toBe(true);
+  });
+
+  it('a NAME label is never contradicted by a target that exists', () => {
+    expect(isMislabelledLink('the export flow', 'MOTIR-7324', projects)).toBe(false);
+    expect(isMislabelledLink('', 'MOTIR-7324', projects)).toBe(false);
+  });
+
+  it('a link to NO card is mislabelled whatever its label says', () => {
+    expect(isMislabelledLink('MOTIR-4202', null, projects)).toBe(true);
+    expect(isMislabelledLink('the ReDoS guard', null, projects)).toBe(true);
   });
 });

@@ -7,6 +7,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import {
   ciRunnerBootService,
   FLEET_TIME_BUDGETS,
+  MAX_BOOT_ATTEMPTS,
   pollWaitMs,
   type PollResult,
 } from '@/lib/services/ciRunnerBootService';
@@ -134,7 +135,7 @@ let jobSeq = 0;
 /** One pending intent, exactly as MOTIR-1920's handler writes it. */
 async function seedIntent(
   fx: Fixture,
-  overrides: { jobId?: string; projectId?: string | null } = {},
+  overrides: { jobId?: string; projectId?: string | null; bootAttempts?: number } = {},
 ) {
   jobSeq += 1;
   return adminDb.ciRunnerProvisioningIntent.create({
@@ -153,6 +154,7 @@ async function seedIntent(
       requestedLabels: [MOTIR_RUNNER_LABEL],
       queuedAt: QUEUED_AT,
       status: 'pending',
+      bootAttempts: overrides.bootAttempts ?? 0,
     },
   });
 }
@@ -280,6 +282,12 @@ describe('the happy path — ONE intent produces ONE ephemeral runner', () => {
     expect(spec.env['MOTIR_RUNNER_LABEL']).toBe(MOTIR_RUNNER_LABEL);
     expect(spec.env['ACTIONS_RUNNER_INPUT_JITCONFIG']).toBe('ZW5jb2RlZC1qaXQ=');
     expect(spec.size).toEqual({ cpuKind: 'performance', cpus: 2, memoryMb: 8192 });
+    // MOTIR-8839: the runner's dockerd gets native disk, or `services:` jobs fill
+    // the rootfs under the `vfs` fallback.
+    expect(spec.dockerVolumeGb).toBe(20);
+    expect(fakeOrchestrator.provisioned[0]?.volumeId).toBe(
+      `${fakeOrchestrator.provisioned[0]?.id}-docker`,
+    );
   });
 
   it("RECORDS BOOT LATENCY, measured from GitHub's own queue instant", async () => {
@@ -378,7 +386,8 @@ describe('every failure path destroys the container — one test each', () => {
     // (§7.4, verified), so a boot that never happens leaves a dangling runner
     // unless this path cleans it up — GitHub does not.
     const fx = await seedTenant();
-    const intent = await seedIntent(fx);
+    // The LAST attempt: an earlier one would be re-queued (MOTIR-8941).
+    const intent = await seedIntent(fx, { bootAttempts: MAX_BOOT_ATTEMPTS - 1 });
     fakeOrchestrator.failNextProvision();
 
     const outcome = await ciRunnerBootService.runIntent(intent.id, FAST);
@@ -396,6 +405,54 @@ describe('every failure path destroys the container — one test each', () => {
     // The runner id was persisted BEFORE the boot, which is what makes the
     // crash-in-this-window case recoverable at all.
     expect(settled.githubRunnerId).toBe(9001);
+  });
+
+  it('a TRANSIENT boot failure re-queues the intent and the next pass boots it (MOTIR-8941)', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    fakeOrchestrator.failNextProvision('volume not found');
+
+    const first = await ciRunnerBootService.runIntent(intent.id, FAST);
+
+    expect(first).toEqual({ outcome: 'rate_limited', retryAfterSeconds: null });
+    // The minted-but-unused runner is still de-registered.
+    expect(deleteRunnerCalls()).toHaveLength(1);
+    const requeued = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(requeued.status).toBe('pending');
+    expect(requeued.settledAt).toBeNull();
+    expect(requeued.bootAttempts).toBe(1);
+
+    const second = await ciRunnerBootService.runIntent(intent.id, {
+      ...FAST,
+      sleep: async () => {
+        const live = fakeOrchestrator.liveContainerIds();
+        if (live[0]) fakeOrchestrator.completeJob(live[0]);
+      },
+    });
+    expect(second).toMatchObject({ outcome: 'settled', reason: 'job_completed' });
+  });
+
+  it('a boot that keeps failing ends provision_failed after MAX_BOOT_ATTEMPTS (MOTIR-8941)', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+
+    const outcomes: string[] = [];
+    for (let i = 0; i < MAX_BOOT_ATTEMPTS; i += 1) {
+      fakeOrchestrator.failNextProvision('the provider keeps refusing');
+      outcomes.push((await ciRunnerBootService.runIntent(intent.id, FAST)).outcome);
+    }
+
+    expect(outcomes).toEqual([
+      ...Array.from({ length: MAX_BOOT_ATTEMPTS - 1 }, () => 'rate_limited'),
+      'provision_failed',
+    ]);
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(settled.status).toBe('failed');
+    expect(settled.teardownReason).toBe('provision_failed');
   });
 
   it('NEVER REGISTERED: a container that never starts is destroyed at the boot deadline', async () => {
@@ -942,7 +999,8 @@ describe('the boot’s defensive paths', () => {
 
   it('reports a NON-ERROR provider rejection as `unknown` rather than losing it', async () => {
     const fx = await seedTenant();
-    const intent = await seedIntent(fx);
+    // The LAST attempt: an earlier one would be re-queued (MOTIR-8941).
+    const intent = await seedIntent(fx, { bootAttempts: MAX_BOOT_ATTEMPTS - 1 });
     vi.spyOn(fakeOrchestrator, 'provision').mockRejectedValue('the provider hung up');
 
     const outcome = await ciRunnerBootService.runIntent(intent.id, FAST);
@@ -977,6 +1035,14 @@ describe('the boot’s defensive paths', () => {
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
     jitHandler = (call) => {
+      // The runner's Docker volume (MOTIR-8839) is created FIRST and must succeed,
+      // so the image pull is what fails — and, once it has, the volume it would
+      // have mounted is deleted.
+      if (call.url.includes('api.machines.dev') && call.url.includes('/volumes')) {
+        return call.method === 'POST'
+          ? json(200, { id: 'vol_boot', name: 'motir_ci_docker', region: 'iad' })
+          : json(200, {});
+      }
       if (call.url.includes('api.machines.dev')) {
         return json(400, {
           error:
@@ -1001,6 +1067,9 @@ describe('the boot’s defensive paths', () => {
     expect(outcome).toMatchObject({
       detail: expect.stringContaining('the runner image could not be pulled'),
     });
+    expect(
+      githubCalls.some((c) => c.method === 'DELETE' && c.url.includes('/volumes/vol_boot')),
+    ).toBe(true);
 
     // The intent tells the truth about WHICH image and WHAT the registry said —
     // this is the row the operator surface renders, so the diagnosis has to
@@ -1048,7 +1117,7 @@ describe('the boot’s defensive paths', () => {
     // of the two happened.
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
-    vi.spyOn(projectRunnerGroupService, 'requireRunnerGroupId').mockRejectedValue(
+    vi.spyOn(projectRunnerGroupService, 'requireRunnerGroupIdFor').mockRejectedValue(
       new Error('the project read failed'),
     );
 

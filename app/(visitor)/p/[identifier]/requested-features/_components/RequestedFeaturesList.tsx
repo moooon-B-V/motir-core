@@ -241,7 +241,7 @@ function RequestRow({
         aria-label={`${vote.voted ? t('removeVote') : t('upvote')} — ${t('voteCount', { count: vote.voteCount })}`}
         onClick={onToggle}
         className={cn(
-          'inline-flex h-9 min-w-14 flex-none items-center justify-center gap-1 rounded-(--radius-control) border px-(--spacing-control-x) text-[13px] font-semibold tabular-nums',
+          'inline-flex h-(--height-control) min-w-14 flex-none items-center justify-center gap-1 rounded-(--radius-control) border px-(--spacing-control-x) text-[13px] font-semibold tabular-nums',
           vote.voted
             ? 'border-(--el-border-strong) bg-(--el-tint-mint) text-(--el-text-strong)'
             : 'border-(--el-border) bg-(--el-page-bg) text-(--el-text-secondary)',

@@ -329,7 +329,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **97 tools**.
+`initialize` handshake and registers **101 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -626,6 +626,7 @@ statusCategory }` for the first and `mark: { key, obsolescence, toStatusKey }` f
   { "kind": "shape", "item": "ACME-7", "severity": "likely-repo-straddle", "path": "motir-ai/src/x.ts", "repo": "motir-ai", "reason": "contradiction", "criterionIndex": 2 },
   { "kind": "shape", "item": "ACME-7", "severity": "likely-over-gate-sizing", "threshold": "both", "storyPoints": 13, "estimateMinutes": 600 },
   { "kind": "shape", "item": "ACME-7", "severity": "likely-self-blocking-design", "designCriterionIndex": 1, "surfaceCriterionIndex": 4 },
+  { "kind": "shape", "item": "ACME-9", "severity": "likely-post-merge-child-under-container", "phrase": "earliest legal start", "container": "ACME-7" },
   { "kind": "shape", "item": "ACME-7", "severity": "body-edit-above-field-move", "bodyEdit": { "at": "2026-09-04T21:53:11.847Z", "fields": ["descriptionMd", "explanationMd"] }, "fieldMove": { "at": "2026-09-04T21:25:39.100Z", "fields": ["title", "type", "executor"] } },
   { "kind": "shape", "item": "ACME-7", "severity": "likely-blocker-count-mismatch", "claim": "four siblings this card is blocked_by", "claimedCount": 4, "blockerCount": 2 }
 ]
@@ -645,14 +646,16 @@ can read, does not say so.
 A **`shape`** entry has no far end at all: the card contradicts itself. Six
 severities, each with its own remedy:
 
-| severity                        | what it found                                                                                                                                                               | remedy                                                               |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `likely-ordering-violation`     | criterion `criterionIndex` carries the merge-word `phrase` — a PARTIAL tell: an evidence-phrased post-deploy criterion carries none, so no entry is not a pass (MOTIR-5426) | CUT the card at that criterion                                       |
-| `likely-repo-straddle`          | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                                                                             | SPLIT the card per repo (one repo, one PR)                           |
-| `likely-over-gate-sizing`       | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate (points = the gate's rule; minutes = a proxy)                                                 | BUILD it and report the sizing — size never stops a run (MOTIR-5372) |
-| `likely-self-blocking-design`   | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws                                                | LIFT the design criterion onto its own `type: design` card           |
-| `likely-blocker-count-mismatch` | an explicit counted claim about the card's own blocker siblings disagrees with its current `blocked_by` edge count                                                          | update the stale prose or wire the genuinely missing edge            |
-| `body-edit-above-field-move`    | the card's newest body write (`bodyEdit`) moved none of the fields a body describes, and the write beneath it (`fieldMove`) did                                             | RE-READ the body against those fields — a prompt, never a stop       |
+| severity                                  | what it found                                                                                                                                                                                           | remedy                                                                   |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `likely-ordering-violation`               | criterion `criterionIndex` carries the merge-word `phrase` — a PARTIAL tell: an evidence-phrased post-deploy criterion carries none, so no entry is not a pass (MOTIR-5426)                             | CUT the card at that criterion                                           |
+| `likely-repo-straddle`                    | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                                                                                                         | SPLIT the card per repo (one repo, one PR)                               |
+| `likely-over-gate-sizing`                 | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate (points = the gate's rule; minutes = a proxy)                                                                             | BUILD it and report the sizing — size never stops a run (MOTIR-5372)     |
+| `under-authored`                          | a childless task / bug / subtask with no `storyPoints`, `estimateMinutes`, `type` or `executor` AND no enumerated criterion under `## Acceptance criteria` (`criteria`: `no-heading` or `no-criterion`) | BUILD it, state the criteria you worked to — never a gate (MOTIR-5427)   |
+| `likely-self-blocking-design`             | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws                                                                            | LIFT the design criterion onto its own `type: design` card               |
+| `likely-post-merge-child-under-container` | the CHILD `item` (a `verification` / `deploy` / `manual` or human card) reads the deployment (`phrase`) while sitting inside the runnable container `container` whose merge it waits on (MOTIR-8863)    | lay it as a sibling the container `blocks`, or split into two containers |
+| `likely-blocker-count-mismatch`           | an explicit counted claim about the card's own blocker siblings disagrees with its current `blocked_by` edge count                                                                                      | update the stale prose or wire the genuinely missing edge                |
+| `body-edit-above-field-move`              | the card's newest body write (`bodyEdit`) moved none of the fields a body describes, and the write beneath it (`fieldMove`) did                                                                         | RE-READ the body against those fields — a prompt, never a stop           |
 
 **`likely-over-gate-sizing`'s two arms do not carry the same authority.**
 `storyPoints >= 8` IS the gate's rule — its literal split signal, read off the
@@ -1047,10 +1050,11 @@ single named extension point enrichment lands on. Requires `project:browse`.
 Read one work item by identifier as the full issue-detail aggregate — the same
 shape the detail page reads.
 
-| Input           | Type   | Required | Notes                                                                                                              |
-| --------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------ |
-| `key`           | string | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                             |
-| `sessionBranch` | string | no       | Branch to FALL BACK to when the item carries no lineage of its own — the unattended-run seed (see `workflowMode`). |
+| Input             | Type    | Required | Notes                                                                                                                                                                 |
+| ----------------- | ------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`             | string  | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                                                                                |
+| `sessionBranch`   | string  | no       | Branch to FALL BACK to when the item carries no lineage of its own — the unattended-run seed (see `workflowMode`).                                                    |
+| `includeSections` | boolean | no       | Default `false`. `true` also returns `parsedSections` — the body parsed at read time into the registry's sections for the card's kind × type (MOTIR-9033). See below. |
 
 **Output** — `structuredContent`: the `IssueDetailDto` aggregate: the item
 (description, status, priority, assignee, …), its parent, children, dependency
@@ -1063,6 +1067,16 @@ array of `{ linkId, item }`, `[]` when empty. The text block prints
 so the [`get_work_item_activity`](#get_work_item_activity) round-trip is only
 paid when there is something to read. The child rows do **not** carry it: this
 aggregate answers for one card, and the list reads answer per row.
+
+**`includeSections`** (MOTIR-9033) is an opt-in read of the body as sections.
+Unasked, the answer is byte-identical to before. Asked, the tool runs
+`parseSections` on the body it already read, with the card's kind and type, and
+returns `parsedSections: { sections, found, missing, invalid, signals }` beside the
+unchanged `item.descriptionMd`, plus one `Sections: found … · missing …` text line
+after `Readiness:`. It is computed at read time, never stored and never written back;
+a hand-written body with no headings is answered (its text comes back as `framing`,
+the required sections are `missing`, signal `no-headings`), never refused. With a
+`planId` it parses the projected target's own body, kind and type.
 
 The aggregate **declares** the item's OWN folder placement (MOTIR-5413) —
 `folderId` (the folder it is filed in) and `folderPath` (that folder's names,
@@ -1394,6 +1408,7 @@ epics included, so the agent surface can create one).
 | `parentKey`          | string                                              | no       | Parent identifier — must be a kind-legal, same-project parent. Mutually exclusive with `folderId`.                                                                                                                                                                  |
 | `folderId`           | string                                              | no       | A folder id (from [`list_folders`](#list_folders)) to FILE the new item into. Any kind may be filed, a subtask included. With `parentKey` → `PLACEMENT_CONFLICT`; unknown → `FOLDER_NOT_FOUND`; another project's → `CROSS_PROJECT_FOLDER`.                         |
 | `descriptionMd`      | string                                              | no       | Markdown description body.                                                                                                                                                                                                                                          |
+| `sections`           | object                                              | no       | The item's [sections](#get_section_sets) as named values — the door checks them for the kind × type, names a missing one (`INVALID_SECTIONS`) and renders them into `descriptionMd`. Never together with `descriptionMd` (`SECTIONS_AND_DESCRIPTION_CONFLICT`).     |
 | `priority`           | priority enum                                       | no       | Omit for the project default.                                                                                                                                                                                                                                       |
 | `storyPoints`        | number \| null                                      | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals). Omit/`null` → unestimated.                                                                                                                                                                            |
 | `estimateMinutes`    | number \| null                                      | no       | Time estimate in minutes (non-negative integer). Omit/`null` → unestimated.                                                                                                                                                                                         |
@@ -1427,6 +1442,21 @@ same service rules apply as on the patch path: `type`/`executor`/`difficulty` ar
 leaf-only (an epic/story kind is rejected), setting `type` without an explicit `executor`
 seeds it from the type default, and `targetRepo` is validated against this
 project's repository set.
+
+**`sections` — typed input over the free-text body** (MOTIR-9031). `descriptionMd`
+stays the one stored body and is always free text; `sections` is an optional way to
+WRITE it. The door checks the sections against the set for the item's kind × type
+(read it with [`get_section_sets`](#get_section_sets)), refuses a missing, unknown or
+malformed section **by name** with `INVALID_SECTIONS` (the message lists each), writes
+the headings itself and stores only the rendered text — nothing structured is stored,
+and no read returns `sections`. Sending `sections` and `descriptionMd` together is
+refused with `SECTIONS_AND_DESCRIPTION_CONFLICT`, and a write with `descriptionMd`
+alone is stored exactly as sent: never parsed, never refused for its shape. On
+`update_work_item` the stored body is read back into its sections first, so a partial
+`sections` changes only what it names, and it is judged on the item's `type` after the
+same write. The v1 API takes the same `sections` object on `POST …/work-items` and
+`PATCH …/work-items/{key}`; the refusal body carries a `sections` field with the
+`missing`, `unknown` and `invalid` names.
 
 **`targetRepo` — pinning the repo an item ships in** (MOTIR-1804). This is what
 makes _one subtask = one repo = one PR_ enforceable in the product rather than
@@ -2828,25 +2858,26 @@ The leaf-only `type`/`executor` rule (setting them on an epic/story is rejected)
 the type→executor seed, and the assignee-membership check all apply exactly as in
 the UI; the same Story-6.4 edit gate gates the call.
 
-| Input                | Type                                               | Required | Notes                                                                                                                                                  |
-| -------------------- | -------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `key`                | string                                             | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                                                                 |
-| `title`              | string                                             | no       | New title.                                                                                                                                             |
-| `descriptionMd`      | string \| null                                     | no       | New description; `null` clears it.                                                                                                                     |
-| `explanationMd`      | string \| null                                     | no       | New explanation ("why"); `null` clears it.                                                                                                             |
-| `priority`           | `lowest…highest`                                   | no       | New priority.                                                                                                                                          |
-| `type`               | work type \| null                                  | no       | Leaf items only; `null` clears it. First set seeds the executor.                                                                                       |
-| `executor`           | `"coding_agent" \| "human"` \| null                | no       | Leaf items only; `null` clears it.                                                                                                                     |
-| `difficulty`         | `"trivial" \| "low" \| "medium" \| "high"` \| null | no       | Leaf items only; `null` clears it. A re-kind onto a container that keeps one is refused.                                                               |
-| `obsolescence`       | `"outdated" \| "deprecated"` \| null               | no       | The [obsolescence mark](#the-obsolescence-mark) — any kind, on a FINISHED card only (else `OBSOLESCENCE_REQUIRES_FINISHED`); `null` clears it, always. |
-| `obsolescenceNoteMd` | string \| null                                     | no       | Why the item is marked; `null` clears it. Independent of the mark.                                                                                     |
-| `estimateMinutes`    | number \| null                                     | no       | Estimated minutes (time); `null` clears it.                                                                                                            |
-| `storyPoints`        | number \| null                                     | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals); set / change / `null` clears it.                                                         |
-| `targetRepo`         | string \| null                                     | no       | Repo the item ships in — bare name or `"owner/name"`; must be in this project's repo set. `null` clears.                                               |
-| `targetRepos`        | string[]                                           | no       | Replace the repo SET wholesale, ORDERED, element 0 the primary; `[]` clears it. Mutually exclusive with `targetRepo`.                                  |
-| `targetRepositories` | string[]                                           | no       | Replace the set as REFERENCES — the project's repository row ids, ORDERED; `[]` clears it. Mutually exclusive with BOTH fields above.                  |
-| `assigneeId`         | string \| null                                     | no       | Assignee user id (must be a workspace member); `null` unassigns.                                                                                       |
-| `dueDate`            | string (ISO-8601) \| null                          | no       | Due date; `null` clears it.                                                                                                                            |
+| Input                | Type                                               | Required | Notes                                                                                                                                                                                                                                                            |
+| -------------------- | -------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`                | string                                             | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                                                                                                                                                                           |
+| `title`              | string                                             | no       | New title.                                                                                                                                                                                                                                                       |
+| `descriptionMd`      | string \| null                                     | no       | New description; `null` clears it.                                                                                                                                                                                                                               |
+| `sections`           | object                                             | no       | Named [sections](#get_section_sets) merged over the stored body (sparse: an omitted section is kept, `null` clears one, a list replaces the list), checked for the type AFTER this write and rendered into `descriptionMd`. Never together with `descriptionMd`. |
+| `explanationMd`      | string \| null                                     | no       | New explanation ("why"); `null` clears it.                                                                                                                                                                                                                       |
+| `priority`           | `lowest…highest`                                   | no       | New priority.                                                                                                                                                                                                                                                    |
+| `type`               | work type \| null                                  | no       | Leaf items only; `null` clears it. First set seeds the executor.                                                                                                                                                                                                 |
+| `executor`           | `"coding_agent" \| "human"` \| null                | no       | Leaf items only; `null` clears it.                                                                                                                                                                                                                               |
+| `difficulty`         | `"trivial" \| "low" \| "medium" \| "high"` \| null | no       | Leaf items only; `null` clears it. A re-kind onto a container that keeps one is refused.                                                                                                                                                                         |
+| `obsolescence`       | `"outdated" \| "deprecated"` \| null               | no       | The [obsolescence mark](#the-obsolescence-mark) — any kind, on a FINISHED card only (else `OBSOLESCENCE_REQUIRES_FINISHED`); `null` clears it, always.                                                                                                           |
+| `obsolescenceNoteMd` | string \| null                                     | no       | Why the item is marked; `null` clears it. Independent of the mark.                                                                                                                                                                                               |
+| `estimateMinutes`    | number \| null                                     | no       | Estimated minutes (time); `null` clears it.                                                                                                                                                                                                                      |
+| `storyPoints`        | number \| null                                     | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals); set / change / `null` clears it.                                                                                                                                                                   |
+| `targetRepo`         | string \| null                                     | no       | Repo the item ships in — bare name or `"owner/name"`; must be in this project's repo set. `null` clears.                                                                                                                                                         |
+| `targetRepos`        | string[]                                           | no       | Replace the repo SET wholesale, ORDERED, element 0 the primary; `[]` clears it. Mutually exclusive with `targetRepo`.                                                                                                                                            |
+| `targetRepositories` | string[]                                           | no       | Replace the set as REFERENCES — the project's repository row ids, ORDERED; `[]` clears it. Mutually exclusive with BOTH fields above.                                                                                                                            |
+| `assigneeId`         | string \| null                                     | no       | Assignee user id (must be a workspace member); `null` unassigns.                                                                                                                                                                                                 |
+| `dueDate`            | string (ISO-8601) \| null                          | no       | Due date; `null` clears it.                                                                                                                                                                                                                                      |
 
 **Output** — `structuredContent`: the updated `WorkItemDto`. A non-member
 assignee, a `type`/`executor` on a non-leaf, a `difficulty` on a non-leaf
@@ -3024,6 +3055,28 @@ row of `folders` is `{ id, parentFolderId, name, path }` and `path` is the
 folder's name and every ancestor's, root first (`["Parked", "2025"]`). The text
 summary is the indented tree.
 
+#### `get_section_sets`
+
+Which sections a work item of a given kind and type has, which of them are
+**required**, and the heading each renders under in the free-text description.
+A planner calls it before writing a card, instead of guessing and learning from a
+refusal. The sets are a product contract, the same for every tenant, so the tool
+takes **no `projectKey`**. It is the same descriptor `GET /api/v1/section-sets`
+returns and the one motir-ai builds its author tool from. Gated on
+`project:browse`, like `whoami`.
+
+| Input  | Type   | Required | Notes                                                                                          |
+| ------ | ------ | -------- | ---------------------------------------------------------------------------------------------- |
+| `kind` | string | no       | Only this kind's sets: `epic`, `story`, `task`, `subtask` or `bug`.                            |
+| `type` | string | no       | Only this type's sets, one cell per kind (a story and an epic have one set whatever the type). |
+
+**Output** — `structuredContent`: `{ version, sections, sets }`. `sections` maps
+each section name to its `heading` (`null` for the unheaded opening) and its value
+`shape`; `sets` has one `{ kind, type, sections: [{ name, required }] }` per cell
+asked for. The text summary lists each cell's required sections first, then the
+optional ones. A `kind` or `type` that names nothing is refused by name
+(`UNKNOWN_SECTION_CELL`), never answered with a default set.
+
 #### `create_folder`
 
 Create a folder at the project root, or inside another folder. Names are unique
@@ -3097,7 +3150,7 @@ code:
 | `PAGE_VERSION_NOT_FOUND`    | `get_page`'s `version` names a number the page has no version for. The message names the number.                                                            |
 | `PAGE_REVISION_CONFLICT`    | `update_page` sent a `revision` the page has moved past. Nothing was written; the message names both revisions. Call `get_page`, redo the edit, send again. |
 | `PAGE_BODY_TOO_LARGE`       | The markdown is over 1 MiB, or the body it makes is over 2 MiB. The message names the size and the limit. Nothing was written.                              |
-| `PAGE_TITLE_TOO_LONG`       | `create_page`'s `title` is over 255 characters.                                                                                                             |
+| `PAGE_TITLE_TOO_LONG`       | `create_page`'s or `rename_page`'s `title` is over 255 characters.                                                                                          |
 | `PAGE_PARENT_NOT_ALLOWED`   | A `parent.kind` other than `root`, `folder` or `page` — a page cannot be filed under a work item.                                                           |
 | `PAGE_PARENT_ID_REQUIRED`   | A `folder` or `page` parent with no `id`.                                                                                                                   |
 | `FOLDER_NOT_FOUND`          | The parent folder is not in this project.                                                                                                                   |
@@ -3165,7 +3218,7 @@ erase what a person saved in between. The refusal names the page's revision and
 the one sent, and tells the agent to call `get_page`, apply its change to what
 that returns, and send the new revision. Whatever a write replaces stays a
 restorable version in the page's history, which is why the tool is annotated
-`destructiveHint: false`. It does not rename the page.
+`destructiveHint: false`. It does not rename the page — `rename_page` does.
 
 | Input        | Type    | Required | Notes                                                      |
 | ------------ | ------- | -------- | ---------------------------------------------------------- |
@@ -3175,6 +3228,22 @@ restorable version in the page's history, which is why the tool is annotated
 | `revision`   | integer | yes      | The `revision` `get_page` or `create_page` returned (≥ 1). |
 
 **Output** — the saved page, in `get_page`'s shape, at its new `revision`.
+
+#### `rename_page`
+
+**Set** a page's title. Gated on `page:edit`. It writes no body, so it takes no
+`revision`, cannot be refused `PAGE_REVISION_CONFLICT`, and does not start a new
+version: a published decision page renamed here stays at the version it was
+published at. An empty `title` makes the page untitled. To change the body, use
+`update_page`.
+
+| Input        | Type   | Required | Notes                                      |
+| ------------ | ------ | -------- | ------------------------------------------ |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                |
+| `pageId`     | string | yes      | The page id — the `<id>` in `/pages/<id>`. |
+| `title`      | string | yes      | The page's new title (may be empty).       |
+
+**Output** — the page's summary: `{ id, projectId, title, position, revision, updatedAt }`.
 
 #### `publish_decision_page`
 
@@ -3413,11 +3482,19 @@ kind — epic / story / task / bug (a `subtask` is the leaf). Read-only.
 | `condition` | `loose`\|`tight` | no       | Default `loose` — a `done` dependency outside the subtree counts as satisfied. `tight` requires every dependency to be IN the subtree, else it gates. |
 
 **Output** — `structuredContent`: a `WorkItemValidityDto` —
-`{ key, valid, blockers, invalidEdges, crossLevelEdges, advisories, softBlocks }`. When `valid` is `false`,
+`{ key, valid, blockers, invalidEdges, crossLevelEdges, advisories, softBlocks, sectionFindings }`. When `valid` is `false`,
 `blockers` lists each gated in-subtree item as
 `{ item, blockedBy, blockerStatus, blockerSprintId }` (the out-of-subtree,
 unsatisfied work gating it — always an item's OWN edge). An unknown /
 cross-workspace key returns a `WORK_ITEM_NOT_FOUND` tool error.
+
+`sectionFindings` (MOTIR-9032) is a second **advisory** channel: each not-`done`
+subtree card whose body, parsed against the section registry for its kind × type,
+misses a required section or carries one it cannot read is reported as
+`{ item, state: "unstructured" | "incomplete", missing, invalid, otherHeadings, signals }`,
+sorted by `item`. It never changes `valid` (a VALID verdict states the count and says
+so), and with a `planId` the body is the projected one. Fix a finding by re-writing the
+card with `sections` (see `get_section_sets`).
 
 `softBlocks` (MOTIR-6354 / MOTIR-6368) is **never gating**: it lists every open
 `blocked_by` edge owned by one of the target's ANCESTORS (parent → … → root) — a
@@ -3512,6 +3589,19 @@ carries the exact `claim`, its `claimedCount` and the graph's current
 `blockerCount`; the body-edit member carries `bodyEdit` and `fieldMove`. Only two
 of the six carry `criterionIndex`, so narrow on `severity` before reading one.
 
+One more `shape` member is reported by `validate_work_item` and `validate_plan`
+only, never on the dispatch wire: **`likely-mislabelled-link`** (MOTIR-9007). A
+body link `[label](motir:<id>)` whose `label` names one or more work-item keys
+(a token whose prefix is a project identifier in the workspace) none of which
+is the key `<id>` actually opens — or whose `<id>` opens no work item the caller
+can read. It carries the link's `label`, its `targetId`, and `targetKey`: the
+key the id resolves to, or `null` when it resolves to nothing (an unknown id,
+another workspace's id and an unbrowsable id all read the same, so the advisory
+leaks no existence). A label that names no key — `[the export flow](motir:…)` —
+is never checked. Fix the id (resolve the key you meant with `get_work_item`) or
+the label; a link that opens the wrong card is consumed by every agent that
+reads the body.
+
 A `subsumption` entry (`kind: "subsumption"`) reports that a path this card's
 body names is being changed SOMEWHERE ELSE — the one advisory family whose far
 end is a pull request rather than a work item. It carries `state`, which is the
@@ -3523,6 +3613,16 @@ cutting a branch to fix it yourself. See
 [the dispatch advisories](#the-dispatch-advisories) for the full shape, the two
 arms' different time semantics, and what path capture cannot see. A card whose
 body opts out (`isSubsumptionCheckExempt`) is never reported.
+
+A `title-coverage` entry (`kind: "title-coverage"`, severity
+`likely-unnamed-title-part`) is the other half of the same question: a
+CONTAINER's body never mentions one or more distinguishing words its own TITLE
+carries. Everything laid under a container is laid against its body, so a body
+that silently drops a part of the title narrows the whole subtree with nothing
+marking it as a choice. It carries `words` (stemmed), and the remedy is to
+restore the part in the body or state it as excluded with the work item that
+owns it. A body that mentions a part only to hand it to another work item
+counts as naming it. Advisory only; it never gates.
 
 A `coverage` entry (`kind: "coverage"`, severity `likely-unowned-criterion`) is
 the one family about a CONTAINER's relationship to its children: one of its
@@ -3777,9 +3877,16 @@ other tool keeps. Requires `project:browse`.
 Read a plan **with the proposals it bundles** — what the planning pass actually
 proposed, not just how many items it produced.
 
-| Input    | Type   | Required | Notes                                                                    |
-| -------- | ------ | -------- | ------------------------------------------------------------------------ |
-| `planId` | string | yes      | The plan id — from an `expand_item` submit, `get_plan_status`, or Motir. |
+| Input             | Type    | Required | Notes                                                                                                       |
+| ----------------- | ------- | -------- | ----------------------------------------------------------------------------------------------------------- |
+| `planId`          | string  | yes      | The plan id — from an `expand_item` submit, `get_plan_status`, or Motir.                                    |
+| `includeSections` | boolean | no       | Default `false`. `true` also returns `parsedSections`, keyed by plan item id, for every `add` (MOTIR-9033). |
+
+With `includeSections`, `structuredContent.parsedSections[<planItemId>]` holds each
+`add` proposal's body parsed at read time (`{ sections, found, missing, invalid,
+signals }`, the kind defaulting as the plan doors default it), and each `add` line
+ends ` · sections missing: …` or ` · sections: complete`. `modify` and `remove`
+proposals are not parsed, `items[]` is untouched, and an unasked call is unchanged.
 
 **Which one to reach for:** `get_plan_status` answers _"what became of the job I
 fired?"_ — a status, a count, and (while generating) whether the job died. It is
@@ -3952,6 +4059,60 @@ report on the same leg returns the same acknowledgement and records nothing more
 
 Requires **`work_item:edit`**, which `CLI_TOKEN_GRANT` already carries — a token
 from `motir login` reaches it without widening the grant.
+
+**A dispatched agent usually does not call it** (MOTIR-8698, the record's
+AMENDMENT 1). An agent `motir run` starts is handed `$MOTIR_AGENT_REPORT`, writes
+its reason there as `"unbuildable"`, and the CLI makes the same report with the
+run's own credential through `POST /api/v1/dispatch-runs/{id}/unbuildable` — the
+only way a hosted or agent-instance run can, since its agent holds no Motir token.
+This tool is the fallback for an agent with no such file.
+
+#### `record_run_discrepancy`
+
+A dispatched runner's record of **what it built differently from the plan**
+(Story MOTIR-8651 · MOTIR-8657). It is called when the run built the card
+through a plan that was wrong only about the HOW — the card's outcome and
+acceptance criteria held (`docs/decisions/run-findings-protocol.md`, the
+MOTIR-8654 amendment). It is called **once, after building and before the pull
+request**.
+
+| Input    | Type   | Required | Notes                                                                                                             |
+| -------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `key`    | string | yes      | The card the run built (`ACME-7`). Case-insensitive.                                                              |
+| `points` | array  | yes      | 1–20 entries of `planAsked`, `built` and `why`; each field is non-empty text of at most 2000 characters, trimmed. |
+
+**Output** — the id of the card comment the server wrote, and whether the run
+record was written too:
+
+```json
+{ "commentId": "…", "recorded": true }
+```
+
+`recorded` is `false` when the card had no open leg on a running dispatch run:
+the comment is still written, and nothing is put on a run.
+
+**One record per leg**: a second call on the same leg is refused with
+`DISCREPANCY_ALREADY_RECORDED` and writes nothing more. Other refusals:
+
+- an empty `points`, more than 20, or a field that is empty or over 2000
+  characters → `RUN_DISCREPANCY_INVALID`;
+- an unknown key, or a key in another workspace → `WORK_ITEM_NOT_FOUND`
+  (404-not-403);
+- a caller who may read but not edit the card → `PERMISSION_DENIED`.
+
+If the WHAT itself cannot be built, this is the wrong tool: stop and use
+`report_unbuildable_target`.
+
+Requires **`work_item:edit`**, which `CLI_TOKEN_GRANT` already carries.
+
+**A dispatched agent with no Motir tools does not call it** (MOTIR-8722,
+`run-found-trigger-dispatched-path.md` AMENDMENT 2). A hosted or agent-instance run's
+agent holds no Motir token, so it writes its points into `$MOTIR_AGENT_REPORT` as
+`"discrepancy"`, and the CLI records them with the run's own credential through
+`POST /api/v1/dispatch-runs/{id}/discrepancy`. Its STOP goes the same way, as `"stop"`,
+through `POST /api/v1/dispatch-runs/{id}/stop`: the comment and the move to Planning,
+with the re-plan brief kept on the card. That path does not submit the re-plan, because a
+run's credential cannot plan.
 
 #### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item` · `update_plan_proposal` · `withdraw_plan_proposal` · `update_plan` · `record_plan_revision_reason` · `report_plan_step` · `hold_plan_revision`
 
@@ -4738,7 +4899,7 @@ Motir-generated plan arrives coherent.
 | `condition` | enum   | no       | `loose` (default) — a done dependency outside the plan counts as satisfied. `tight` — every dependency must be IN the projection. |
 
 **Output** — `structuredContent`: `{ planId, valid, blockers, rejections,
-invalidEdges, crossLevelEdges }`. Each blocker is `{ item, blockedBy, blockerStatus,
+invalidEdges, crossLevelEdges, advisories }`. Each blocker is `{ item, blockedBy, blockerStatus,
 blockerSprintId }`; an `item` or `blockedBy` of the form `planItem:<id>` names a
 **proposal in this plan**, not a work item. `invalidEdges` is the cross-parent
 rule under `validate_work_item` above, asked of the PROJECTION — proposed parents,
@@ -4750,6 +4911,15 @@ children before it may have drawn every parent edge. `crossLevelEdges` is the
 PROJECTION: a PROPOSED cross-level edge is a `cross_level` rejection instead, so
 what it reports is a COMMITTED cross-level edge (the link door writes one —
 MOTIR-6509). `valid` is `true` only when all four lists are empty.
+
+**`advisories` rides beside the verdict and never changes it (MOTIR-9007).** It
+lists every `likely-mislabelled-link` shape advisory in a body the plan
+PROPOSES — an `add`'s body, or a `modify` that rewrites one — as
+`{ kind: "shape", item, severity, label, targetId, targetKey }`: a
+`[label](motir:<id>)` link whose label names a work-item key the id does not
+open, or whose id opens no card at all (`targetKey: null`). Fix the id before
+sealing. Only the MCP tool carries it; the internal `validate-plan-forest`
+verdict is unchanged.
 
 **Both edge lists hold only the findings the PLAN introduces (MOTIR-7727).** The
 projection holds every edge anyone ever drew in the project, so judging all of
@@ -4764,6 +4934,11 @@ still reports that child edge, and re-wiring one end of an old bad edge makes it
 this plan's to fix. An old edge the plan touches nothing of is reported by
 `validate_work_item` without a `planId`, unchanged. The same narrowing applies to
 `validate_work_item` with a `planId`.
+
+`validate_plan` also returns `sectionFindings` (MOTIR-9032), the same advisory
+channel as on `validate_work_item`, over the cards the plan adds or modifies: the
+projected body parsed against the section registry, a missing required section
+named by `item`. It never changes `valid`.
 
 ```jsonc
 validate_plan({ planId })
@@ -5275,6 +5450,40 @@ than read as a soft state.
 **Permission: `ai:plan`, at the door and in the service** — as `get_code_health`
 and `read_file`, on the same argument (`docs/decisions/member-facing-permissions.md`
 AMENDMENT 3). **Read-only**, closed-world: the graph is Motir's own.
+
+#### `get_coding_convention`
+
+**One repository's coding convention, in full.** A repository's own rules live in
+its Codebase coding convention (the card on the Code page), not in a file in its
+checkout. `get_code_health` carries a convention too, but as one line per
+repository inside a planning summary; this is the document itself, so a
+`motir run` prompt can point the agent here instead of at `CLAUDE.md`.
+
+**Input**
+
+| Field        | Type   | Required | Notes                                                                              |
+| ------------ | ------ | -------- | ---------------------------------------------------------------------------------- |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                                                        |
+| `repo`       | string | yes      | A repository in the project's set — bare name or `owner/name`, case-insensitively. |
+
+**Output.** The text result is headed by the repository, the version and whether
+the version was `derived` from the code or `edited by <name> on <date>`, followed
+by the convention document. `structuredContent.state` is one of these, every one
+a **non-error** result:
+
+| `state`               | Meaning                                                                           | Extra fields                                                                                                     |
+| --------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `present`             | The current version.                                                              | `repoRef`, `version`, `authorKind`, `editedByName`, `editedByUserId`, `updatedAt`, `pendingDerived`, `contentMd` |
+| `absent`              | No convention has been derived or saved for the repository yet.                   | `repoRef`                                                                                                        |
+| `unavailable`         | motir-ai did not answer; this does not mean none is recorded.                     | `repoRef`, `code`                                                                                                |
+| `repo_not_in_project` | `repo` matches no repository in the set. Decided in core; motir-ai is not called. | `repo`, `repoSet`                                                                                                |
+
+`pendingDerived: true` means a re-derive produced a newer document that is parked
+beside a person's edited text; the text returned is still the one in force.
+
+**Permission: `ai:plan`, at the door and in the service** — as `get_code_health`
+and `read_file`, on the same argument (`docs/decisions/member-facing-permissions.md`
+AMENDMENT 3). Every `motir run` token holds it. **Read-only**, closed-world.
 
 #### `skeleton`
 

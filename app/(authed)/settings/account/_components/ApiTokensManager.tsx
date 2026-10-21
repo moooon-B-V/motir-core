@@ -199,7 +199,7 @@ export function ApiTokensManager({
                           </span>
                         </td>
                         <td className="py-(--spacing-control-y) pr-4 align-middle">
-                          <code className="rounded-(--radius-control) bg-(--el-code-bg) px-1.5 py-0.5 font-mono text-xs text-(--el-code-text)">
+                          <code className="rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-control-x-6) py-(--spacing-control-y-2) font-mono text-xs text-(--el-code-text)">
                             {token.tokenPrefix}…
                           </code>
                         </td>

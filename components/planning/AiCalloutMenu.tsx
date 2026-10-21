@@ -149,7 +149,7 @@ export function AiCalloutMenu({ context, onSelect }: AiCalloutMenuProps) {
                 aria-hidden
                 style={isPrimary ? PRIMARY_TILE_STYLE : TILE_STYLE}
                 className={cn(
-                  'inline-grid h-6.5 w-6.5 flex-none place-items-center rounded-(--radius-control)',
+                  'inline-grid h-(--height-control-28) w-6.5 flex-none place-items-center rounded-(--radius-control)',
                   isPrimary ? 'text-(--el-accent-text)' : 'text-(--el-accent-on-surface)',
                 )}
               >

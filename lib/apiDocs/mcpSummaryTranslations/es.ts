@@ -213,6 +213,12 @@ export const es: McpSummaryTranslations = {
     source:
       "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
   },
+  get_coding_convention: {
+    summary:
+      'La convención de código de un repositorio completa, derivada o editada por una persona, con su versión: lo que sigue un cambio en ese repositorio.',
+    source:
+      "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
+  },
   get_design: {
     summary:
       'El diseño APROBADO de un elemento de trabajo de diseño, con enlaces de corta duración a sus archivos, o cuál de las cinco razones explica que no haya ninguno.',
@@ -239,9 +245,9 @@ export const es: McpSummaryTranslations = {
   },
   get_project_state: {
     summary:
-      'Las condiciones previas de planificación de un Proyecto (establecido, código conectado, indexado, repositorio definido) antes de que planifiques.',
+      'Las condiciones previas de planificación de un Proyecto (establecido, código conectado, indexado, repositorio definido) y el idioma de contenido de su organización, antes de que planifiques.',
     source:
-      "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
+      "A project's planning preconditions — established, code connected, indexed, repo set — and its organisation's content language, before you plan.",
   },
   get_work_item: {
     summary:
@@ -392,6 +398,12 @@ export const es: McpSummaryTranslations = {
       'Informa del paso en el que está una sesión del planificador (settle, lay, author) o termínala: una señal de progreso orientativa en un Plan que se está generando.',
     source:
       'Report the step a planner session is on (settle, lay, author) or end it — an advisory progress signal on a generating plan.',
+  },
+  record_run_discrepancy: {
+    summary:
+      'Un runner que construyó un elemento de trabajo con un plan equivocado solo en el CÓMO registra lo que construyó de otra forma: un comentario en el elemento y un registro de la ejecución, con acuse de recibo.',
+    source:
+      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
   },
   report_unbuildable_target: {
     summary:

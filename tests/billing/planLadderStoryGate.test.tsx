@@ -48,6 +48,7 @@ const LOCALES = { en, zh, de, es, fr, it: it_, ja, ko, nl, pl, pt } as const;
 
 const CI: CiEntitlementStateDTO = {
   applicable: true,
+  internal: false,
   organizationId: 'org1',
   periodStart: '2026-07-01T00:00:00.000Z',
   periodEnd: '2026-08-01T00:00:00.000Z',

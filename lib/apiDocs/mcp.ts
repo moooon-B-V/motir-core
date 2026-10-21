@@ -536,7 +536,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-8098, summary UNCHANGED: the item carries `languages`, each
     // text field's recorded content language — a field of the item, which "one item
     // in full" already covers.
-    descriptionFingerprint: '729b47f94961',
+    // Re-pinned for MOTIR-8940, summary UNCHANGED: the item may be addressed by its
+    // internal id as well as its key — how a card is NAMED, which a summary of what
+    // the read returns does not describe.
+    // Re-pinned for MOTIR-9033, summary UNCHANGED: the opt-in `includeSections` adds a
+    // parsed view of the body the read already returns — the body, not a new read.
+    descriptionFingerprint: '18bf3c3889bd',
   },
   get_design: {
     // Story MOTIR-5553 · MOTIR-5561.
@@ -600,13 +605,18 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   get_project_state: {
     summary:
-      "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
-    descriptionFingerprint: '77241589544a',
+      "A project's planning preconditions — established, code connected, indexed, repo set — and its organisation's content language, before you plan.",
+    descriptionFingerprint: '3bd7d4978a1d',
   },
   get_code_health: {
     summary:
       "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
     descriptionFingerprint: 'ab6d4bd4fd37',
+  },
+  get_coding_convention: {
+    summary:
+      "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
+    descriptionFingerprint: '1c7784e4be1f',
   },
   read_file: {
     summary:
@@ -631,6 +641,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     summary:
       "The whole project's tree shape in one read — every item's key, kind, title, status, parent, folder and obsolescence mark, with no paging loop.",
     descriptionFingerprint: 'a655e6804ec8',
+  },
+  get_section_sets: {
+    summary:
+      'Which sections a card of a given kind and type has, which are required and the heading each renders under — read it before writing a card.',
+    descriptionFingerprint: 'e229abdc1b1d',
   },
   list_folders: {
     summary:
@@ -663,7 +678,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   update_page: {
     summary:
       'Replace a page’s whole body with markdown at the revision you read; a page saved since is refused, not merged.',
-    descriptionFingerprint: 'aac141bef380',
+    descriptionFingerprint: '24af12bc474b',
+  },
+  rename_page: {
+    summary:
+      'Change a page’s title only — no body write, no revision, and no new version of a published decision page.',
+    descriptionFingerprint: 'd1f07933be8e',
   },
   publish_decision_page: {
     summary:
@@ -765,6 +785,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // scope — a childless card that is not itself `type: design`. Summary
     // UNCHANGED: it narrows an advisory, and this line describes the verdict.
     //
+    // Re-pinned for MOTIR-9032's advisory `sectionFindings` (the body parsed against
+    // the section registry). Summary UNCHANGED: like the other advisory channels it
+    // never touches the finishability verdict this line describes.
+    //
     // Re-pinned for MOTIR-6368's NON-gating `softBlocks` (an ancestor's open
     // blockers). Summary UNCHANGED: like the advisory channel, it never touches
     // the finishability verdict this line describes.
@@ -784,7 +808,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-7727, summary UNCHANGED: with a `planId` the two edge
     // lists now hold only the findings the plan introduces. The questions are the
     // same; which edges a PLAN answers for is the description's to say.
-    descriptionFingerprint: '1d37986b153f',
+    // Re-pinned for MOTIR-8647, summary UNCHANGED: the new `title-coverage` advisory
+    // never touches the finishability verdict this line describes.
+    // Re-pinned for MOTIR-5427, summary UNCHANGED: the new `under-authored` advisory
+    // is another severity on the channel, not part of the verdict this line names.
+    // Re-pinned for MOTIR-9007, summary UNCHANGED: the new `likely-mislabelled-link`
+    // advisory is another severity on the channel, outside the verdict.
+    descriptionFingerprint: '94d73c229405',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
@@ -808,7 +838,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-7727, summary UNCHANGED and now more exactly true: "its
     // cross-parent edges" are the plan's own — the two edge lists hold only the
     // findings the plan introduces, not every old edge in the project.
-    descriptionFingerprint: 'e5bc9d691542',
+    // Re-pinned for MOTIR-9032's advisory `sectionFindings`, summary UNCHANGED.
+    // Re-pinned for MOTIR-9007, summary UNCHANGED: `advisories` (mislabelled links in
+    // proposed bodies) rides beside the verdict and never touches it.
+    descriptionFingerprint: 'f10d745aade7',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool
@@ -843,9 +876,16 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // the note's first line, and the supersedes edges by KEY on both a `modify`
     // and an `add`. A reader deciding whether this tool shows a plan that retires
     // finished cards needs to know it does, and that the refs come back as keys.
+    //
+    // MOTIR-8668 REWROTE it again: a `modify` may now REPLACE a card's steps, and
+    // the description says the line prints how many it drops and how many were
+    // ticked. A reader deciding whether this tool shows what a re-plan costs a
+    // person's progress needs to know it does.
     summary:
-      'A plan with the proposals it bundles: what the planner actually proposed, not just how much — including a proposed obsolescence mark (current → proposed, with its note) and its supersedes edges, named by key.',
-    descriptionFingerprint: '978802db7b0b',
+      'A plan with the proposals it bundles: what the planner actually proposed, not just how much — including a proposed obsolescence mark (current → proposed, with its note), its supersedes edges named by key, and the steps a change replaces with how many were ticked.',
+    // Re-pinned for MOTIR-9033, summary UNCHANGED: the opt-in `includeSections` parses
+    // each `add`'s body into sections on request; the summary describes what is bundled.
+    descriptionFingerprint: '00accdd86bbd',
   },
   get_approved_shape_verdict: {
     // The line has to carry the one thing a reader choosing between this and
@@ -864,6 +904,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'A dispatched runner reports the card it stopped on as unbuildable — acknowledged, nothing to act on.',
     // Regenerated from a live `tools/list` handshake, never from the source.
     descriptionFingerprint: 'bf12bf352e1e',
+  },
+  record_run_discrepancy: {
+    summary:
+      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
+    descriptionFingerprint: '711c8278f527',
   },
   create_plan: {
     summary:
@@ -988,7 +1033,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-8098, summary WIDENED: `language` / `languages` override the
     // organisation's content language for the new item's text, one more field set in
     // the one call, and this summary enumerates them.
-    descriptionFingerprint: '058838aefb65',
+    // Re-pinned for MOTIR-9031, summary UNCHANGED: the description names the optional
+    // `sections` input (INVALID_SECTIONS, SECTIONS_AND_DESCRIPTION_CONFLICT); a body
+    // written as sections is still one description, and the summary lists no body
+    // rule. Left alone so the ten translated summaries keep matching their source.
+    descriptionFingerprint: '0f4e3cd9e4f1',
   },
   update_work_item: {
     // Re-pinned for MOTIR-5585: the description now names PROJECT-repository
@@ -1005,7 +1054,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // status rule.
     // Re-pinned for MOTIR-8098, summary UNCHANGED: the description names `language` /
     // `languages` for the edited text; "any subset of an item's fields" covers them.
-    descriptionFingerprint: '1a04f0375758',
+    // Re-pinned for MOTIR-9031, summary UNCHANGED: the description names the optional
+    // `sections` input merged over the stored body; "any subset of an item's fields"
+    // covers it, and the translated summaries keep matching their source.
+    descriptionFingerprint: '9dc87a265b74',
   },
   transition_status: {
     summary:

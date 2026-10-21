@@ -75,7 +75,7 @@ export default async function ProjectLessonPage({ params }: RouteParams) {
     <div
       role="status"
       data-testid="lesson-applying"
-      className="bg-(--el-tint-sky) flex items-start gap-2.5 rounded-(--radius-card) px-4 py-3"
+      className="bg-(--el-tint-sky) flex items-start gap-2.5 rounded-(--radius-card) px-(--spacing-card-padding-16) py-(--spacing-card-padding-12)"
     >
       <ShieldCheck className="text-(--el-text-strong) mt-px size-4 shrink-0" aria-hidden />
       <p className="text-(--el-text-strong) text-sm">
@@ -198,7 +198,7 @@ export default async function ProjectLessonPage({ params }: RouteParams) {
                 {t('aiPlanning.lessons.factRecordedFrom')}
               </dt>
               <dd className="m-0 text-(--el-text)">
-                <code className="bg-(--el-muted) rounded-(--radius-control) px-1.5 py-0.5 font-mono text-xs">
+                <code className="bg-(--el-muted) rounded-(--radius-control) px-(--spacing-control-x-6) py-(--spacing-control-y-2) font-mono text-xs">
                   {lesson.sourceRef}
                 </code>
               </dd>

@@ -1,5 +1,6 @@
 import type { Prisma } from '@/generated/prisma/client';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
+import { withUserContext } from '@/lib/workspaces/context';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { entitlementsFor, pmTierForOrg, type PmTier } from '@/lib/billing/entitlements';
 import { CapLockUnavailableError, EntitlementExceededError } from '@/lib/billing/errors';
@@ -144,6 +145,24 @@ function isScaledActive(sub: ScaledTrackerSubscription | null): boolean {
   return sub?.status === 'active';
 }
 
+/**
+ * The §4.5 org-creation predicate over the orgs a user owns or admins. None ⇒
+ * the first org, always free. Otherwise one of them must be scaled-active OR the
+ * META org (moooon B.V.) — meta is treated as paid so its owners and admins can
+ * freely spin up orgs/workspaces. The exemption is documented intent, so
+ * MOTIR-8779 kept it and pinned it with a test; lifting it is the owner's call.
+ */
+function organizationCreationAllowed(
+  orgs: ReadonlyArray<{ scaledTrackerSubscription: Prisma.JsonValue | null; isMeta: boolean }>,
+): boolean {
+  if (orgs.length === 0) return true;
+  return orgs.some(
+    (o) =>
+      o.isMeta ||
+      isScaledActive((o.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null),
+  );
+}
+
 export const entitlementsService = {
   /**
    * §4.1 — block the create of a work item that would push the org past its
@@ -259,17 +278,30 @@ export const entitlementsService = {
       actorUserId,
       tx,
     );
-    if (orgs.length === 0) return; // the first org — always free
-    // A scaled-active OR the META org (moooon B.V.) clears the gate — meta is
-    // treated as paid so its owners can freely spin up orgs/workspaces.
-    const hasUncappedOrg = orgs.some(
-      (o) =>
-        o.isMeta ||
-        isScaledActive((o.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null),
-    );
-    if (!hasUncappedOrg) {
+    if (!organizationCreationAllowed(orgs)) {
       throw new EntitlementExceededError('organizations', { limit: orgs.length });
     }
+  },
+
+  /**
+   * §4.5, READ-ONLY — would `assertCanCreateOrganization` let this account
+   * create an organization right now? The shell asks this to decide whether the
+   * org menu offers "Create organization" (MOTIR-8779). It used to infer the
+   * answer from how many orgs the account BELONGS to (the row only appeared at
+   * ≥2), so an invited Member of one org — who owns none and is therefore
+   * entitled to their first one free — had no door to it at all.
+   *
+   * The SAME predicate the gate applies, over the same read, so the menu and the
+   * create cannot disagree about who may create. It takes no lock: it answers a
+   * render, and the create re-asks under the actor-row lock (MOTIR-3717), so a
+   * stale `true` costs a typed refusal, never a second free org.
+   */
+  async canCreateOrganization(actorUserId: string): Promise<boolean> {
+    if (!isCloudBilling()) return true;
+    const orgs = await withUserContext(actorUserId, (tx) =>
+      organizationMembershipRepository.findOwnerAdminOrgsWithSubscription(actorUserId, tx),
+    );
+    return organizationCreationAllowed(orgs);
   },
 
   /**

@@ -73,6 +73,17 @@ const readout = (b: AgentInstanceBootDto, agentState = 'starting', extra = {}) =
 const rows = () => [...document.querySelectorAll('[data-testid="agent-boot"] li')];
 
 describe('the read-out while booting', () => {
+  it('bounds a tall read-out so it scrolls inside its own box instead of crushing the terminal area (MOTIR-8845)', () => {
+    const many = Array.from({ length: 11 }, (_, i) =>
+      step(i, { step: 'clone', repository: `acme/repo-${i}` }),
+    );
+    readout(boot({ steps: many }));
+    const section = screen.getByTestId('agent-boot');
+    expect(section.className).toContain('max-h-[45%]');
+    expect(section.className).toContain('overflow-y-auto');
+    expect(section.className).toContain('shrink-0');
+  });
+
   it('draws one row per step in order, each state with its words, the done duration and the live clock', () => {
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     vi.setSystemTime(T0 + 44_000);

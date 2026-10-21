@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { ArrowRight, CircleAlert, Languages, RotateCw, TriangleAlert } from 'lucide-react';
@@ -24,15 +24,25 @@ const MESSAGE =
 const GLYPH = 'h-3.5 w-3.5';
 
 /** The no-credit message: everyone's line, and the link or the member's addition. */
-function NoCreditMessage({ canAddCredits }: { canAddCredits: boolean }) {
+function NoCreditMessage({
+  canAddCredits,
+  replacedPressedButton,
+}: {
+  canAddCredits: boolean;
+  /** The reader pressed the button this replaced (MOTIR-8832, design A5). */
+  replacedPressedButton: boolean;
+}) {
   const t = useTranslations('itemTranslation');
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    // The button this replaced held focus after the press; hand it here.
+    // The button this replaced held focus after the press; hand it here. A page
+    // that OPENS in no-credit (auto-translate) replaced nothing: focus stays on
+    // `body`, where the browser put it, and nothing is announced.
+    if (!replacedPressedButton) return;
     if (document.activeElement === document.body || document.activeElement === null) {
       ref.current?.focus();
     }
-  }, []);
+  }, [replacedPressedButton]);
   return (
     <span ref={ref} tabIndex={-1} className={MESSAGE} data-translation-message="no-credit">
       <CircleAlert className={`mt-0.5 ${GLYPH} shrink-0 text-(--el-text-secondary)`} aria-hidden />
@@ -137,18 +147,24 @@ function Bar({ phase, children }: { phase: string; children: ReactNode }) {
  */
 export function TranslateControl() {
   const ctx = useTranslationContext();
+  // Whether the reader has pressed this bar's button. Held here, above the faces,
+  // so it survives the swap to the no-credit message.
+  const [pressedByReader, setPressedByReader] = useState(false);
   if (!ctx || ctx.scope.length === 0) return null;
   if (ctx.phase.kind === 'no_credit') {
     return (
       <Bar phase="no-credit">
-        <NoCreditMessage canAddCredits={ctx.canAddCredits} />
+        <NoCreditMessage
+          canAddCredits={ctx.canAddCredits}
+          replacedPressedButton={pressedByReader}
+        />
       </Bar>
     );
   }
-  return <ControlBar />;
+  return <ControlBar onReaderPress={() => setPressedByReader(true)} />;
 }
 
-function ControlBar() {
+function ControlBar({ onReaderPress }: { onReaderPress: () => void }) {
   const ctx = useTranslationContext()!;
   const face = useControlFace();
   return (
@@ -160,7 +176,10 @@ function ControlBar() {
         leftIcon={face.icon}
         {...face.aria}
         // Busy's `onPress` does nothing: a second press while busy is ignored.
-        onClick={face.onPress}
+        onClick={() => {
+          onReaderPress();
+          face.onPress();
+        }}
         data-translation-control
       >
         {face.label}

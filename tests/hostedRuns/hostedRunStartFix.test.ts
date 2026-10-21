@@ -371,6 +371,8 @@ describe('Fix on the hosted agent — the run it starts', () => {
     expect(run.continues).toBeNull();
     expect(run.repair).toEqual({
       repairClass: 'review',
+      // A hosted run records no agent session to resume (MOTIR-9043's `resume` field).
+      resume: null,
       title: card.title,
       pullRequests: [
         {

@@ -1,3 +1,9 @@
+import { resolveSurfaceTranslation } from '@/lib/pages/surfaceTranslation';
+import {
+  SurfaceShowOriginalSwitch,
+  SurfaceTitleTranslationProvider,
+  SurfaceTitlesNotice,
+} from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Inbox } from 'lucide-react';
@@ -61,36 +67,44 @@ export default async function TriagePage() {
     );
   }
 
-  const page = await triageService.getTriageQueue(
-    ctx.projectId,
-    {},
-    { userId: ctx.userId, workspaceId: ctx.workspaceId },
-  );
+  const svcCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  const [page, titleTranslation] = await Promise.all([
+    triageService.getTriageQueue(ctx.projectId, {}, svcCtx),
+    // The reader's title-translation context (Story MOTIR-7738 · MOTIR-8833).
+    resolveSurfaceTranslation(ctx.project, svcCtx),
+  ]);
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-3">
-            <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
-            <Pill tone="neutral">{t('count', { count: page.items.length })}</Pill>
+    <SurfaceTitleTranslationProvider projectKey={ctx.project.identifier} context={titleTranslation}>
+      <div className="flex flex-col gap-6">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-3">
+              <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
+              <Pill tone="neutral">{t('count', { count: page.items.length })}</Pill>
+            </div>
+            <p className="text-sm text-(--el-text-muted)">
+              {t('subtitle', { project: ctx.project.name, key: ctx.project.identifier })}
+            </p>
           </div>
-          <p className="text-sm text-(--el-text-muted)">
-            {t('subtitle', { project: ctx.project.name, key: ctx.project.identifier })}
-          </p>
-        </div>
-        {/* The inbox-header "Report" CTA (design/triage panel 1) — opens the
+          {/* The inbox-header "Report" CTA (design/triage panel 1) — opens the
             6.11.7 report widget mounted by ReportProvider in the (authed) layout.
             This page already gates on canEdit, so the trigger renders enabled. */}
-        <ReportButton display="inbox" />
-      </header>
+          <div className="flex flex-wrap items-center gap-2">
+            <SurfaceShowOriginalSwitch />
+            <ReportButton display="inbox" />
+          </div>
+        </header>
 
-      <TriageInbox
-        initialItems={page.items}
-        initialNextCursor={page.nextCursor}
-        projectKey={ctx.project.identifier}
-        projectName={ctx.project.name}
-      />
-    </div>
+        <SurfaceTitlesNotice />
+
+        <TriageInbox
+          initialItems={page.items}
+          initialNextCursor={page.nextCursor}
+          projectKey={ctx.project.identifier}
+          projectName={ctx.project.name}
+        />
+      </div>
+    </SurfaceTitleTranslationProvider>
   );
 }

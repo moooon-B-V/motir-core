@@ -8,8 +8,9 @@
 //
 //   - answers ONLY the invocations `docs/decisions/agent-chat.md` records — Q3's
 //     headless turn (new and resumed) and Q2's `claude auth status --json` —
-//     argv for argv. Anything else exits 2, so an adapter that drifts from the
-//     ADR fails the spec instead of being answered;
+//     argv for argv — and, since MOTIR-9056, the unattended RUN forms a `motir fix`
+//     launches (`claudeRunArgs` / `codexRunArgs`). Anything else exits 2, so an
+//     adapter that drifts from the ADR fails the spec instead of being answered;
 //   - replays a fixture COPIED FROM THE ADAPTERS' OWN (`packages/cli/test/
 //     agentTerminal/fixtures/chat/**`, with this story's words), one line at a
 //     time at a human pace, so what the tab draws went through the REAL adapter
@@ -110,6 +111,30 @@ function claudeTurnArgs() {
   return null;
 }
 
+/**
+ * A RUN's unattended form (Story MOTIR-8981 · MOTIR-9056) — what `motir fix` launches in
+ * the person's own agent, from `packages/cli/src/agentProfiles.ts`'s `agentStream`:
+ * `-p --output-format stream-json --verbose --dangerously-skip-permissions`, then
+ * `--session-id <uuid>` for a fresh session or `--resume <uuid>` for the card's own.
+ * The spec asserts on these recorded argv; the stand-in only has to answer them.
+ */
+function claudeRunArgs() {
+  const head = [
+    '-p',
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    '--dangerously-skip-permissions',
+  ];
+  if (args.length !== head.length + 2) return null;
+  if (head.some((flag, i) => args[i] !== flag)) return null;
+  const [mode, id] = args.slice(head.length);
+  if (!UUID.test(id ?? '')) return null;
+  if (mode === '--session-id') return { id, resumed: false };
+  if (mode === '--resume') return { id, resumed: true };
+  return null;
+}
+
 /** Which recorded stream answers this prompt. */
 function claudeFixture(prompt, resumed) {
   if (!resumed) return 'claude/folders.jsonl';
@@ -134,8 +159,8 @@ async function claude() {
     process.stdout.write(readFileSync(path.join(FIXTURES, 'claude', answer), 'utf8'));
     return;
   }
-  const turn = claudeTurnArgs();
-  if (!turn) refuse('not the headless turn agent-chat.md Q3 records');
+  const turn = claudeTurnArgs() ?? claudeRunArgs();
+  if (!turn) refuse('not a headless turn agent-chat.md Q3 records, nor a run form');
   const prompt = readStdin();
   record({ args, prompt });
   const store = storeFile(turn.id);
@@ -189,9 +214,29 @@ function codexTurnArgs() {
   return { resumed, id: resumed ? rest[0] : null };
 }
 
+/**
+ * A RUN's forms (MOTIR-9056): `exec resume --json -c sandbox_mode="danger-full-access" <id> -`
+ * for the card's own session, `exec --json --sandbox danger-full-access -` for a fresh one.
+ */
+function codexRunArgs() {
+  const fresh = ['exec', '--json', '--sandbox', 'danger-full-access', '-'];
+  if (args.length === fresh.length && fresh.every((flag, i) => args[i] === flag)) {
+    return { resumed: false, id: null };
+  }
+  const resume = ['exec', 'resume', '--json', '-c', 'sandbox_mode="danger-full-access"'];
+  if (
+    args.length === resume.length + 2 &&
+    resume.every((flag, i) => args[i] === flag) &&
+    args[args.length - 1] === '-'
+  ) {
+    return { resumed: true, id: args[resume.length] };
+  }
+  return null;
+}
+
 async function codex() {
-  const turn = codexTurnArgs();
-  if (!turn) refuse('not the headless turn agent-chat.md Q3 records');
+  const turn = codexTurnArgs() ?? codexRunArgs();
+  if (!turn) refuse('not a headless turn agent-chat.md Q3 records, nor a run form');
   const prompt = readStdin();
   record({ args, prompt });
   // Q1's Stop row: exit 1, no final event.

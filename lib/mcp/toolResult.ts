@@ -44,6 +44,11 @@ import {
   ReplyDepthExceededError,
 } from '@/lib/comments/errors';
 import { InvalidActivityCursorError } from '@/lib/activity/errors';
+import {
+  InvalidSectionsError,
+  SectionsWithDescriptionError,
+  UnknownSectionCellError,
+} from '@/lib/workItems/sections/errors';
 import { InvalidReadyCursorError } from '@/lib/workItems/readyFilter';
 import { FilterValidationError } from '@/lib/filters/errors';
 import { InvalidEstimateError } from '@/lib/estimation/errors';
@@ -105,8 +110,10 @@ import {
   AgentRunReportInvalidError,
   ContinueFromInvalidError,
   ContinueRunRefusedError,
+  DiscrepancyAlreadyRecordedError,
   DispatchRunNotFoundError,
   RepairRunRefusedError,
+  RunDiscrepancyInvalidError,
   RunFoundReportReasonInvalidError,
 } from '@/lib/dispatchRuns/errors';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
@@ -543,6 +550,19 @@ export function toToolError(err: unknown): CallToolResult {
   ) {
     return toolError(err.code, err.message);
   }
+  // `get_section_sets` (MOTIR-9029): a `kind` / `type` that names no cell. The message
+  // names the value and lists the legal ones, so the agent corrects it — it is never
+  // answered with a default set.
+  if (err instanceof UnknownSectionCellError) {
+    return toolError(err.code, err.message);
+  }
+  // `create_work_item` / `update_work_item` with `sections` (MOTIR-9031): a missing,
+  // unknown or invalid section is refused BY NAME (the message lists each), and
+  // `sections` beside `descriptionMd` is refused before anything is written. Both
+  // are the caller's own input, fixable in one hop.
+  if (err instanceof InvalidSectionsError || err instanceof SectionsWithDescriptionError) {
+    return toolError(err.code, err.message);
+  }
   if (err instanceof FilterValidationError) {
     // `search_work_items` (7.8.6): the registry's typed 422 — an unknown
     // field/operator id or a value that fails its (field, operator) arity —
@@ -656,6 +676,12 @@ export function toToolError(err: unknown): CallToolResult {
     // bound is the SERVICE's, so it must reach the runner as this code rather
     // than as a JSON-RPC internal error.
     err instanceof RunFoundReportReasonInvalidError ||
+    // RUN_DISCREPANCY_INVALID / DISCREPANCY_ALREADY_RECORDED (MOTIR-8657) —
+    // `record_run_discrepancy`'s points empty, too many or over-long (the message names the
+    // point and field), and a second record on a leg that already has one. Each is the
+    // runner's own input or its own repeat, fixable in one hop, and must reach it as a code.
+    err instanceof RunDiscrepancyInvalidError ||
+    err instanceof DiscrepancyAlreadyRecordedError ||
     // REPAIR_RUN_NOT_FOUND / REPAIR_RUN_NOT_YOURS (MOTIR-6807) — a
     // `touch_work_item_repair` / `close_work_item_repair` naming a run that is not
     // the caller's own repair run of that card. Refused before anything is

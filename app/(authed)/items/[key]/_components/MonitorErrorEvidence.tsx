@@ -94,7 +94,7 @@ const LABEL =
   'mb-1 font-mono text-[11px] font-semibold tracking-[0.06em] text-(--el-text-secondary) uppercase';
 const LABEL_COUNT = 'font-normal tracking-normal normal-case';
 const CODE =
-  'rounded-(--radius-control) bg-(--el-code-bg) px-2.5 py-2 font-mono text-xs leading-normal [overflow-wrap:anywhere] whitespace-pre-wrap text-(--el-code-text)';
+  'rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-control-x) py-(--spacing-control-y-8) font-mono text-xs leading-normal [overflow-wrap:anywhere] whitespace-pre-wrap text-(--el-code-text)';
 const FOLD =
   'mt-1 font-sans text-xs font-medium text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none';
 const QUIET_LINE =
@@ -342,7 +342,7 @@ export function MonitorErrorEvidence({ evidence }: { evidence: MonitorIssueEvide
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="mt-0.5 mb-1 ml-[27px] flex w-[calc(100%-27px)] items-center gap-1.5 rounded-(--radius-control) py-[3px] pr-1.5 pl-0.5 text-left font-sans text-xs leading-snug text-(--el-text-secondary) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none @max-[30rem]:ml-0 @max-[30rem]:w-full"
+        className="mt-0.5 mb-1 ml-[27px] flex w-[calc(100%-27px)] items-center gap-1.5 rounded-(--radius-control) py-(--spacing-control-y-2) pr-(--spacing-control-x-6) pl-(--spacing-control-x-2) text-left font-sans text-xs leading-snug text-(--el-text-secondary) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none @max-[30rem]:ml-0 @max-[30rem]:w-full"
       >
         {open ? (
           <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -360,7 +360,7 @@ export function MonitorErrorEvidence({ evidence }: { evidence: MonitorIssueEvide
       </button>
       {open ? (
         <div
-          className="mt-1 mb-1.5 ml-[27px] flex flex-col gap-3 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-card) p-3 @max-[30rem]:ml-0"
+          className="mt-1 mb-1.5 ml-[27px] flex flex-col gap-3 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-card) p-(--spacing-control-x-12) @max-[30rem]:ml-0"
           data-testid="evidence-block"
         >
           {view.stale && evidence.lastFailedAt ? (

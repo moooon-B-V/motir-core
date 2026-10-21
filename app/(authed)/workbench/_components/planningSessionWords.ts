@@ -12,7 +12,8 @@ import { OUT_OF_CREDITS_CODE } from '@/lib/planning/planEditsClient';
 // newer motir-ai wrote before this build learned it — reads as the `internal` sentence rather
 // than leaking the raw code to a person.
 
-/** The seven stable reason codes a failed attempt records. */
+/** The stable reason codes a failed attempt records. `stalled` is core's own (MOTIR-9065): the
+ *  abandoned-plan sweep's silence verdict, never a code motir-ai sends. */
 export const RESUME_REASON_CODES = [
   'rate_limited',
   'out_of_credits',
@@ -20,6 +21,7 @@ export const RESUME_REASON_CODES = [
   'token_expired',
   'prompt_too_large',
   'job_failed',
+  'stalled',
   'internal',
 ] as const;
 export type ResumeReasonCode = (typeof RESUME_REASON_CODES)[number];
@@ -103,9 +105,14 @@ export function resumeRefusalKeyOf(
   }
 }
 
-/** Whether a refusal means the session is no longer waiting to resume (hold + re-read). */
+/**
+ * Whether a refusal means the session is no longer waiting to resume (hold + re-read). A
+ * `notResumable` refusal is one: the server has recorded that the attempt cannot be resumed
+ * and given its cards back (MOTIR-9121), so offering the same Resume again would only be
+ * refused again — the next message in the session plans again instead.
+ */
 export function refusalEndsWaiting(key: ResumeRefusalKey): boolean {
-  return key === 'ended' || key === 'notFailed';
+  return key === 'ended' || key === 'notFailed' || key === 'notResumable';
 }
 
 // ── Situation 2 (Story MOTIR-7905 · MOTIR-7940; design § 38) ───────────────────────────────

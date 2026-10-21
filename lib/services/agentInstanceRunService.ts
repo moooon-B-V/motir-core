@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { AgentInstance } from '@/generated/prisma/client';
 import { assertWorkspaceFeatureEnabled } from '@/lib/featureFlags/evaluate';
 import { INSTANCE_MAX_PER_USER } from '@/lib/agentInstances/config';
@@ -13,8 +14,21 @@ import {
   AgentRunCancelForbiddenError,
   AgentRunCardNotReadyError,
   AgentRunNotFoundError,
+  AgentRunCommandInvalidError,
+  AgentRunCommandMismatchError,
+  AgentRunRepairRefusedError,
 } from '@/lib/agentInstances/errors';
-import { profileCanRunCards, profileDisplayName } from '@/lib/agentInstances/profiles';
+import {
+  AGENT_RUN_COMMANDS,
+  DEFAULT_AGENT_RUN_COMMAND,
+  isAgentRunCommand,
+  type AgentRunCommand,
+} from '@/lib/agentInstances/runCommand';
+import {
+  profileCanResume,
+  profileCanRunCards,
+  profileDisplayName,
+} from '@/lib/agentInstances/profiles';
 import {
   AGENT_RUN_LAUNCH_TIMEOUT_SECONDS,
   AGENT_RUN_STOP_TIMEOUT_SECONDS,
@@ -29,6 +43,7 @@ import type {
   AgentRunAgentRefusal,
   AgentRunStartedDto,
   AgentsForCardDto,
+  CardResumeTargetDto,
 } from '@/lib/dto/agentInstanceRuns';
 import {
   hostedRunWriteAccess,
@@ -47,6 +62,7 @@ import {
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { AGENT_RUN_END_DETAIL } from '@/lib/agentInstances/runEnd';
 import { toAgentForCardDto } from '@/lib/mappers/agentInstanceRunMappers';
+import { toDispatchRunAgentInstanceDto } from '@/lib/mappers/dispatchRunMappers';
 import { getPersistentOrchestrator, isPersistentOrchestratorConfigured } from '@/lib/orchestrator';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
@@ -64,6 +80,7 @@ import {
 } from '@/lib/services/agentInstanceLifecycleService';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
+import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { runCredentialService } from '@/lib/services/runCredentialService';
@@ -134,6 +151,12 @@ export interface StartAgentRunInput {
   agentInstanceId: string;
   /** Optional: a repeated key answers the run it already started. */
   idempotencyKey?: string | undefined;
+  /**
+   * What the run is for (MOTIR-9045): `run` (the default — a parent card opens
+   * `run_scope` instead), `fix` or `continue`. The value is the run's own
+   * `DispatchCommand`, recorded on the run and on its `run_opened` event.
+   */
+  command?: AgentRunCommand | undefined;
 }
 
 /** How long the launch job waits for a woken agent to come up before failing the run. */
@@ -208,6 +231,24 @@ function projectKeyOf(identifier: string): string {
   return dash > 0 ? identifier.slice(0, dash) : identifier;
 }
 
+/** Bound on the stderr tail a failed launch keeps in the run's detail. */
+const LAUNCH_STDERR_TAIL_CHARS = 300;
+
+/**
+ * A failed launch's exit code and the tail of its stderr, for the run's detail
+ * (MOTIR-8872) — the launcher prints its refusal there and never the token, so
+ * it is safe to keep. Empty when the exec exited 0 with nothing on stderr.
+ */
+function launchDiagnostic(result: { exitCode: number; stderr: string }): string {
+  const stderr = result.stderr.trim();
+  const tail =
+    stderr.length > LAUNCH_STDERR_TAIL_CHARS
+      ? `…${stderr.slice(-LAUNCH_STDERR_TAIL_CHARS)}`
+      : stderr;
+  if (result.exitCode === 0 && !tail) return '';
+  return ` — exit ${result.exitCode}${tail ? `, stderr: ${tail}` : ''}`;
+}
+
 function detailOf(err: unknown): string {
   return err instanceof Error ? err.message.slice(0, 300) : String(err);
 }
@@ -280,6 +321,13 @@ function refusalError(
     case 'agent_not_signed_in':
       return new AgentNotSignedInError(row.id, name);
   }
+}
+
+/** A non-blank `sessionId` out of an event's `data`, else null (`null` and blank read as absent). */
+function sessionIdOf(data: unknown): string | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const id = (data as Record<string, unknown>)['sessionId'];
+  return typeof id === 'string' && id.trim() !== '' ? id : null;
 }
 
 /** The card a running run works on, for the refusal's words. */
@@ -386,6 +434,10 @@ export const agentInstanceRunService = {
    */
   async start(input: StartAgentRunInput, ctx: ServiceContext): Promise<AgentRunStartedDto> {
     const identifier = input.workItemKey.trim().toUpperCase();
+    const requested = input.command ?? DEFAULT_AGENT_RUN_COMMAND;
+    if (!isAgentRunCommand(requested)) {
+      throw new AgentRunCommandInvalidError(String(requested), AGENT_RUN_COMMANDS);
+    }
 
     // ── 1 · Access: `instance:use` on the project and edit on the card ────────
     const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
@@ -399,7 +451,15 @@ export const agentInstanceRunService = {
       const already = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
         dispatchRunRepository.findByIdempotencyKey(ctx.workspaceId, key, tx),
       );
-      if (already) return { dispatchRunId: already.id, created: false, woke: false };
+      if (already) {
+        // The same key for a different command would answer a `run` to a caller
+        // that asked for a `fix`, which reads as a fix that never starts.
+        const startedAs = already.command === 'run_scope' ? 'run' : already.command;
+        if (startedAs !== requested) {
+          throw new AgentRunCommandMismatchError(already.id, already.command, requested);
+        }
+        return { dispatchRunId: already.id, created: false, woke: false };
+      }
     }
     // The `hosted_runs` kill-switch (MOTIR-750): an agent run is a hosted run.
     await assertWorkspaceFeatureEnabled(ctx.workspaceId, 'hosted_runs');
@@ -416,7 +476,12 @@ export const agentInstanceRunService = {
     }
 
     // ── 3 · The card is ready ────────────────────────────────────────────────
-    const { legIds, isParent } = await readyLegs(project, item, ctx);
+    // A `fix` claims nothing and previews no scope (MOTIR-9049): it is decided by the
+    // repair claim in step 9, so a story card or an `implemented` one is not refused here.
+    const isFix = requested === 'fix';
+    const { legIds, isParent } = isFix
+      ? { legIds: [item.id], isParent: false }
+      : await readyLegs(project, item, ctx);
 
     // ── 4 · No run already running in the agent (the index is the real guard) ─
     const running = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -463,13 +528,60 @@ export const agentInstanceRunService = {
       woke = true;
     }
 
+    // ── 9 (fix) · The REPAIR CLAIM is the open (MOTIR-9049) ──────────────────
+    // One claim under the card's row lock opens the `fix` run in this agent and writes
+    // its ONE `run_opened`; nothing below the claim's own steps applies — no keyed
+    // claim, no provenance, no second `run_opened`. No `admit`: every class is admitted.
+    if (isFix) {
+      // Read BEFORE the claim opens its own run, or the latest run would be this one.
+      const last = (await agentInstanceRunService.resumeTargetForCard(identifier, ctx)).lastRun;
+      const claim = await workItemRepairService.openAgentRepair(project.id, identifier, ctx, {
+        origin: 'instance',
+        resume:
+          last?.agent && last.agentIsReaders
+            ? { profile: last.agent.profile, sessionId: last.sessionId, canResume: last.canResume }
+            : null,
+        agent: agent.profileId,
+        agentInstanceId: agent.id,
+        idempotencyKey: input.idempotencyKey ?? randomUUID(),
+      });
+      if (claim.outcome !== 'claimed' || claim.runId === null) {
+        throw new AgentRunRepairRefusedError(claim);
+      }
+      const runId = claim.runId;
+      try {
+        await sendEvent(
+          'agent-instance-run/launch',
+          {
+            workspaceId: ctx.workspaceId,
+            dispatchRunId: runId,
+            idempotencyKey: agentRunLaunchKey(runId),
+          },
+          { strict: true },
+        );
+        await sendEvent(
+          'agent-instance-run/supervise',
+          {
+            workspaceId: ctx.workspaceId,
+            dispatchRunId: runId,
+            idempotencyKey: agentRunSuperviseKey(runId),
+          },
+          { strict: true },
+        );
+        return { dispatchRunId: runId, created: true, woke };
+      } catch (err) {
+        await this.end(runId, 'failed', `the run could not start: ${detailOf(err)}`);
+        throw err;
+      }
+    }
+
     // ── 9 · Open the run, one leg per card, `origin: instance` (§5) ──────────
     const legKeys = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
       const rows = await workItemRepository.findByIds(legIds, tx);
       const byId = new Map(rows.map((r) => [r.id, r.identifier]));
       return legIds.map((id) => byId.get(id) ?? '');
     });
-    const command = isParent ? 'run_scope' : 'run';
+    const command = requested === 'run' && isParent ? 'run_scope' : requested;
     let opened;
     try {
       opened = await dispatchRunService.open(
@@ -650,7 +762,7 @@ export const agentInstanceRunService = {
       });
       const result = await getPersistentOrchestrator().exec(
         handle,
-        agentRunLaunchCommand(target, dispatchRunId),
+        agentRunLaunchCommand(target, dispatchRunId, run.command),
         {
           timeoutSeconds: AGENT_RUN_LAUNCH_TIMEOUT_SECONDS,
           stdin: JSON.stringify({ apiUrl: resolveBaseUrlTrimmed(), token: credential.token }),
@@ -672,7 +784,7 @@ export const agentInstanceRunService = {
         await agentInstanceLifecycleService.touchActivity(agent.id);
         return 'launched';
       }
-      detail = `the agent’s terminal server refused it (${answer.error})`;
+      detail = `the agent’s terminal server refused it (${answer.error})${launchDiagnostic(result)}`;
     } catch (err) {
       detail = detailOf(err);
     }
@@ -900,6 +1012,67 @@ export const agentInstanceRunService = {
    * read for all of them, one read of those runs' cards. A caller without
    * `instance:use` has no agents to offer.
    */
+  /**
+   * A card's LAST run read back for the door and the resume (MOTIR-9046): which
+   * agent it ran in, the session id it recorded, whether that agent's profile has
+   * a resume form. A caller without `instance:use` has no agent door, so gets
+   * `{ lastRun: null }`.
+   *
+   * The session belongs to the card's LEG: that leg's newest `agent_exited`, else
+   * its newest `agent_started`; only a run with NO leg for the card (a scope
+   * target) falls back to the run-scoped read. A leg that recorded nothing answers
+   * null — never another leg's id, which would resume a different card's conversation.
+   */
+  async resumeTargetForCard(
+    workItemKey: string,
+    ctx: ServiceContext,
+  ): Promise<CardResumeTargetDto> {
+    const identifier = workItemKey.trim().toUpperCase();
+    const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
+    const item = await workItemsService.getWorkItemByIdentifier(project.id, identifier, ctx);
+    try {
+      await projectAccessService.assertPermission(project.id, ctx, 'instance:use');
+    } catch (err) {
+      if (err instanceof PermissionDeniedError) return { lastRun: null };
+      /* v8 ignore next -- the project was resolved above; browse cannot fail here */
+      throw err;
+    }
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id },
+      async (tx) => {
+        const run = await dispatchRunRepository.findLatestResumeRunForWorkItem(item.id, tx);
+        if (!run) return { lastRun: null };
+        const legId = run.cards[0]?.id ?? null;
+        let sessionId: string | null = null;
+        if (run.agentInstance) {
+          for (const kind of ['agent_exited', 'agent_started'] as const) {
+            const event = await dispatchRunEventRepository.findLatestOfKind(
+              run.id,
+              kind,
+              tx,
+              legId,
+            );
+            sessionId = sessionIdOf(event?.data);
+            if (sessionId) break;
+          }
+        }
+        return {
+          lastRun: {
+            id: run.id,
+            command: run.command,
+            status: run.status,
+            startedAt: run.startedAt.toISOString(),
+            endedAt: run.endedAt?.toISOString() ?? null,
+            agent: toDispatchRunAgentInstanceDto(run.agentInstance),
+            agentIsReaders: run.agentInstance?.ownerId === ctx.userId,
+            sessionId,
+            canResume: run.agentInstance ? profileCanResume(run.agentInstance.profileId) : false,
+          },
+        };
+      },
+    );
+  },
+
   async listAgentsForCard(workItemKey: string, ctx: ServiceContext): Promise<AgentsForCardDto> {
     const identifier = workItemKey.trim().toUpperCase();
     const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
@@ -941,7 +1114,10 @@ export const agentInstanceRunService = {
                     workItemTitle: target?.title ?? null,
                   }
                 : null,
-              agentRefusal(row, run),
+              // A RUNNING agent's recorded sign-in is a boot-time snapshot the
+              // start re-asks live (below), so the picker must not refuse on it:
+              // a row it offers is a row the start accepts (MOTIR-8869).
+              agentRefusal(row, run, row.state === 'running' ? 'unknown' : row.signInState),
             );
           }),
         };

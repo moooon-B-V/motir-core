@@ -27,6 +27,7 @@ vi.mock('@/lib/auth', () => ({ getSession: async () => sessionRef.current }));
 
 const getCodeAuditMock = vi.fn<(q: unknown) => Promise<RawCodeAuditSurface>>();
 const getConventionMock = vi.fn<(q: unknown) => Promise<RawConventionSurface>>();
+const putConventionMock = vi.fn<(i: unknown) => Promise<RawConvention>>();
 const refreshCodeAuditMock =
   vi.fn<
     (t: unknown, c: unknown, a: unknown) => Promise<{ auditJobId: string; conventionJobId: string }>
@@ -34,11 +35,13 @@ const refreshCodeAuditMock =
 vi.mock('@/lib/ai/motirAiClient', () => ({
   getCodeAudit: (q: unknown) => getCodeAuditMock(q),
   getConvention: (q: unknown) => getConventionMock(q),
+  putConvention: (i: unknown) => putConventionMock(i),
   refreshCodeAudit: (t: unknown, c: unknown, a: unknown) => refreshCodeAuditMock(t, c, a),
 }));
 
 const { GET: auditGET } = await import('@/app/api/ai/coding-convention/audit/route');
-const { GET: conventionGET } = await import('@/app/api/ai/coding-convention/convention/route');
+const { GET: conventionGET, PUT: conventionPUT } =
+  await import('@/app/api/ai/coding-convention/convention/route');
 const { POST: refreshPOST } = await import('@/app/api/ai/coding-convention/refresh/route');
 const { createTestWorkspace, createTestProject, createTestUser } = await import('./fixtures');
 const { workspacesService } = await import('@/lib/services/workspacesService');
@@ -46,7 +49,7 @@ const { projectMembersService } = await import('@/lib/services/projectMembersSer
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
 const { parseRepoScopeBody, parseOffsetParam, parseLimitParam, mapCodeHealthError } =
   await import('@/app/api/ai/coding-convention/_shared');
-const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
+const { MotirAiUnavailableError, MotirAiConventionConflictError } = await import('@/lib/ai/errors');
 const { truncateAuthTables, truncateRateLimitCounters } = await import('./helpers/db');
 const { __resetSharedRateLimitStoreForTest } = await import('@/lib/rateLimit/store');
 const { ALIGNED_HEADROOM_MS, ALIGNED_WINDOW_MS, waitForWindowHeadroom } =
@@ -117,6 +120,7 @@ beforeEach(async () => {
   sessionRef.current = null;
   getCodeAuditMock.mockReset();
   getConventionMock.mockReset();
+  putConventionMock.mockReset();
   refreshCodeAuditMock.mockReset();
 });
 
@@ -509,5 +513,96 @@ describe('GET /api/ai/coding-convention/convention', () => {
       versions: [],
       nextCursor: null,
     });
+  });
+});
+
+// MOTIR-9082 — a person saves one repository's convention.
+describe('PUT /api/ai/coding-convention/convention', () => {
+  const putRequest = (body: unknown) =>
+    new Request(`${BASE}/convention`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    });
+  const VALID = { repoKey: 'acme/web', contentMd: '# Ours', baseVersion: 2 };
+
+  it('401s with no session', async () => {
+    const res = await conventionPUT(putRequest(VALID));
+    expect(res.status).toBe(401);
+    expect(putConventionMock).not.toHaveBeenCalled();
+  });
+
+  it('400s a body that is not JSON or lacks a field', async () => {
+    await signInAtProject();
+    expect((await conventionPUT(putRequest('{nope'))).status).toBe(400);
+    expect((await conventionPUT(putRequest({ ...VALID, baseVersion: -1 }))).status).toBe(400);
+    expect((await conventionPUT(putRequest({ ...VALID, contentMd: 5 }))).status).toBe(400);
+    expect((await conventionPUT(putRequest({ contentMd: 'x', baseVersion: 0 }))).status).toBe(400);
+    expect(putConventionMock).not.toHaveBeenCalled();
+  });
+
+  it('403s a project member', async () => {
+    const { workspace, project } = await signInAtProject();
+    const member = await createTestUser();
+    await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
+    sessionRef.current = { user: { id: member.id, email: `${member.id}@t.dev` } };
+    ctxRef.current = {
+      userId: member.id,
+      workspaceId: workspace.id,
+      projectId: project.id,
+      project,
+    };
+    const res = await conventionPUT(putRequest(VALID));
+    expect(res.status).toBe(403);
+    expect(putConventionMock).not.toHaveBeenCalled();
+  });
+
+  it('422s a blank body', async () => {
+    await signInAtProject();
+    const res = await conventionPUT(putRequest({ ...VALID, contentMd: '   ' }));
+    expect(res.status).toBe(422);
+    expect((await res.json()).code).toBe('CONVENTION_BLANK');
+  });
+
+  it('409s a stale base with the version that won, so the editor can offer it', async () => {
+    const { owner } = await signInAtProject();
+    const winner = rawConvention({ version: 4, authorKind: 'edited', editedByUserId: owner.id });
+    putConventionMock.mockRejectedValue(new MotirAiConventionConflictError(4));
+    getConventionMock.mockResolvedValue(
+      rawConventionSurface({ convention: winner, versions: [winner] }),
+    );
+
+    const res = await conventionPUT(putRequest(VALID));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe('CONVENTION_VERSION_CONFLICT');
+    expect(body.latestVersion).toBe(4);
+    expect(body.latest.convention.version).toBe(4);
+  });
+
+  it('200s with the saved surface', async () => {
+    const { owner } = await signInAtProject();
+    const saved = rawConvention({
+      version: 3,
+      authorKind: 'edited',
+      editedByUserId: owner.id,
+      contentMd: '# Ours',
+    });
+    putConventionMock.mockResolvedValue(saved);
+    getConventionMock.mockResolvedValue(
+      rawConventionSurface({ convention: saved, versions: [saved] }),
+    );
+
+    const res = await conventionPUT(putRequest(VALID));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.convention.version).toBe(3);
+    expect(body.convention.editedByName).toBe(owner.name);
+  });
+
+  it('maps a motir-ai outage to 502', async () => {
+    await signInAtProject();
+    putConventionMock.mockRejectedValue(new MotirAiUnavailableError('down'));
+    expect((await conventionPUT(putRequest(VALID))).status).toBe(502);
   });
 });

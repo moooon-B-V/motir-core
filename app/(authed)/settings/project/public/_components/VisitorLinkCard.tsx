@@ -43,7 +43,7 @@ export function VisitorLinkCard({
     >
       {visitorUrl ? (
         <div className="flex flex-col gap-2">
-          <div className="flex min-h-(--height-control) items-center gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface-soft) px-3 py-2">
+          <div className="flex min-h-(--height-control) items-center gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x-12) py-(--spacing-control-y-8)">
             <span
               data-testid="visitor-link-url"
               className="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text)"

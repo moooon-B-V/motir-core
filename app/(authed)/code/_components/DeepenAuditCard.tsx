@@ -90,7 +90,7 @@ function SetupBlock({
       <p className="text-sm text-(--el-text-secondary)">
         {t(tool === 'codeql' ? 'deepen.codeql.setupHint' : 'deepen.sonar.setupHint')}
       </p>
-      <pre className="overflow-x-auto rounded-(--radius-input) border border-(--el-border) bg-(--el-code-bg) p-3 text-xs text-(--el-code-text)">
+      <pre className="overflow-x-auto rounded-(--radius-input) border border-(--el-border) bg-(--el-code-bg) p-(--spacing-control-x-12) text-xs text-(--el-code-text)">
         <code>{snippet}</code>
       </pre>
       <div className="flex flex-wrap items-center gap-2">
@@ -140,7 +140,7 @@ function ToolRow({
   const Icon = tool === 'codeql' ? SearchCode : ShieldCheck;
   return (
     <div
-      className={`rounded-(--radius-card) border p-3 ${
+      className={`rounded-(--radius-card) border p-(--spacing-card-padding-12) ${
         recommended
           ? 'border-(--el-accent-on-surface) bg-(--el-surface-soft)'
           : 'border-(--el-border) bg-(--el-page-bg)'
@@ -207,7 +207,7 @@ export function DeepenAuditCard({
           type="button"
           onClick={onDismiss}
           aria-label={t('deepen.dismiss')}
-          className="rounded-(--radius-control) p-1 text-(--el-text-muted) hover:text-(--el-text-strong) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+          className="rounded-(--radius-control) p-(--spacing-control-x-4) text-(--el-text-muted) hover:text-(--el-text-strong) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
         >
           <X className="size-4" aria-hidden />
         </button>
@@ -224,7 +224,7 @@ export function DeepenAuditCard({
       </div>
 
       {reauditing ? (
-        <div className="flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) p-3">
+        <div className="flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) p-(--spacing-card-padding-12)">
           <Loader2 className="size-4 animate-spin text-(--el-accent-on-surface)" aria-hidden />
           <span className="text-sm font-medium text-(--el-text-strong)">
             {t('deepen.reauditing')}

@@ -26,6 +26,11 @@ import { IssueTreeSection } from './_components/IssueTreeSection';
 import { IssueTreeSkeleton } from './_components/IssueTreeSkeleton';
 import { IssueQuickViewController } from './_components/IssueQuickViewController';
 import { OrganizationReadOnlyNote } from '../_components/OrganizationReadOnlyNote';
+import { resolveSurfaceTranslation } from '@/lib/pages/surfaceTranslation';
+import {
+  SurfaceTitleTranslationProvider,
+  SurfaceTitlesNotice,
+} from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 
 // The project issue index (Story 2.5 · Subtask 2.5.3; view switcher in 2.5.8) —
 // the surface the sidebar "Issues" link opens. Server Component: resolves the
@@ -127,6 +132,7 @@ export default async function ItemsView({
     folders,
     referencedLabels,
     archivedCount,
+    titleTranslation,
   ] = await Promise.all([
     workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
     // Assignable users scoped by access level (6.4.6): private → project members.
@@ -147,6 +153,9 @@ export default async function ItemsView({
     // The [Archived] entry-point's count badge (Story 2.9 · Subtask 2.9.3) —
     // a cheap COUNT(*) of the project's archived items.
     ctx.visitor ? 0 : workItemsService.countArchivedWorkItems(ctx.projectId, wsCtx),
+    // The reader's title-translation context (Story MOTIR-7738 · MOTIR-8833) —
+    // null when the project's switch is off, which mounts nothing below.
+    resolveSurfaceTranslation(ctx.project, ctx.read),
   ]);
 
   // The actor's saved-filter tier (Subtask 6.2.3) — passed to the toolbar's
@@ -157,59 +166,28 @@ export default async function ItemsView({
     <AdvancedFilterProvider>
       <FolderCommandsProvider>
         <SavedFilterSessionProvider>
-          <div className="flex flex-col gap-6">
-            <header className="flex flex-wrap items-end justify-between gap-4">
-              <div className="flex flex-col gap-1">
-                <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
-                  {t('heading')}
-                </h1>
-                <p className="text-sm text-(--el-text-muted)">
-                  {t('allIssuesIn', { project: ctx.project.name })}
-                </p>
-              </div>
-              {/* The closing organization's one header note (MOTIR-6403, design
+          <SurfaceTitleTranslationProvider
+            projectKey={ctx.project.identifier}
+            context={titleTranslation}
+          >
+            <div className="flex flex-col gap-6">
+              <header className="flex flex-wrap items-end justify-between gap-4">
+                <div className="flex flex-col gap-1">
+                  <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
+                    {t('heading')}
+                  </h1>
+                  <p className="text-sm text-(--el-text-muted)">
+                    {t('allIssuesIn', { project: ctx.project.name })}
+                  </p>
+                </div>
+                {/* The closing organization's one header note (MOTIR-6403, design
                   MOTIR-6390 panel 6) — `null` for an open org. */}
-              {ctx.visitor ? null : <OrganizationReadOnlyNote workspaceId={ctx.workspaceId} />}
-              <IssueListToolbar
-                routes={routes}
-                view={view}
-                sort={sort}
-                filter={filter}
-                ast={ast}
-                statuses={workflow.statuses}
-                members={members}
-                sprints={sprints}
-                customFields={customFields}
-                components={components}
-                folders={folders}
-                referencedLabels={referencedLabels}
-                projectKey={ctx.project.identifier}
-                viewer={viewer}
-                archivedCount={archivedCount}
-              />
-            </header>
-
-            {/* The invalid `?filter=` recovery callout (6.1.4, mock panel 6) —
-            above the UNFILTERED list, never a crash, never a silent drop. */}
-            {advanced.state === 'invalid' ? (
-              <InvalidFilterCallout view={view} sort={sort} filter={filter} />
-            ) : null}
-
-            {/* The applied-filter bar (6.2.3, mock panel 0) — the saved-filter name
-            chip + dirty state + Save / Save-as / Discard, prepended to the
-            6.1.4 condition-chip readout (panel 5, read-only; any chip reopens
-            the builder). The bar renders nothing when no filter is applied and
-            the builder is empty. */}
-            <IssueAppliedFilterBar
-              projectKey={ctx.project.identifier}
-              viewer={viewer}
-              view={view}
-              sort={sort}
-              filter={filter}
-              ast={ast}
-            >
-              {ast !== null ? (
-                <AdvancedFilterSummary
+                {ctx.visitor ? null : <OrganizationReadOnlyNote workspaceId={ctx.workspaceId} />}
+                <IssueListToolbar
+                  routes={routes}
+                  view={view}
+                  sort={sort}
+                  filter={filter}
                   ast={ast}
                   statuses={workflow.statuses}
                   members={members}
@@ -218,35 +196,73 @@ export default async function ItemsView({
                   components={components}
                   folders={folders}
                   referencedLabels={referencedLabels}
+                  projectKey={ctx.project.identifier}
+                  viewer={viewer}
+                  archivedCount={archivedCount}
                 />
-              ) : null}
-            </IssueAppliedFilterBar>
+              </header>
 
-            <Suspense
-              key={`${ctx.projectId}:${view}:${serializeSort(sort)}:${JSON.stringify(filter)}:${page}`}
-              fallback={<IssueTreeSkeleton flat={view === 'list'} />}
-            >
-              <IssueTreeSection
-                projectId={ctx.projectId}
-                reader={ctx.read}
-                service={ctx.service}
+              <SurfaceTitlesNotice />
+
+              {/* The invalid `?filter=` recovery callout (6.1.4, mock panel 6) —
+            above the UNFILTERED list, never a crash, never a silent drop. */}
+              {advanced.state === 'invalid' ? (
+                <InvalidFilterCallout view={view} sort={sort} filter={filter} />
+              ) : null}
+
+              {/* The applied-filter bar (6.2.3, mock panel 0) — the saved-filter name
+            chip + dirty state + Save / Save-as / Discard, prepended to the
+            6.1.4 condition-chip readout (panel 5, read-only; any chip reopens
+            the builder). The bar renders nothing when no filter is applied and
+            the builder is empty. */}
+              <IssueAppliedFilterBar
+                projectKey={ctx.project.identifier}
+                viewer={viewer}
                 view={view}
                 sort={sort}
                 filter={filter}
                 ast={ast}
-                page={page}
-                workflow={workflow}
-                members={members}
-              />
-            </Suspense>
+              >
+                {ast !== null ? (
+                  <AdvancedFilterSummary
+                    ast={ast}
+                    statuses={workflow.statuses}
+                    members={members}
+                    sprints={sprints}
+                    customFields={customFields}
+                    components={components}
+                    folders={folders}
+                    referencedLabels={referencedLabels}
+                  />
+                ) : null}
+              </IssueAppliedFilterBar>
 
-            {/* Quick-view peek (Subtask 2.5.19; bug 8.8.2) — a client island that
+              <Suspense
+                key={`${ctx.projectId}:${view}:${serializeSort(sort)}:${JSON.stringify(filter)}:${page}`}
+                fallback={<IssueTreeSkeleton flat={view === 'list'} />}
+              >
+                <IssueTreeSection
+                  projectId={ctx.projectId}
+                  reader={ctx.read}
+                  service={ctx.service}
+                  view={view}
+                  sort={sort}
+                  filter={filter}
+                  ast={ast}
+                  page={page}
+                  workflow={workflow}
+                  members={members}
+                />
+              </Suspense>
+
+              {/* Quick-view peek (Subtask 2.5.19; bug 8.8.2) — a client island that
           watches `?peek` and renders the modal frame + skeleton instantly, then
           client-fetches the item from /api/work-items/peek. Decoupled from this
           page's server render, so opening/closing is a pure shallow URL change
           with no underlying-list refetch. */}
-            <IssueQuickViewController />
-          </div>
+              <IssueQuickViewController />
+            </div>
+          </SurfaceTitleTranslationProvider>
         </SavedFilterSessionProvider>
       </FolderCommandsProvider>
     </AdvancedFilterProvider>

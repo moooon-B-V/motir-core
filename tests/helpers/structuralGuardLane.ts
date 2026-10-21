@@ -74,6 +74,11 @@ export const STRUCTURAL_GUARD_SPECS = [
   // profile as the ink guards — one whole-tree parse, no database, nothing
   // rendered — and it imports nothing from `lib/` or `app/`.
   'tests/theme/modalScrollContainer.test.ts',
+  // ── tests/guards/ — the follow-and-typewriter mount pins (MOTIR-8596) ─────
+  // Its own `readdirSync` over `app/` and `components/`, text-matching the JSX
+  // sites that may pass `followMode` / `typeIn` / render `TypeInText`. No
+  // database, nothing imported from `lib/` or `app/`.
+  'tests/guards/follow-and-typewriter-mounts.test.ts',
   // ── tests/ — the coverage gate's own guard (MOTIR-3497) ───────────────────
   // The instance the IMPORT-shaped membership predicate could not see. It pays
   // one memoised `tinyglobby` resolution of the whole `coverage.include` set —
@@ -182,6 +187,9 @@ export const STRUCTURAL_GUARD_SPECS = [
   // and nothing reaches past a package barrel. No database, no render, and it
   // imports only `node:fs` / `node:path`.
   'tests/packages/importDirection.test.ts',
+  // MOTIR-8887 — a whole-tree import scan (`readdirSync` over six roots) that timed out at
+  // 60 s inside the sharded, coverage-instrumented job with zero assertion failures.
+  'tests/passkeyBoundaryContract.test.ts',
   // ── tests/ciFleet/ — the fleet PORT BOUNDARY (MOTIR-4299) ─────────────────
   // ⚠️ IT WAS ALREADY A WHOLE-TREE SCANNER AND WAS ALREADY IN THE SHARDED JOB,
   // and the reason it moves NOW is that MOTIR-4299 made it bigger: the fly
@@ -194,6 +202,11 @@ export const STRUCTURAL_GUARD_SPECS = [
   // asked the question nobody had: is each of this story's guards in a lane where
   // its cost is a function of the tree rather than of what else is running?
   'tests/ciFleet/orchestratorPortBoundary.test.ts',
+  // ── tests/ciFleet/ — the ORG-IDENTITY guard (MOTIR-8716) ──────────────────
+  // The same shape as the port boundary above: it lists `lib/` + `app/` with
+  // `git ls-files`, comment-strips every code file and tests a handful of
+  // patterns against every line. No database, no render, no coverage to carry.
+  'tests/ciFleet/fleetNoOrgIdentityBranch.test.ts',
   // ── tests/typecheck-program/ — the story's guard CENSUS (MOTIR-4300) ──────
   // ⚠️ IT IS HERE BY DERIVATION, NOT BY COST, and that is worth saying because
   // the file itself reads five named files and takes ~10 ms. It imports THIS

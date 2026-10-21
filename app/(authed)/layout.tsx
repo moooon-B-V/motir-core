@@ -8,6 +8,7 @@ import { redirectIfOrganizationSuspended } from '@/lib/organizations/suspensionR
 import { workspacesService } from '@/lib/services/workspacesService';
 import { platformStaffRepository } from '@/lib/repositories/platformStaffRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
+import { entitlementsService } from '@/lib/services/entitlementsService';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { orgCan } from '@/lib/organizations/capabilities';
 import { projectsService } from '@/lib/services/projectsService';
@@ -53,6 +54,7 @@ import { AccountDeletionBanner } from './_components/AccountDeletionBanner';
 import { OrganizationClosingBanner } from './_components/OrganizationClosingBanner';
 import {
   isWorkspaceTierRevealed,
+  preferredOrganizationId,
   scopeWorkspacesToActiveOrg,
 } from '@/lib/workspaces/tierDisclosure';
 import { AI_PLANNING_REQUIREMENT, satisfiesRequirement } from '@/lib/settings/projectNavAccess';
@@ -201,7 +203,9 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   const activeWorkspaceModel = ctx
     ? (workspaceModels.find((w) => w.id === ctx.workspaceId) ?? null)
     : null;
-  const preferredOrgId = activeWorkspaceModel?.organizationId ?? orgCookie;
+  // The ONE rule for "the active org" — `resolveActiveOrganizationAsShell` and
+  // every org settings pane compose the same helper (MOTIR-8776).
+  const preferredOrgId = preferredOrganizationId(activeWorkspaceModel, orgCookie);
   const currentOrg = await organizationsService.resolveActiveOrganization(
     session.user.id,
     preferredOrgId,
@@ -213,7 +217,16 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
         role: currentOrg.role,
       }
     : null;
-  const orgs = currentOrg ? await organizationsService.listUserOrganizations(session.user.id) : [];
+  // The org list and whether this account may create an org (§4.5 — the org
+  // menu's "Create organization" door, MOTIR-8779) are independent reads, so
+  // they share one round trip. Both are skipped for an account with no org,
+  // whose shell renders no org control at all.
+  const [orgs, canCreateOrganization] = currentOrg
+    ? await Promise.all([
+        organizationsService.listUserOrganizations(session.user.id),
+        entitlementsService.canCreateOrganization(session.user.id),
+      ])
+    : [[], false];
   // Whether this is a Motir cloud build — gates the org menu's "Billing & plans"
   // row (Story 8.1.7); off-cloud the commercial surface does not exist (ADR §6).
   const cloudBilling = isCloudBilling();
@@ -508,6 +521,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                           buildInPublicProjectKey={buildInPublicProjectKey}
                           buildingInPublic={buildingInPublic}
                           cloudBilling={cloudBilling}
+                          canCreateOrganization={canCreateOrganization}
                           showPlanWithAi={showPlanWithAi}
                         />
                       }
@@ -597,6 +611,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                           workspaces={workspaces}
                           activeWorkspaceId={activeWorkspaceId}
                           cloudBilling={cloudBilling}
+                          canCreateOrganization={canCreateOrganization}
                           placement="drawer"
                         />
                       }

@@ -144,7 +144,7 @@ export function SubscribeDialog({
           <div className="h-24 animate-pulse rounded-(--radius-card) bg-(--el-muted)" aria-hidden />
         ) : !editing && current ? (
           <>
-            <div className="flex items-start gap-3 rounded-(--radius-card) bg-(--el-tint-mint) px-3 py-3">
+            <div className="flex items-start gap-3 rounded-(--radius-card) bg-(--el-tint-mint) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12)">
               <BellRing className="mt-0.5 size-5 shrink-0 text-(--el-text-strong)" aria-hidden />
               <div className="flex flex-col gap-0.5">
                 <p className="text-sm font-medium text-(--el-text-strong)">

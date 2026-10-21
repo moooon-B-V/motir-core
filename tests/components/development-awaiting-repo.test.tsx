@@ -76,6 +76,24 @@ describe('a repository with no pull request yet', () => {
     expect(screen.queryByText(t.noPullRequestYet)).toBeNull();
   });
 
+  it('says a CHILD delivered it — never "No pull request yet" (MOTIR-8811)', () => {
+    render(
+      <DevelopmentSectionBody
+        pullRequests={[merged]}
+        itemIdentifier="MOTIR-8699"
+        repoDelivery={[awaiting('moooon/motir-ai', 'delivered_by_child')]}
+      />,
+    );
+    const rows = screen.getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    // The merge is linked to the child card, so the story has no row of its own
+    // for it — the placeholder says where it landed instead of "awaiting".
+    expect(within(rows[1]!).getByText(t.deliveredByChildPullRequest)).toBeTruthy();
+    expect(within(rows[1]!).getByText(t.repoState.delivered_by_child)).toBeTruthy();
+    expect(screen.queryByText(t.noPullRequestYet)).toBeNull();
+    expect(screen.queryByText(t.repoState.awaiting)).toBeNull();
+  });
+
   it('replaces the big EmptyState when the item carries repositories but has NO pull requests', () => {
     render(
       <DevelopmentSectionBody

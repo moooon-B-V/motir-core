@@ -209,6 +209,19 @@ const ROUTES: { route: string; call: Call }[] = [
       ),
   },
   {
+    route: 'GET auto-translate',
+    call: async (key) =>
+      (await import('@/app/api/projects/[key]/auto-translate/route')).GET(get(), p({ key })),
+  },
+  {
+    route: 'POST translate-titles',
+    call: async (key) =>
+      (await import('@/app/api/projects/[key]/translate-titles/route')).POST(
+        json('POST', { workItemIds: ['wi-1'] }),
+        p({ key }),
+      ),
+  },
+  {
     route: 'GET monitors',
     call: async (key) =>
       (await import('@/app/api/projects/[key]/monitors/route')).GET(get(), p({ key })),
@@ -235,6 +248,22 @@ const ROUTES: { route: string; call: Call }[] = [
     route: 'GET monitors/available',
     call: async (key) =>
       (await import('@/app/api/projects/[key]/monitors/available/route')).GET(get(), p({ key })),
+  },
+  {
+    // MOTIR-9060: the Agent auto-fix switch's read door.
+    route: 'GET agent-auto-fix',
+    call: async (key) =>
+      (await import('@/app/api/projects/[key]/agent-auto-fix/route')).GET(get(), p({ key })),
+  },
+  {
+    // MOTIR-9060: its write door. The body is a valid boolean, so the request reaches
+    // the lookup rather than 400ing on the value.
+    route: 'PATCH agent-auto-fix',
+    call: async (key) =>
+      (await import('@/app/api/projects/[key]/agent-auto-fix/route')).PATCH(
+        json('PATCH', { agentAutoFixEnabled: true }),
+        p({ key }),
+      ),
   },
   {
     // MOTIR-5181: the merge-mode card's write door. The body is a valid mode, so

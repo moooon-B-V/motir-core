@@ -73,6 +73,9 @@ export interface FailedJobFacts {
   walkStop: JobWalkStop | null;
   /** motir-ai failed the job because its machine stopped renewing the lease. */
   lostMachine: boolean;
+  /** motir-ai's verdict on whether the job can be resumed (MOTIR-9121); `null` when it
+   *  did not say. */
+  resumable: boolean | null;
 }
 
 const REASONS: ReadonlySet<string> = new Set(PLAN_SESSION_FAILURE_REASONS);
@@ -95,10 +98,16 @@ export function reasonCodeFromError(
     // core it could not make, a precondition it would not plan past — and no model
     // may ever have been called. Reading it as `model_unavailable` sent a person to
     // wait on a healthy provider. `getJob` maps that problem to MotirAiJobFailedError.
+    //
+    // The same holds for a terminal job whose problem is `validation_error` (any 4xx),
+    // which `getJob` maps to MotirAiBadRequestError (MOTIR-9127): motir-ai's handler
+    // refused the job — a read token that expired in the queue — and no model was
+    // called. Every caller hands this map a FAILED job's error; a refused submit
+    // throws before any job exists and never reaches it.
     case 'MOTIR_AI_JOB_FAILED':
+    case 'MOTIR_AI_BAD_REQUEST':
       return 'job_failed';
     case 'MOTIR_AI_UNAVAILABLE':
-    case 'MOTIR_AI_BAD_REQUEST':
       return 'model_unavailable';
     default:
       return 'internal';
@@ -112,6 +121,8 @@ export interface FailureRecordInput {
   walkStop: JobWalkStop | null;
   lastPosition: JobWalkPosition | null;
   error: { code: string; message?: string } | null;
+  /** motir-ai's resumable verdict (MOTIR-9121); absent or `null` when unknown. */
+  resumable?: boolean | null;
 }
 
 /**
@@ -136,5 +147,6 @@ export function failureRecordFrom(input: FailureRecordInput): PlanSessionFailure
     failureStopPhase: stop?.phase ?? null,
     failureStopRef: stop?.target ?? null,
     failureStopTitle: stop?.targetTitle ?? null,
+    failureResumable: input.resumable ?? null,
   };
 }

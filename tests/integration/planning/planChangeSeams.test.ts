@@ -211,12 +211,12 @@ function legacySearchParams(context: PlanningLaunchContext): Record<string, stri
           : 'contextual'
         : context.kind === 'roadmap'
           ? 'roadmap'
-          : context.kind === 'convention-refine'
-            ? 'contextual'
-            : context.kind === 'refused-gate'
-              ? 'replan'
-              : context.kind === 'guide'
-                ? 'guide'
+          : context.kind === 'refused-gate'
+            ? 'replan'
+            : context.kind === 'guide'
+              ? 'guide'
+              : context.kind === 'guide-offer'
+                ? 'contextual'
                 : context.hasPlan === undefined
                   ? 'project'
                   : context.hasPlan
@@ -225,7 +225,6 @@ function legacySearchParams(context: PlanningLaunchContext): Record<string, stri
     from: context.kind,
   });
   if (context.kind === 'work-item') params.set('item', context.itemKey);
-  if (context.kind === 'convention-refine') params.set('repo', context.repoKey);
   return Object.fromEntries(params.entries());
 }
 
@@ -330,7 +329,6 @@ describe('seam · the launcher’s OVERLAY address is what the overlay resolves'
       mode: 'replan',
       from: 'project',
       itemKey: null,
-      repoKey: null,
     });
   });
 
@@ -341,18 +339,6 @@ describe('seam · the launcher’s OVERLAY address is what the overlay resolves'
       mode: 'contextual',
       from: 'work-item',
       itemKey: 'PROD-7',
-      repoKey: null,
-    });
-  });
-
-  it('carries a convention-refine launch’s repo key', async () => {
-    await markOnboarded();
-
-    expect(launchFromOverlay({ kind: 'convention-refine', repoKey: 'moooon/motir-core' })).toEqual({
-      mode: 'contextual',
-      from: 'convention-refine',
-      itemKey: null,
-      repoKey: 'moooon/motir-core',
     });
   });
 
@@ -384,22 +370,7 @@ describe('seam · an OLD /planning link still lands in the workspace (the forwar
       mode: 'contextual',
       from: 'work-item',
       itemKey: 'PROD-7',
-      repoKey: null,
     });
-  });
-
-  it('sends a convention-refine launch to code health', async () => {
-    await markOnboarded();
-
-    const url = new URL(
-      planningForwardTarget(legacySearchParams({ kind: 'convention-refine', repoKey: 'r' })),
-      BASE,
-    );
-    // ⚠️ `/code` (MOTIR-1768) — the convention-refine host moved. The audit is a
-    // SECTION of the Code room now, and `/code-health` permanently redirects
-    // into it, so the forward names the real address rather than one that 308s.
-    expect(url.pathname).toBe('/code');
-    expect(parsePlanningOverlay(url.searchParams)?.repoKey).toBe('r');
   });
 
   it('sends everything else to the roadmap, including a bare /planning', async () => {
@@ -452,7 +423,6 @@ describe('seam · an OLD /planning link still lands in the workspace (the forwar
       mode: 'replan',
       from: 'work-item',
       itemKey: 'PROD-3',
-      repoKey: null,
     });
   });
 });

@@ -37,6 +37,14 @@ vi.mock('@/app/(authed)/runs/_components/RunCanvasPane', () => ({
   ),
 }));
 
+vi.mock('@/lib/planning/roadmapClient', () => ({
+  fetchRoadmapLevel: async () => ({
+    items: [{ id: 'wi_1', title: 'The ingest route' }],
+    edges: [],
+    offLevelBlockers: [],
+  }),
+}));
+
 const fetchMock = vi.fn();
 const onClose = vi.fn();
 
@@ -274,5 +282,83 @@ describe("⚠️ the RUN's own ending — carried by `done`, not by any card eve
     // the frame. The count is what says the terminal frame did the work.
     expect(reads).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('the ready set is drained')).toBeTruthy();
+  });
+});
+
+describe('the exit is drawn top left, once (MOTIR-9070)', () => {
+  it('draws no corner X, and one shared exit control that precedes the title', async () => {
+    await mountWith(run());
+    // The dialog's icon-only corner control is the only one named exactly "Close".
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+    const exit = screen.getByTestId('overlay-exit');
+    expect(exit.textContent).toContain('Esc');
+    const title = screen.getByRole('heading', { level: 1 });
+
+    expect(exit.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('draws it while the run loads', () => {
+    fetchMock.mockImplementation(() => new Promise(() => {}));
+    render(<RunModal runId="run_a91f" projectKey="MOTIR" onClose={onClose} />);
+    expect(screen.getByTestId('run-modal-loading')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('overlay-exit'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('draws it when the read fails', async () => {
+    await mountFailing(500);
+    expect(screen.getByTestId('run-modal-failed')).toBeTruthy();
+    expect(screen.getAllByTestId('overlay-exit')).toHaveLength(1);
+  });
+
+  it('Close calls onClose exactly once', async () => {
+    await mountWith(run());
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('overlay-exit'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('Escape reaches the same close seam', async () => {
+    await mountWith(run());
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape', code: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the List | Canvas switch (MOTIR-9074)', () => {
+  it('opens on Canvas, with the switch named and the list not drawn', async () => {
+    await mountWith(run());
+    expect(screen.getByRole('button', { name: 'Canvas' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(screen.queryByTestId('run-set-list')).toBeNull();
+    expect(screen.getByTestId('run-canvas-keepalive').hasAttribute('inert')).toBe(false);
+  });
+
+  it('List shows the rows and keeps the canvas mounted but inert and hidden', async () => {
+    await mountWith(run());
+    const stub = screen.getByTestId('stub-node');
+    fireEvent.click(screen.getByRole('button', { name: 'List' }));
+    expect(screen.getByTestId('run-set-list')).toBeTruthy();
+    const keep = screen.getByTestId('run-canvas-keepalive');
+    expect(keep.hasAttribute('inert')).toBe(true);
+    expect(keep.getAttribute('aria-hidden')).toBe('true');
+    // The SAME node survived — switching must not remount the canvas.
+    expect(screen.getByTestId('stub-node')).toBe(stub);
+  });
+
+  it('a row selects the work item the log region follows', async () => {
+    await mountWith(run());
+    fireEvent.click(screen.getByRole('button', { name: 'List' }));
+    fireEvent.click(screen.getByTestId('run-set-row'));
+    expect(screen.getByTestId('run-modal-log-region').getAttribute('data-selected-work-item')).toBe(
+      'wi_1',
+    );
+  });
+
+  it('a run with no members still says so', async () => {
+    await mountWith(run({ cards: [] }));
+    expect(screen.getByTestId('run-modal-no-members')).toBeTruthy();
+    expect(screen.queryByTestId('run-set-list')).toBeNull();
   });
 });

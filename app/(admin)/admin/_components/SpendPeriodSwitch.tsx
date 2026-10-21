@@ -41,7 +41,7 @@ export function SpendPeriodSwitch({
         id="spend-period-month"
         value={isAll ? '' : period}
         onChange={(e) => e.target.value && go(e.target.value)}
-        className={`h-(--height-input) rounded-(--radius-input) border px-2 font-sans text-sm ${
+        className={`h-(--height-input) rounded-(--radius-input) border px-(--spacing-control-x-8) font-sans text-sm ${
           isAll
             ? 'border-(--el-border) bg-(--el-page-bg) text-(--el-text-secondary)'
             : 'border-(--el-accent-on-surface) bg-(--el-page-bg) text-(--el-text)'
@@ -58,7 +58,7 @@ export function SpendPeriodSwitch({
         type="button"
         aria-pressed={isAll}
         onClick={() => go('all')}
-        className={`h-(--height-input) rounded-(--radius-input) border px-3 font-sans text-sm ${
+        className={`h-(--height-input) rounded-(--radius-input) border px-(--spacing-control-x-12) font-sans text-sm ${
           isAll
             ? 'border-(--el-accent-on-surface) bg-(--el-page-bg) shadow-(--shadow-subtle) text-(--el-text)'
             : 'border-(--el-border) text-(--el-text-secondary) hover:text-(--el-text)'

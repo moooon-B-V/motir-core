@@ -5,7 +5,7 @@ import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject, type ProjectContext } from '@/lib/projects';
 import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
 import { MotirAiError } from '@/lib/ai/errors';
-import { CodeHealthError } from '@/lib/codeHealth/errors';
+import { CodeHealthError, ConventionVersionConflictError } from '@/lib/codeHealth/errors';
 
 // Shared plumbing for the /api/ai/coding-convention/* routes (MOTIR-926). Each
 // route operates on the ACTIVE project (the /code-health page is active-project
@@ -53,6 +53,12 @@ export function mapCodeHealthError(err: unknown): NextResponse {
   if (switchedOff) return switchedOff;
   const mapped = projectErrorResponse(err);
   if (mapped) return mapped;
+  if (err instanceof ConventionVersionConflictError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, latestVersion: err.latestVersion, latest: err.latest },
+      { status: 409 },
+    );
+  }
   if (err instanceof CodeHealthError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
   }

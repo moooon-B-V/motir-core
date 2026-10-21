@@ -309,3 +309,126 @@ describe('the null reporter', () => {
     expect(nullDispatchRunReporter.offline).toBe(false);
   });
 });
+
+describe('the build-through and STOP writes (MOTIR-8722)', () => {
+  const POINTS = [{ planAsked: 'a', built: 'b', why: 'c' }];
+
+  it('posts the points and the STOP on the run it holds', async () => {
+    const calls: unknown[] = [];
+    const { client } = fakeClient({
+      async recordDispatchRunDiscrepancy(args) {
+        calls.push(args);
+        return { commentId: 'c1', recorded: true };
+      },
+      async reportDispatchRunStop(args) {
+        calls.push(args);
+        return { commentId: 'c2', movedToPlanning: true };
+      },
+    });
+    const reporter = createDispatchRunReporter({ client });
+    await reporter.open(OPEN);
+
+    await reporter.reportDiscrepancy!('PROD-1', POINTS);
+    await reporter.reportStop!('PROD-1', {
+      comment: 'no such table',
+      toPlanning: true,
+      requirement: { outcome: 'O' },
+    });
+
+    expect(calls).toEqual([
+      { runId: 'run_1', key: 'PROD-1', points: POINTS },
+      {
+        runId: 'run_1',
+        key: 'PROD-1',
+        comment: 'no such table',
+        toPlanning: true,
+        requirement: { outcome: 'O' },
+      },
+    ]);
+  });
+
+  it('a failure warns once each and takes nothing down; no run held sends nothing', async () => {
+    const warnings: string[] = [];
+    let sent = 0;
+    const { client } = fakeClient({
+      async recordDispatchRunDiscrepancy() {
+        sent += 1;
+        throw new Error('409');
+      },
+      async reportDispatchRunStop() {
+        sent += 1;
+        throw new Error('422');
+      },
+    });
+    const idle = createDispatchRunReporter({ client });
+    await idle.reportDiscrepancy!('PROD-1', POINTS);
+    await idle.reportStop!('PROD-1', { comment: 'x', toPlanning: false, requirement: null });
+    expect(sent).toBe(0);
+
+    const reporter = createDispatchRunReporter({ client, warn: (m) => warnings.push(m) });
+    await reporter.open(OPEN);
+    await expect(reporter.reportDiscrepancy!('PROD-1', POINTS)).resolves.toBeUndefined();
+    await expect(
+      reporter.reportStop!('PROD-1', { comment: 'x', toPlanning: true, requirement: null }),
+    ).resolves.toBeUndefined();
+    expect(sent).toBe(2);
+    expect(warnings).toEqual([
+      'motir: could not record the discrepancies on PROD-1 in Motir. The run continues.',
+      'motir: could not comment on PROD-1 or move it to Planning in Motir. The run continues.',
+    ]);
+  });
+});
+
+describe('the run-found report (MOTIR-8698)', () => {
+  it('posts the stopped card and reason on the run it holds', async () => {
+    const reports: Array<{ runId: string; targetKey: string; reason: string }> = [];
+    const { client } = fakeClient({
+      async reportDispatchRunUnbuildable(args) {
+        reports.push(args);
+        return { recordedOnRun: true };
+      },
+    });
+    const reporter = createDispatchRunReporter({ client });
+    await reporter.open(OPEN);
+
+    await reporter.reportUnbuildable!('PROD-1', 'no such table');
+
+    expect(reports).toEqual([{ runId: 'run_1', targetKey: 'PROD-1', reason: 'no such table' }]);
+  });
+
+  it('is sent even after event reporting went OFFLINE, and its own failure takes nothing down', async () => {
+    const warnings: string[] = [];
+    let reported = 0;
+    const { client } = fakeClient({
+      async appendDispatchRunEvents() {
+        throw new Error('500');
+      },
+      async reportDispatchRunUnbuildable() {
+        reported += 1;
+        throw new Error('network down');
+      },
+    });
+    const reporter = createDispatchRunReporter({ client, warn: (m) => warnings.push(m) });
+    await reporter.open(OPEN);
+    reporter.event({ kind: 'card_claimed', workItemKey: 'PROD-1' });
+    await reporter.flush();
+    expect(reporter.offline).toBe(true);
+
+    await expect(reporter.reportUnbuildable!('PROD-1', 'why')).resolves.toBeUndefined();
+    expect(reported).toBe(1);
+    expect(warnings.some((w) => w.includes('could not report PROD-1 as unbuildable'))).toBe(true);
+  });
+
+  it('sends nothing when no run is held', async () => {
+    let reported = 0;
+    const { client } = fakeClient({
+      async reportDispatchRunUnbuildable() {
+        reported += 1;
+        return { recordedOnRun: true };
+      },
+    });
+    const reporter = createDispatchRunReporter({ client });
+    await reporter.reportUnbuildable!('PROD-1', 'why');
+    expect(reported).toBe(0);
+  });
+});

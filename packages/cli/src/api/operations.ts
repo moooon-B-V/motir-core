@@ -54,7 +54,7 @@ export const API_MAJOR = 1;
  * compatible by construction and only a server BELOW it can be missing
  * something this client was generated to expect.
  */
-export const GENERATED_AGAINST = "1.66.0";
+export const GENERATED_AGAINST = "1.74.0";
 
 /** Every declared operation, keyed by `operationId`. */
 export const V1_OPERATIONS = {
@@ -268,6 +268,13 @@ export const V1_OPERATIONS = {
     successStatus: 200,
     responseComponent: undefined,
   },
+  "getSectionSets": {
+    method: "GET",
+    path: "/api/v1/section-sets",
+    permission: "project:browse",
+    successStatus: 200,
+    responseComponent: "SectionSets",
+  },
   "getSprint": {
     method: "GET",
     path: "/api/v1/sprints/{sprintId}",
@@ -464,12 +471,33 @@ export const V1_OPERATIONS = {
     successStatus: 200,
     responseComponent: "PlanSession",
   },
+  "recordDispatchRunDiscrepancy": {
+    method: "POST",
+    path: "/api/v1/dispatch-runs/{id}/discrepancy",
+    permission: "work_item:edit",
+    successStatus: 200,
+    responseComponent: "RunDiscrepancyAcknowledgement",
+  },
   "recordWorkItemIntegration": {
     method: "POST",
     path: "/api/v1/work-items/{key}/integration",
     permission: "work_item:edit",
     successStatus: 200,
     responseComponent: "IntegrationResult",
+  },
+  "reportDispatchRunStop": {
+    method: "POST",
+    path: "/api/v1/dispatch-runs/{id}/stop",
+    permission: "work_item:edit",
+    successStatus: 200,
+    responseComponent: "RunStopReportAcknowledgement",
+  },
+  "reportDispatchRunUnbuildable": {
+    method: "POST",
+    path: "/api/v1/dispatch-runs/{id}/unbuildable",
+    permission: "work_item:edit",
+    successStatus: 200,
+    responseComponent: "UnbuildableReportAcknowledgement",
   },
   "reportWorkItemImplementation": {
     method: "POST",

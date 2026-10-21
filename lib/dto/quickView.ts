@@ -223,7 +223,7 @@ export interface QuickViewData {
   readiness: {
     ready: boolean;
     blockers: string[];
-    blockedByAncestor: { identifier: string; title: string } | null;
+    blockedByAncestor: { id: string; identifier: string; title: string } | null;
   } | null;
   /**
    * The Development section's linked PRs (Story 7.10 · MOTIR-1579),

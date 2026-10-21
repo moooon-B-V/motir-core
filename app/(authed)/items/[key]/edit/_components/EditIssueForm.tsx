@@ -28,12 +28,20 @@ import {
   DraftErrorNotice,
 } from '@/components/issues/DraftWithAi';
 import { useExplanationDraft } from '@/lib/hooks/useExplanationDraft';
-import { isUntouchedAiDraft, explanationSourceForSave } from '@/lib/ai/explanationSource';
+import {
+  isUntouchedAiDraft,
+  explanationLanguageForSave,
+  explanationSourceForSave,
+} from '@/lib/ai/explanationSource';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { WorkItemDto, WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { updateIssueAction, changeStatusAction } from '../actions';
+import {
+  OriginalLanguageAccessory,
+  useOriginalLanguageNote,
+} from '../../_components/translation/OriginalLanguageNote';
 
 // The full edit form (Subtask 2.3.6). Status and non-status fields submit via
 // TWO distinct Server Actions (finding #46): `changeStatusAction` → the gated
@@ -96,6 +104,10 @@ export function EditIssueForm({
   );
   const router = useRouter();
   const t = useTranslations('issueViews');
+  // The language the STORED title is recorded in (MOTIR-8832, design MOTIR-8837).
+  // `FormField` shows an error in place of the helper, so the note returns the
+  // moment a title error clears.
+  const titleNote = useOriginalLanguageNote(issue.languages.title, issue.title.trim() !== '');
   const tc = useTranslations('common');
   const tErr = useTranslations('errors');
   const { toast } = useToast();
@@ -176,6 +188,13 @@ export function EditIssueForm({
         // an edited draft → `user_edited`; omitted otherwise so the service's
         // auto-flip rule (editing an existing ai_draft → user_edited) applies.
         const explanationSource = explanationSourceForSave(explanation, draft.draftBaseline);
+        // …and the language it was drafted in (MOTIR-8744); omitted otherwise, so
+        // the write door records the organisation's content language.
+        const explanationLanguage = explanationLanguageForSave(
+          explanation,
+          draft.draftBaseline,
+          draft.draftLanguage,
+        );
         const res = await updateIssueAction({
           id: issue.id,
           expectedUpdatedAt: token,
@@ -184,6 +203,7 @@ export function EditIssueForm({
           descriptionMd: description.trim() ? description : null,
           explanationMd: explanation.trim() ? explanation : null,
           ...(explanationSource ? { explanationSource } : {}),
+          ...(explanationLanguage ? { languages: { explanation: explanationLanguage } } : {}),
           parentId,
           assigneeId,
           priority,
@@ -240,7 +260,7 @@ export function EditIssueForm({
       {stale ? (
         <div
           role="alert"
-          className="border-(--el-danger) bg-(--el-card) text-(--el-text) flex items-center justify-between gap-3 rounded-(--radius-card) border px-3 py-2 text-sm"
+          className="border-(--el-danger) bg-(--el-card) text-(--el-text) flex items-center justify-between gap-3 rounded-(--radius-card) border px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm"
         >
           <span>{t('staleBanner')}</span>
           <Button type="button" variant="secondary" size="sm" onClick={() => router.refresh()}>
@@ -251,6 +271,7 @@ export function EditIssueForm({
 
       <Input
         label={t('title')}
+        helperText={titleNote ?? undefined}
         value={title}
         onChange={(e) => {
           setTitle(e.target.value);
@@ -266,6 +287,12 @@ export function EditIssueForm({
           wrapping <label>/span, else "Description" shows twice. */}
       <MarkdownEditor
         label={t('description')}
+        labelAccessory={
+          <OriginalLanguageAccessory
+            language={issue.languages.description}
+            hasText={issue.descriptionMd != null && issue.descriptionMd.trim() !== ''}
+          />
+        }
         value={description}
         onChange={setDescription}
         size="full"
@@ -376,6 +403,10 @@ export function EditIssueForm({
             <span className="text-(--el-text-secondary) font-normal">
               — {t('explanationGloss')}
             </span>
+            <OriginalLanguageAccessory
+              language={issue.languages.explanation}
+              hasText={issue.explanationMd != null && issue.explanationMd.trim() !== ''}
+            />
             {showAiDraftedPill ? <Pill severity="info">{t('aiDrafted')}</Pill> : null}
             <DraftWithAiButton
               phase={draft.phase}

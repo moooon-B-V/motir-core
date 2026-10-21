@@ -296,6 +296,9 @@ function scoped(over: Partial<DispatchRunListItemDto> = {}): DispatchRunListItem
       skipped: 1,
       not_reached: 0,
     },
+    targetKey: 'PROD-42',
+    targetWorkItemId: 'itm_1',
+    otherCardCount: 3,
     ...over,
   };
 }

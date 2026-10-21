@@ -6,7 +6,7 @@ import { monitorIssueService } from '@/lib/services/monitorIssueService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { projectedWorkItem } from '@/lib/services/planProjectionService';
+import { projectedBodyOf, projectedWorkItem } from '@/lib/services/planProjectionService';
 import type { ProjectedDetailDto, ProjectedRowDto } from '@/lib/services/planProjectionService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { IssueDetailDto } from '@/lib/dto/workItems';
@@ -16,6 +16,16 @@ import { CHILD_EDGE_BLOCK_DESCRIPTION } from '../dependencyEdges';
 import { obsolescenceLines } from '../obsolescence';
 import { derived } from '../payloads/define';
 import { getWorkItemPayload, presentMcpWorkItemChild } from '../payloads/workItems';
+import { isTempRef } from '@/lib/plans/refs';
+import { parseSections } from '@/lib/workItems/sections/parse';
+import type { IssueType } from '@/lib/issues/parentRules';
+import type { SectionType } from '@/lib/workItems/sections/registry';
+import type { ParsedBody } from '@/lib/workItems/sections/parse';
+import {
+  includeSectionsField,
+  PARSED_SECTIONS_DESCRIPTION,
+  sectionsSummary,
+} from '../parsedSections';
 import { TEMP_REF_HELP, normalizeProjectedTarget, planIdField } from './planRef';
 import { renderFolderPath } from './placement';
 import {
@@ -60,11 +70,27 @@ const inputSchema = {
     .min(1)
     .describe(
       'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"), ' +
-        'case-insensitive. With `planId`, this may instead be a `planItem:<id>` temp-ref ' +
+        "case-insensitive — or the work item's internal id, the form a plan names a " +
+        'committed card by (`parentRef`, `blockedByRefs`, `workItemId`). With `planId`, this may instead be a `planItem:<id>` temp-ref ' +
         'naming an `add` in that plan (case-SENSITIVE, as `add_plan_items` returned it).',
     ),
   planId: planIdField,
+  includeSections: includeSectionsField,
 };
+
+/**
+ * Turn a work-item ID into its key (MOTIR-8940). A plan names committed cards by
+ * id, and this door read every argument as `<KEY>-<n>`, so a bare id was taken
+ * whole as a project key and refused `PROJECT_NOT_FOUND`. A key always carries a
+ * dash, a cuid never does, and a `planItem:` temp-ref is left to the projection;
+ * `getWorkItem` is the same workspace + browse gate the key path passes, so an
+ * unknown or foreign id is the ordinary not-found.
+ */
+async function keyOfRef(raw: string, ctx: ServiceContext): Promise<string> {
+  const ref = raw.trim();
+  if (ref.includes('-') || isTempRef(ref)) return raw;
+  return (await workItemsService.getWorkItem(ref, ctx)).identifier;
+}
 
 /** Derive the owning project key from an `ACME-7`-style identifier. */
 function projectKeyOf(identifier: string): string {
@@ -77,6 +103,7 @@ function summarize(
   detail: IssueDetailDto,
   commentCount: number,
   folderPath: string[] | null,
+  parsed?: ParsedBody,
 ): string {
   const it = detail.item;
   const lines = [
@@ -93,6 +120,9 @@ function summarize(
           .map((b) => b.identifier)
           .join(', ')}`,
   );
+  // The parsed sections view (MOTIR-9033) — printed ONLY when it was asked for,
+  // so an unasked read's text is byte-identical to what it was.
+  if (parsed) lines.push(sectionsSummary(parsed));
   // The SUPERSEDES pair (MOTIR-6580): which items this one replaces, and which
   // replace it — printed only when present, so an ordinary card reads as before.
   if (detail.supersedes.length > 0) {
@@ -130,7 +160,7 @@ function projectedLine(row: ProjectedRowDto): string {
 }
 
 /** Compact human-readable summary of a PROJECTED detail. */
-function summarizeProjected(detail: ProjectedDetailDto): string {
+function summarizeProjected(detail: ProjectedDetailDto, parsed?: ParsedBody): string {
   const t = detail.target;
   const lines = [
     t.proposal
@@ -153,6 +183,7 @@ function summarizeProjected(detail: ProjectedDetailDto): string {
   if (detail.blockedBy.length > 0) {
     lines.push('Blocked by (projected):', ...detail.blockedBy.map(projectedLine));
   }
+  if (parsed) lines.push(sectionsSummary(parsed));
   lines.push(
     'Nothing was created: approving the plan in Motir is the only path from a proposal to a work item.',
   );
@@ -161,14 +192,15 @@ function summarizeProjected(detail: ProjectedDetailDto): string {
 
 /** The adapter: resolve the project from the key, read the detail aggregate. */
 export async function runGetWorkItem(
-  args: { key: string; planId?: string },
+  args: { key: string; planId?: string; includeSections?: boolean },
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
+  const key = await keyOfRef(args.key, ctx);
   if (args.planId !== undefined) {
     // PROJECTED. No project lookup: `buildProjection` resolves the project FROM
     // the plan and asserts browse on it, and a `planItem:<id>` target has no
     // project-key prefix to derive one from anyway.
-    const projected = await projectedWorkItem(args.planId, normalizeProjectedTarget(args.key), ctx);
+    const projected = await projectedWorkItem(args.planId, normalizeProjectedTarget(key), ctx);
     // ⚠️ The whole projected answer rides ONE clearly-named key, and `children`
     // — the committed aggregate's array, which the payload seam derives from the
     // shared v1 child schema — is EMPTY. That is not a gap: a keyless proposal
@@ -176,15 +208,24 @@ export async function runGetWorkItem(
     // key in the array every existing consumer reads committed children from.
     // A caller branches on `projection` being present, exactly as it does on
     // `search_work_items`.
+    // The sections view of the card AS THE PLAN WOULD LEAVE IT (MOTIR-9033) —
+    // parsed only when asked, from the projected body, kind and type.
+    const body = args.includeSections
+      ? await projectedBodyOf(args.planId, normalizeProjectedTarget(key), ctx)
+      : null;
+    const parsed = body
+      ? parseSections(body.descriptionMd, body.kind as IssueType, body.type as SectionType)
+      : undefined;
     return toolOk(
-      summarizeProjected(projected),
+      summarizeProjected(projected, parsed),
       derived(getWorkItemPayload, {
         children: [],
         projection: projected,
+        ...(parsed ? { parsedSections: parsed } : {}),
       }),
     );
   }
-  const identifier = args.key.trim().toUpperCase();
+  const identifier = key.trim().toUpperCase();
   const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
   const detail = await workItemsService.getIssueDetail(project.id, identifier, ctx);
   // The children's dependency edges in TWO batched queries (MOTIR-1842's reader),
@@ -248,6 +289,16 @@ export async function runGetWorkItem(
   // a dispatched agent are handed the same reason for the same card. `null` unless
   // the card's most recently decided gate, of any kind, is `changes_requested`.
   const latestRefusal = await approvalGatesService.latestRefusalFor(detail.item.id, ctx);
+  // The parsed sections view (MOTIR-9033): one pure call on the body this read
+  // already holds, attached at the transport like the comment counts, so
+  // `IssueDetailDto` and the web page do not change. Absent unless asked for.
+  const parsed = args.includeSections
+    ? parseSections(
+        detail.item.descriptionMd,
+        detail.item.kind as IssueType,
+        (detail.item.type ?? null) as SectionType,
+      )
+    : undefined;
   const structured = {
     ...publishedDetail,
     folderId: detail.folderId,
@@ -259,9 +310,10 @@ export async function runGetWorkItem(
     deliveries,
     errors,
     latestRefusal,
+    ...(parsed ? { parsedSections: parsed } : {}),
   };
   return toolOk(
-    summarize(detail, item.commentCount, folderPath),
+    summarize(detail, item.commentCount, folderPath, parsed),
     derived(getWorkItemPayload, structured),
   );
 }
@@ -272,7 +324,7 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
     {
       title: 'Get work item',
       description:
-        'Read a single work item by its identifier (e.g. "ACME-7"): full detail including ' +
+        'Read a single work item by its identifier (e.g. "ACME-7") or its internal id: full detail including ' +
         'description, status, priority, assignee, parent/children, dependency links, and a ' +
         'readiness verdict. The link groups include `supersedes` (the older items this one ' +
         'replaces) and `supersededBy` (the newer items that replace it), beside `blockedBy` / ' +
@@ -313,7 +365,8 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
         'committedChildren, proposedChildren, blockedBy }` — and the ordinary `children` array ' +
         'is EMPTY, because a proposal has no key and cannot sit in the array committed children ' +
         'use. Every projected row carries `proposal` and a null `key` when it is one; no key is ' +
-        'ever invented for a proposal. Read-only: it creates nothing and persists nothing.',
+        'ever invented for a proposal. Read-only: it creates nothing and persists nothing.' +
+        PARSED_SECTIONS_DESCRIPTION,
       inputSchema,
     },
     async (args, extra) => {

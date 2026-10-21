@@ -96,6 +96,7 @@ export type PersonalDataDelegate =
   | 'organizationContentLanguageChange'
   | 'dataExportRequest'
   | 'projectMembership'
+  | 'projectAutoTranslateChange'
   | 'notification'
   | 'savedFilter'
   | 'savedFilterStar'
@@ -363,6 +364,18 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     tier: 'tenant',
     basis: 'Explicit project memberships the reader holds.',
     where: byUserId,
+  },
+  {
+    table: 'project_auto_translate_change',
+    model: 'projectAutoTranslateChange',
+    tier: 'tenant',
+    // `changed_by_user_id` attributes a flip of a project's auto-translate switch to
+    // the person who made it (Story MOTIR-7738). The table's policy keys on
+    // `app.workspace_id` (the `page_version` pair), so it is read per workspace;
+    // there is no `app.user_id` arm. The row holds no credential, so nothing is
+    // redacted.
+    basis: "Flips of a project's auto-translate switch the reader made.",
+    where: (userId) => ({ changedByUserId: userId }),
   },
   {
     table: 'role_migration_report',
@@ -765,6 +778,13 @@ export const EXCLUDED_FROM_EXPORT: Readonly<Record<string, string>> = {
     'moooon B.V. operator who last flipped it. A record about a customer tenant, ' +
     'written only from the platform tier — `PlatformAuditLog`’s argument; every flip ' +
     'is recorded there (`org.kill_switch_off` / `org.kill_switch_on`).',
+  PlatformFleetOrgCi:
+    'The platform switch that moves a connected organisation’s private CI onto the ' +
+    'shared runner fleet (MOTIR-8714), whose only User FK is the platform superadmin ' +
+    'who last flipped it. Platform configuration written only from the platform tier, ' +
+    'not a record about the operator as a data subject — `PlatformRunModel`’s argument; ' +
+    'every flip is recorded in the audit log (`fleet.org_ci.enable` / ' +
+    '`fleet.org_ci.disable`) with the same actor.',
   PlatformRunModel:
     'A row of the platform-wide hosted-run model list (MOTIR-7525) whose only User FK ' +
     'is the moooon B.V. operator who added the model. Platform configuration written ' +

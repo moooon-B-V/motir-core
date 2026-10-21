@@ -118,7 +118,7 @@ export function NotificationBell({ initialUnreadCount }: { initialUnreadCount: n
           {badge > 0 ? (
             <span
               aria-hidden
-              className="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-(--radius-badge) bg-(--el-accent) px-1 text-[10px] leading-none font-bold text-(--el-accent-text) ring-2 ring-(--el-page-bg)"
+              className="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-(--radius-badge) bg-(--el-accent) px-(--spacing-chip-x-4) text-[10px] leading-none font-bold text-(--el-accent-text) ring-2 ring-(--el-page-bg)"
             >
               {capCount(badge)}
             </span>

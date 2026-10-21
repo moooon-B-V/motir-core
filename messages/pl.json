@@ -235,6 +235,7 @@
     "noteShowLess": "Pokaż mniej",
     "field_description": "Opis",
     "field_explanation": "Wyjaśnienie",
+    "field_todos": "Kroki",
     "field_links": "Zależności",
     "field_parent": "Element nadrzędny",
     "field_targetRepo": "Repozytorium",
@@ -1735,7 +1736,8 @@
       "unknown": "Nieznany",
       "unestablished": "Nieutworzone",
       "excluded": "Pominięto",
-      "delivered_without_change_request": "Dostarczono bez pull requesta"
+      "delivered_without_change_request": "Dostarczono bez pull requesta",
+      "delivered_by_child": "Dostarczono przez element podrzędny"
     }
   },
   "comments": {
@@ -1971,6 +1973,7 @@
       "components": "Komponenty",
       "aiPlanning": "Planowanie AI",
       "hostedAgent": "Hostowany agent",
+      "translation": "Tłumaczenie",
       "rules": "Reguły",
       "repositories": "Repozytoria",
       "monitoring": "Monitorowanie",
@@ -3872,6 +3875,61 @@
         "factKeptBy": "Zachowana"
       }
     },
+    "translation": {
+      "title": "Tłumaczenie",
+      "pageDescription": "Jak członkowie czytający w różnych językach widzą treść pracy w tym projekcie.",
+      "card": {
+        "title": "Automatyczne tłumaczenie",
+        "subtitle": "Pozwala każdemu członkowi czytać pracę w tym projekcie we własnym języku i nadal widzieć oryginał."
+      },
+      "switch": {
+        "label": "Automatycznie tłumacz treść pracy"
+      },
+      "hint": {
+        "off": "Wyłączone. Treść pracy jest pokazywana tak, jak została napisana, a przycisk <b>Tłumacz</b> na każdej stronie elementu pracy tłumaczy ten jeden element, gdy członek o to poprosi.",
+        "on": "Włączone. Każdy członek czyta treść pracy w języku swojego interfejsu bez naciskania czegokolwiek, a <b>Pokaż oryginał</b> jest zawsze o jedno kliknięcie dalej."
+      },
+      "saving": "Zapisywanie…",
+      "flipError": "Nie udało się {to, select, on {włączyć} other {wyłączyć}} automatycznego tłumaczenia. Nic nie zostało zmienione.",
+      "retry": "Spróbuj ponownie",
+      "loadFailed": "Nie udało się wczytać tego ustawienia.",
+      "effects": {
+        "title": "Co dostają czytelnicy",
+        "page": "Strony elementów pracy i szybkie podglądy pokazują każde pole w języku czytelnika: tytuł, opis, objaśnienie i każde zadanie do zrobienia.",
+        "lists": "Listy, tablice, backlog, sprinty, mapa drogowa, gotowe i triaż pokazują tytuły w języku czytelnika, z przełącznikiem <b>Pokaż oryginał</b> w każdym widoku.",
+        "original": "Agenci, API i wiadomości e-mail zawsze otrzymują oryginalny tekst, a edycja zawsze otwiera oryginał."
+      },
+      "cost": "Każde pole jest tłumaczone tylko raz na język i zachowywane, więc kolejny czytelnik tego samego tekstu nic nie płaci, a tekst, który jest już w języku czytelnika, nigdy nie jest wysyłany. Tłumaczenie zużywa kredyty AI Twojej organizacji po koszcie modelu plus 50%. <link>Użycie i koszty</link>",
+      "noCredit": {
+        "body": "<b>Tłumaczenie wymaga kredytów AI.</b> Treść pracy jest pokazywana tak, jak została napisana, dopóki nie zostaną dodane kredyty. Nic nie jest naliczane.",
+        "add": "Dodaj kredyty",
+        "askAdmin": "Może je dodać właściciel lub administrator organizacji."
+      },
+      "readOnly": "Tylko do odczytu",
+      "readOnlyNote": "Tylko administrator projektu może zmienić automatyczne tłumaczenie.",
+      "readOnlyValue": {
+        "on": "Automatyczne tłumaczenie jest włączone w tym projekcie. Treść pracy jest pokazywana w języku każdego członka.",
+        "off": "Automatyczne tłumaczenie jest wyłączone w tym projekcie. Treść pracy jest pokazywana tak, jak została napisana."
+      },
+      "value": {
+        "on": "Włączone",
+        "off": "Wyłączone"
+      },
+      "history": {
+        "title": "Historia zmian",
+        "subtitle": "Kto włączył lub wyłączył automatyczne tłumaczenie i kiedy.",
+        "col": {
+          "who": "Kto",
+          "change": "Zmiana",
+          "when": "Kiedy"
+        },
+        "row": "{who} zmienił(a) automatyczne tłumaczenie z {from} na {to} dnia {when}.",
+        "unknownActor": "Dawny członek",
+        "empty": "Brak zmian. Automatyczne tłumaczenie nigdy nie było zmieniane w tym projekcie.",
+        "capped": "Pokazano {shown} najnowszych z {total} zmian.",
+        "failed": "<b>Nie udało się wczytać historii zmian.</b> Ustawienie powyżej pozostało bez zmian."
+      }
+    },
     "hostedAgent": {
       "title": "Hostowany agent",
       "pageDescription": "Którego modelu używa hostowane uruchomienie. Opcja Uruchom hostowanie wstępnie wybiera go na podstawie trudności elementu roboczego; osoba uruchamiająca może wybrać inny.",
@@ -3899,7 +3957,11 @@
       "savedTitle": "Zapisano ustawienia hostowanego agenta",
       "savedDesc": "Nowe uruchomienia hostowane używają tych modeli.",
       "errorTitle": "Nie udało się zapisać",
-      "saveError": "Ustawienia hostowanego agenta nie zostały zapisane. Spróbuj ponownie."
+      "saveError": "Ustawienia hostowanego agenta nie zostały zapisane. Spróbuj ponownie.",
+      "autoFix": {
+        "label": "Napraw czerwony pull request w agencie przypisanym do elementu roboczego.",
+        "help": "Gdy pull request staje się czerwony, a ostatnie uruchomienie elementu roboczego odbyło się w zalogowanym i działającym agencie, Motir rozpoczyna naprawę w tym agencie. Wyłączone (domyślnie) — nic nie startuje samo."
+      }
     },
     "connectedApps": {
       "title": "Połączone aplikacje",
@@ -4157,6 +4219,7 @@
         "bugs": "Tym, gdzie trafiają błędy tego projektu, zarządzają administratorzy projektu. Poproś administratora, jeśli miejsce docelowe wymaga zmiany.",
         "ai-planning": "Planowanie AI w tym projekcie — jego częstotliwość — konfigurują administratorzy projektu. Poproś administratora, jeśli wymaga zmiany.",
         "hosted-agent": "Informacja o tym, którego modelu używa hostowane uruchomienie, jest widoczna dla osób, które mogą uruchamiać hostowane uruchomienia w tym projekcie. Poproś administratora projektu, jeśli musisz ją zobaczyć.",
+        "translation": "To, czy treść pracy w tym projekcie jest tłumaczona dla każdego czytelnika, widzą osoby, które mogą czytać elementy pracy projektu. Zapytaj administratora projektu, jeśli potrzebujesz to zobaczyć.",
         "automation": "Automatyzacją projektu zarządzają administratorzy projektu. Poproś administratora, jeśli reguła wymaga zmiany.",
         "monitoring": "Połączeniem z monitorem błędów tego projektu zarządzają osoby, które mogą zarządzać integracjami. Poproś administratora projektu, jeśli Sentry trzeba połączyć lub połączyć ponownie."
       }
@@ -4690,7 +4753,13 @@
       "velocityTableCaption": "Prędkość — zobowiązanie a ukończone ({statistic}) dla każdego Sprintu. Średnio ukończono: {average}.",
       "velocityTableSprint": "Sprint",
       "notFound": "Ten raport Sprintu jest niedostępny.",
-      "backToBacklog": "Wróć do Backlogu"
+      "backToBacklog": "Wróć do Backlogu",
+      "sprintLabel": "Sprint",
+      "activeGroup": "Aktywne",
+      "completedGroup": "Zakończone",
+      "sprintSearch": "Szukaj Sprintów…",
+      "noSprintsTitle": "Brak Sprintów do raportowania",
+      "noSprintsBody": "Rozpocznij Sprint z Backlogu, aby zobaczyć tutaj jego raport."
     },
     "aiPlan": {
       "cta": "Zaplanuj Sprinty z Motir",
@@ -5053,7 +5122,16 @@
       "chartDesc": "Utworzone a rozwiązane w podziale na okres ({period}) w ostatnich przedziałach ({count}). Łącznie utworzono {created}, rozwiązano {resolved}; różnica jest zacieniowana na czerwono tam, gdzie Backlog rośnie, i na zielono tam, gdzie zespół nadrabia.",
       "tableCaption": "Utworzone a rozwiązane w każdym okresie (liczby na okres).",
       "tableCaptionCumulative": "Utworzone a rozwiązane w każdym okresie (sumy skumulowane).",
-      "subWindow": "ostatnie {days} dni"
+      "subWindow": "ostatnie {days} dni",
+      "chartFormLabel": "Wykres",
+      "formLine": "Linia",
+      "formBars": "Słupki",
+      "seriesLabel": "Serie",
+      "seriesLocked": "Przynajmniej jedna seria musi pozostać włączona.",
+      "subCreatedOnly": "Tylko utworzone",
+      "subResolvedOnly": "Tylko rozwiązane",
+      "chartDescBars": "Utworzone i rozwiązane w podziale na okres ({period}) w ostatnich przedziałach ({count}), jako słupki. Łącznie utworzono {created}, rozwiązano {resolved}.",
+      "chartDescSingle": "{series} w podziale na okres ({period}) w ostatnich przedziałach ({count}), łącznie {total}."
     },
     "distribution": {
       "title": "Rozkład statusów",
@@ -5077,7 +5155,18 @@
       "noSprintsBody": "Rozpocznij Sprint z Backlogu, aby zobaczyć jego wykres."
     },
     "velocity": {
-      "title": "Wykres prędkości"
+      "title": "Wykres prędkości",
+      "endingAtLabel": "Kończy się na",
+      "endingAtHint": "Zakończony Sprint. Puste = najnowszy.",
+      "latest": "Ostatnio zakończony",
+      "latestNamed": "Ostatnio zakończony — {name}",
+      "endingAtSearch": "Szukaj Sprintów…",
+      "countLabel": "Sprinty",
+      "countFewer": "Mniej Sprintów",
+      "countMore": "Więcej Sprintów",
+      "countHint": "od 3 do 52 · domyślnie 7.",
+      "rangeSubLine": "{project} · {from} – {to}",
+      "chartLoading": "Ładowanie wykresu prędkości"
     },
     "controls": {
       "periodLabel": "Okres",
@@ -5134,13 +5223,20 @@
       "xPoints": "Punkty historii (otwarte)",
       "xCount": "Elementy robocze (otwarte)",
       "unassigned": "Nieprzypisane",
-      "chartDesc": "Otwarte ({measure}) na osobę odpowiedzialną, w kolejności: {breakdown}. Łącznie {total} w nierozwiązanych elementach roboczych ({count}).",
-      "tableCaption": "Otwarta (nierozwiązana) praca na osobę odpowiedzialną — punkty historii i liczba elementów roboczych.",
+      "chartDesc": "Otwarte ({measure}) według osoby w wybranym okresie: {breakdown}. Łącznie {total} w elementach roboczych ({count}).",
+      "tableCaption": "Otwarta praca według osoby w wybranym okresie — przypisana, nieprzypisana i zgłoszona przez daną osobę oraz suma dla aktywnej miary.",
       "tableAssignee": "Osoba odpowiedzialna",
       "tablePoints": "Punkty historii",
       "tableIssues": "Elementy robocze",
       "emptyTitle": "Brak przypisanej otwartej pracy",
-      "emptyBody": "Każdy nierozwiązany element roboczy jest nieprzypisany albo nie ma otwartej pracy. Wybierz inny zakres."
+      "emptyBody": "Każdy nierozwiązany element roboczy jest nieprzypisany albo nie ma otwartej pracy. Wybierz inny zakres.",
+      "legendAssigned": "Przypisane",
+      "legendUnassigned": "Nieprzypisane — zgłoszone przez",
+      "tableAssigned": "Przypisane",
+      "tableUnassigned": "Nieprzypisane (zgłoszone)",
+      "tableTotal": "Suma",
+      "subWindow": "ostatnie {days} dni",
+      "chartDescPerson": "{name} {total} (przypisane: {assigned}, nieprzypisane i zgłoszone: {unassigned})"
     },
     "statistic": {
       "kind": "Typ",
@@ -5151,6 +5247,45 @@
       "sprint": "Sprint",
       "label": "Etykieta",
       "component": "Komponent"
+    },
+    "help": {
+      "hide": "Ukryj tekst pomocy",
+      "show": "Pokaż tekst pomocy",
+      "regionLabel": "O tym raporcie",
+      "whatLabel": "Co pokazuje.",
+      "howLabel": "Jak go czytać.",
+      "burndown": {
+        "what": "Jak zakres Sprintu, ukończona i rozpoczęta praca zmieniają się od jego początku do końca, wraz z linią celu i znacznikiem Dzisiaj.",
+        "how": "Ukończone rosnące w stronę Zakresu oznacza, że Sprint idzie zgodnie z planem. Linia Zakresu, która rośnie po rozpoczęciu, to rozrost zakresu; linia Ukończone, która pozostaje w tyle za linią Cel, oznacza opóźnienie."
+      },
+      "velocity": {
+        "what": "Punkty historii, do których zespół się zobowiązał, w porównaniu z punktami, które ukończył, Sprint po Sprincie.",
+        "how": "Porównaj dwa słupki w każdym Sprincie. Stabilne słupki ukończonych punktów pokazują wiarygodne tempo, według którego możesz zaplanować kolejny Sprint; wybierz wcześniejszy Sprint, aby spojrzeć wstecz od tego miejsca."
+      },
+      "sprintReport": {
+        "what": "Zakończony lub trwający Sprint na jednej stronie: co ukończono, czego nie ukończono, co dodano po rozpoczęciu oraz jego wykres Sprintu.",
+        "how": "Zacznij od porównania ukończonych z nieukończonymi, a potem sprawdź pracę dodaną w trakcie Sprintu. Użyj selektora pod tytułem, aby zmienić Sprint."
+      },
+      "createdVsResolved": {
+        "what": "Ile elementów roboczych utworzono, a ile rozwiązano w każdym okresie.",
+        "how": "Gdy słupek utworzonych jest wyższy niż słupek rozwiązanych, Backlog rośnie; gdy jest niższy, zespół nadrabia zaległości. Użyj przełączników serii, aby zobaczyć tylko jedną z nich."
+      },
+      "distribution": {
+        "what": "Jak elementy robocze projektu rozkładają się według wartości jednego pola, takiego jak status, typ czy osoba odpowiedzialna.",
+        "how": "Im szerszy wycinek, tym więcej elementów roboczych ma daną wartość. Zmień statystykę, aby podzielić tę samą pracę w inny sposób."
+      },
+      "averageAge": {
+        "what": "Średnia liczba dni, przez które nierozwiązane elementy robocze były otwarte na koniec każdego okresu.",
+        "how": "Linia, która stale rośnie, oznacza, że praca zostaje otwarta. Porównaj ją ze średnią z okresu, aby sprawdzić, czy ostatni okres odbiega od normy."
+      },
+      "resolutionTime": {
+        "what": "Średnia liczba dni potrzebnych na rozwiązanie elementów roboczych rozwiązanych w każdym okresie.",
+        "how": "Spadająca linia oznacza, że praca jest kończona szybciej. Okresy są liczone według daty rozwiązania, więc stary element rozwiązany dzisiaj podnosi wartość dzisiejszego okresu."
+      },
+      "workload": {
+        "what": "Otwarta praca, którą ma każda osoba w wybranym okresie, liczona w punktach historii lub elementach roboczych. Praca bez osoby odpowiedzialnej jest liczona przy jej autorze.",
+        "how": "Najdłuższe słupki to osoby z największą ilością otwartej pracy. Zanim przypiszesz więcej, sprawdź, czy rozkład nie jest bardzo nierówny."
+      }
     }
   },
   "dashboards": {
@@ -6278,8 +6413,11 @@
       "stateDrawing": "Pobiera kredyty",
       "statePaused": "CI wstrzymane",
       "stateNothing": "Nic do rozliczenia",
+      "stateInternal": "Wewnętrzna",
       "usedLabel": "Minuty użyte w tym miesiącu",
       "usedOfPool": "{used} z {pool} minut",
+      "internalUsed": "{used} min",
+      "internalNote": "Ta organizacja należy do samego Motir: bez wliczonych minut, bez pobieranych kredytów i bez opłat. Minuty są zapisywane, aby zespół widział, ile kosztują jego runnery CI. Liczenie obejmuje miesiąc kalendarzowy.",
       "minutesLeft": "Pozostało minut: {left}",
       "minutesOver": "Przekroczenie o {over} min",
       "creditsDrawn": "Pobrane kredyty: {credits}",
@@ -7171,6 +7309,43 @@
               "body": "Nic nie zostało uruchomione i nic nie zostało naliczone. Naprawa na hostowanym agencie zadziała ponownie, gdy organizacja będzie mieć kredyty — albo napraw to z terminala."
             }
           }
+        },
+        "myAgent": {
+          "lead": "Napraw go we własnym agencie: <b>{agent}</b>, agencie użytym w ostatnim uruchomieniu tego elementu roboczego.",
+          "door": {
+            "label": "Napraw w moim agencie",
+            "starting": "Rozpoczynanie naprawy…",
+            "why": "Naprawa działa w tym samym agencie na tej samej gałęzi, więc zaczyna od własnego kontekstu uruchomienia, a nie od pustego."
+          },
+          "fixing": {
+            "by": "Naprawa w <b>{agent}</b> rozpoczęta przez <b>{name}</b> <when></when> — <run>{label}</run>.",
+            "byYou": "Naprawa w <b>{agent}</b> rozpoczęta przez Ciebie <when></when> — <run>{label}</run>.",
+            "why": "Naprawa jest tylko jedna naraz: to uruchomienie trzyma naprawę do swojego końca, więc druga nie może wystartować na jej wierzchu."
+          },
+          "refused": {
+            "busy": {
+              "title": "Nie rozpoczęto — dla tego elementu roboczego naprawa już trwa.",
+              "body": "Rozpoczęta przez <b>{name}</b> <when></when> — <run>{label}</run>. Nic nie zostało uruchomione i nic nie zostało naliczone.",
+              "bodyYou": "Rozpoczęta przez Ciebie <when></when> — <run>{label}</run>. Nic nie zostało uruchomione i nic nie zostało naliczone."
+            },
+            "signedOut": {
+              "title": "Nie rozpoczęto — <b>{agent}</b> jest wylogowany.",
+              "body": "Zaloguj <b>{agent}</b>, a potem kliknij ponownie „Napraw w moim agencie”. <link>Otwórz agenta</link>, aby zalogować się poleceniem <cmd>{cmd}</cmd>. Nic nie zostało uruchomione i nic nie zostało naliczone."
+            }
+          },
+          "fellBack": {
+            "notice": "<b>{agent}</b> nie mógł wznowić sesji uruchomienia tego elementu roboczego, więc naprawa rozpoczęła nową sesję na tej samej gałęzi (<b>{branch}</b>)."
+          },
+          "settled": {
+            "notice": "Pull requesty tego elementu roboczego są teraz zielone, więc nie rozpoczęto naprawy."
+          },
+          "gaveUp": {
+            "note": "Ostatnia naprawa w <b>{agent}</b> poddała się <when></when> po {attempts, plural, one {# próbie} few {# próbach} many {# próbach} other {# próby}}. Można ponownie kliknąć „Napraw w moim agencie”.",
+            "noteNoCount": "Ostatnia naprawa w <b>{agent}</b> poddała się <when></when>. Można ponownie kliknąć „Napraw w moim agencie”."
+          },
+          "modal": {
+            "lead": "To uruchomienie zakończyło się czerwonym pull requestem. Napraw go w tym samym agencie, bez kopiowania błędu do nowego."
+          }
         }
       },
       "continue": {
@@ -7288,11 +7463,13 @@
         "delivered": "Dostarczono",
         "unestablished": "Nie utworzono",
         "excluded": "Pominięto",
-        "delivered_without_change_request": "Dostarczono bez PR"
+        "delivered_without_change_request": "Dostarczono bez PR",
+        "delivered_by_child": "Dostarczono przez element podrzędny"
       },
       "repositoryNotCreated": "Repozytorium jeszcze nie utworzone",
       "repositorySkipped": "Pominięte w tym projekcie",
       "shippedWithoutPullRequest": "Dostarczono bez pull requesta",
+      "deliveredByChildPullRequest": "Dostarczono przez pull request podrzędnego elementu roboczego",
       "unlinkAria": "Usuń powiązanie z {target}",
       "unlinkConfirmBefore": "Usunąć powiązanie z",
       "unlinkConfirmAfter": "? Pull request na GitHubie pozostaje nietknięty — usuwane jest tylko powiązanie.",
@@ -7544,7 +7721,9 @@
         "aria": "Otwórz {key}, element roboczy, który ta rozmowa planuje ponownie",
         "pickLabel": "Kontynuacja <mono>{key}</mono>",
         "chose": "wybrano: {label}",
-        "pickAria": "Otwórz {key}, wybór, którego kontynuacją jest ta rozmowa (wybrano: {label})"
+        "pickAria": "Otwórz {key}, wybór, którego kontynuacją jest ta rozmowa (wybrano: {label})",
+        "guideLabel": "Z przewodnika po <mono>{key}</mono>",
+        "guideAria": "Otwórz {key}, element roboczy, przez który prowadził Cię Motir AI, gdy zaproponował zmianę planu"
       },
       "end": {
         "failed": "Zamknięta · próba nie powiodła się · {time}",
@@ -7809,7 +7988,6 @@
       "replan": "Otwarto, aby zmienić istniejący plan projektu {project}.",
       "contextual": "Otwarto w kontekście projektu {project}.",
       "contextualItem": "Otwarto w kontekście {item}.",
-      "conventionRefine": "Otwarto, aby dopracować konwencję kodowania repozytorium {repo}.",
       "roadmap": "Otwarto z roadmapy.",
       "followUp": "Otwarto, aby zaplanować kontynuację wyboru {choice} w {item}.",
       "followUpProject": "Otwarto w projekcie {project}, aby zaplanować kontynuację wyboru {choice}."
@@ -7974,6 +8152,16 @@
     "followUpCard": {
       "label": "Kontynuacja wyboru"
     },
+    "guideSeed": {
+      "chip": "z przewodnika",
+      "lead": "Otwarte w {target} na podstawie przewodnika Motir AI po {guided}.",
+      "card": "Z przewodnika",
+      "cardBy": "Potwierdzone przez {who} · {when}",
+      "justNow": "przed chwilą",
+      "you": "Ty",
+      "status": "Planowanie",
+      "offerClosed": "Ta oferta zmiany planu nie jest już otwarta. Wróć do przewodnika, aby zobaczyć, na jakim jest etapie."
+    },
     "guide": {
       "openedFrom": "Otwarto z {key}",
       "reading": "Czytanie {key} i jego listy zadań…",
@@ -8005,7 +8193,8 @@
       "errors": {
         "notManual": "Motir AI prowadzi człowieka przez pracę ręczną, a ten element roboczy jest przeznaczony dla agenta, więc nie ma tu przez co prowadzić.",
         "closed": "Ten element roboczy jest gotowy lub zarchiwizowany, więc nie ma już przez co prowadzić.",
-        "forbidden": "Aby skorzystać z przewodnika, potrzebujesz uprawnień do edycji tego elementu roboczego i do planowania z Motir AI."
+        "forbidden": "Aby skorzystać z przewodnika, potrzebujesz uprawnień do edycji tego elementu roboczego i do planowania z Motir AI.",
+        "offerClosed": "Ta oferta została już rozstrzygnięta, więc nie można jej zmienić. Wczytaj ponownie element roboczy, aby zobaczyć, na jakim jest etapie."
       },
       "youTicked": "Zaznaczono krok {n} na liście",
       "youUnticked": "Odznaczono krok {n} na liście",
@@ -8060,6 +8249,32 @@
         "typeText": "Tekst",
         "typeMarkdown": "Markdown",
         "typeFile": "Plik"
+      },
+      "offer": {
+        "label": "Prośba o zmianę planu",
+        "target": "Cel",
+        "targetElsewhere": "Zmiana planu zaczyna się od {key}, a nie od tego elementu roboczego.",
+        "resolved": "{done} jest gotowe, więc zmiana planu zaczyna się od {open}.",
+        "noTarget": "Brak otwartego elementu roboczego, od którego można zacząć zmianę planu.",
+        "confirm": "Potwierdź",
+        "confirming": "Uruchamianie…",
+        "openSession": "Otwórz sesję planowania",
+        "decline": "Odrzuć",
+        "declining": "Odrzucanie…",
+        "showAll": "Pokaż wszystko",
+        "showLess": "Pokaż mniej",
+        "confirmHelp": "Otwiera planowanie Motir AI dla {key} z wysłaną tą prośbą. Zużywa kredyty.",
+        "declineHelp": "Zamyka tę ofertę. Nic nie zostanie zaplanowane.",
+        "replaced": "Zastąpiona nowszą ofertą",
+        "started": "Zmiana planu rozpoczęta",
+        "startedBy": "Potwierdzone · {when}",
+        "declined": "Odrzucone",
+        "declinedBy": "Odrzucone · {when}",
+        "recorded": "Zapisane w elemencie roboczym",
+        "resumeAt": "Przewodnik „Poprowadź mnie” wznowi od kroku {n}.",
+        "walkStopped": "Przewodnik został zatrzymany.",
+        "cannotPlan": "Nie możesz tu rozpocząć planowania — poproś kogoś, kto może, lub udostępnij tę prośbę.",
+        "noAi": "Motir AI nie jest tu skonfigurowany, więc planowania nie można rozpocząć. Nadal możesz udostępnić tę prośbę."
       }
     },
     "restart": {
@@ -8082,7 +8297,9 @@
       "onlyStarter": "Tylko {name} lub kierownik projektu może to wznowić.",
       "onlyStarterAnon": "Tylko osoba, która to rozpoczęła, lub kierownik projektu może to wznowić.",
       "failureLine": "Twoja ostatnia zmiana w tym planie nie mogła zostać wprowadzona · {when}",
-      "failureLineAgain": "Twoja ostatnia zmiana znów nie mogła zostać wprowadzona · {when}"
+      "failureLineAgain": "Twoja ostatnia zmiana znów nie mogła zostać wprowadzona · {when}",
+      "failureLinePlanAgain": "Nie udało się kontynuować tej próby · {when}. Twoja następna wiadomość zaplanuje ją od nowa.",
+      "failureLinePlanAgainAgain": "Tej próby znów nie udało się kontynuować · {when}. Twoja następna wiadomość zaplanuje ją od nowa."
     },
     "grill": {
       "control": {
@@ -8096,6 +8313,11 @@
         },
         "hint": "Twoja następna wiadomość rozpocznie przepytywanie."
       }
+    },
+    "follow": {
+      "following": "Podąża za planistą",
+      "resume": "Podążaj za planistą",
+      "resumedAnnouncement": "Znowu podąża za planistą"
     }
   },
   "codeHealth": {
@@ -8182,13 +8404,40 @@
       }
     },
     "convention": {
+      "versionEdited": "v{version} · edytowana",
+      "bylineDerived": "Wyprowadzona z kodu",
+      "bylineEdited": "Edytowana przez {name} · {date}",
+      "bylineEditedUnknown": "Edytowana przez członka zespołu · {date}",
+      "edit": "Edytuj",
+      "writeFirst": "Napisz konwencję",
+      "editFieldLabel": "Konwencja (Markdown)",
+      "editingVersion": "Edytowanie v{version}",
+      "saveCreates": "Zapisanie utworzy v{next}. {count} / {max} znaków.",
+      "editHelper": "Każdy nowy prompt dla tego repozytorium czyta zapisany tekst. Nowsza wersja wyprowadzona z kodu nigdy go nie zastępuje.",
+      "save": "Zapisz",
+      "cancel": "Anuluj",
+      "saving": "Zapisywanie…",
+      "saveFailed": "Nie udało się zapisać konwencji. Twój tekst nadal tu jest — spróbuj ponownie.",
+      "tooLong": "Konwencja ma więcej niż {max} znaków. Skróć ją, aby zapisać.",
+      "blank": "Napisz coś, aby zapisać.",
+      "conflictTitle": "Ktoś zapisał nowszą wersję",
+      "conflictBody": "Wersja v{latest} została zapisana przez {name} dnia {date}, gdy edytowano v{base}. Twoje zmiany nie zostały zapisane.",
+      "conflictLoadTheirs": "Wczytaj ich wersję",
+      "conflictKeepMine": "Zachowaj moją jako kopię",
+      "conflictCopyLabel": "Twój tekst — skopiuj go, a potem wczytaj ich wersję",
+      "conflictCopyHint": "Kopia tylko do odczytu. Wczytanie ich wersji zamyka ten edytor.",
+      "copy": "Kopiuj do schowka",
+      "pendingTitle": "Z kodu wyprowadzono nowszą wersję",
+      "pendingBody": "Ponowny audyt z {date} wygenerował wyprowadzoną wersję. Nie jest używana — używany jest tekst poniżej. Nic się nie zmieni, dopóki nie edytujesz.",
+      "pendingCompare": "Porównaj obok siebie",
+      "pendingInUse": "Używana · v{version} edytowana",
+      "pendingWaiting": "Oczekuje · wyprowadzona",
+      "emptyWriteBody": "Dla tego repozytorium nie wyprowadzono jeszcze reguł konwencji. Napisz tutaj pierwszą wersję lub poczekaj, aż Motir wyprowadzi ją z Twojego kodu.",
       "emptyTitle": "Brak konwencji",
       "emptyDescription": "Motir wyprowadza konwencję kodowania z kodu po połączeniu repozytorium. Przejrzyj ją tutaj.",
       "defaultRepo": "Kod",
       "noRules": "Nie wyprowadzono jeszcze żadnych reguł konwencji dla tego repozytorium.",
       "versionDerived": "v{version} · wyprowadzona",
-      "bannerDerivedTitle": "Wyprowadzona z kodu — używana automatycznie",
-      "bannerDerivedBody": "Ta konwencja jest wyprowadzona z bazy kodu i dołączana do każdego promptu dla nowego kodu. Aby ją dopracować, użyj powyższej opcji Dopracuj z Motir, która otwiera czat AI.",
       "provenanceTitle": "Pochodzenie reguł",
       "provenanceLegend": "Przyjęta — kod już tak robi, a my to udokumentowaliśmy. Proponowana — kod milczał lub był niespójny, więc umieszczono tu domyślną zasadę czystego kodu.",
       "provenance": {
@@ -8494,7 +8743,12 @@
       "answeredGroup": "Odpowiedź znaleziona już w projekcie",
       "answeredMeta": "Motir przeczytał kod i elementy robocze",
       "discoveryStep": "Kilka pytań",
-      "directionGroup": "Twój kierunek"
+      "directionGroup": "Twój kierunek",
+      "subtitle": "Indeksowanie i import działają w tle. Wejdź do Motir, kiedy chcesz.",
+      "background": "W tle · {detail}",
+      "backgroundInProgress": "W toku",
+      "backgroundQueued": "W kolejce",
+      "backgroundFailed": "Niepowodzenie"
     },
     "common": {
       "back": "Wstecz",
@@ -8576,6 +8830,58 @@
         "installation_not_accessibleHint": "Użytkownik GitHub, z którego korzystasz, nie widzi tej instalacji, więc nic nie zostało powiązane. Dostęp może nadać właściciel konta GitHub.",
         "not_configuredTitle": "GitHub nie jest skonfigurowany w tym wdrożeniu",
         "not_configuredHint": "To wdrożenie Motir nie ma jeszcze aplikacji GitHub App, więc nie można tu połączyć GitHuba. Osoba, która zarządza wdrożeniem, może to skonfigurować."
+      },
+      "existing": {
+        "title": "Twoje konta GitHub z aplikacją Motir",
+        "hint": "Aplikacja Motir jest już zainstalowana na tych kontach. Wybierz jedno, aby połączyć tutaj jego repozytoria. Nie musisz instalować jej ponownie.",
+        "loading": "Szukamy Twoich kont GitHub…",
+        "typeUser": "Konto osobiste",
+        "typeOrg": "Organizacja GitHub",
+        "linkedHere": "Już powiązane z tą organizacją",
+        "pickCta": "Wybierz repozytoria",
+        "pickAria": "Wybierz repozytoria z {login}",
+        "installAnotherCta": "Zainstaluj na innym koncie",
+        "installAnotherHint": "Użyj tej opcji, jeśli konta, którego szukasz, nie ma na liście.",
+        "loadErrorTitle": "Nie udało się odczytać Twoich kont GitHub",
+        "loadErrorHint": "Nic nie zostało zmienione. Spróbuj ponownie lub zainstaluj na innym koncie.",
+        "retryCta": "Spróbuj ponownie",
+        "identity": {
+          "title": "Zaloguj się przez GitHub, aby znaleźć swoje instalacje.",
+          "hint": "Motir sprawdza tylko, na których kontach jest zainstalowana aplikacja Motir i do których z nich masz dostęp. Możesz pominąć ten krok i zainstalować aplikację na nowym koncie.",
+          "cta": "Zaloguj się przez GitHub",
+          "skipCta": "Pomiń i zainstaluj",
+          "declinedHint": "GitHub nie zalogował Cię, więc nic nie zostało zmienione. Spróbuj ponownie albo pomiń ten krok i zainstaluj aplikację."
+        },
+        "picker": {
+          "heading": "Repozytoria w {login}",
+          "hint": "Wybierz repozytoria, które połączy ta organizacja. Nic nie zostanie połączone, dopóki nie potwierdzisz.",
+          "fromInstallHint": "Wybrano konto, na którym aplikacja Motir jest już zainstalowana. Wybierz, które z jego repozytoriów połączy ta organizacja.",
+          "loading": "Wczytywanie repozytoriów…",
+          "available": "Dostępne",
+          "connectedHere": "Połączone tutaj",
+          "connectedElsewhere": "Połączone z inną organizacją",
+          "connectedElsewhereHint": "Tego repozytorium nie można tutaj wybrać.",
+          "selectedCount": "{count, plural, one {Wybrano # repozytorium} few {Wybrano # repozytoria} many {Wybrano # repozytoriów} other {Wybrano # repozytorium}}",
+          "confirmCta": "{count, plural, one {Połącz # repozytorium} few {Połącz # repozytoria} many {Połącz # repozytoriów} other {Połącz # repozytorium}}",
+          "backCta": "Wróć do kont",
+          "nothingLeftTitle": "Z tego konta nie ma już nic do połączenia",
+          "nothingLeftHint": "Każde repozytorium tutaj jest już połączone, z tą organizacją lub z inną. Aby udostępnić więcej, dodaj repozytoria do instalacji w GitHubie.",
+          "nothingLeftCta": "Dodaj repozytoria w GitHubie"
+        },
+        "outcome": {
+          "linkedTitle": "Repozytoria połączone",
+          "linkedHint": "Motir może teraz odczytywać wybrane repozytoria. Nic więcej z tego konta nie zostało połączone.",
+          "takenTitle": "Podczas wybierania ktoś zajął repozytorium",
+          "takenHint": "Inna organizacja połączyła {repos}. Nic nie zostało połączone. Lista jest zaktualizowana, więc wybierz ponownie.",
+          "notAccessibleTitle": "Nie masz już dostępu do tego konta",
+          "notAccessibleHint": "GitHub nie pozwala Ci już widzieć tej instalacji, więc została usunięta z listy. Poproś właściciela konta GitHub o dostęp lub zainstaluj na innym koncie.",
+          "notAdminTitle": "Tylko administrator organizacji może powiązać istniejącą instalację",
+          "notAdminHint": "Poproś administratora tej organizacji o jej powiązanie albo sam zainstaluj na innym koncie.",
+          "selectionRequiredTitle": "Wybierz co najmniej jedno repozytorium",
+          "selectionRequiredHint": "Nic nie zostało połączone. Zaznacz wybrane repozytoria, a potem potwierdź.",
+          "notVisibleTitle": "Repozytorium nie należy już do tej instalacji",
+          "notVisibleHint": "Nic nie zostało połączone. Lista jest zaktualizowana, więc wybierz ponownie."
+        }
       }
     },
     "index": {
@@ -8588,7 +8894,9 @@
       "perRepo": "Według repozytorium",
       "state": {
         "indexed": "Zindeksowane",
-        "queued": "W kolejce"
+        "queued": "W kolejce",
+        "indexing": "W toku",
+        "failed": "Niepowodzenie"
       },
       "callout": "Motir wyprowadza konwencje i weryfikację kondycji kodu (oraz ewentualny plan) z całego projektu, więc potrzebuje zindeksowania każdego repozytorium — przycisk Dalej pozostaje nieaktywny, dopóki wszystkie repozytoria nie zostaną ukończone.",
       "completeTitle": "Graf kodu zbudowany",
@@ -8598,11 +8906,13 @@
     "import": {
       "eyebrow": "Opcjonalne · Import i planowanie",
       "heading": "Przenieś istniejący Backlog",
-      "body": "Śledzisz już pracę w Jira, Linear, GitHubie, Plane lub pliku CSV? Zaimportuj ją do tego projektu — przed zapisaniem czegokolwiek przejrzysz podgląd próbny. Pomiń ten krok, jeśli nie masz Backlogu do przeniesienia.",
+      "body": "Zaimportuj z Jira, Linear lub Plane albo wejdź do Motir i zrób to później. Import trwa dalej w tle.",
       "reconcile": "Gdy potem wygenerujesz plan, Motir uzgodni oba źródła, aby nic się nie zduplikowało.",
       "skip": "Pomiń import",
       "bodyInline": "Śledzisz już pracę w Jira, Linear, GitHubie, Plane lub pliku CSV? Przenieś ją od razu tutaj. Przed zapisaniem czegokolwiek przejrzysz podgląd próbny. Pomiń ten krok, jeśli nie masz Backlogu do przeniesienia.",
-      "continue": "Dalej"
+      "continue": "Dalej",
+      "running": "Import z {source} · dotąd elementów pracy: {done}",
+      "runningBody": "To trwa dalej w tle. Nie musisz czekać."
     },
     "decision": {
       "eyebrow": "Konfiguracja zakończona",
@@ -8628,6 +8938,26 @@
       "readyTitle": "Twój pierwszy plan jest gotowy",
       "readyBody": "{count, plural, one {# element przygotowano} few {# elementy przygotowano} many {# elementów przygotowano} other {# elementu przygotowano}} dla {project}. Nic nie jest ostateczne, dopóki tego nie zatwierdzisz.",
       "readyCta": "Przejrzyj plan"
+    },
+    "indexing": {
+      "doneTitle": "Zindeksowano {repos}",
+      "repoCount": "{count, plural, one {# repozytorium} few {# repozytoria} many {# repozytoriów} other {# repozytorium}}",
+      "aggregateTail": "Gotowe: {done} z {total}",
+      "failedTail": "Nieudane: {count}",
+      "detailBody": "To trwa dalej w tle. Możesz już wejść do Motir; nic nie czeka na zakończenie.",
+      "rowFailed": "Motir nie mógł zindeksować tego repozytorium. Nic z tego, co zrobiłeś, nie przepadło.",
+      "checkConnection": "Sprawdź połączenie",
+      "close": "Zamknij",
+      "retrying": "Ponawianie…",
+      "refusedNotConnected": "To repozytorium nie jest już połączone z projektem. Sprawdź połączenie i spróbuj ponownie.",
+      "refusedTooLarge": "To repozytorium jest za duże, by Motir mógł je zindeksować.",
+      "retryError": "Motir nie mógł uruchomić tego ponownie. Spróbuj jeszcze raz za chwilę.",
+      "importHeading": "Import elementów pracy",
+      "importProgress": "Dotąd: {done}"
+    },
+    "enter": {
+      "cta": "Przejdź do Motir",
+      "hint": "Indeksowanie i ewentualny import trwają dalej po wejściu."
     }
   },
   "repositorySet": {
@@ -9250,6 +9580,7 @@
         "token_expired": "połączenie z dostawcą AI wygasło",
         "prompt_too_large": "kontekst planu był zbyt duży dla modelu",
         "job_failed": "zadanie planowania nie powiodło się",
+        "stalled": "plan przestał posuwać się naprzód",
         "internal": "po naszej stronie wystąpił problem"
       },
       "refusal": {
@@ -9334,7 +9665,8 @@
       "navPlanningLessons": "Lekcje planowania",
       "navIdeas": "Pomysły",
       "navEnterpriseRequests": "Zapytania Enterprise",
-      "navRunModels": "Modele hostowanych uruchomień"
+      "navRunModels": "Modele hostowanych uruchomień",
+      "navFleetSettings": "Ustawienia floty"
     },
     "nav": {
       "overview": "Przegląd",
@@ -9514,7 +9846,11 @@
             }
           },
           "fleet": {
-            "stop": "Zatrzymano kontenery floty"
+            "stop": "Zatrzymano kontenery floty",
+            "org_ci": {
+              "enable": "Włączono CI floty",
+              "disable": "Wyłączono CI floty"
+            }
           },
           "enterprise_request": {
             "transition": "Przeniesiono zapytanie Enterprise"
@@ -11441,6 +11777,186 @@
         "notFound": "Ten pomysł już nie istnieje. Ktoś usunął go, gdy strona była otwarta.",
         "failed": "Coś poszło nie tak, więc nic nie zostało zmienione. Spróbuj ponownie."
       }
+    },
+    "fleetSettings": {
+      "breadcrumb": "Operacje · Ustawienia floty",
+      "title": "Ustawienia floty",
+      "subtitle": "Tutaj superadmin decyduje, czyje CI działa na własnych maszynach Motir. Każda zmiana wymaga podania powodu i jest zapisywana w dzienniku audytu.",
+      "empty": "Żaden projekt nie oferuje CI na flocie — żaden projekt metaorganizacji nie ma prywatnego repozytorium w połączonej organizacji.",
+      "setting": {
+        "title": "Uruchamiaj CI prywatnych repozytoriów Motir na flocie",
+        "pair": "Projekt {project} · Organizacja GitHub {org}",
+        "superadminOnly": "Tylko superadmin",
+        "explanation": "Po włączeniu każde zadanie CI w prywatnych repozytoriach Motir w {org} żąda etykiety {label} i działa na współdzielonych maszynach {fleet}, rozliczane na moooon B.V. Po wyłączeniu działają na runnerach hostowanych przez GitHub. W żadnym przypadku nie zmienia się żaden plik workflow."
+      },
+      "state": {
+        "on": "Włączone",
+        "off": "Wyłączone"
+      },
+      "action": {
+        "turnOn": "Włącz",
+        "turnOff": "Wyłącz"
+      },
+      "blocked": "Nie można włączyć, dopóki wszystkie warunki nie są spełnione.",
+      "offNeverBlocked": "Wyłączenie nigdy nie czeka na gotowość.",
+      "meta": {
+        "lastChanged": "Ostatnia zmiana",
+        "changedBy": "przez {email}, {when} — „{reason}”",
+        "neverChanged": "Nigdy nie zmieniano",
+        "auditLink": "Dziennik audytu",
+        "variable": "Zmienna GitHub",
+        "repositories": "Repozytoria"
+      },
+      "variable": {
+        "present": "{name} = {value} w {org} (prywatne repozytoria) — nowe zadania żądają floty.",
+        "absent": "{name} nie jest ustawiona w {org} — zadania wracają na runnery hostowane przez GitHub.",
+        "unknown": "Nie udało się odczytać {name} w {org} — GitHub odpowiedział HTTP {status}.",
+        "unreachable": "Nie udało się odczytać {name} w {org} — nie można połączyć się z GitHubem."
+      },
+      "drift": {
+        "onAbsent": {
+          "title": "Zapisano jako włączone, ale GitHub się nie zgadza.",
+          "body": "{name} nie jest ustawiona w {org}, więc nowe zadania nadal działają na runnerach hostowanych przez GitHub. Wyłącz i ponownie włącz ustawienie, aby ją zapisać."
+        },
+        "offPresent": {
+          "title": "Zapisano jako wyłączone, ale GitHub się nie zgadza.",
+          "body": "{name} jest nadal ustawiona w {org}, więc nowe zadania nadal żądają floty. Włącz i ponownie wyłącz ustawienie, aby ją usunąć."
+        }
+      },
+      "repositories": {
+        "count": "{count, plural, one {# prywatne repozytorium} few {# prywatne repozytoria} many {# prywatnych repozytoriów} other {# prywatnego repozytorium}}, odczytywane w czasie działania z prywatnych repozytoriów projektu {project} w {org}"
+      },
+      "monitoringLine": "Maszyny Motir są widoczne pod moooon B.V. w Monitorowanie › Flota",
+      "onCallout": {
+        "title": "CI Motir działa na flocie.",
+        "link": "Otwórz Monitorowanie › Flota"
+      },
+      "degraded": {
+        "title": "Włączone, ale niegotowe.",
+        "body": "Nowe zadania będą czekać w kolejce, dopóki problem nie zostanie naprawiony lub ustawienie nie zostanie wyłączone."
+      },
+      "readiness": {
+        "title": "Gotowość",
+        "subtitle": "Dziewięć warunków w kolejności, w jakiej napotyka je zadanie. Warunek, którego nie udało się sprawdzić, liczy się jako niespełniony.",
+        "ready": "Gotowe",
+        "readySub": "Wszystkie warunki ({count}) spełnione",
+        "notReady": "Niegotowe — {count, plural, one {# warunek niespełniony} few {# warunki niespełnione} many {# warunków niespełnionych} other {# warunku niespełnionego}}",
+        "unmetCount": "Niespełnione: {count}",
+        "unknownCount": "Niesprawdzone: {count}",
+        "checked": "Sprawdzono {when}",
+        "checkedAgain": "Sprawdzono ponownie {when}",
+        "recheck": "Sprawdź ponownie"
+      },
+      "mark": {
+        "met": "Spełniony",
+        "unmet": "Niespełniony",
+        "unknown": "Nie udało się sprawdzić"
+      },
+      "cond": {
+        "kill_switch": {
+          "label": "Wyłącznik awaryjny floty"
+        },
+        "app_installed": {
+          "label": "Zainstalowana aplikacja"
+        },
+        "app_runner_permission": {
+          "label": "Uprawnienie aplikacji: runnery self-hosted"
+        },
+        "app_variables_permission": {
+          "label": "Uprawnienie aplikacji: zmienne (zapis)"
+        },
+        "workflow_job_subscription": {
+          "label": "Dostarczanie workflow_job"
+        },
+        "app_repositories": {
+          "label": "Aplikacja ma dostęp do repozytoriów"
+        },
+        "delivery_attributable": {
+          "label": "Zadania przypisane do projektu {project}"
+        },
+        "runner_group": {
+          "label": "Grupa runnerów"
+        },
+        "image_coverage": {
+          "label": "Pokrycie obrazu"
+        }
+      },
+      "why": {
+        "kill_switch_engaged": "Wyłącznik awaryjny floty jest włączony ({variable}=0), więc żadna maszyna floty się nie uruchamia. Operator usuwa go lub zwiększa wartość.",
+        "app_not_installed": "Aplikacja motir-studio nie jest zainstalowana w {org}. Właściciel {org} ją instaluje.",
+        "app_suspended": "Aplikacja motir-studio w {org} jest zawieszona od {date}. Właściciel {org} cofa zawieszenie.",
+        "permission_missing": "Aplikacja motir-studio w {org} ma {permission}: brak, a potrzebuje zapisu. Właściciel {org} akceptuje prośbę o uprawnienia.",
+        "permission_insufficient": "Aplikacja motir-studio w {org} ma {permission}: {granted}, a potrzebuje zapisu. Właściciel {org} akceptuje prośbę o uprawnienia.",
+        "not_subscribed": "Aplikacja nie subskrybuje zdarzeń workflow_job, więc GitHub nigdy nie informuje Motir, że zadanie czeka w kolejce. Osoba administrująca aplikacją motir-studio włącza subskrypcję w ustawieniach aplikacji.",
+        "repositories_not_granted": "Instalacja aplikacji w {org} nie ma dostępu do {repositories}. Właściciel {org} dodaje je do dostępu instalacji do repozytoriów.",
+        "no_private_repositories": "Projekt {project} nie ma prywatnego repozytorium w {org}, więc flota nie ma czego uruchamiać.",
+        "not_attributable": "Zadanie w kolejce z {repositories} nie zostałoby przypisane do projektu {project}, więc czekałoby w kolejce, aż GitHub je wygasi. Połącz repozytorium ponownie z projektem, aby jego wiersz lustrzany był aktualny.",
+        "no_runner_group": "Projekt {project} nie ma grupy runnerów w {org}. Operator uruchamia {script} --project {project}.",
+        "sync_pending": "Grupa runnerów projektu w {org} nie jest zsynchronizowana z jego repozytoriami. Operator uruchamia {script} --project {project}.",
+        "jobs_not_runnable": "{count, plural, one {# zadanie nie może} few {# zadania nie mogą} many {# zadań nie może} other {# zadania nie może}} jeszcze działać na obrazie runnera floty. Osoba utrzymująca obraz floty dodaje brakujące narzędzie; zadanie wymagające innego systemu operacyjnego pozostaje niemożliwe do uruchomienia, dopóki nie opuści zbioru prywatnego.",
+        "not_inventoried": "{repositories} {count, plural, one {nie jest} few {nie są} many {nie są} other {nie są}} w inwentarzu zadań floty, więc nikt nie sprawdził, czy obraz runnera może uruchomić {count, plural, one {jego} few {ich} many {ich} other {ich}} zadania. Osoba utrzymująca inwentarz uruchamia go ponownie.",
+        "inventory_stale": "Workflow {repositories} zmieniły się po tym, jak inwentarz zadań floty je zmierzył. Osoba utrzymująca inwentarz uruchamia go ponownie.",
+        "read_failed": "Nie udało się sprawdzić: GitHub odpowiedział HTTP {status}. Liczy się jako niespełniony, dopóki sprawdzenie się nie powiedzie.",
+        "read_unreachable": "Nie udało się sprawdzić: nie można połączyć się z GitHubem. Liczy się jako niespełniony, dopóki sprawdzenie się nie powiedzie.",
+        "read_failedNoStatus": "Nie udało się sprawdzić. Liczy się jako niespełniony, dopóki sprawdzenie się nie powiedzie.",
+        "app_not_readable": "Nie można sprawdzić, dopóki aplikacja motir-studio nie zostanie zainstalowana i nie będzie czytelna w {org}."
+      },
+      "jobs": {
+        "missing": "{repo} · {workflow} · {job} — brakuje: {tools}",
+        "cannotHost": "{repo} · {workflow} · {job} — nie można hostować: {reason}",
+        "more": "+{count} więcej",
+        "scope": "Dotyczy to zinwentaryzowanego obrazu zbudowanego z main, a nie obrazu uruchamianego na produkcji."
+      },
+      "confirm": {
+        "onTitle": "Włączyć CI na flocie dla {org}?",
+        "onBody": "Wyłączone → Włączone. Każde nowe zadanie CI w {count, plural, one {# repozytorium} few {# repozytoriach} many {# repozytoriach} other {# repozytorium}} będzie działać na flocie i obciążać pulę moooon B.V.: {repositories}. Zadania już uruchomione kończą się tam, gdzie się zaczęły.",
+        "offTitle": "Wyłączyć CI na flocie dla {org}?",
+        "offBody": "Włączone → Wyłączone. Nowe zadania wracają na runnery hostowane przez GitHub; zadania już działające na flocie kończą się tam. Wyłączenie nigdy nie czeka na gotowość.",
+        "reasonLabel": "Powód — wymagany, zapisywany w dzienniku audytu",
+        "reasonPlaceholderOn": "Dlaczego to włączasz?",
+        "reasonPlaceholderOff": "Dlaczego to wyłączasz?",
+        "reasonHint": "Widoczny dla każdego operatora, który później przeczyta tę zmianę. Samo „Testy” niczego nie wyjaśnia.",
+        "reasonHintEmpty": "Przycisk pozostaje nieaktywny, dopóki nie wpiszesz powodu — ta sama zasada, którą stosuje serwer.",
+        "cancel": "Anuluj",
+        "confirmOn": "Włącz",
+        "confirmOff": "Wyłącz"
+      },
+      "refused": {
+        "reasonMissing": "Nie {direction}: powód jest wymagany i zostaje zapisany w dzienniku audytu razem z tą zmianą. Nic się nie zmieniło.",
+        "alreadyOn": "Już włączone — nic się nie zmieniło.",
+        "alreadyOff": "Już wyłączone — nic się nie zmieniło.",
+        "alreadyBody": "Inny superadmin zmienił to wcześniej, więc nic nie zostało zapisane i nie dodano wiersza audytu.",
+        "githubStatus": "Nie {direction}: GitHub odmówił operacji „{operation}” dla {name} w {org} (HTTP {status}).",
+        "githubUnreachable": "Nie {direction}: nie można połączyć się z GitHubem, aby wykonać „{operation}” dla {name} w {org}.",
+        "nothingChanged": "Nic się nie zmieniło: ustawienie i zmienna GitHub są takie jak wcześniej.",
+        "notReady": "Nie włączono: flota przestała być gotowa po załadowaniu tej strony.",
+        "notReadyList": "Obecnie niespełnione: {conditions}. Nic się nie zmieniło. Gotowość poniżej została sprawdzona ponownie.",
+        "notPermitted": "Nie zmieniono: tylko superadmin może zmienić to ustawienie.",
+        "targetUnknown": "Nie zmieniono: to ustawienie nie jest już oferowane dla tego projektu i tej organizacji. Odśwież stronę.",
+        "failed": "Nie {direction}: coś poszło nie tak. Odśwież stronę, aby zobaczyć obecny stan ustawienia."
+      },
+      "done": {
+        "on": "Włączono. Od teraz nowe zadania żądają floty.",
+        "off": "Wyłączono. Nowe zadania wracają na runnery hostowane przez GitHub."
+      },
+      "direction": {
+        "on": "włączono",
+        "off": "wyłączono"
+      },
+      "operation": {
+        "read": "odczyt",
+        "set": "ustawienie",
+        "delete": "usunięcie"
+      },
+      "permission": {
+        "organization_self_hosted_runners": "Runnery self-hosted",
+        "organization_actions_variables": "Zmienne"
+      },
+      "unavailable": {
+        "title": "Nie udało się załadować ustawienia floty",
+        "body": "Nie udało się odczytać ustawienia ani jego gotowości, więc nie jest wyświetlany żaden stan ani przełącznik. To błąd odczytu — nic się nie zmieniło i żadna wartość nie jest zgadywana.",
+        "retry": "Ponów"
+      }
     }
   },
   "legal": {
@@ -11886,6 +12402,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "Uruchomienie",
     "searchLabel": "Szukaj w tym uruchomieniu",
     "gloss": "co zrobił agent",
@@ -11961,8 +12479,9 @@
     "sectionPast": "Poprzednie uruchomienia",
     "noneRunning": "Nic nie działa.",
     "nonePast": "Żadne uruchomienie jeszcze się nie zakończyło.",
-    "colCommand": "Polecenie",
-    "colScope": "Zakres",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, one {and # more work item} other {and # more work items}}",
     "colAgent": "Agent",
     "colStarted": "Rozpoczęto",
     "colStatus": "Status",
@@ -12010,6 +12529,10 @@
       "expired": {
         "title": "Poza okresem przechowywania",
         "body": "Treści logów są usuwane 30 dni po uruchomieniu. Treści tego uruchomienia zostały już usunięte."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12023,6 +12546,8 @@
       "approvedFor": "zatwierdzono dla {key}",
       "materialized": "{count, plural, one {# propozycja zrealizowana} few {# propozycje zrealizowane} many {# propozycji zrealizowanych} other {# propozycji zrealizowanej}}",
       "bugFiled": "Zarejestrowano błąd",
+      "discrepancy": "Zbudowano inaczej",
+      "discrepancyPoints": "{count, plural, one {# punkt} few {# punkty} many {# punktów} other {# punktu}}",
       "open": "Otwórz →"
     },
     "scope": {
@@ -12348,7 +12873,10 @@
       "progressAria": "Wykonano {done} z {total} kroków",
       "progressAllDone": "Wykonano {total} z {total} kroków",
       "door": "Przeprowadź mnie"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "Dodaj repozytorium",
@@ -12514,6 +13042,8 @@
         "subject_gone": "To, czego dotyczyło pytanie, już nie istnieje, więc to pytanie zostało wycofane.",
         "no_longer_manual": "Element roboczy nie jest już pracą ręczną, więc to pytanie zostało wycofane.",
         "closed_without_decision": "Element roboczy został zamknięty bez oznaczenia go jako gotowy, więc to pytanie zostało wycofane.",
+        "not_ready": "Element roboczy jest zablokowany przez inną pracę, więc to pytanie zostało wycofane, dopóki nie będzie można go rozpocząć.",
+        "replanned": "Element roboczy został zaplanowany ponownie, więc to pytanie zostało wycofane.",
         "unknown": "To pytanie zostało wycofane. Nie zapisano powodu."
       },
       "causeByKind": {
@@ -14237,7 +14767,9 @@
       "completed": "To wszystko, o co musiałem zapytać.",
       "nothingToAsk": "Nie mam pytań: to wystarczająco jasne, by planować. Teraz piszę plan.",
       "stopped": "Przerwano przepytywanie.",
-      "stoppedNoAnswer": "Przerwano przepytywanie przed jakąkolwiek odpowiedzią. Nic nie zostało zapisane."
+      "stoppedNoAnswer": "Przerwano przepytywanie przed jakąkolwiek odpowiedzią. Nic nie zostało zapisane.",
+      "handoffFailed": "Przepytaj mnie nie mogło zadać pytań, więc plan powstaje bez nich. Twoja prośba pozostaje taka, jak ją napisano.",
+      "handoffNoCredit": "Przepytaj mnie potrzebuje środków AI, aby zadać pytania, więc plan powstaje bez nich."
     },
     "summary": {
       "title": "Co ustalono",
@@ -14266,6 +14798,8 @@
     "translate": "Przetłumacz",
     "translating": "Tłumaczenie…",
     "showOriginal": "Pokaż oryginał",
+    "originalIn": "Oryginał: {language}",
+    "originalNotRecorded": "Język oryginału nie został zapisany",
     "showTranslation": "Pokaż tłumaczenie",
     "retry": "Ponów",
     "hintInto": "na język: {language}",
@@ -14298,5 +14832,18 @@
     "liveFailedCount": "{n, plural, one {# pola nie udało się przetłumaczyć.} few {# pól nie udało się przetłumaczyć.} many {# pól nie udało się przetłumaczyć.} other {# pola nie udało się przetłumaczyć.}}",
     "liveNoCredits": "Tłumaczenie wymaga kredytów AI.",
     "liveEdited": "Pole {field} zostało edytowane i przetłumaczone ponownie."
+  },
+  "titleTranslation": {
+    "addCredit": "Dodaj kredyty",
+    "liveDone": "Tytuły przetłumaczone",
+    "liveFailed": "Nie udało się przetłumaczyć niektórych tytułów",
+    "liveNoCredit": "Tytuły są wyświetlane w języku oryginału: brak kredytów",
+    "livePending": "Tłumaczenie tytułów…",
+    "marked": "Przetłumaczono",
+    "markedFrom": "Przetłumaczono z języka: {language}",
+    "noCredit": "Tytuły pozostają w języku oryginału, ponieważ Twoja organizacja nie ma już kredytów.",
+    "pendingMark": "Tłumaczenie",
+    "showOriginal": "Pokaż oryginał",
+    "showTranslation": "Pokaż tłumaczenie"
   }
 }

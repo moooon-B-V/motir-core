@@ -6,6 +6,7 @@ import { planValidityService } from '@/lib/services/planValidityService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
   isCoverageAdvisory,
+  isTitleCoverageAdvisory,
   isBlockerCountAdvisory,
   isPathReferenceAdvisory,
   isOrderingAdvisory,
@@ -14,13 +15,18 @@ import {
   isBodyAboveFieldMoveAdvisory,
   isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
+  isUnderAuthoredAdvisory,
+  isMislabelledLinkAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
 import {
   BODY_ABOVE_FIELD_MOVE_REMEDY,
   describeBodyAboveFieldMove,
 } from '@/lib/workItems/bodyAboveFieldMove';
-import type { WorkItemValidityDto } from '@/lib/dto/workItems';
+import type {
+  WorkItemProseMislabelledLinkAdvisoryDto,
+  WorkItemValidityDto,
+} from '@/lib/dto/workItems';
 import type { ValidityCondition } from '@/lib/dto/sprints';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
@@ -94,16 +100,30 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   const selfBlocking = result.advisories.filter(isSelfBlockingDesignAdvisory);
   const bodyAbove = result.advisories.filter(isBodyAboveFieldMoveAdvisory);
   const blockerCounts = result.advisories.filter(isBlockerCountAdvisory);
+  const underAuthored = result.advisories.filter(isUnderAuthoredAdvisory);
+  const mislabelled = result.advisories.filter(isMislabelledLinkAdvisory);
   const uncovered = result.advisories.filter(isCoverageAdvisory);
+  const unnamedTitles = result.advisories.filter(isTitleCoverageAdvisory);
   const pathReferences = result.advisories.filter(isPathReferenceAdvisory);
 
   const lines: string[] = [];
+  for (const a of underAuthored) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): ${a.item} is UNDER-AUTHORED — ${
+        a.criteria === 'no-heading'
+          ? 'no `## Acceptance criteria` heading'
+          : 'an `## Acceptance criteria` heading with no criterion under it'
+      }, and null storyPoints, estimateMinutes, type and executor. Author it before sealing; every other check reads an empty list as clean.`,
+    );
+  }
   for (const a of blockerCounts) {
     lines.push(
       '',
       `Advisory (${unaffected}): ${a.item} claims "${a.claim}" (${a.claimedCount}), but its graph holds ${a.blockerCount} blocked_by edge${a.blockerCount === 1 ? '' : 's'}. Update the prose or the graph.`,
     );
   }
+  lines.push(...mislabelledLinkLines(mislabelled, unaffected));
   if (references.length > 0) {
     lines.push(
       '',
@@ -286,6 +306,22 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
         'not name it is reported here too, and a criterion over every child ("Each story …") never is.',
     );
   }
+  // The TITLE-COVERAGE family (MOTIR-8647) — the container's body against its own
+  // TITLE. Everything under a container is laid against the body, so a body that
+  // silently drops a part of the title narrows the whole subtree unmarked.
+  if (unnamedTitles.length > 0) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): these containers have a title word their body never mentions, ` +
+        'so the work laid under them is laid against a narrower scope than the title promises:',
+      ...unnamedTitles.map(
+        (a) => `  ${a.item} body never mentions: ${a.words.join(', ')} (${a.severity})`,
+      ),
+      'Restore the part in the body, or state it as excluded with the work item that owns it — ' +
+        'never trim the title to fit the body. A part the body delivers under another word is ' +
+        'reported here too.',
+    );
+  }
   // The PATH-REFERENCE family (MOTIR-5424) — gate 4 read on a PATH rather than a
   // key. MOTIR-5231 cited a mock its design sibling was creating, with no edge,
   // and every key-based check on this surface was silent about it.
@@ -314,6 +350,24 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
  * The UNCOVERED CROSS-PARENT lines (MOTIR-6370) — shared wording for both
  * validators' text blocks. Empty when there are none.
  */
+/**
+ * The MISLABELLED-LINK advisories (MOTIR-9007), one block per link. Exported for
+ * `validate_plan`, which reports the same finding over a plan's proposed bodies.
+ * `unaffected` is the caller's "not a blocker" clause — the two verdicts phrase it
+ * differently.
+ */
+export function mislabelledLinkLines(
+  advisories: readonly WorkItemProseMislabelledLinkAdvisoryDto[],
+  unaffected: string,
+): string[] {
+  return advisories.flatMap((a) => [
+    '',
+    a.targetKey === null
+      ? `Advisory (${unaffected}): ${a.item} links "${a.label}" to motir:${a.targetId}, which opens NO work item. Fix the id — resolve the key you meant with get_work_item.`
+      : `Advisory (${unaffected}): ${a.item} links "${a.label}" to motir:${a.targetId}, which is ${a.targetKey}. The label and the card disagree — fix the id or the label.`,
+  ]);
+}
+
 export function invalidEdgeLines(
   invalidEdges: ReadonlyArray<{
     item: string;
@@ -369,6 +423,46 @@ export function crossLevelEdgeLines(
 }
 
 /**
+ * The SECTION-finding lines (MOTIR-9032) — shared wording for both validators.
+ * The body parsed against the section registry, a required section named when it
+ * is missing. ADVISORY: stated as a count in a valid verdict, so a reader who
+ * sees VALID is told in the same breath that the findings did not change it.
+ * Empty when there are none.
+ */
+export function sectionFindingLines(
+  findings: ReadonlyArray<{
+    item: string;
+    kind: string;
+    type: string | null;
+    state: 'unstructured' | 'incomplete';
+    missing: string[];
+    invalid: { section: string; message: string }[];
+    otherHeadings: string[];
+    signals: string[];
+  }>,
+  verdict: 'valid' | 'invalid',
+): string[] {
+  if (findings.length === 0) return [];
+  return [
+    '',
+    `Section findings (${findings.length}, advisory — they do NOT change ${
+      verdict === 'valid' ? 'VALID' : 'the verdict'
+    }): the body parsed against the sections its kind and type expect:`,
+    ...findings.map((f) => {
+      const parts: string[] = [];
+      if (f.missing.length > 0) parts.push(`missing ${f.missing.join(', ')}`);
+      if (f.invalid.length > 0) {
+        parts.push(`invalid ${f.invalid.map((i) => `${i.section} — ${i.message}`).join(', ')}`);
+      }
+      if (f.otherHeadings.length > 0) parts.push(`other headings ${f.otherHeadings.join(', ')}`);
+      if (f.signals.length > 0) parts.push(`signals ${f.signals.join(', ')}`);
+      return `  ${f.item} (${f.kind}/${f.type ?? 'untyped'}, ${f.state}): ${parts.join('; ')}`;
+    }),
+    'Re-write the card with `sections` (see `get_section_sets`) so each section is named, or add the missing heading to the body.',
+  ];
+}
+
+/**
  * The SOFT-block lines (MOTIR-6368) — an ancestor's open blocker, which reaches
  * the target only through the readiness cascade. Phrased as information, never a
  * failure: soft blocks do not change `valid`.
@@ -402,6 +496,7 @@ function summarize(result: WorkItemValidityDto, planId?: string): string {
       `Work item ${result.key} is VALID — its whole subtree can be finished within itself${over}.`,
       ...softBlockLines(result),
       ...advisoryLines(result),
+      ...sectionFindingLines(result.sectionFindings, 'valid'),
     ].join('\n');
   }
   if (result.blockers.length === 0) {
@@ -413,6 +508,7 @@ function summarize(result: WorkItemValidityDto, planId?: string): string {
       ...crossLevelEdgeLines(result.crossLevelEdges),
       ...softBlockLines(result),
       ...advisoryLines(result),
+      ...sectionFindingLines(result.sectionFindings, 'invalid'),
     ].join('\n');
   }
   return [
@@ -428,6 +524,7 @@ function summarize(result: WorkItemValidityDto, planId?: string): string {
     ...crossLevelEdgeLines(result.crossLevelEdges),
     ...softBlockLines(result),
     ...advisoryLines(result),
+    ...sectionFindingLines(result.sectionFindings, 'invalid'),
   ].join('\n');
 }
 
@@ -487,7 +584,7 @@ export function registerValidateWorkItem(
         'dependency outside the subtree counts as satisfied); pass `tight` to require every ' +
         'dependency to be IN the subtree (a done item outside it is then reported as a blocker). ' +
         'Returns `{ key, valid, blockers: [...], invalidEdges: [...], crossLevelEdges: [...], ' +
-        'advisories: [...], softBlocks: [...] }` — `blockers` naming each in-subtree item and the out-of-subtree, ' +
+        'advisories: [...], softBlocks: [...], sectionFindings: [...] }` — `blockers` naming each in-subtree item and the out-of-subtree, ' +
         'unsatisfied work gating it (always an item’s OWN blocked_by edge); `invalidEdges` naming ' +
         'each same-level blocked_by between items under DIFFERENT parents whose parents carry no ' +
         'matching edge (`{ item, blockedBy, itemParent, blockerParent }` — a cross-parent edge is ' +
@@ -533,12 +630,18 @@ export function registerValidateWorkItem(
         'trail), or ' +
         "`likely-blocker-count-mismatch` when an explicit counted claim about the card's own " +
         'blocker siblings disagrees with its current blocked_by edge count (with the exact ' +
-        '`claim`, `claimedCount`, and `blockerCount`). A `coverage` ' +
+        '`claim`, `claimedCount`, and `blockerCount`), or `under-authored` when a CHILDLESS card ' +
+        'has no enumerated acceptance criterion AND null `storyPoints`, `estimateMinutes`, `type` ' +
+        'and `executor` (with `criteria`: `no-heading` or `no-criterion` — a pure null check, ' +
+        'never a gate, because a card is routinely saved mid-authoring), or ' +
+        '`likely-mislabelled-link` when a `[label](motir:<id>)` link in the body opens a ' +
+        'different card than the key its label names, or opens no card at all (with the ' +
+        '`label`, the `targetId`, and the `targetKey` it really opens, `null` for none). A `coverage` ' +
         'advisory (`kind: "coverage"`, `likely-unowned-criterion`) names a CONTAINER one of whose ' +
         "acceptance criteria no direct child's TITLE carries, reported only when a child was " +
         'created BEFORE the container (adopted) — with the `criterionIndex` and the ' +
         '`adoptedChildren`; the remedy is to widen the adopted work item on the record or file the ' +
-        'sibling that covers the difference. A `path-reference` advisory (`kind: ' +
+        'sibling that covers the difference. A `title-coverage` advisory (`kind: "title-coverage"`, `likely-unnamed-title-part`) names a CONTAINER whose body never mentions one or more distinguishing words its TITLE carries — with the `words`; the remedy is to restore the part in the body or state it as excluded with its owner. A `path-reference` advisory (`kind: ' +
         '"path-reference"`, `likely-missing-path-edge`) names a card whose acceptance criterion ' +
         'names a FILE PATH that does not exist yet on the default branch of its repository (its ' +
         'top-level directory does) while ANOTHER not-done work item also names that path, with no ' +
@@ -546,6 +649,10 @@ export function registerValidateWorkItem(
         'the `repo`, and the other item as `referenced` / `referencedStatus`; the remedy is to ' +
         'wire blocked_by from the citing card to the creating one. Advisories ' +
         'never affect `valid` or `blockers` — a card with advisories is still valid and ready. ' +
+        '`sectionFindings` is a second advisory channel of the same kind: each not-done subtree ' +
+        'card whose BODY, parsed against the section registry for its kind and type, misses a ' +
+        'required section or carries one it cannot read, as `{ item, state: "unstructured" | ' +
+        '"incomplete", missing, invalid, otherHeadings, signals }` — it never changes `valid`. ' +
         'Pass `planId` to ask the SAME question over a plan you are authoring: the verdict is ' +
         'then computed over the project’s live tree ⊕ that plan’s proposals, so you can check a ' +
         'subtree you have PROPOSED before anybody reviews it. With a `planId`, `invalidEdges` ' +

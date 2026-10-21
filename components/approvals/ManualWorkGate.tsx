@@ -139,7 +139,7 @@ function ManualWorkPort({ view, done }: { view: ManualWorkPortDTO; done: boolean
           </ul>
         </ContentSectionCard>
       ) : (
-        <div className="flex flex-col items-center justify-center gap-1 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-4 py-10 text-center">
+        <div className="flex flex-col items-center justify-center gap-1 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-card-padding-16) py-10 text-center">
           <p className="text-[13px] font-medium text-(--el-text)">{t('noList.title')}</p>
           <p className="text-xs text-(--el-text-secondary)">{t('noList.body')}</p>
         </div>

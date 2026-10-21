@@ -199,11 +199,13 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   list_projects: 'read',
   get_project_state: 'read',
   get_code_health: 'read',
+  get_coding_convention: 'read',
   read_file: 'read',
   code_explore: 'read',
   code_search: 'read',
   skeleton: 'read',
   list_folders: 'read',
+  get_section_sets: 'read',
   // MOTIR-7410 — a page read. Mapped into the RETIRED vocabulary only because
   // this table is total over the registry; its real gate is `page:view`.
   get_page: 'read',
@@ -211,6 +213,7 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // only; their real gate is `page:edit`.
   create_page: 'work_items:write',
   update_page: 'work_items:write',
+  rename_page: 'work_items:write',
   // A WRITE: it seals a page version, records the publication and may raise a gate.
   publish_decision_page: 'work_items:write',
   // The SEMANTIC search (MOTIR-3101). A read at the gate — `assertCanBrowse` and
@@ -244,6 +247,10 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // already carries that key, so this row adds no loss and no widening
   // (`tests/mcp/scopes.test.ts`'s forward-map check).
   report_unbuildable_target: 'work_items:write',
+  // The run discrepancy record (MOTIR-8657). A comment on the card and a finding on the
+  // caller's run leg, gated on `work_item:edit` (`TOOL_PERMISSIONS`); `work_items:write`'s
+  // forward map already carries that key, so this row adds no loss and no widening.
+  record_run_discrepancy: 'work_items:write',
   open_plan_session: 'read',
   // The plan-AUTHORING door (MOTIR-2988), mapped into the RETIRED six-scope
   // vocabulary only because this table is total over the registry and a new tool

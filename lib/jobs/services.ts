@@ -22,6 +22,7 @@ import { attachmentsService } from '@/lib/services/attachmentsService';
 import { publicAddressCertificatesService } from '@/lib/services/publicAddressCertificatesService';
 import { rateLimitService } from '@/lib/services/rateLimitService';
 import { oauthSweepService } from '@/lib/services/oauthSweepService';
+import { workItemEmbeddingSweepService } from '@/lib/services/workItemEmbeddingSweepService';
 import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
 import { publicFollowDigestService } from '@/lib/services/publicFollowDigestService';
 import { automationEngineService } from '@/lib/services/automationEngineService';
@@ -40,6 +41,7 @@ import { fleetDebitMonitorService } from '@/lib/services/fleetDebitMonitorServic
 import { ciLiveChargeService } from '@/lib/services/ciLiveChargeService';
 import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
+import { ciRunnerReconcileService } from '@/lib/services/ciRunnerReconcileService';
 import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthService';
 import { fleetPreflightService } from '@/lib/services/fleetPreflightService';
 import { indexRebuildStreakService } from '@/lib/services/indexRebuildStreakService';
@@ -98,6 +100,8 @@ export const jobServices = {
   rateLimit: rateLimitService,
   // The daily OAuth sweep (MOTIR-6984).
   oauthSweep: oauthSweepService,
+  // The hourly work-item embedding sweep (MOTIR-8227).
+  workItemEmbeddingSweep: workItemEmbeddingSweepService,
   savedFilterSubscriptions: savedFilterSubscriptionsService,
   publicFollowDigest: publicFollowDigestService,
   automationEngine: automationEngineService,
@@ -121,6 +125,8 @@ export const jobServices = {
   fleetDebitMonitor: fleetDebitMonitorService,
   ciActionsGate: ciActionsGateService,
   ciRunnerBoot: ciRunnerBootService,
+  // The GitHub-side reconcile of the fleet's queue (MOTIR-8976).
+  ciRunnerReconcile: ciRunnerReconcileService,
   // A hosted run's supervision (Story MOTIR-683 · MOTIR-690).
   hostedRun: hostedRunService,
   jobScheduleHealth: jobScheduleHealthService,

@@ -218,8 +218,12 @@ test.describe('settings-area — the project-settings area journey', () => {
 
     await signIn(page, member.email, PWD);
 
-    // The bottom-nav door is not offered at all — the area has nothing behind it.
-    await expect(page.getByRole('link', { name: 'Settings', exact: true })).toHaveCount(0);
+    // The bottom-nav door opens on the one room a reader may see, Translation
+    // (MOTIR-7738 · MOTIR-8830) — never on the administrative area.
+    await expect(page.getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute(
+      'href',
+      '/settings/project/translation',
+    );
     // …and it is not merely unmentioned: typing the URL meets the refusal.
     await page.goto('/settings/project');
     await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible();

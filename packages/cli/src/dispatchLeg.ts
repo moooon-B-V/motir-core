@@ -76,7 +76,13 @@ export type DispatchLegVerdict =
   /** Exit 0, work on the remote, the card genuinely built. `suspects` is
    *  non-empty when a bootstrap dispatch did not produce its checkout — which
    *  the CALLER decides the severity of. */
-  | { kind: 'succeeded'; model: string | null; suspects: SuspectDispatch[] };
+  | {
+      kind: 'succeeded';
+      model: string | null;
+      /** The agent's own session id (MOTIR-9048) — what the CI watch resumes; null when it reported none. */
+      sessionId: string | null;
+      suspects: SuspectDispatch[];
+    };
 
 export interface DispatchLegInput {
   client: Pick<MotirClient, 'getWorkItem' | 'listWorkItemDesigns'>;
@@ -197,7 +203,12 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
     kind: 'agent_started',
     workItemKey: key,
     disposition: 'running',
-    data: { agent: agent.binary },
+    data: {
+      agent: agent.binary,
+      // The agent's session, when Motir chose it or is resuming it (MOTIR-8980) — known
+      // before the agent runs, so a run that dies still names the conversation.
+      ...(agent.stream?.sessionId ? { sessionId: agent.stream.sessionId } : {}),
+    },
   });
   // The producer for the `log` event kind (MOTIR-3961). `null` unless the
   // operator passed `--report-log`, and then the spawn is unchanged.
@@ -238,8 +249,33 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
     // renders that rather than inventing one. TOP-LEVEL is what the server writes
     // onto the leg (MOTIR-7504); `data` keeps its copy so the stream reads as before.
     model: result.model ?? null,
-    data: { model: result.model ?? null, signal: result.signal ?? null },
+    data: {
+      model: result.model ?? null,
+      signal: result.signal ?? null,
+      // The agent's own session id (MOTIR-8980) — what a later fix resumes. Null when the
+      // agent ran in a form that has none, so the key's absence never reads as unknown.
+      sessionId: result.sessionId ?? null,
+    },
   });
+
+  // THE RUN-FOUND REPORT (MOTIR-8698) — the agent stopped on an unbuildable card and
+  // said why in its self-report. The CLI makes the report, with the run's own
+  // credential, because the agent may hold none (a hosted run, a run inside an agent
+  // instance) or have no Motir MCP to make it with. BEFORE any verdict settles the
+  // leg: the server records it on the leg that is still open. Whatever the exit
+  // code — an agent that reported and then failed still found what it found.
+  if (result.unbuildableReason) {
+    await reporter.reportUnbuildable?.(key, result.unbuildableReason);
+  }
+
+  // THE AGENT'S OTHER WRITES (MOTIR-8722) — its build-through record and its STOP, which
+  // the prompt sends through `$MOTIR_AGENT_REPORT` when the agent has no Motir tools (a
+  // hosted run, a run inside an agent instance). Made with the run's credential, BEFORE the
+  // verdict below: the STOP's move to Planning is what `agentSubmittedReplan` then reads.
+  if (result.discrepancy && result.discrepancy.length > 0) {
+    await reporter.reportDiscrepancy?.(key, result.discrepancy);
+  }
+  if (result.stop) await reporter.reportStop?.(key, result.stop);
 
   if (result.exitCode !== 0) {
     return settle({
@@ -264,5 +300,10 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
   // second half had no checkout to happen in is exactly the run that otherwise
   // exits 0 with half the work missing.
   const suspects = over.map((t) => checkBootstrapCheckout(t)).filter((s) => s !== null);
-  return settle({ kind: 'succeeded', model: result.model ?? null, suspects });
+  return settle({
+    kind: 'succeeded',
+    model: result.model ?? null,
+    sessionId: result.sessionId ?? null,
+    suspects,
+  });
 }

@@ -222,7 +222,7 @@ export function ConnectStep({
               aria-checked={selected}
               onClick={() => onSelectSource(s)}
               className={cn(
-                'flex flex-col items-start gap-2 rounded-(--radius-card) border p-4 text-left transition-shadow',
+                'flex flex-col items-start gap-2 rounded-(--radius-card) border p-(--spacing-card-padding-16) text-left transition-shadow',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                 selected
                   ? 'border-(--el-accent) ring-2 ring-[color-mix(in_srgb,var(--el-accent)_18%,transparent)]'
@@ -257,7 +257,7 @@ export function ConnectStep({
 
       {/* Per-source connection panel */}
       {source ? (
-        <div className="flex flex-col gap-4 rounded-(--radius-card) border border-(--el-border) p-4">
+        <div className="flex flex-col gap-4 rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding-16)">
           {source !== 'csv' ? (
             <LiveConnect
               source={source}
@@ -283,7 +283,7 @@ export function ConnectStep({
       {(error || justConnectedFailed) && source ? (
         <div
           role="alert"
-          className="rounded-(--radius-card) bg-(--el-tint-rose) p-3 text-sm text-(--el-text-strong)"
+          className="rounded-(--radius-card) bg-(--el-tint-rose) p-(--spacing-card-padding-12) text-sm text-(--el-text-strong)"
         >
           <p className="font-medium">
             {t('connect.connectFailedTitle', { source: sourceName(source) })}
@@ -472,7 +472,7 @@ function CsvConnect({
       <button
         type="button"
         onClick={() => csvInputRef.current?.click()}
-        className="flex flex-col items-center gap-1 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-6 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+        className="flex flex-col items-center gap-1 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding) text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
       >
         <FileUp className="size-6 text-(--el-text-muted)" aria-hidden />
         <span className="text-sm text-(--el-text)">{t('connect.csv.dropzone')}</span>
@@ -492,7 +492,7 @@ function CsvConnect({
       {csvError ? (
         <p
           role="alert"
-          className="rounded-(--radius-card) bg-(--el-tint-rose) p-2 text-sm text-(--el-text-strong)"
+          className="rounded-(--radius-card) bg-(--el-tint-rose) p-(--spacing-card-padding-8) text-sm text-(--el-text-strong)"
         >
           {csvError}
         </p>

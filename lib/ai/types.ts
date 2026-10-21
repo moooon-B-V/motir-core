@@ -6,6 +6,7 @@
 
 import type { GuideContext } from '@/lib/ai/guideWorkItem';
 import type { TranslateJobInput } from '@/lib/ai/translate';
+import type { Locale } from '@/lib/i18n/locales';
 
 export const ENVELOPE_VERSION = 'v1' as const;
 
@@ -166,6 +167,23 @@ export interface Tenant {
   // does not yet read it simply keeps searching — the switch is then recorded and
   // sent, and takes effect when the far side honours it.
   webSearch?: boolean;
+  // THE TWO LANGUAGES A WRITING JOB WRITES IN (Story MOTIR-7734 · MOTIR-8737).
+  // The producer is `resolveTenantLanguages` (`lib/ai/tenantLanguages.ts`):
+  // `contentLanguage` is the org's content language — stored work content is
+  // written in it; `personLanguage` is the saved account language of the person
+  // the job answers — replies and explanations are written in it.
+  //
+  // ⚠️ `personLanguage: ''` IS NOT `personLanguage` ABSENT. `''` says "no
+  // requesting person" (a schedule or a monitor started the job); motir-ai then
+  // writes explanations in the content language. ABSENT means a producer forgot
+  // the field, and motir-ai REFUSES a writing job that lacks either (MOTIR-8736).
+  //
+  // Optional on the TS type for the same wire reason as `internalBilling`: older
+  // fixtures and the non-writing kinds stay representable. The six writing kinds
+  // (`plan`, `ask_project`, `generate_explanation`, `author_bug`, `debug_bug`,
+  // `analyze_bug`) always set both.
+  contentLanguage?: Locale;
+  personLanguage?: Locale | '';
   workspaceId: string;
   projectId: string;
   projectKey: string;
@@ -569,8 +587,20 @@ export interface SubmittedRequirement {
   constraints?: string;
   /** How somebody will know it is done, as an observation rather than a test name. */
   acceptance?: string;
-  /** What was concluded that nobody confirmed. May be blank. */
-  assumptions?: string;
+  /**
+   * What was concluded that nobody confirmed — a LIST of recommendations, each
+   * with a stable id (MOTIR-9160), so a verdict can name the one it answers
+   * rather than the planner guessing at where prose divides. May be empty.
+   * A bare string is still accepted (a requirement stored before the list
+   * existed, or an older sender) and is read as ONE recommendation.
+   */
+  assumptions?: string | (string | RequirementRecommendation)[];
+}
+
+/** One of the planner's uncorrected recommendations. `id` is assigned by the reader when absent. */
+export interface RequirementRecommendation {
+  id?: string;
+  text: string;
 }
 
 /** The `context.sprintPlanning` hole a `plan_sprint` submit fills (7.13.4). */
@@ -715,6 +745,8 @@ export interface Problem {
   jobId?: string;
   /** Where a failed planning walk stopped (MOTIR-7909). Untrusted until parsed. */
   walkStop?: unknown;
+  /** Present only on a coding-convention save refused for a stale base (MOTIR-9080). */
+  conventionConflict?: { code: 'CONVENTION_VERSION_CONFLICT'; latestVersion: number };
 }
 
 // The raw GET /v1/jobs/:id wire body (contract §2.4). The client maps this into
@@ -724,6 +756,8 @@ export interface RawJobResponse {
   status: JobStatus;
   result: ResultEnvelope | null;
   error: Problem | null;
+  /** Present on a failed planning job only (MOTIR-9121). */
+  resumable?: unknown;
 }
 
 // An SSE frame from GET /v1/jobs/:id/stream (contract §2.4): `event` is

@@ -9,6 +9,7 @@ import {
   Gauge,
   Globe,
   KeyRound,
+  Languages,
   Link2,
   ShieldCheck,
   SlidersHorizontal,
@@ -601,6 +602,36 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     // A BUILD fact (MOTIR-6995): absent off a deployment that runs no hosted
     // agents, and the route 404s there. Motir AI being DOWN keeps the row.
     hostedRunsOnly: true,
+  },
+  {
+    id: 'translation',
+    group: 'automation',
+    href: '/settings/project/translation',
+    icon: Languages,
+    labelKey: 'nav.translation',
+    // Story MOTIR-7738 · MOTIR-8830, drawn by MOTIR-8822
+    // (`design/settings/auto-translate.mock.html` · `design/settings/design-notes.md`
+    // § Auto-translate room). The project's Auto-translate work content switch and
+    // the read-back of who changed it. DIRECTLY UNDER Hosted agent, above Rules: the
+    // rooms that configure what Motir does on this project's behalf, and what it
+    // costs, sit together; Rules is user-authored automation and stays last.
+    //
+    // VERIFIED (write key): `projectAutoTranslateSettingsService.updateSettings`
+    // asserts `project:administer`. It gates the switch; the page reads it through
+    // `settingsEntryKeys('translation')`.
+    permission: 'project:administer',
+    // ⚠️ A DISTINCT VIEW KEY, DECIDED BY THE PROJECT OWNER (2026-10-17, recorded in
+    // the design notes), AND IT BRINGS THE AREA DOOR BACK FOR EVERY ACTOR WHO CAN
+    // BROWSE THE PROJECT, viewers included, on EVERY build (the room has no build
+    // flag). Seeing the setting follows reading the project's work items, which
+    // `project:browse` gates: every role that reads them may read whether they are
+    // auto-translated.
+    // VERIFIED: `projectAutoTranslateSettingsService.getSettings` asserts
+    // `project:browse`. Its evidence row is in
+    // `tests/settings/projectSettingsNav.test.ts`'s VIEW_KEY_EVIDENCE, and the
+    // suites that pinned *a member is offered no settings area* now say what they
+    // mean.
+    viewPermission: 'project:browse',
   },
   {
     id: 'automation',

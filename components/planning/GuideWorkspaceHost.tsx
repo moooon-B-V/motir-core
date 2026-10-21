@@ -1,13 +1,18 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { X } from 'lucide-react';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { OverlayExitButton } from '@/components/ui/OverlayExitButton';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { GuideTodoCanvas } from '@/components/planning/GuideTodoCanvas';
 import { GuideRail } from '@/components/planning/GuideRail';
 import { useGuideConversation, type GuideTodoAccess } from '@/lib/hooks/useGuideConversation';
 import { deriveGuideView } from '@/lib/planning/guideView';
+import { withPlanningOverlay } from '@/lib/planning/launcher';
+import { shallowPush } from '@/lib/navigation/shallowUrl';
+import { useAiAccess } from '@/lib/hooks/useAiAccess';
+import { useProjectAccess } from '@/app/(authed)/_components/ProjectAccessProvider';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
 import { useRequestWorkbenchReread } from '@/lib/workbench/workbenchReread';
 import { listTodosAction, setTodoDoneAction } from '@/app/(authed)/items/[key]/todoActions';
@@ -40,7 +45,12 @@ export function GuideWorkspaceHost({ projectName, card, onClose }: GuideWorkspac
   const t = useTranslations('planningWorkspace');
   const tg = useTranslations('planningWorkspace.guide');
   const requestWorkbenchReread = useRequestWorkbenchReread();
-  const { state, send, retry, reloadRows, setRowDone } = useGuideConversation({
+  const { can } = useProjectAccess();
+  const { blocked: outOfCreditsNow } = useAiAccess();
+  const [offerBlocked, setOfferBlocked] = useState(false);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { state, send, retry, reloadRows, setRowDone, declineOffer } = useGuideConversation({
     itemKey: card.identifier,
     workItemId: card.id,
     todos: TODOS,
@@ -51,6 +61,27 @@ export function GuideWorkspaceHost({ projectName, card, onClose }: GuideWorkspac
     [state.session, state.rows, state.phase],
   );
   const title = view.editedTitle ?? card.title;
+
+  // CONFIRM, and a confirmed offer's link, open the planner FROM THE OFFER (MOTIR-8694):
+  // the overlay's address is rewritten to `plan=contextual&planFrom=guide-offer&planOffer=
+  // <turnId>` and the overlay's seed read does the rest (MOTIR-8693). A push, so Back
+  // returns to the stopped guide; nothing is sent from here and no text is in the URL.
+  const openOffer = (turnId: string): boolean => {
+    // OUT OF CREDITS: Confirm spends credits, so the shipped paywall answers in the
+    // rail's own slot and nothing opens (the offer stays undecided).
+    if (outOfCreditsNow) {
+      setOfferBlocked(true);
+      return false;
+    }
+    const qs = searchParams.toString();
+    shallowPush(
+      withPlanningOverlay(`${pathname}${qs ? `?${qs}` : ''}`, {
+        kind: 'guide-offer',
+        guideTurnId: turnId,
+      }),
+    );
+    return true;
+  };
 
   // When the guide goes away — by Close, Esc, the scrim or Back alike — a
   // Workbench underneath re-reads its window in place. The card's own page is the
@@ -69,17 +100,7 @@ export function GuideWorkspaceHost({ projectName, card, onClose }: GuideWorkspac
         // pushed the chat column off the right edge (and the divider with it).
         <div className="flex h-full min-h-0 min-w-0 flex-col bg-(--el-canvas)">
           <div className="flex items-center gap-3 border-b border-(--el-border-soft) bg-(--el-surface) px-4 py-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-            >
-              <X className="h-4 w-4 shrink-0" aria-hidden />
-              {t('close')}
-              <kbd className="ml-1 rounded-(--radius-kbd) border border-(--el-border) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[0.6875rem] text-(--el-text-secondary)">
-                {t('escKey')}
-              </kbd>
-            </button>
+            <OverlayExitButton onClose={onClose} label={t('close')} escLabel={t('escKey')} />
             {/* THE CRUMB NAMES THE CARD (design § What guide mode changes, 2):
                 project / KEY title, the key in the identifier ink, the title
                 truncating — and the title the walk last set, marked until the
@@ -96,7 +117,7 @@ export function GuideWorkspaceHost({ projectName, card, onClose }: GuideWorkspac
                 data-testid="guide-crumb-title"
                 className={`truncate font-semibold text-(--el-text) ${
                   view.titleEditedNow
-                    ? 'guide-title--edited rounded-(--radius-kbd) bg-(--el-diff-added) px-1'
+                    ? 'guide-title--edited rounded-(--radius-kbd) bg-(--el-diff-added) px-(--spacing-control-x-4)'
                     : ''
                 }`}
               >
@@ -125,11 +146,18 @@ export function GuideWorkspaceHost({ projectName, card, onClose }: GuideWorkspac
           view={view}
           phase={state.phase}
           errorCode={state.errorCode}
-          outOfCredits={state.outOfCredits}
+          outOfCredits={state.outOfCredits || offerBlocked}
           markers={state.markers}
           onSend={(text, attachmentIds) => void send(text, attachmentIds)}
           onRetry={() => void retry()}
           onReload={() => void reloadRows()}
+          canPlan={state.planning.canPlan && can('ai:plan')}
+          cannotPlanReason={
+            state.planning.reason ?? (can('ai:plan') ? null : ('no_permission' as const))
+          }
+          decliningTurnId={state.decliningTurnId}
+          onOpenOffer={openOffer}
+          onDeclineOffer={(id) => void declineOffer(id)}
         />
       }
     />

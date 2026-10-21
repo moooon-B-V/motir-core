@@ -98,7 +98,7 @@ export function OrgFleetCard({ orgId, orgName, role, row, window, lastStop }: Or
           <div className="flex min-w-0 items-center gap-2">
             <span
               aria-hidden
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-sky) text-(--el-info)"
+              className="inline-flex h-(--height-control-32) w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-sky) text-(--el-info)"
             >
               <Server className="h-4 w-4" />
             </span>

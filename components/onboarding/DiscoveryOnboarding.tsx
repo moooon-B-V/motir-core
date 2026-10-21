@@ -306,7 +306,7 @@ export function DiscoveryOnboarding({
             </Button>
           )}
           {complete && (
-            <div className="absolute right-4 bottom-4 max-w-[20rem] rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-mint) px-4 py-4 shadow-(--shadow-card)">
+            <div className="absolute right-4 bottom-4 max-w-[20rem] rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-mint) px-(--spacing-card-padding-16) py-(--spacing-card-padding-16) shadow-(--shadow-card)">
               <p className="font-medium text-(--el-text-strong)">{t('completeTitle')}</p>
               <p className="mt-1 text-sm text-(--el-text-strong)">{t('completeBody')}</p>
               {/* The "Go to plan phase" exit (Subtask 7.3.28 / MOTIR-1041) — the

@@ -60,7 +60,7 @@ concurrency:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # NO run on record — this lane has never fired (`gh api
     # actions/workflows/release-brand.yml/runs` → `total_count: 0`) → 15, a
     # STATED FLOOR rather than a measurement. The only comparable evidence is

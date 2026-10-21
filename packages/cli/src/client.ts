@@ -1172,7 +1172,10 @@ export type DispatchEventKind =
   | 'unbuildable_reported'
   // A review run's verdict (MOTIR-6821) — appended by the verdict route's SERVICE,
   // refused by the ingest like the three above.
-  | 'review_verdict';
+  | 'review_verdict'
+  // A run's discrepancy record (MOTIR-8655) — appended by the discrepancy SERVICE in the
+  // same transaction as the card comment, refused by the ingest like the four above.
+  | 'discrepancy_recorded';
 
 export interface DispatchRunOpened {
   runId: string;
@@ -1226,6 +1229,11 @@ export interface DispatchRunRepair {
     baseRef: string | null;
     headSha: string | null;
   }>;
+  /**
+   * The last agent run's profile and recorded session, for an agent-door repair to resume
+   * (MOTIR-9052); null when there is none, and always null from a server older than 1.74.0.
+   */
+  resume: { profile: string; sessionId: string | null; canResume: boolean } | null;
   /** The review's refusal the repair answers, the findings verbatim; null off `review`. */
   findings:
     | (ReviewRefusal & {
@@ -1316,7 +1324,7 @@ export interface DispatchRunAppended {
 
 /**
  * The kinds this CLI may REPORT — every member of {@link DispatchEventKind}
- * except the four the server writes (`review_verdict`, MOTIR-6821, the fourth).
+ * except the five the server writes (`review_verdict`, MOTIR-6821, the fourth; `discrepancy_recorded`, MOTIR-8655, the fifth).
  *
  * ⚠️ THE EXCLUSION IS THE POINT (MOTIR-3981, `run-findings-protocol.md` Q5).
  * `bug_filed`, `plan_submitted` and `unbuildable_reported` (MOTIR-6282) carry
@@ -1328,7 +1336,11 @@ export interface DispatchRunAppended {
  */
 export type ReportableEventKind = Exclude<
   DispatchEventKind,
-  'bug_filed' | 'plan_submitted' | 'unbuildable_reported' | 'review_verdict'
+  | 'bug_filed'
+  | 'plan_submitted'
+  | 'unbuildable_reported'
+  | 'review_verdict'
+  | 'discrepancy_recorded'
 >;
 
 /** One event on the wire. `body` is the OPT-IN log payload — default OFF. */
@@ -2084,6 +2096,11 @@ export class MotirClient {
         // Same rule, same reason (MOTIR-4085): absent means no, so only the one
         // lane that HAS an auto-approving loop ever sends it.
         ...(opts.autoApproveReplan ? { autoApproveReplan: '1' } : {}),
+        // ALWAYS sent (MOTIR-8810): every run this CLI launches reads
+        // `$MOTIR_AGENT_REPORT` and posts its `unbuildable`, `discrepancy` and `stop`
+        // (`dispatchLeg.ts`), so the server may name that file as the route. A CLI
+        // that predates those posts sends nothing and is told to use the tool.
+        agentReport: '1',
         ...(opts.continueFrom ? { continueFrom: opts.continueFrom } : {}),
       },
     });
@@ -2503,6 +2520,71 @@ export class MotirClient {
       if (err instanceof DispatchRunClosedError) return 'closed';
       throw err;
     }
+  }
+
+  /**
+   * The RUN-FOUND REPORT (MOTIR-8698) — the agent stopped because `targetKey`, a card
+   * this run holds, cannot be built as written. The server records it on the card's
+   * leg of this run and, when an approved plan shaped the card unchanged, files ONE
+   * planning bug into Motir's own planner-bug home. The answer is only whether the
+   * card had an open leg on the run.
+   */
+  async reportDispatchRunUnbuildable(args: {
+    runId: string;
+    targetKey: string;
+    reason: string;
+  }): Promise<{ recordedOnRun: boolean }> {
+    const body = await this.v1.request('reportDispatchRunUnbuildable', {
+      path: { id: args.runId },
+      body: { targetKey: args.targetKey, reason: args.reason },
+    });
+    return { recordedOnRun: body.recordedOnRun };
+  }
+
+  /**
+   * The run's DISCREPANCY record (MOTIR-8722) — the agent BUILT THROUGH `key`, a card this
+   * run holds, and wrote what it built differently into its self-report. One comment on the
+   * card and one finding on its leg of this run.
+   */
+  async recordDispatchRunDiscrepancy(args: {
+    runId: string;
+    key: string;
+    points: { planAsked: string; built: string; why: string }[];
+  }): Promise<{ commentId: string; recorded: boolean }> {
+    const body = await this.v1.request('recordDispatchRunDiscrepancy', {
+      path: { id: args.runId },
+      body: { key: args.key, points: args.points },
+    });
+    return { commentId: body.commentId, recorded: body.recorded };
+  }
+
+  /**
+   * The run's STOP report (MOTIR-8722) — the agent stopped on `key`. One comment with its
+   * finding and, with `toPlanning`, the card to Planning with the re-plan brief kept on it.
+   * The re-plan is NOT submitted: the run's credential cannot plan.
+   */
+  async reportDispatchRunStop(args: {
+    runId: string;
+    key: string;
+    comment: string;
+    toPlanning: boolean;
+    requirement?: Partial<
+      Record<
+        'outcome' | 'behaviour' | 'scopeEdge' | 'constraints' | 'acceptance' | 'assumptions',
+        string
+      >
+    >;
+  }): Promise<{ commentId: string; movedToPlanning: boolean }> {
+    const body = await this.v1.request('reportDispatchRunStop', {
+      path: { id: args.runId },
+      body: {
+        key: args.key,
+        comment: args.comment,
+        toPlanning: args.toPlanning,
+        ...(args.requirement ? { requirement: args.requirement } : {}),
+      },
+    });
+    return { commentId: body.commentId, movedToPlanning: body.movedToPlanning };
   }
 
   /** CLOSE the run with its stop reason. The status is DERIVED server-side. */

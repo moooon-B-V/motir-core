@@ -12,6 +12,10 @@ export interface TranslatableField {
 /** The ONLY producer of a fieldRef: no caller spells one by hand. */
 export const fieldRef = {
   title: (): string => 'title',
+  // The ref a title is SENT under when many items' titles share one job (MOTIR-8829):
+  // motir-ai refuses a reply with a duplicate `fieldRef`, so each title needs its own.
+  // The store keeps a title under `title()` on its own item, never under this.
+  titleForItem: (workItemId: string): string => `title:${workItemId}`,
   description: (): string => 'description',
   explanation: (): string => 'explanation',
   todoText: (todoId: string): string => `todo:${todoId}:text`,

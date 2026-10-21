@@ -287,6 +287,24 @@ export const jobRunRepository = {
     return rows.map((row) => row.id);
   },
 
+  /**
+   * The ids of the workspace's `system.code-graph-index` runs still `running` —
+   * the half of the pointer rule that says `indexing` (MOTIR-8768). A running row
+   * carries no `output.repoRef`, so a repository is indexing only when its
+   * `GithubRepo.indexingRunId` is in this set; a crashed run's pointer names an
+   * `abandoned` row and is simply absent. Ids, so the join stays the caller's.
+   */
+  async listRunningCodeGraphIndexRunIds(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.jobRun.findMany({
+      where: { workspaceId, functionId: 'system.code-graph-index', status: 'running' },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  },
+
   async listSucceededCodeGraphIndexRepoRefs(
     workspaceId: string,
     tx: Prisma.TransactionClient,
@@ -362,8 +380,8 @@ export const jobRunRepository = {
    * System-tab read (1.6.5): every run across all workspaces INCLUDING the
    * untenanted system rows (workspace_id IS NULL). No workspace filter — the
    * caller MUST run this under withSystemContext (the only context whose RLS
-   * branch admits null-workspace rows), and the dashboard only reaches it for a
-   * PLATFORM_ADMIN_EMAIL operator. Newest-first, paged.
+   * branch admits null-workspace rows), and the dashboard only reaches it for
+   * platform staff (`support` or above). Newest-first, paged.
    */
   async listAll(
     opts: { status?: JobRunStatus; limit: number; offset: number },

@@ -1,4 +1,4 @@
-import { provisioningAuth } from '@/lib/github/repoProvisioning';
+import { resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 
 // The RUNNER-GROUP boundary (Story MOTIR-1916 · MOTIR-1972) — the one module
 // that talks to GitHub about a project's self-hosted runner group. Everything
@@ -6,10 +6,15 @@ import { provisioningAuth } from '@/lib/github/repoProvisioning';
 // is `fetch`. That line is where the tests fake.
 //
 // It is a LEAF PRIMITIVE in the `lib/github/appAuth.ts` sense — services import
-// it directly; routes never do. It authenticates through `provisioningAuth()`
-// for the same reason `repoCollaborators.ts` does: "which org does Motir own,
-// and with which credential?" keeps exactly ONE reader, so a group can never be
-// created in a different org than the repositories it access-lists.
+// it directly; routes never do. It authenticates through `resolveOrgAuth()`
+// (`lib/github/orgTarget.ts`) for the same reason `repoCollaborators.ts` reads
+// the provisioning org: "which org, and with which credential?" keeps exactly ONE
+// reader, so a group can never be created in a different org than the
+// repositories it access-lists. With no target that reader answers the
+// provisioning org — every shipped caller's default; a `GithubOrgTarget`
+// (MOTIR-8702) acts on that org through that installation instead. The template
+// is the same for every target: `allows_public_repositories` is never a
+// parameter, in any org.
 //
 // ⚠️ NO SECOND PERMISSION IS NEEDED, and this is measured, not assumed
 // (MOTIR-1919, verified against the live org on 2026-08-01):
@@ -163,11 +168,14 @@ export const runnerGroupClient = {
    * The body is {@link RUNNER_GROUP_TEMPLATE} verbatim; nothing about the shape
    * is a parameter.
    */
-  async createGroup(input: {
-    name: string;
-    selectedRepositoryIds: readonly number[];
-  }): Promise<RunnerGroup> {
-    const { org, token } = await provisioningAuth();
+  async createGroup(
+    input: {
+      name: string;
+      selectedRepositoryIds: readonly number[];
+    },
+    target?: GithubOrgTarget,
+  ): Promise<RunnerGroup> {
+    const { org, token } = await resolveOrgAuth(target);
     const res = await request(
       `${GITHUB_API}/orgs/${encodeURIComponent(org)}/actions/runner-groups`,
       {
@@ -195,8 +203,8 @@ export const runnerGroupClient = {
    * deleted out of band (an operator tidying the org) is not an error, it is a
    * group to re-create, and the caller does exactly that.
    */
-  async getGroup(id: number): Promise<RunnerGroup | null> {
-    const { org, token } = await provisioningAuth();
+  async getGroup(id: number, target?: GithubOrgTarget): Promise<RunnerGroup | null> {
+    const { org, token } = await resolveOrgAuth(target);
     const res = await request(
       `${GITHUB_API}/orgs/${encodeURIComponent(org)}/actions/runner-groups/${id}`,
       { method: 'GET', token },
@@ -220,8 +228,8 @@ export const runnerGroupClient = {
    * repositories. Names are compared case-insensitively because GitHub does not
    * distinguish two groups by case alone.
    */
-  async findGroupByName(name: string): Promise<RunnerGroup | null> {
-    const { org, token } = await provisioningAuth();
+  async findGroupByName(name: string, target?: GithubOrgTarget): Promise<RunnerGroup | null> {
+    const { org, token } = await resolveOrgAuth(target);
     const wanted = name.toLowerCase();
     for (let page = 1; page <= MAX_PAGES; page += 1) {
       const res = await request(
@@ -253,8 +261,12 @@ export const runnerGroupClient = {
    * group that grants nothing, which is the correct intermediate state before the
    * group is deleted.
    */
-  async setGroupRepositories(id: number, repositoryIds: readonly number[]): Promise<void> {
-    const { org, token } = await provisioningAuth();
+  async setGroupRepositories(
+    id: number,
+    repositoryIds: readonly number[],
+    target?: GithubOrgTarget,
+  ): Promise<void> {
+    const { org, token } = await resolveOrgAuth(target);
     const res = await request(
       `${GITHUB_API}/orgs/${encodeURIComponent(org)}/actions/runner-groups/${id}/repositories`,
       {
@@ -273,8 +285,8 @@ export const runnerGroupClient = {
    * because the delete runs from a handoff saga and a project deletion, either of
    * which may be retried.
    */
-  async deleteGroup(id: number): Promise<void> {
-    const { org, token } = await provisioningAuth();
+  async deleteGroup(id: number, target?: GithubOrgTarget): Promise<void> {
+    const { org, token } = await resolveOrgAuth(target);
     const res = await request(
       `${GITHUB_API}/orgs/${encodeURIComponent(org)}/actions/runner-groups/${id}`,
       { method: 'DELETE', token },

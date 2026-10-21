@@ -1,5 +1,6 @@
 'use client';
 
+import { useSurfaceTitleResolver } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { TreeTable, type TreeTableColumn, type TreeTableRow } from '@/components/ui/TreeTable';
@@ -31,6 +32,7 @@ export interface IssueTreeStaticTableProps {
 export function IssueTreeStaticTable({ rows, workflow, members }: IssueTreeStaticTableProps) {
   const routes = useReaderRoutes();
   const t = useTranslations();
+  const resolveTitle = useSurfaceTitleResolver();
   // A plain row click opens the quick-view peek (the per-row eye was removed in
   // MOTIR-1306); ⌘/ctrl/middle-click still opens the detail page via the href.
   const onPeekClick = usePeekRowClick();
@@ -63,7 +65,7 @@ export function IssueTreeStaticTable({ rows, workflow, members }: IssueTreeStati
       expandedIds={expandedIds}
       onExpandedChange={setExpandedIds}
       getRowHref={(r) => routes.item(r.identifier)}
-      getRowLabel={(r) => `${r.identifier} ${r.title}`}
+      getRowLabel={(r) => `${r.identifier} ${resolveTitle(r.id, r.title).name}`}
       onRowLinkClick={(e, r) => onPeekClick(e, r.identifier)}
       getRowTestId={(r) => `issue-row-${r.identifier}`}
     />

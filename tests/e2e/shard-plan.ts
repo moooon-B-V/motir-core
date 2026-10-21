@@ -600,6 +600,8 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // typed at 12 ms a key. Recorded at the ~1.5x this file's calibration note puts
   // between a local reading and the CI cost: **43.0**. RE-MEASURE from the first green
   // `playwright-report-bulk-*` artifact that includes it.
+  'density-nested-scope.spec.ts': 3.0,
+  'density-style-swap.spec.ts': 6.0,
   'refusal-reason.spec.ts': 43.0,
   // Story MOTIR-7460 — three receipts PROMOTED out of the acceptance lane when the
   // Workbench's To approve tab was renamed Waiting on you (they were
@@ -707,6 +709,12 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // bin-packer. Re-measure from the first green CI run that includes it.
   'mcp-tool-hints.spec.ts': 8.0,
   'migrate-index-fleet.spec.ts': 26.7,
+  // MOTIR-8774 — a brand-new spec, ESTIMATED rather than measured: three tests,
+  // each a sign-up, a project and the migrate walk to Import, the shape
+  // `migrate-index-fleet.spec.ts` (26.7 s) runs, plus Enter Motir's navigation.
+  // Rounded UP, because under-estimating unbalances the bin-packer. Re-measure
+  // from the first green CI run that includes it.
+  'migrate-nonblocking-index.spec.ts': 35.0,
   'modal-scroll-container.spec.ts': 6.0,
   'multi-tenant-isolation.spec.ts': 2.5,
   'navigation-instant.spec.ts': 8.0,

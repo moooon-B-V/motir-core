@@ -15,7 +15,10 @@ import type {
 } from '@/lib/dto/workItems';
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 import type { SprintBlockerDto } from '@/lib/dto/sprints';
+import type { SectionFindingDto } from '@/lib/dto/workItems';
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
+import type { Locale } from '@/lib/i18n/locales';
+import type { WorkItemSections } from '@/lib/workItems/sections/registry';
 
 /** Wire form of the Prisma `PlanStatus` enum, as a VALUE — so a surface that
  *  must be total over the lifecycle (the tab strip, the per-status counts) can
@@ -138,6 +141,23 @@ export interface ProposedTodoInput {
 }
 
 /**
+ * The language each of a proposal's text fields was WRITTEN in (Story MOTIR-7734 ·
+ * MOTIR-8743) — the planner's statement, FIXED AT GENERATION and never re-read
+ * from the organisation's setting: approve records `title` on the title,
+ * `description` on the description, `explanation` on the explanation and `todos`
+ * on each step's text and notes, and falls back to the setting only for a field
+ * with no key. Every key is optional; a key means "this field's current text was
+ * written in this language". Validated at every door
+ * (`lib/plans/validateProposedLanguages.ts`).
+ */
+export interface ProposalLanguages {
+  title?: Locale;
+  description?: Locale;
+  explanation?: Locale;
+  todos?: Locale;
+}
+
+/**
  * The proposed fields of an `add` PlanItem — the new node's values, which live
  * HERE until materialize (no WorkItem exists yet). `kind` defaults to `task`
  * (a standalone leaf) when omitted; `parentRef` (on the PlanItem) decides the
@@ -190,6 +210,10 @@ export interface PlanItemProposedFields {
    */
   explanationMd?: string | null;
   explanationSource?: string | null;
+  /** The language each text field was written in (MOTIR-8743) — fixed at
+   *  generation, never re-read from the setting. Stored here, inside the one
+   *  place a proposal's fields live, so it survives edits to the row. */
+  languages?: ProposalLanguages;
   /**
    * Native PLANNING provenance (Story MOTIR-1685) — motir-ai attaches how it
    * planned this item so `materialize` can stamp it (docs/decisions/work-item-provenance.md,
@@ -339,14 +363,12 @@ export interface PlanItemProposedFields {
    * to-do list, proposed with the card so the reviewer reads what approve will
    * write (`docs/decisions/agent-authored-plans.md` AMENDMENT 14 D1).
    *
-   * `add` ONLY, and that is a DECISION rather than an omission (AMENDMENT 14 D2):
-   * {@link PlanItemPatch} deliberately has no twin, because a committed card's
-   * list carries a PERSON'S PROGRESS — every row has `doneAt` / `doneById` — and
-   * a plan is not the editor of somebody's progress. A re-plan that overwrote
-   * four ticked rows would be the day the checkbox stopped meaning anything, and
-   * it would happen under one approval by someone reading titles. The doors that
-   * DO edit a live card's list are the item page's own section and the
-   * item-scoped assistant (MOTIR-1344).
+   * Since MOTIR-8668 (AMENDMENT 27, which overturns AMENDMENT 14 D2) a `modify`
+   * may carry it too — {@link PlanItemPatch.todos} REPLACES a committed card's
+   * list at approve. D2 kept the list off the patch because ticked rows carry a
+   * person's progress; AMENDMENT 27 keeps that cost VISIBLE instead of
+   * forbidding it: the review's change row and `get_plan` both say how many
+   * steps the replacement drops and how many of them were ticked.
    *
    * Validated at BOTH write boundaries against the STORE's own caps —
    * `lib/plans/validateProposedTodos.ts`, importing the three constants from
@@ -410,6 +432,11 @@ export type ModifyKindTarget = (typeof MODIFY_KIND_TARGETS)[number];
  * changes carry refs (a real work-item id or an intra-plan temp-ref).
  */
 export interface PlanItemPatch {
+  /** The language of each text field THIS patch sets (MOTIR-8743) — fixed at
+   *  generation, never re-read from the setting. An ANNOTATION on the patch, not
+   *  a change to the card: it is outside {@link PLAN_ITEM_PATCH_KEYS} and rides
+   *  only beside the field it describes. */
+  languages?: ProposalLanguages;
   title?: string;
   descriptionMd?: string | null;
   /**
@@ -477,6 +504,26 @@ export interface PlanItemPatch {
    * Applied by `applyModify` with a `difficulty` revision diff cell.
    */
   difficulty?: WorkItemDifficultyDto | null;
+  /**
+   * REPLACE the target's ORDERED STEPS (MOTIR-8668; `agent-authored-plans.md`
+   * AMENDMENT 27, overturning AMENDMENT 14 D2) — the `modify` mirror of
+   * {@link PlanItemProposedFields.todos}, so a re-plan of a `manual` card can
+   * give it the steps the card is missing on the plan a person approves.
+   *
+   * A REPLACEMENT, never a merge: at approve the target's list becomes exactly
+   * this array, in order, with no row ticked, and every prior row is deleted.
+   * Sparse at the KEY: absent leaves the list untouched; an explicit `[]` or
+   * `null` CLEARS it. Validated against the store's caps through
+   * `validateProposedTodos`, and refused when the TARGET is (or is re-kinded
+   * to) a container — at the append, the correction, and at approve as
+   * `todos_on_container`. NOT a mark key: a `modify` of a `done` / `cancelled`
+   * card that carries it is refused `PLAN_TARGET_IMMUTABLE`.
+   *
+   * The progress it discards is shown, not hidden: the review's `todos` change
+   * row reads the live count, and `get_plan` prints how many steps the
+   * replacement drops and how many of them were ticked.
+   */
+  todos?: ProposedTodoInput[] | null;
   /**
    * RE-PIN the target's repo (MOTIR-1884) — the `modify` mirror of the `add`
    * path's {@link PlanItemProposedFields.targetRepo}, so a re-plan that moves work
@@ -655,6 +702,7 @@ export const PLAN_ITEM_PATCH_KEYS = [
   'storyPoints',
   'estimateMinutes',
   'difficulty',
+  'todos',
   'targetRepo',
   'targetRepos',
   'targetRepositories',
@@ -715,7 +763,9 @@ export const PLAN_ITEM_REASON_MAX = 2000;
  * Adding a field to the interface without adding it to the constant (or the
  * reverse) fails `pnpm build` before any test runs.
  */
-type PatchKeyMissingFromConstant = Exclude<keyof PlanItemPatch, PlanItemPatchKey>;
+// `languages` (MOTIR-8743) is the one member outside the constant, by design: it
+// annotates the text keys beside it and changes nothing on the card by itself.
+type PatchKeyMissingFromConstant = Exclude<keyof PlanItemPatch, PlanItemPatchKey | 'languages'>;
 type PatchKeyMissingFromInterface = Exclude<PlanItemPatchKey, keyof PlanItemPatch>;
 const _planItemPatchKeysAreExhaustive: [
   PatchKeyMissingFromConstant,
@@ -1008,13 +1058,40 @@ export interface CreatePlanInput {
   origin?: PlanOriginDto;
 }
 
+/**
+ * A proposal's SECTIONS INPUT (Story MOTIR-9023 · MOTIR-9030) — the typed way a
+ * planner hands a door a card's sections instead of composing headings inside
+ * `descriptionMd`. An INPUT only: the door checks it against the registry for the
+ * proposal's merged kind × type, refuses a missing / unknown / invalid section by
+ * name, renders it, and stores ONLY the rendered `descriptionMd`. It is never
+ * persisted, so {@link PlanItemProposedFields} gains no key.
+ *
+ * On an EDIT it is sparse at the section key: an omitted section is kept (read
+ * back from the stored body), an explicit `null` clears that section, a list
+ * REPLACES the list. Never sent beside `descriptionMd`.
+ */
+export type ProposalSectionsInput = {
+  [K in keyof WorkItemSections]?: WorkItemSections[K] | null;
+};
+
+/** The fields of an `add` as a door RECEIVES them: the stored bag plus the
+ *  optional sections input, which a door renders into `descriptionMd` and strips
+ *  before anything is written. */
+export type ProposedFieldsInput = PlanItemProposedFields & {
+  sections?: ProposalSectionsInput;
+};
+
 /** A single proposed operation appended via `plansService.addProposals`. */
 export interface ProposalInput {
   op: PlanItemOpDto;
   /** `modify` / `remove`: the existing target work-item id. Omitted for `add`. */
   workItemId?: string | null;
   /** `add` only. */
-  proposedFields?: PlanItemProposedFields | null;
+  proposedFields?: ProposedFieldsInput | null;
+  /** `add` only: the language each proposed text field was written in
+   *  (MOTIR-8743), beside `proposedFields` on the wire and copied INTO them on
+   *  append. Fixed at generation, never re-read from the setting. */
+  languages?: ProposalLanguages;
   /** `modify` only. */
   patch?: PlanItemPatch | null;
   /**
@@ -1053,6 +1130,13 @@ export interface UpdateProposalInput {
   title?: string;
   kind?: string;
   descriptionMd?: string | null;
+  /**
+   * The card's sections as an INPUT (Story MOTIR-9023 · MOTIR-9030) — rendered
+   * into `descriptionMd`, never stored, never sent beside it. Sparse at the
+   * section key over the stored body, which the service parses first. See
+   * {@link ProposalSectionsInput}.
+   */
+  sections?: ProposalSectionsInput;
   type?: string | null;
   priority?: string | null;
   /** Leaf sizing (MOTIR-1433) — patchable on the proposal-edit / deepen path
@@ -1114,6 +1198,10 @@ export interface UpdateProposalInput {
    * reads the merge, not the patch alone.
    */
   todos?: ProposedTodoInput[] | null;
+  /** The language of each text field this edit writes (MOTIR-8743) — merged per
+   *  key, and a field this edit rewrites WITHOUT naming its language drops its
+   *  recorded one. Fixed at generation, never re-read from the setting. */
+  languages?: ProposalLanguages;
 }
 
 /**
@@ -1237,6 +1325,8 @@ export const UPDATE_PROPOSAL_KEYS = [
   'title',
   'kind',
   'descriptionMd',
+  // The sections INPUT (MOTIR-9030) — rendered into `descriptionMd`, never stored.
+  'sections',
   'type',
   'priority',
   'storyPoints',
@@ -1245,6 +1335,8 @@ export const UPDATE_PROPOSAL_KEYS = [
   'explanationMd',
   'executor',
   'todos',
+  // The language of each text field the edit writes (MOTIR-8743).
+  'languages',
 ] as const;
 
 export type UpdateProposalKey = (typeof UPDATE_PROPOSAL_KEYS)[number];
@@ -1481,6 +1573,8 @@ export interface PlanValidityDto {
    */
   valid: boolean;
   blockers: SprintBlockerDto[];
+  /** As on `WorkItemValidityDto.waits` (MOTIR-9021): the subset of `blockers` the plan does not own. */
+  waits?: SprintBlockerDto[];
   rejections: PlanApprovabilityRejectionDto[];
   /**
    * Every same-level cross-parent `blocked_by` in the PROJECTION whose parents
@@ -1497,6 +1591,13 @@ export interface PlanValidityDto {
    * removes (MOTIR-7727) — a validation verdict, as on `validate_work_item`.
    */
   crossLevelEdges: CrossLevelEdgeDto[];
+  /**
+   * Per-card SECTION findings over the PROJECTED tree (MOTIR-9032) — every
+   * added or modified not-done card whose projected body misses a required
+   * section for its projected kind × type. ADVISORY: never changes `valid`.
+   * Sorted by `item`.
+   */
+  sectionFindings: SectionFindingDto[];
 }
 
 // --- Auto-plan PAUSE state (Story 7.13 · MOTIR-1740) ------------------------

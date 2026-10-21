@@ -3,6 +3,7 @@ import { authenticateAndLimitJobRequest } from '@/lib/ai/jobAuth';
 import { mapJobRequestError } from '@/lib/ai/jobAuthResponse';
 import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 import type { SubmittedRequirement } from '@/lib/ai/types';
+import { isRecommendationList } from '@/lib/sharpening/requirement';
 import type {
   PlannerAssumptionDto,
   SharpeningPerItemInput,
@@ -136,6 +137,14 @@ function parseInput(body: unknown): SharpeningWriteBackInput | string {
   const requirement: Partial<SubmittedRequirement> = {};
   for (const part of REQUIREMENT_PARTS) {
     if (r[part] === undefined) continue;
+    if (part === 'assumptions') {
+      // A list of `{ id?, text }` (MOTIR-9160) — or a string from a sender that
+      // predates the list, which stays one recommendation.
+      if (typeof r[part] === 'string') requirement[part] = r[part];
+      else if (isRecommendationList(r[part])) requirement[part] = r[part];
+      else return '`requirement.assumptions` must be a list of `{ id?, text }` or a string.';
+      continue;
+    }
     if (typeof r[part] !== 'string') return `\`requirement.${part}\` must be a string.`;
     requirement[part] = r[part];
   }

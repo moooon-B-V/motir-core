@@ -238,9 +238,10 @@ test.describe('reports @smoke', () => {
     // The report card did not collapse — it spans a page-level width.
     expect(await reportCardWidth(page)).toBeGreaterThanOrEqual(640);
 
-    // Created-vs-Resolved line chart: bounded by the report card, so it fits one
-    // fold (height ≤ 480) and does NOT span the full 1280 px page width — but is
-    // not collapsed either (a real page chart, ≥ 600 px wide).
+    // Created-vs-Resolved line chart: fits one fold (height ≤ 480) at the full
+    // report width — MOTIR-8919 dropped the old 48rem column cap, so the chart
+    // now fills its card (never wider than the 1280 px viewport) and is not
+    // collapsed either (a real page chart, ≥ 600 px wide).
     await page.goto('/reports/created-vs-resolved');
     await expect(page.getByRole('heading', { name: 'Created vs Resolved' })).toBeVisible();
     const line = page.getByRole('img', { name: 'Created vs Resolved' });
@@ -249,7 +250,7 @@ test.describe('reports @smoke', () => {
     expect(lineBox).not.toBeNull();
     expect(lineBox!.height).toBeLessThanOrEqual(480);
     expect(lineBox!.width).toBeGreaterThanOrEqual(600);
-    expect(lineBox!.width).toBeLessThanOrEqual(820);
+    expect(lineBox!.width).toBeLessThanOrEqual(1280);
     expect(await reportCardWidth(page)).toBeGreaterThanOrEqual(640);
   });
 

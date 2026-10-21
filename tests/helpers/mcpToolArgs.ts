@@ -42,6 +42,9 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // health as not-found. Aimed at a project with no repository set, it answers
     // `repos: []` without ever reaching the motir-ai boundary.
     get_code_health: { projectKey: t.projectKey },
+    // MOTIR-9083 — project-keyed: a non-member reads tenant A's key as not-found
+    // before the repo is resolved or the boundary is asked.
+    get_coding_convention: { projectKey: t.projectKey, repo: 'motir-core' },
     // MOTIR-7861 — project-keyed, so a non-member reads tenant A's key as
     // not-found before the repo is resolved or any host is asked.
     read_file: { projectKey: t.projectKey, repo: 'motir-core', path: 'README.md' },
@@ -58,6 +61,7 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // inside the caller's workspace first, so a non-member reads it as not-found
     // before any folder id is looked at.
     list_folders: { projectKey: t.projectKey },
+    get_section_sets: {},
     create_folder: { projectKey: t.projectKey, name: 'rogue' },
     update_folder: { projectKey: t.projectKey, folderId: 'fld_whatever', name: 'rogue' },
     delete_folder: { projectKey: t.projectKey, folderId: 'fld_whatever' },
@@ -68,6 +72,7 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // MOTIR-7411 — the page writes, aimed the same way.
     create_page: { projectKey: t.projectKey, markdown: 'rogue' },
     update_page: { projectKey: t.projectKey, pageId: t.pageId, markdown: 'rogue', revision: 1 },
+    rename_page: { projectKey: t.projectKey, pageId: t.pageId, title: 'rogue' },
     publish_decision_page: { key: t.item1, pageId: t.pageId },
     get_work_item: { key: t.item1 },
     get_design: { key: t.item1 },
@@ -122,6 +127,12 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // The run-found report (MOTIR-6286) — item-keyed within a project, so a
     // non-member must read A's key as not-found rather than record on A's run.
     report_unbuildable_target: { projectKey: t.projectKey, targetKey: t.item1, reason: 'leak?' },
+    // The run discrepancy record (MOTIR-8657) — item-keyed, so a non-member must read A's key
+    // as not-found rather than comment on A's card or record on A's run.
+    record_run_discrepancy: {
+      key: t.item1,
+      points: [{ planAsked: 'leak?', built: 'leak?', why: 'leak?' }],
+    },
     open_plan_session: { projectKey: t.projectKey },
     append_plan_turn: { projectKey: t.projectKey, body: 'leak?' },
     submit_plan_session: { projectKey: t.projectKey },

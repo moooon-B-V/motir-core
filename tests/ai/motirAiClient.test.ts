@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   submitJob,
   getJob,
+  cancelJob,
   getPreplanState,
   parseSseFrame,
   createCheckoutSession,
@@ -262,6 +263,36 @@ describe('getJob', () => {
   });
 });
 
+describe('cancelJob (MOTIR-9065)', () => {
+  it('sends DELETE /v1/jobs/:id with the project scope and returns the answer', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ jobId: 'job_1', status: 'canceled' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(cancelJob('job_1', 'pj_42')).resolves.toEqual({
+      jobId: 'job_1',
+      status: 'canceled',
+    });
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(String(url)).toBe('https://ai.example.test/v1/jobs/job_1?coreProjectId=pj_42');
+    expect((init as RequestInit).method).toBe('DELETE');
+  });
+
+  it('throws a typed error when motir-ai refuses, so the caller can say why', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(new Response('404 Not Found', { status: 404, statusText: 'Not Found' })),
+    );
+    // A bare 404 is not problem+json, so it reads as motir-ai's own failure, carrying
+    // the status text the sweep reports as why.
+    await expect(cancelJob('job_1', 'pj_1')).rejects.toThrow(MotirAiUnavailableError);
+    await expect(cancelJob('job_1', 'pj_1')).rejects.toThrow('Not Found');
+  });
+});
+
 describe('getJob — the lost-machine fact (MOTIR-8304)', () => {
   const failedWith = (code: string, status = 500) =>
     jsonResponse({
@@ -300,6 +331,39 @@ describe('getJob — the lost-machine fact (MOTIR-8304)', () => {
         ),
     );
     expect((await getJob('job_1', 'pj_1')).lostMachine).toBe(false);
+  });
+});
+
+describe('getJob — the resumable verdict (MOTIR-9121)', () => {
+  const failed = (extra: Record<string, unknown>) =>
+    jsonResponse({
+      jobId: 'job_1',
+      status: 'failed',
+      result: null,
+      error: {
+        type: 't',
+        title: 'Validation failed',
+        status: 400,
+        code: 'validation_error',
+        detail: 'd',
+        jobId: 'job_1',
+      },
+      ...extra,
+    });
+
+  it.each([true, false])('passes motir-ai’s `resumable: %s` through', async (resumable) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(failed({ resumable })));
+    expect((await getJob('job_1', 'pj_1')).resumable).toBe(resumable);
+  });
+
+  it('a motir-ai that does not say leaves it absent — unknown, never false', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(failed({})));
+    expect(Object.keys(await getJob('job_1', 'pj_1'))).not.toContain('resumable');
+  });
+
+  it('a value that is not a boolean reads as unknown', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(failed({ resumable: 'no' })));
+    expect(Object.keys(await getJob('job_1', 'pj_1'))).not.toContain('resumable');
   });
 });
 

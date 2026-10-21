@@ -71,7 +71,7 @@ const entrance = (page: Page) => page.getByRole('main').getByTestId('work-item-p
  * (`tests/e2e-page-rooted-locators.test.ts`).
  */
 const canvasPane = (page: Page) =>
-  workspace(page).getByTestId('planning-resizable-frame').locator('> div').first();
+  workspace(page).getByTestId('resizable-split').locator('> div').first();
 
 const overlayOpen = (url: URL) => url.searchParams.has('plan');
 

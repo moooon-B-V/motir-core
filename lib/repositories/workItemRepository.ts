@@ -3482,6 +3482,8 @@ export const workItemRepository = {
     Array<{
       id: string;
       descriptionMd: string | null;
+      /** The row's kind — the section registry's first coordinate (MOTIR-9032). */
+      kind: string;
       type: string | null;
       executor: string | null;
       targetRepo: string | null;
@@ -3511,6 +3513,7 @@ export const workItemRepository = {
       select: {
         id: true,
         descriptionMd: true,
+        kind: true,
         type: true,
         executor: true,
         targetRepo: true,
@@ -5282,6 +5285,119 @@ export const workItemRepository = {
         AND w."archivedAt" IS NULL
         AND ${notInTriageSql('w')}
         AND (cs."category" IS NULL OR cs."category" <> 'done')
+        AND (${astSql})
+      GROUP BY 1, 2
+      ORDER BY "points" DESC, "count" DESC, 2 ASC NULLS LAST, 1 ASC NULLS LAST`;
+  },
+
+  /**
+   * The WINDOWED workload aggregate (Story MOTIR-8919): work that was OPEN at
+   * any point in `[window.start, window.end]`, one bar per PERSON — the item's
+   * assignee, else its reporter, else the `NULL` "Unassigned" bar. A second
+   * method, not a branch of {@link aggregateWorkloadByAssignee}: that one reads
+   * current rows only and feeds the dashboard gadget, which must not move.
+   *
+   * An item counts when it is scoped, non-archived, non-triage, created by
+   * `end`, and either (a) its CURRENT status is not `done`-category (a `NULL`
+   * join counts as open, as in the snapshot) or (b) its LAST move into a done
+   * category — from a status that is not done — is at or after `start`. The
+   * `last_done` CTE takes `MAX(changedAt)`, deliberately not the `MIN` that
+   * `aggregateAverageAgeByBucket` takes: resolved before the window, reopened
+   * and resolved again inside it must still count. An item that is done now
+   * with no done-entry revision has no recorded open time and is not counted.
+   *
+   * Attribution is by the item's CURRENT assignee / reporter / `storyPoints`.
+   * Per person it returns the totals plus the assigned (`assigneeId IS NOT
+   * NULL`) and unassigned-but-reported (`assigneeId IS NULL AND reporterId IS
+   * NOT NULL`) segments; the person-less row carries only totals (its segment
+   * fields are 0). Rows are people, never items (finding #57). `workspaceId`
+   * gates the read (finding #26).
+   */
+  async aggregateWorkloadByPersonInWindow(
+    projectId: string,
+    workspaceId: string,
+    window: { start: Date; end: Date },
+    filter?: { ast?: FilterAst; referents?: ProjectFilterReferents },
+    tx?: Prisma.TransactionClient,
+  ): Promise<
+    Array<{
+      assigneeId: string | null;
+      name: string | null;
+      points: number;
+      count: number;
+      assignedPoints: number;
+      assignedCount: number;
+      unassignedPoints: number;
+      unassignedCount: number;
+    }>
+  > {
+    const astSql = filter?.ast
+      ? compileFilterConditionsSql(filter.ast, filter.referents)
+      : Prisma.sql`TRUE`;
+    const client = tx ?? dbRead;
+    return client.$queryRaw<
+      Array<{
+        assigneeId: string | null;
+        name: string | null;
+        points: number;
+        count: number;
+        assignedPoints: number;
+        assignedCount: number;
+        unassignedPoints: number;
+        unassignedCount: number;
+      }>
+    >`
+      WITH last_done AS (
+        SELECT r."workItemId" AS "work_item_id",
+               MAX(r."changedAt") AS "last_done_at"
+          FROM "work_item_revision" r
+          JOIN "work_item" iw
+            ON iw."id" = r."workItemId"
+           AND iw."projectId" = ${projectId}
+           AND iw."workspaceId" = ${workspaceId}
+          LEFT JOIN "workflow_status" fs
+            ON fs."project_id" = iw."projectId"
+           AND fs."key" = (r."diff" -> 'status' ->> 'from')
+          JOIN "workflow_status" ts
+            ON ts."project_id" = iw."projectId"
+           AND ts."key" = (r."diff" -> 'status' ->> 'to')
+         WHERE r."changeKind" = 'updated'
+           AND r."diff" -> 'status' IS NOT NULL
+           AND ts."category" = 'done'
+           AND (fs."category" IS NULL OR fs."category" <> 'done')
+         GROUP BY r."workItemId"
+      )
+      SELECT
+        COALESCE(w."assigneeId", w."reporterId")  AS "assigneeId",
+        pu."name"                                 AS "name",
+        COALESCE(SUM(w."storyPoints"), 0)::float8 AS "points",
+        COUNT(*)::int                             AS "count",
+        COALESCE(SUM(w."storyPoints") FILTER (WHERE w."assigneeId" IS NOT NULL), 0)::float8
+                                                  AS "assignedPoints",
+        (COUNT(*) FILTER (WHERE w."assigneeId" IS NOT NULL))::int
+                                                  AS "assignedCount",
+        COALESCE(SUM(w."storyPoints") FILTER (
+          WHERE w."assigneeId" IS NULL AND w."reporterId" IS NOT NULL), 0)::float8
+                                                  AS "unassignedPoints",
+        (COUNT(*) FILTER (
+          WHERE w."assigneeId" IS NULL AND w."reporterId" IS NOT NULL))::int
+                                                  AS "unassignedCount"
+      FROM "work_item" w
+      LEFT JOIN "user" pu ON pu."id" = COALESCE(w."assigneeId", w."reporterId")
+      LEFT JOIN "workflow_status" cs
+        ON cs."project_id" = w."projectId"
+       AND cs."key" = w."status"
+      LEFT JOIN last_done ld ON ld."work_item_id" = w."id"
+      WHERE w."projectId" = ${projectId}
+        AND w."workspaceId" = ${workspaceId}
+        AND w."archivedAt" IS NULL
+        AND ${notInTriageSql('w')}
+        AND w."createdAt" <= ${window.end}
+        AND (
+          cs."category" IS NULL
+          OR cs."category" <> 'done'
+          OR ld."last_done_at" >= ${window.start}
+        )
         AND (${astSql})
       GROUP BY 1, 2
       ORDER BY "points" DESC, "count" DESC, 2 ASC NULLS LAST, 1 ASC NULLS LAST`;

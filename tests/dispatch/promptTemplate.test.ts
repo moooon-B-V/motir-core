@@ -6,12 +6,14 @@ import {
   FINDINGS_POLICY_TOKENS,
   FULL_FINDINGS_POLICY,
   DESIGN_DIR_ENV,
+  GET_CODING_CONVENTION_TOOL_NAME,
   GET_DESIGN_TOOL_NAME,
   HOW_TO_TEST_TOOL_NAME,
   LINKING_RATIONALE,
   LIST_DESIGNS_TOOL_NAME,
   NO_INJECTIONS,
   parseFindingsPolicy,
+  RECORD_DISCREPANCY_TOOL_NAME,
   RENDERED_SURFACE_TRIGGER,
   renderErrorEvidence,
   type DispatchPromptSource,
@@ -19,7 +21,9 @@ import {
 import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
 import { MCP_TOOL_NAMES } from '@/lib/mcp/registry';
 import { PUBLISH_TEST_INSTRUCTIONS_TOOL_NAME } from '@/lib/mcp/tools/publishTestInstructions';
+import { RECORD_RUN_DISCREPANCY_TOOL_NAME } from '@/lib/mcp/tools/recordRunDiscrepancy';
 import { REPORT_UNBUILDABLE_TARGET_TOOL_NAME } from '@/lib/mcp/tools/reportUnbuildableTarget';
+import { GET_CODING_CONVENTION_TOOL_NAME as REGISTERED_GET_CODING_CONVENTION } from '@/lib/mcp/tools/getCodingConvention';
 import { GET_DESIGN_TOOL_NAME as REGISTERED_GET_DESIGN } from '@/lib/mcp/tools/getDesign';
 import { LIST_DESIGNS_TOOL_NAME as REGISTERED_LIST_DESIGNS } from '@/lib/mcp/tools/listDesigns';
 import { MOTIR_DESIGN_DIR_ENV as CLI_MOTIR_DESIGN_DIR_ENV } from '../../packages/cli/src/designFiles';
@@ -782,16 +786,16 @@ describe('assembleDispatchPrompt — the Epic-9 injection extension point', () =
     expect(withEmpty).toBe(assembleDispatchPrompt(source()).prompt);
   });
 
-  it('appends filled slots to CONTEXT, conventions before lessons', () => {
+  it('appends a filled lessons slot to CONTEXT', () => {
     const { prompt } = assembleDispatchPrompt(
-      source({
-        injections: { conventions: ['CONVENTION BLOCK'], lessons: ['LESSON BLOCK'] },
-      }),
+      source({ injections: { lessons: ['LESSON BLOCK'] } }),
     );
     const context = prompt.slice(prompt.indexOf('CONTEXT'), prompt.indexOf('WHAT TO DO'));
-    expect(context).toContain('CONVENTION BLOCK');
     expect(context).toContain('LESSON BLOCK');
-    expect(context.indexOf('CONVENTION BLOCK')).toBeLessThan(context.indexOf('LESSON BLOCK'));
+  });
+
+  it('has no conventions slot: the convention is fetched, not pasted (MOTIR-9084)', () => {
+    expect(Object.keys(NO_INJECTIONS)).toEqual(['lessons']);
   });
 });
 
@@ -834,6 +838,18 @@ describe('assembleDispatchPrompt — the prose-vs-graph advisory block (MOTIR-20
     );
     expect(prompt).toContain('"all four siblings this card is blocked_by" says 4');
     expect(prompt).toContain('graph holds 2 blocked_by edges');
+  });
+
+  it('names an UNDER-AUTHORED card and tells the agent to proceed, not stop (MOTIR-5427)', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({
+        advisories: [
+          { kind: 'shape', item: 'PROD-7', severity: 'under-authored', criteria: 'no-heading' },
+        ],
+      }),
+    );
+    expect(prompt).toContain('THIS CARD IS UNDER-AUTHORED');
+    expect(prompt).toContain('This is not a');
   });
 
   it('instructs the agent to VERIFY against origin/main and to STOP rather than rebuild', () => {
@@ -1623,7 +1639,7 @@ describe('THE CARD IS WRONG — the agent COMPOSES the WHAT, through the plan-se
   /** The card-is-wrong branch alone: from its heading to the third branch. */
   function replanArm(prompt: string): string {
     const section = cardOutcomeBranches(prompt);
-    const at = section.indexOf('THE CARD IS WRONG');
+    const at = section.indexOf('STOP — the WHAT itself breaks');
     expect(at, 'the prompt carries THE CARD IS WRONG').toBeGreaterThan(-1);
     return section.slice(at);
   }
@@ -2667,11 +2683,12 @@ describe('THE CARD IS WRONG — the report_unbuildable_target step (MOTIR-6287)'
 
   /** THE CARD IS WRONG, from its heading up to FOUND A DEFECT. */
   function block(policy: DispatchPromptSource['findingsPolicy']): string {
+    // A runner that posts the self-report (MOTIR-8810); the other route has its own block.
     const prompt = assembleDispatchPrompt(
-      source({ key: 'PROD-99', findingsPolicy: policy }),
+      source({ key: 'PROD-99', findingsPolicy: policy, runnerPostsAgentReport: true }),
     ).prompt;
     const branches = cardOutcomeBranches(prompt);
-    const at = branches.indexOf('THE CARD IS WRONG');
+    const at = branches.indexOf('STOP — the WHAT itself breaks');
     expect(at, 'the prompt carries THE CARD IS WRONG').toBeGreaterThan(-1);
     return branches.slice(at);
   }
@@ -2703,7 +2720,16 @@ describe('THE CARD IS WRONG — the report_unbuildable_target step (MOTIR-6287)'
       const text = block(policy);
       expect(text.split(REPORT_UNBUILDABLE_TARGET_TOOL_NAME)).toHaveLength(2);
       const four = stepText(text, 4);
-      expect(four).toMatch(/^ {2}4\. Report it with the report_unbuildable_target tool/);
+      expect(four).toMatch(/^ {2}4\. Report it\. If the environment variable MOTIR_AGENT_REPORT/);
+      // The run's own file FIRST (MOTIR-8698): the CLI reports with the run's
+      // credential, so an agent with no Motir token or MCP still reaches it.
+      expect(four).toContain('"unbuildable": "<the SAME text as your step-3 comment>"');
+      expect(four.indexOf('"unbuildable"')).toBeLessThan(
+        four.indexOf(REPORT_UNBUILDABLE_TARGET_TOOL_NAME),
+      );
+      expect(four).toMatch(
+        /If the variable is unset, report it with the report_unbuildable_target tool/,
+      );
       expect(stepText(text, 3)).toContain('3. Comment the finding on PROD-99');
       expect(four).toMatch(/projectKey:\s+PROD\b/);
       expect(four).toMatch(/targetKey:\s+PROD-99\b/);
@@ -2799,6 +2825,121 @@ describe('THE CARD IS WRONG — the report_unbuildable_target step (MOTIR-6287)'
       }
     },
   );
+});
+
+// MOTIR-8722 — an agent with NO Motir tools (a hosted run, a run inside an agent) cannot make the
+// build-through record or the STOP's writes itself. The prompt sends both through
+// `$MOTIR_AGENT_REPORT`, and says plainly that the re-plan is not submitted on that path.
+describe('NO MOTIR TOOLS — the build-through and the STOP go through the self-report (MOTIR-8722)', () => {
+  // A runner that posts the self-report (MOTIR-8810): only then are the file routes named.
+  const prompt = (policy: DispatchPromptSource['findingsPolicy']) =>
+    assembleDispatchPrompt(
+      source({ key: 'PROD-99', findingsPolicy: policy, runnerPostsAgentReport: true }),
+    ).prompt;
+  const REPLAN = { logBug: true, replan: true, autoApproveReplan: false };
+  const NO_REPLAN = { logBug: true, replan: false, autoApproveReplan: false };
+
+  it('the build-through puts its points into the file as "discrepancy" when the tool is missing', () => {
+    const text = prompt(REPLAN);
+    const at = text.indexOf('BUILD THROUGH — the WHAT holds');
+    const through = text.slice(at, text.indexOf('STOP — the WHAT itself breaks'));
+    expect(through).toContain('If the record_run_discrepancy tool is not available to you');
+    expect(through).toContain('"discrepancy": [{"planAsked": "…", "built": "…", "why": "…"}]');
+    // The JSON shown is the shape the CLI reads.
+    const shown = JSON.parse(
+      '{"model": "m", "discrepancy": [{"planAsked": "a", "built": "b", "why": "c"}]}',
+    ) as { discrepancy: unknown[] };
+    expect(shown.discrepancy).toHaveLength(1);
+  });
+
+  it('a re-planning STOP asks for "stop" with toPlanning and the six fields, and says nothing is submitted', () => {
+    const text = prompt(REPLAN);
+    const stop = text.slice(text.indexOf('STOP — the WHAT itself breaks'));
+    expect(stop).toContain('NO MOTIR TOOLS?');
+    expect(stop).toContain('"stop": {"toPlanning": true, "requirement": {"outcome": "…"');
+    for (const field of AI_REQUIREMENT_FIELDS) expect(stop).toContain(`"${field}"`);
+    expect(stop).toContain('It does NOT submit the');
+    expect(stop).toContain('Do not report a re-plan as submitted.');
+    // Before the Planning step it replaces, so the agent reads it in time.
+    expect(stop.indexOf('NO MOTIR TOOLS?')).toBeLessThan(
+      stop.indexOf('to Planning with the transition_status tool'),
+    );
+  });
+
+  it('a STOP with re-planning off asks for "stop" with toPlanning false and moves nothing', () => {
+    const stop = prompt(NO_REPLAN).slice(
+      prompt(NO_REPLAN).indexOf('STOP — the WHAT itself breaks'),
+    );
+    expect(stop).toContain('"stop": {"toPlanning": false}');
+    expect(stop).not.toContain('"toPlanning": true');
+  });
+});
+
+describe('a runner that does NOT post the self-report gets the tool as the route (MOTIR-8810)', () => {
+  // `@motir/cli` 0.12.0 sets `$MOTIR_AGENT_REPORT` and reads only `model` from it. The
+  // prompt MOTIR-8698 deployed told every agent with that file to put its unbuildable
+  // reason there and skip the tool, so with every CLI anyone could install the report was
+  // lost. Only a client that declares it posts gets `runnerPostsAgentReport: true`; the
+  // `/api/v1` route passes `false` otherwise, and the MCP tool passes nothing.
+  const REPLAN = { logBug: true, replan: true, autoApproveReplan: false };
+  const NO_REPLAN = { logBug: true, replan: false, autoApproveReplan: false };
+  const text = (
+    runnerPostsAgentReport: boolean | undefined,
+    policy: DispatchPromptSource['findingsPolicy'] = REPLAN,
+  ) =>
+    assembleDispatchPrompt(
+      source({
+        key: 'PROD-99',
+        findingsPolicy: policy,
+        ...(runnerPostsAgentReport === undefined ? {} : { runnerPostsAgentReport }),
+      }),
+    ).prompt;
+  const stopOf = (t: string) => t.slice(t.indexOf('STOP — the WHAT itself breaks'));
+  const throughOf = (t: string) =>
+    t.slice(
+      t.indexOf('BUILD THROUGH — the WHAT holds'),
+      t.indexOf('STOP — the WHAT itself breaks'),
+    );
+
+  it.each([
+    ['re-planning on', REPLAN],
+    ['re-planning off', NO_REPLAN],
+  ])(
+    'with %s, step 4 is the report_unbuildable_target call and names no file route',
+    (_n, policy) => {
+      expect(text(undefined, policy)).toBe(text(false, policy));
+      const stop = stopOf(text(false, policy));
+      expect(stop).toContain(
+        `  4. Report it with the ${REPORT_UNBUILDABLE_TARGET_TOOL_NAME} tool:`,
+      );
+      expect(stop).toContain('targetKey:  PROD-99');
+      expect(stop).not.toContain('no Motir tool needed');
+      expect(stop).not.toContain('"unbuildable"');
+      expect(stop).not.toContain('NO MOTIR TOOLS?');
+      expect(stop).not.toContain('"stop": {');
+    },
+  );
+
+  it('the build-through names no "discrepancy" file route', () => {
+    const through = throughOf(text(false));
+    expect(through).toContain(`Call the ${RECORD_RUN_DISCREPANCY_TOOL_NAME} tool ONCE`);
+    expect(through).not.toContain('"discrepancy"');
+    expect(through).not.toContain('NO MOTIR TOOLS?');
+  });
+
+  it('still asks for the model, which 0.12.0 does read', () => {
+    expect(text(false)).toContain('{"model": "<the model you are running as>"}');
+  });
+
+  it('a runner that posts gets the file route, with the tool kept for an unset variable', () => {
+    const t = text(true);
+    expect(stopOf(t)).toContain('no Motir tool needed');
+    expect(stopOf(t)).toContain(
+      `If the variable is unset, report it with the ${REPORT_UNBUILDABLE_TARGET_TOOL_NAME} tool:`,
+    );
+    expect(stopOf(t)).toContain('NO MOTIR TOOLS?');
+    expect(throughOf(t)).toContain('"discrepancy"');
+  });
 });
 
 describe('the BRANCH the prompt instructs (MOTIR-6530) — what a local run records on checkout_ready', () => {
@@ -2903,5 +3044,322 @@ describe('the CONTINUE block and workflow (MOTIR-6531)', () => {
     const { prompt } = assembleDispatchPrompt(source());
     expect(prompt).not.toContain('CONTINUE — you are carrying on');
     expect(gitSection(prompt)).toMatch(/-b subtask\/PROD-7/);
+  });
+});
+
+// ── THE CARD IS WRONG, in two ways — the WHAT test, BUILD THROUGH and STOP (MOTIR-8658) ──
+//
+// Story MOTIR-8651. A run that finds its card wrong first asks ONE question about the WHAT. Yes
+// builds through and records a discrepancy; no stops exactly as before. The test's wording is the
+// decision page's (MOTIR-8654), quoted verbatim — where this suite and that page disagree, the
+// page wins.
+
+describe('THE CARD IS WRONG — the WHAT test, BUILD THROUGH and STOP (MOTIR-8658)', () => {
+  const WHAT_TEST = [
+    "Is the WHAT — the card's outcome and its acceptance criteria — unchanged,",
+    "consistent with itself and with shipped reality and other cards' scope, and",
+    'reachable by this run alone?',
+  ].join(' ');
+  const flat = (text: string) => text.replace(/\s+/g, ' ');
+
+  const POLICIES = [
+    { name: 'full', policy: { logBug: true, replan: true, autoApproveReplan: false } },
+    { name: 'no re-plan', policy: { logBug: true, replan: false, autoApproveReplan: false } },
+    { name: 'two lanes', policy: { logBug: true, replan: true, autoApproveReplan: true } },
+    { name: 'nothing filed', policy: { logBug: false, replan: false, autoApproveReplan: false } },
+  ] as const;
+
+  /** The card-is-wrong block of the composed prompt, from its heading to FOUND A DEFECT. */
+  function wrongBlock(over: Partial<DispatchPromptSource> = {}): string {
+    const branches = cardOutcomeBranches(assembleDispatchPrompt(source(over)).prompt);
+    const at = branches.indexOf('THE CARD IS WRONG —');
+    expect(at, 'the prompt carries THE CARD IS WRONG').toBeGreaterThan(-1);
+    return branches.slice(at);
+  }
+
+  /** BUILD THROUGH's own text: from its heading up to the STOP heading. */
+  function buildThrough(block: string): string {
+    const at = block.indexOf('BUILD THROUGH — the WHAT holds');
+    const stop = block.indexOf('STOP — the WHAT itself breaks');
+    expect(at, 'a BUILD THROUGH section').toBeGreaterThan(-1);
+    expect(stop, 'a STOP section').toBeGreaterThan(at);
+    return block.slice(at, stop);
+  }
+
+  const DECISION = { type: 'decision', executor: 'coding_agent' } as const;
+
+  it('names the tool from the REGISTERED constant, and never says "the nearest thing that works"', () => {
+    expect(RECORD_DISCREPANCY_TOOL_NAME).toBe(RECORD_RUN_DISCREPANCY_TOOL_NAME);
+    expect(MCP_TOOL_NAMES).toContain(RECORD_RUN_DISCREPANCY_TOOL_NAME);
+    for (const over of [{}, { sessionBranch: 'motir/auto-1' }, DECISION]) {
+      const { prompt } = assembleDispatchPrompt(source(over));
+      expect(prompt).not.toContain('nearest thing that works');
+      expect(buildThrough(wrongBlock(over))).toContain(RECORD_RUN_DISCREPANCY_TOOL_NAME);
+    }
+  });
+
+  it.each([
+    { lane: 'code', over: {} },
+    { lane: 'decision', over: DECISION },
+  ])(
+    'the $lane lane: the test, then BUILD THROUGH, then STOP, then FOUND A DEFECT — in that order',
+    ({ over }) => {
+      const prompt = assembleDispatchPrompt(source({ key: 'PROD-7', ...over })).prompt;
+      const branches = outcomeSection(prompt);
+      const order = [
+        branches.indexOf('THE CARD IS WRONG —'),
+        flat(branches).indexOf(WHAT_TEST),
+        branches.indexOf('BUILD THROUGH — the WHAT holds'),
+        branches.indexOf('STOP — the WHAT itself breaks'),
+        branches.indexOf('FOUND A DEFECT — your card is fine'),
+      ];
+      expect(
+        order.every((n) => n > -1),
+        `every part renders: ${order}`,
+      ).toBe(true);
+      // The test text is offset in the FLAT string, so compare the rest by position and the
+      // test by presence: it has to sit between the header and BUILD THROUGH.
+      const flatBranches = flat(branches);
+      expect(flatBranches.indexOf(WHAT_TEST)).toBeGreaterThan(
+        flatBranches.indexOf('THE CARD IS WRONG —'),
+      );
+      expect(flatBranches.indexOf(WHAT_TEST)).toBeLessThan(
+        flatBranches.indexOf('BUILD THROUGH — the WHAT holds'),
+      );
+      expect(order[2]).toBeLessThan(order[3]!);
+      expect(order[3]).toBeLessThan(order[4]!);
+    },
+  );
+
+  it('BUILD THROUGH (code lane) records ONCE with the key and the three fields, before committing', () => {
+    const section = flat(buildThrough(wrongBlock({ key: 'PROD-7' })));
+    expect(section).toContain(`Call the ${RECORD_RUN_DISCREPANCY_TOOL_NAME} tool ONCE`);
+    expect(section).toContain('after you have built and before you commit');
+    expect(section).toContain('key: PROD-7');
+    for (const field of ['planAsked', 'built', 'why']) expect(section).toContain(field);
+    expect(section).toContain('DISCREPANCY_ALREADY_RECORDED');
+    expect(section).toContain('## Deviations from the plan');
+    expect(section).toContain('Discrepancy record missing: <the error code or message>');
+    expect(section).toMatch(/recorded: false means PROD-7 has no open run leg/);
+    expect(section).toContain('is NOT a failure');
+    // What survives from STOP: the WHAT is never widened.
+    expect(section).toContain('You change the ROUTE, never the WHAT');
+    expect(section).toContain('Never edit, re-scope, re-parent or archive any card');
+  });
+
+  it('BUILD THROUGH hands nothing back: no report, no Planning, no planner, no classification vocabulary', () => {
+    for (const over of [{}, { sessionBranch: 'motir/auto-1' }, DECISION]) {
+      const section = buildThrough(wrongBlock(over));
+      expect(section).not.toContain(REPORT_UNBUILDABLE_TARGET_TOOL_NAME);
+      expect(section).not.toMatch(/submit_plan_session|append_plan_turn|status planning/);
+      expect(section).not.toMatch(/verdict|unchanged|planning bug|classif/i);
+    }
+  });
+
+  it('STOP keeps today’s steps under every policy, and names the report tool exactly once in the whole prompt', () => {
+    for (const { name, policy } of POLICIES) {
+      const over = { key: 'PROD-7', findingsPolicy: policy, runnerPostsAgentReport: true };
+      const prompt = assembleDispatchPrompt(source(over)).prompt;
+      const block = flat(wrongBlock(over));
+      const stop = block.slice(block.indexOf('STOP — the WHAT itself breaks'));
+      expect(stop, name).toContain('1. REVERT FIRST.');
+      expect(stop, name).toContain('Do not improvise');
+      expect(stop, name).toContain('Do NOT RESTRUCTURE THE PLAN');
+      expect(stop, name).toContain('Comment the finding on PROD-7');
+      expect(stop, name).toMatch(
+        /report it with the report_unbuildable_target tool: projectKey: PROD targetKey: PROD-7 reason:/,
+      );
+      expect(prompt.split(REPORT_UNBUILDABLE_TARGET_TOOL_NAME), name).toHaveLength(2);
+      if (policy.replan) {
+        expect(stop, name).toContain('Move PROD-7 to Planning');
+        expect(stop, name).toContain('submit_plan_session');
+      } else {
+        expect(stop, name).toContain('Stop, and leave the card In Progress');
+        expect(stop, name).not.toContain('submit_plan_session');
+      }
+      // The two lanes are information inside STOP, and only under --auto-approve-replan.
+      expect(stop.includes('TWO LANES, and WHICH ONE'), name).toBe(policy.autoApproveReplan);
+    }
+  });
+
+  it('BUILD THROUGH renders identically under every combination of the findings policy', () => {
+    const [first, ...rest] = POLICIES.map(({ policy }) =>
+      buildThrough(wrongBlock({ key: 'PROD-7', findingsPolicy: policy })),
+    );
+    for (const section of rest) expect(section).toBe(first);
+  });
+
+  it('FOUND A DEFECT says it applies on BUILD THROUGH too, and keeps its comment-only alternative', () => {
+    for (const { policy } of POLICIES) {
+      const prompt = assembleDispatchPrompt(
+        source({ key: 'PROD-7', findingsPolicy: policy }),
+      ).prompt;
+      const defect = flat(prompt.slice(prompt.indexOf('FOUND A DEFECT — your card is fine')));
+      expect(defect).toContain('It applies during a BUILD THROUGH as well');
+      expect(defect).toContain('filing a bug never turns a build-through into STOP');
+      if (!policy.logBug) expect(defect).toContain('do NOT create a work item');
+    }
+  });
+
+  it('the decision lane records BEFORE publish_decision_page, lists deviations in the report, and does not transition', () => {
+    const block = wrongBlock({ key: 'PROD-7', ...DECISION });
+    const section = flat(buildThrough(block));
+    expect(section).toContain('before publish_decision_page');
+    expect(section).toContain('list the same points in your FINISHED report');
+    expect(section).toContain('do NOT transition the card');
+    expect(section).not.toContain('## Deviations from the plan');
+    expect(section).toContain('Discrepancy record missing:');
+    // STOP still opens with PUBLISH NOTHING.
+    const stop = block.slice(block.indexOf('STOP — the WHAT itself breaks'));
+    expect(stop.indexOf('PUBLISH NOTHING')).toBeGreaterThan(-1);
+    expect(stop.indexOf('PUBLISH NOTHING')).toBeLessThan(stop.indexOf('Do not improvise'));
+  });
+
+  it('with a session branch, the Deviations section goes in the SESSION pull request body, and no PR of its own is asked for', () => {
+    const section = flat(
+      buildThrough(wrongBlock({ key: 'PROD-7', sessionBranch: 'motir/auto-1' })),
+    );
+    expect(section).toContain(
+      '"## Deviations from the plan" section for PROD-7 to the BODY of the session pull request',
+    );
+    expect(section).not.toMatch(/open (a|the) pull request/i);
+  });
+});
+
+// THE REPOSITORY'S CONVENTION IS READ, NOT AUTO-LOADED (Story MOTIR-9079 · MOTIR-9084).
+// The prompt used to send the agent to "its CLAUDE.md", which holds only on a harness
+// that loads one and in a repository whose owner wrote one. It now names the MCP read
+// that returns the convention the team keeps on the Code page, and says what to do
+// when that read has nothing or fails.
+describe('the repository convention is fetched with get_coding_convention (MOTIR-9084)', () => {
+  const ALL_TYPES: WorkItemTypeDto[] = [
+    'code',
+    'design',
+    'test',
+    'content',
+    'copy',
+    'translate',
+    'research',
+    'review',
+    'verification',
+    'decision',
+    'choice',
+    'deploy',
+    'manual',
+    'legal',
+    'chore',
+  ];
+  const CHANGES_A_REPO: (WorkItemTypeDto | null)[] = [
+    'code',
+    'test',
+    'content',
+    'copy',
+    'translate',
+    'chore',
+    null,
+  ];
+  const render = (type: WorkItemTypeDto | null) =>
+    assembleDispatchPrompt(source({ type, executor: 'coding_agent' })).prompt;
+
+  it('the tool name is the REGISTERED one', () => {
+    expect(GET_CODING_CONVENTION_TOOL_NAME).toBe(REGISTERED_GET_CODING_CONVENTION);
+    expect(MCP_TOOL_NAMES).toContain(GET_CODING_CONVENTION_TOOL_NAME);
+  });
+
+  it.each([...ALL_TYPES, null])('the prompt for type %s never names CLAUDE.md', (type) => {
+    expect(render(type)).not.toContain('CLAUDE.md');
+  });
+
+  it.each(CHANGES_A_REPO)(
+    'type %s names the read with the project key and the target repository',
+    (type) => {
+      expect(render(type)).toContain(
+        'get_coding_convention { projectKey: "PROD", repo: "motir-core" }',
+      );
+    },
+  );
+
+  it('says what to do when no convention is recorded and when the read fails', () => {
+    const prompt = render('code');
+    expect(prompt).toContain('BEFORE you build, read the repository’s coding convention');
+    expect(prompt).toContain(
+      'If it says no convention is recorded, follow the patterns of the surrounding',
+    );
+    expect(prompt).toContain(
+      'If the call fails, say so in your report and follow the surrounding code.',
+    );
+    expect(prompt).toContain('this prompt never relies on one.');
+  });
+
+  it('a card with no target repository still names the read, without inventing a repo', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({ type: 'code', targetRepo: null, targetRepos: undefined }),
+    );
+    expect(prompt).toContain('repo: <the repository you are working in>');
+  });
+
+  it('a manual item is a person’s instructions and carries no tool call', () => {
+    expect(render('manual')).not.toContain('get_coding_convention');
+  });
+});
+
+describe('the run prompt states the product’s approval and receipt rules (MOTIR-9085)', () => {
+  const designPrompt = assembleDispatchPrompt(
+    source({ type: 'design', executor: 'coding_agent', openDependentKeys: ['X-2'] }),
+  ).prompt;
+  const acceptancePrompt = assembleDispatchPrompt(
+    source({
+      key: 'PROD-40',
+      type: 'test',
+      title: 'Story E2E (Playwright) + ACCEPTANCE VIDEO — walk both surfaces',
+      descriptionMd: 'Record the story working.\n\n## Acceptance criteria\n\n- Declares its story.',
+    }),
+  ).prompt;
+  const codePrompt = assembleDispatchPrompt(source({ type: 'code' })).prompt;
+
+  it.each([
+    'Publishing raises an approval gate on this card.',
+    'you never approve it and have no way to.',
+    'holds two gates and asks ONE question',
+    'Approve\n     moves the card to done only when no pull request is open',
+    'Your publish does NOT release a blocked_by on this card.',
+    'Republish only because the design CHANGED.',
+    'A second publish retires the\n     pending question',
+    'A superseded design’s missing files are expected',
+  ])('a design card that something waits on says: %s', (sentence) => {
+    expect(designPrompt).toContain(sentence);
+  });
+
+  it('a design card nothing waits on carries none of the publish rules', () => {
+    const quiet = assembleDispatchPrompt(
+      source({ type: 'design', executor: 'coding_agent' }),
+    ).prompt;
+    expect(quiet).not.toContain('Publishing raises an approval gate');
+  });
+
+  it.each([
+    'AN ACCEPTANCE SPEC IS A RECEIPT, NOT A REGRESSION TEST',
+    'Approving pins the recording; it does not freeze the story.',
+    'the story goes back below implemented',
+    'Only the spec’s AUTHOR moves it out of the acceptance lane',
+    'do NOT edit the assertion to match today',
+  ])('an acceptance card says: %s', (sentence) => {
+    expect(acceptancePrompt).toContain(sentence);
+  });
+
+  it('an ordinary code card is not told about receipts', () => {
+    expect(codePrompt).not.toContain('ACCEPTANCE SPEC IS A RECEIPT');
+  });
+
+  it('every reporting section tells the agent a manual-mode pull request is awaiting approval', () => {
+    expect(codePrompt).toContain('OPEN AND\n  AWAITING APPROVAL');
+    expect(codePrompt).toContain('You never approve a gate or merge a pull request.');
+  });
+
+  it('names no motir-core path, lane or file in the new sentences', () => {
+    for (const p of [designPrompt, acceptancePrompt, codePrompt]) {
+      expect(p).not.toContain('tests/e2e/acceptance');
+      expect(p).not.toContain('docs/approval-gates');
+    }
   });
 });

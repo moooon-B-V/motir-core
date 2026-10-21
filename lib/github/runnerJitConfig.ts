@@ -1,4 +1,4 @@
-import { provisioningAuth } from '@/lib/github/repoProvisioning';
+import { resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 
 // The JIT-CONFIG boundary (Story MOTIR-1916 · MOTIR-1921) — the one module that
 // asks GitHub for a runner's startup configuration, and the one that takes it
@@ -6,8 +6,13 @@ import { provisioningAuth } from '@/lib/github/repoProvisioning';
 //
 // A LEAF PRIMITIVE in the `lib/github/appAuth.ts` sense, and the exact sibling of
 // `lib/github/runnerGroups.ts`: services import it directly, routes never do, and
-// it authenticates through `provisioningAuth()` so "which org does Motir own, and
-// with which credential?" keeps exactly ONE reader.
+// it authenticates through `resolveOrgAuth()` (`lib/github/orgTarget.ts`) so
+// "which org, and with which credential?" keeps exactly ONE reader. With no target
+// that is the provisioning org, every shipped caller's default; a
+// `GithubOrgTarget` (MOTIR-8702) mints and de-registers in that org through that
+// installation instead — and `deleteRunnersNamed` forwards it to every delete, so
+// a runner listed in one org is never deleted by id in another. The deadline, the
+// rate-limit reading and the JIT-only rule below hold for every target.
 //
 // ⚠️ A JIT CONFIG, NEVER A REGISTRATION TOKEN — `docs/decisions/ci-runner-fleet.md`
 // §7.4, and this is the whole security posture of the fleet in one choice:
@@ -257,13 +262,16 @@ export const runnerJitConfigClient = {
    * in some unrelated tenant's workflow, which is §7.3's cross-tenant pickup
    * arriving through the label axis instead of the group axis.
    */
-  async mint(input: {
-    name: string;
-    runnerGroupId: number;
-    labels: readonly string[];
-    workFolder?: string;
-  }): Promise<JitRunnerConfig> {
-    const { org, token } = await provisioningAuth();
+  async mint(
+    input: {
+      name: string;
+      runnerGroupId: number;
+      labels: readonly string[];
+      workFolder?: string;
+    },
+    target?: GithubOrgTarget,
+  ): Promise<JitRunnerConfig> {
+    const { org, token } = await resolveOrgAuth(target);
     const res = await request(
       `${GITHUB_API}/orgs/${encodeURIComponent(org)}/actions/runners/generate-jitconfig`,
       {
@@ -318,8 +326,8 @@ export const runnerJitConfigClient = {
    * real fleet runner that has wedged — which is exactly what makes them
    * expensive later.
    */
-  async deleteRunner(runnerId: number): Promise<void> {
-    const { org, token } = await provisioningAuth();
+  async deleteRunner(runnerId: number, target?: GithubOrgTarget): Promise<void> {
+    const { org, token } = await resolveOrgAuth(target);
     const res = await request(
       `${GITHUB_API}/orgs/${encodeURIComponent(org)}/actions/runners/${runnerId}`,
       { method: 'DELETE', token, operation: 'de-registration' },
@@ -350,8 +358,8 @@ export const runnerJitConfigClient = {
    * the good case). Never throws for "already gone" — {@link deleteRunner}'s 404
    * tolerance covers the race with the sweeper.
    */
-  async deleteRunnersNamed(name: string): Promise<number[]> {
-    const { org, token } = await provisioningAuth();
+  async deleteRunnersNamed(name: string, target?: GithubOrgTarget): Promise<number[]> {
+    const { org, token } = await resolveOrgAuth(target);
     const res = await request(
       `${GITHUB_API}/orgs/${encodeURIComponent(org)}/actions/runners` +
         `?per_page=100&name=${encodeURIComponent(name)}`,
@@ -368,7 +376,7 @@ export const runnerJitConfigClient = {
       return Number.isInteger(id) ? [id] : [];
     });
 
-    for (const id of ids) await runnerJitConfigClient.deleteRunner(id);
+    for (const id of ids) await runnerJitConfigClient.deleteRunner(id, target);
     return ids;
   },
 };

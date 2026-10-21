@@ -32,6 +32,7 @@ import type { CommentDTO } from '@/lib/dto/comments';
 import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
 import type { LatestRefusalDTO } from '@/lib/dto/approvalGate';
 import { definePayload } from './define';
+import { parsedSectionsSchema } from './parsedSectionsSchema';
 
 // The WORK-ITEM payload shapes (Story 11.6 · Subtask 11.6.2 — MOTIR-2228).
 //
@@ -209,6 +210,12 @@ export const getWorkItemPayload = definePayload({
         .object({ languages: mcpWorkItemLanguagesSchema.optional() })
         .catchall(z.unknown())
         .optional(),
+      /**
+       * The OPTIONAL sections view (MOTIR-9033): the body parsed at read time,
+       * present only when `includeSections` was asked for — on the committed
+       * answer and on the projected one alike.
+       */
+      parsedSections: parsedSectionsSchema.optional(),
     })
     .catchall(z.unknown()) as unknown as z.ZodType<
     {
@@ -217,6 +224,7 @@ export const getWorkItemPayload = definePayload({
       folderPath?: string[] | null;
       errors?: MonitorIssueLinkDto[];
       latestRefusal?: LatestRefusalDTO | null;
+      parsedSections?: z.infer<typeof parsedSectionsSchema>;
     } & Record<string, unknown>
   >,
   probes: [

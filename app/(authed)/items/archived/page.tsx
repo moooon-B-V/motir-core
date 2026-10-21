@@ -1,3 +1,9 @@
+import { startSurfaceTranslation } from '@/lib/pages/surfaceTranslation';
+import { SurfaceTitleHost } from '@/components/workItems/titleTranslation/SurfaceTitleHost';
+import {
+  SurfaceShowOriginalSwitch,
+  SurfaceTitlesNotice,
+} from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -48,6 +54,8 @@ export default async function ArchivedIssuesPage({
   if (!ctx) redirect(NO_PROJECT_PATH);
 
   const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  // Title translation (Story MOTIR-7738 · MOTIR-8834), started beside the page's reads.
+  const titleContext = startSurfaceTranslation(ctx.project, ctx);
   const caps = await projectAccessService.getCapabilities(ctx.projectId, wsCtx);
   if (!caps.canBrowse) {
     const ta = await getTranslations('projectAccess');
@@ -80,30 +88,37 @@ export default async function ArchivedIssuesPage({
   const rows = toArchivedRows(archived.items, workflow, locale);
 
   return (
-    <div className="flex flex-col gap-5">
-      <Link
-        href="/items"
-        className="inline-flex w-fit items-center gap-1.5 text-sm text-(--el-link) hover:text-(--el-link-pressed)"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden />
-        {t('backToWorkItems')}
-      </Link>
+    <SurfaceTitleHost projectKey={ctx.project.identifier} contextRead={titleContext}>
+      <div className="flex flex-col gap-5">
+        <Link
+          href="/items"
+          className="inline-flex w-fit items-center gap-1.5 text-sm text-(--el-link) hover:text-(--el-link-pressed)"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+          {t('backToWorkItems')}
+        </Link>
 
-      <header className="flex flex-col gap-1">
-        <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
-          {t('archivedHeading')}
-        </h1>
-        <p className="text-sm text-(--el-text-muted)">{t('archivedSubtitle')}</p>
-      </header>
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
+              {t('archivedHeading')}
+            </h1>
+            <p className="text-sm text-(--el-text-muted)">{t('archivedSubtitle')}</p>
+          </div>
+          <SurfaceShowOriginalSwitch />
+        </header>
 
-      {/* Keyed by page so the optimistic-removed set resets on URL-driven paging. */}
-      <ArchivedWorkItemsList
-        key={archived.page}
-        rows={rows}
-        total={archived.total}
-        page={archived.page}
-        pageSize={archived.pageSize}
-      />
-    </div>
+        <SurfaceTitlesNotice />
+
+        {/* Keyed by page so the optimistic-removed set resets on URL-driven paging. */}
+        <ArchivedWorkItemsList
+          key={archived.page}
+          rows={rows}
+          total={archived.total}
+          page={archived.page}
+          pageSize={archived.pageSize}
+        />
+      </div>
+    </SurfaceTitleHost>
   );
 }

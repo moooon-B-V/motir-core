@@ -26,10 +26,13 @@ type LoadState = 'loading' | 'ready' | 'error';
 export function ReportBurndownSection({
   sprintId,
   cycle,
+  fit,
 }: {
   sprintId: string;
   /** The server-fetched cycle graph (the standalone page); omit to client-fetch. */
   cycle?: CycleGraphDto;
+  /** Page mode, passed only by the report pages (Story MOTIR-8919). */
+  fit?: 'page';
 }) {
   const t = useTranslations('backlog');
   const preloaded = cycle !== undefined;
@@ -57,7 +60,7 @@ export function ReportBurndownSection({
   }, [preloaded, sprintId, reloadKey]);
 
   const data = cycle ?? fetched;
-  if (data) return <CycleGraphChart cycle={data} variant="full" />;
+  if (data) return <CycleGraphChart cycle={data} variant="full" fit={fit} />;
 
   if (loadState === 'error') {
     return (
@@ -77,7 +80,7 @@ export function ReportBurndownSection({
     <div
       role="status"
       aria-label={t('sprintReport.burndownLoading')}
-      className="flex min-h-[200px] flex-col justify-end gap-2 rounded-(--radius-card) border border-(--el-border) px-(--spacing-card-padding) py-3"
+      className="flex min-h-[200px] flex-col justify-end gap-2 rounded-(--radius-card) border border-(--el-border) px-(--spacing-card-padding) py-(--spacing-card-padding-12)"
     >
       <span className="h-3 w-2/5 animate-pulse rounded-(--radius-control) bg-(--el-muted)" />
       <div className="flex h-32 items-end gap-2">

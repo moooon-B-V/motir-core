@@ -7,19 +7,31 @@
 // empty-state surface).
 
 import { expect, test, type Page } from '@playwright/test';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { startSignedOut } from './_helpers/shell-session';
 import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 const PASSWORD = 'projects-flow-pass-123';
 const USER_EMAIL = 'e2e-projects@example.com';
 const SCREENSHOT_DIR = '/tmp/motir-smoke';
+
 /**
- * The project the WORKSPACE seeds for itself (MOTIR-4870), named after it. It
- * exists before step 2 — the first authed request makes it — so it is the
- * OLDEST project here, which is what decides the archive fallback below.
+ * The project the WORKSPACE seeds for itself (MOTIR-4870). It exists before
+ * step 2 — the first authed request makes it — so it is the OLDEST project
+ * here, which is what decides the archive fallback below.
+ *
+ * ⚠️ READ FROM THE DATABASE, NOT DERIVED FROM THE EMAIL (MOTIR-8239). It used to
+ * be named after the workspace (`<local-part>'s Workspace`); it now takes a
+ * generated `adjective-noun-NNNN` name, which no spec can predict.
  */
-const SEEDED_PROJECT = `${USER_EMAIL.split('@')[0]}'s Workspace`;
+async function seededProjectName(email: string): Promise<string> {
+  const project = await adminDb.project.findFirstOrThrow({
+    where: { workspace: { memberships: { some: { user: { email } } } } },
+    orderBy: { createdAt: 'asc' },
+    select: { name: true },
+  });
+  return project.name;
+}
 
 test.beforeEach(async () => {
   await resetDatabase();
@@ -79,6 +91,7 @@ async function applyTheme(page: Page, mode: 'light' | 'dark'): Promise<void> {
 
 test('projects UI happy path with theme parity screenshots', async ({ page }) => {
   await signUp(page, USER_EMAIL);
+  const SEEDED_PROJECT = await seededProjectName(USER_EMAIL);
 
   // 1) A fresh account's surface — light
   //

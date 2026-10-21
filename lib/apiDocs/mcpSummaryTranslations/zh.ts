@@ -189,6 +189,12 @@ export const zh: McpSummaryTranslations = {
     source:
       "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
   },
+  get_coding_convention: {
+    summary:
+      '某个仓库的完整编码规范：由代码推导或由人工编辑，并附版本号，即该仓库中的改动应遵循的内容。',
+    source:
+      "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
+  },
   get_design: {
     summary:
       '一个设计工作项的已批准设计，附带指向其文件的短时效链接；若没有，则说明五种原因中的哪一种。',
@@ -214,9 +220,9 @@ export const zh: McpSummaryTranslations = {
   },
   get_project_state: {
     summary:
-      '一个项目的规划前置条件：是否已建立、代码是否已连接、是否已索引、repo 是否已设置，供规划之前查看。',
+      '一个项目的规划前置条件：是否已建立、代码是否已连接、是否已索引、repo 是否已设置，以及其组织的内容语言，供规划之前查看。',
     source:
-      "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
+      "A project's planning preconditions — established, code connected, indexed, repo set — and its organisation's content language, before you plan.",
   },
   get_work_item: {
     summary:
@@ -355,6 +361,12 @@ export const zh: McpSummaryTranslations = {
       '报告规划器会话所处的步骤（settle、lay、author）或结束它：针对正在生成的计划的辅助性进度信号。',
     source:
       'Report the step a planner session is on (settle, lay, author) or end it — an advisory progress signal on a generating plan.',
+  },
+  record_run_discrepancy: {
+    summary:
+      '按仅在“如何做”上有误的计划构建工作项的运行器，记录它实际有何不同的做法：一条工作项评论加一条运行记录，并予确认。',
+    source:
+      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
   },
   report_unbuildable_target: {
     summary: '已派发的运行器报告它停下的那个工作项无法构建：仅作确认，无需任何处理。',

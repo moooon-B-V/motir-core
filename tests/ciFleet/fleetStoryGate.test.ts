@@ -865,7 +865,8 @@ describe('§3.2 — EXACTLY ONE usage row per provisioned handle, on every path'
     await handle(delivery(fx, { jobId: 55_005, runId: 65_005 }));
 
     const outcome = await ciRunnerBootService.runIntent(dispatchedIntentIds()[0]!, FAST);
-    expect(outcome.outcome).toBe('provision_failed');
+    // A first failure is re-queued, not settled (MOTIR-8941).
+    expect(outcome.outcome).toBe('rate_limited');
 
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
     // No container was ever provisioned, so there is no handle to account for —

@@ -133,6 +133,36 @@ export interface ProjectHostedModelOverridesRow {
 
 export const projectRepository = {
   /**
+   * Every project of an organisation flagged `isMeta` — Motir's own — with its
+   * workspace and organisation ids (Story MOTIR-8699 · MOTIR-8714: the projects
+   * whose private-repository CI the platform console may move onto the fleet).
+   * Cross-tenant by design, so it runs under `withSystemContext`: `project`,
+   * `workspace` and `organization` all carry a `system_admin` read arm.
+   */
+  async listInMetaOrganizations(
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<{ id: string; identifier: string; workspaceId: string; organizationId: string }>
+  > {
+    const rows = await tx.project.findMany({
+      where: { workspace: { organization: { isMeta: true } } },
+      select: {
+        id: true,
+        identifier: true,
+        workspaceId: true,
+        workspace: { select: { organizationId: true } },
+      },
+      orderBy: { identifier: 'asc' },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      identifier: r.identifier,
+      workspaceId: r.workspaceId,
+      organizationId: r.workspace.organizationId,
+    }));
+  },
+
+  /**
    * Read a project by id. Optionally takes `tx` when the caller is already
    * inside a transaction — required when running under the non-bypass
    * motir_app role with the project RLS policy in force, because the
@@ -184,8 +214,11 @@ export const projectRepository = {
    * path — a user-facing read must stay workspace-scoped via `findByIdentifier`
    * above, or it leaks the existence of other tenants' projects.
    */
-  async findAllByIdentifier(identifier: string): Promise<Project[]> {
-    return db.project.findMany({ where: { identifier }, orderBy: { createdAt: 'asc' } });
+  async findAllByIdentifier(identifier: string, tx?: Prisma.TransactionClient): Promise<Project[]> {
+    // `tx` lets operator tooling read under `withSystemContext`, which the
+    // project policy's system arm admits (MOTIR-8712's sync script).
+    const client = tx ?? dbRead;
+    return client.project.findMany({ where: { identifier }, orderBy: { createdAt: 'asc' } });
   },
 
   /**
@@ -983,6 +1016,72 @@ export const projectRepository = {
     return tx.project.update({ where: { id }, data });
   },
 
+  /**
+   * Read just a project's auto-translate switch (Story MOTIR-7738 · MOTIR-8826) —
+   * the stored value, never a computed default. Null when the id doesn't exist.
+   * Optional `tx` — same contract as `findStatusAutomation`.
+   */
+  async findAutoTranslateWorkContent(
+    id: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ autoTranslateWorkContent: boolean } | null> {
+    const client = tx ?? dbRead;
+    return client.project.findUnique({
+      where: { id },
+      select: { autoTranslateWorkContent: true },
+    });
+  },
+
+  /**
+   * Write a project's auto-translate switch. `tx` REQUIRED; the caller
+   * (`projectAutoTranslateSettingsService`) has asserted `project:administer`,
+   * holds the row lock and appends the trail row in the same transaction.
+   */
+  async updateAutoTranslateWorkContent(
+    id: string,
+    autoTranslateWorkContent: boolean,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ autoTranslateWorkContent: boolean }> {
+    return tx.project.update({
+      where: { id },
+      data: { autoTranslateWorkContent },
+      select: { autoTranslateWorkContent: true },
+    });
+  },
+
+  /**
+   * Read just a project's agent auto-fix switch (Story MOTIR-8981 · MOTIR-9060) —
+   * the stored value, never a computed default. Null when the id doesn't exist.
+   * Optional `tx` — same contract as `findAutoTranslateWorkContent`.
+   */
+  async findAgentAutoFixEnabled(
+    id: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ agentAutoFixEnabled: boolean } | null> {
+    const client = tx ?? dbRead;
+    return client.project.findUnique({
+      where: { id },
+      select: { agentAutoFixEnabled: true },
+    });
+  },
+
+  /**
+   * Write a project's agent auto-fix switch. `tx` REQUIRED; the caller
+   * (`projectAgentAutoFixSettingsService`) has asserted `ai:configure` and holds
+   * the row lock.
+   */
+  async updateAgentAutoFixEnabled(
+    id: string,
+    agentAutoFixEnabled: boolean,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ agentAutoFixEnabled: boolean }> {
+    return tx.project.update({
+      where: { id },
+      data: { agentAutoFixEnabled },
+      select: { agentAutoFixEnabled: true },
+    });
+  },
+
   // --- Merge mode (Story MOTIR-4880 · Subtask MOTIR-5177) -------------------
   // `prMergeMode` + its `prMergeModeDecidedAt` stamp (`approval-gates.md` §7 and
   // its 2026-09-13 amendment). The stamp is what separates the column's FLOOR
@@ -1124,6 +1223,27 @@ export const projectRepository = {
     return tx.project.findMany({
       where: { aiAutoPlanEnabled: true, archivedAt: null },
       select: { id: true, workspaceId: true, aiAutoPlanThreshold: true },
+      orderBy: { id: 'asc' },
+      take: opts.take,
+      ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
+    });
+  },
+
+  /**
+   * Every live (non-archived) project across ALL workspaces, keyset-paged by id —
+   * the discovery read of the work-item embedding sweep (Story MOTIR-8226 ·
+   * MOTIR-8227). Same cross-tenant shape as {@link listAutoPlanEnabled}: the caller
+   * runs it under `withSystemContext`, whose system_admin read branch on the
+   * project policy is what lets it see every tenant's rows, and everything the
+   * sweep does afterwards runs per project inside that project's own workspace.
+   */
+  async listLiveAcrossWorkspaces(
+    opts: { take: number; cursor?: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; workspaceId: string }>> {
+    return tx.project.findMany({
+      where: { archivedAt: null },
+      select: { id: true, workspaceId: true },
       orderBy: { id: 'asc' },
       take: opts.take,
       ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),

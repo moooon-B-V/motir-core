@@ -23,12 +23,18 @@ import type { McpToolName } from '../registry';
  * column fails the run rather than being skipped.
  */
 export const EXEMPT_TOOLS = {
+  record_run_discrepancy:
+    'Returns an ACKNOWLEDGEMENT — `{ commentId, recorded }` — of a comment it wrote on the ' +
+    'card and, when the card had an open dispatch leg, a server-written finding on the run. It ' +
+    'represents no resource, and there is no `/api/v1` operation by decision — nothing but the ' +
+    'runner that built the card through calls it (decision page MOTIR-8654, MOTIR-8657).',
   report_unbuildable_target:
     'Returns an ACKNOWLEDGEMENT of a server-side finding — `{ acknowledged: true, ' +
     'recordedOnRun }` — and deliberately nothing else: the verdict, the approving plan and any ' +
-    'bug filed stay on the server. It represents no resource, and there is no `/api/v1` ' +
-    'operation by decision — nothing but the dispatched runner calls it ' +
-    '(`docs/decisions/run-found-trigger-dispatched-path.md`, MOTIR-6286).',
+    'bug filed stay on the server. It represents no resource. Its `/api/v1` sibling, ' +
+    '`POST /dispatch-runs/{id}/unbuildable` (MOTIR-8698), is the CLI’s door on the run’s own ' +
+    'credential and answers the same acknowledgement ' +
+    '(`docs/decisions/run-found-trigger-dispatched-path.md` AMENDMENT 1, MOTIR-6286).',
   get_approved_shape_verdict:
     'Returns a VERDICT — is this card still what the last approved plan approved ' +
     '(`unchanged` / `changed` / `no_plan`), with the diverging revision and the child-set ' +
@@ -78,6 +84,11 @@ export const EXEMPT_TOOLS = {
     'derived convention, each section present / absent / unavailable) — a planning read ' +
     'assembled for an agent, the same reason `get_project_state` gives. No `/api/v1` ' +
     'operation returns it, and no REST client has asked for it (MOTIR-7793).',
+  get_coding_convention:
+    'Returns ONE repository\u2019s coding convention TEXT with its version and author (derived / ' +
+    'edited by), or a named `state` (absent / unavailable / repo_not_in_project) \u2014 a read of ' +
+    'motir-ai\u2019s convention store assembled for an agent about to write code. No `/api/v1` ' +
+    'operation returns a convention document, and no REST client has asked for one (MOTIR-9083).',
   read_file:
     'Returns one repository FILE\u2019s TEXT at a git ref, plus a named `outcome` (found / not_found / ' +
     'ref_not_found / too_large / binary / \u2026 / repo_not_in_project) \u2014 a read made against the ' +
@@ -291,6 +302,9 @@ export const EXEMPT_TOOLS = {
   update_page:
     'Returns the saved PAGE exactly as `get_page` reads it, at its new `revision` (MOTIR-7411). ' +
     'No `/api/v1` operation returns a page, so there is no shared shape to derive from.',
+  rename_page:
+    'Returns the renamed page’s summary — `{ id, projectId, title, position, revision, updatedAt }` ' +
+    '(MOTIR-8841). No `/api/v1` operation returns a page, so there is no shared shape to derive from.',
   publish_decision_page:
     'Returns the PUBLICATION — which version of which page is the card’s decision, and the gate ' +
     'it raised (MOTIR-7434). No `/api/v1` operation returns a publication, so there is no shared ' +

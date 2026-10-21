@@ -109,7 +109,7 @@ export function AppLayout({ banner, topNav, sidebar, children, className }: AppL
         href="#main"
         className={cn(
           'sr-only z-[100] focus:not-sr-only focus:absolute focus:left-4 focus:top-3',
-          'focus:rounded-(--radius-control) focus:bg-(--el-page-bg) focus:px-4 focus:py-2',
+          'focus:rounded-(--radius-control) focus:bg-(--el-page-bg) focus:px-(--spacing-control-x-16) focus:py-(--spacing-control-y-8)',
           'focus:font-sans focus:text-sm focus:text-(--el-text) focus:shadow-(--shadow-elevated)',
           'focus:outline-none focus:ring-2 focus:ring-(--focus-ring-color)',
         )}

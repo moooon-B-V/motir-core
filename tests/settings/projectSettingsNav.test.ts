@@ -183,7 +183,8 @@ describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29
       .find((g) => g.group === 'automation')!
       .entries.map((e) => e.id);
     // MOTIR-6995 — Hosted agent sits DIRECTLY under AI planning (design panel 0).
-    expect(automationIds).toEqual(['ai-planning', 'hosted-agent', 'automation']);
+    // MOTIR-8830 — Translation sits DIRECTLY under Hosted agent (design MOTIR-8822).
+    expect(automationIds).toEqual(['ai-planning', 'hosted-agent', 'translation', 'automation']);
   });
 });
 
@@ -217,10 +218,19 @@ describe('projectSettingsNav registry — access matrix (rides the 6.4.3 policy)
   // opens on `work_item:edit`, which a member holds (design MOTIR-6991, decided
   // knowingly), so on a build that runs hosted agents a member is offered that
   // ONE room — asserted in the Hosted agent block below.
-  it('a member sees NO section off a hosted-runs build — every other entry gates on an administrative key', () => {
-    expect(visibleSettingsNav(MEMBER)).toEqual([]);
-    expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_ROUTES)).toEqual([]);
-    expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_NAV, SELF_HOSTED)).toEqual([]);
+  // ⚠️ RE-STATED BY MOTIR-8830. The Translation room opens on `project:browse`
+  // (the owner's 2026-10-17 decision, design MOTIR-8822: every reader may see
+  // what the project's auto-translate is set to), which EVERY actor who reaches
+  // the shell holds. So a member is offered that ONE read-only room on every
+  // build, not "no section".
+  it('a member sees exactly Translation off a hosted-runs build — every other entry gates on an administrative key', () => {
+    expect(visibleSettingsNav(MEMBER).map((e) => e.id)).toEqual(['translation']);
+    expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_ROUTES).map((e) => e.id)).toEqual([
+      'translation',
+    ]);
+    expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_NAV, SELF_HOSTED).map((e) => e.id)).toEqual([
+      'translation',
+    ]);
   });
 
   it('a no-browse actor sees NOTHING — the whole area filters away (no nav leak)', () => {
@@ -277,10 +287,14 @@ describe('the Public page room (Story MOTIR-3875 · MOTIR-4243)', () => {
     // MOTIR-5278 had narrowed these two to "no public-page, and exactly Approvals".
     // MOTIR-6995: on cloud a member is offered the Hosted agent room (its view key
     // is `work_item:edit`) and nothing cloud-only.
+    // MOTIR-8830: and Translation, whose view key is `project:browse`.
     expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_NAV, ON_CLOUD).map((e) => e.id)).toEqual([
       'hosted-agent',
+      'translation',
     ]);
-    expect(visibleSettingsNav(VIEWER, PROJECT_SETTINGS_NAV, ON_CLOUD)).toEqual([]);
+    expect(visibleSettingsNav(VIEWER, PROJECT_SETTINGS_NAV, ON_CLOUD).map((e) => e.id)).toEqual([
+      'translation',
+    ]);
   });
 
   it('DEFAULTS CLOSED — a caller that forgets the deployment fact drops the row', () => {
@@ -368,8 +382,13 @@ describe('the Hosted agent room (Story MOTIR-6989 · MOTIR-6995)', () => {
     );
     expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_NAV, HOSTED_ONLY).map((e) => e.id)).toEqual([
       'hosted-agent',
+      'translation',
     ]);
-    expect(visibleSettingsNav(VIEWER, PROJECT_SETTINGS_NAV, HOSTED_ONLY)).toEqual([]);
+    // A viewer may not start a hosted run: Hosted agent is absent, Translation
+    // (browse) is not.
+    expect(
+      visibleSettingsNav(VIEWER, PROJECT_SETTINGS_NAV, HOSTED_ONLY).map((e) => e.id),
+    ).not.toContain('hosted-agent');
     // `ai:configure` alone opens nothing here — it is the room's WRITE key.
     expect(
       visibleSettingsNav(
@@ -625,6 +644,13 @@ const KEY_EVIDENCE: Record<string, { permission: PermissionKey; source: string; 
     source: 'lib/services/projectHostedAgentSettingsService.ts',
     gate: 'assertPermission',
   },
+  // MOTIR-8830 — the Translation room's WRITE: `updateSettings` asserts
+  // `project:administer` (its READ asserts the view key, `project:browse`).
+  translation: {
+    permission: 'project:administer',
+    source: 'lib/services/projectAutoTranslateSettingsService.ts',
+    gate: 'assertPermission',
+  },
 };
 
 describe('every registry entry names the key its DESTINATION asserts (MOTIR-2468)', () => {
@@ -700,20 +726,24 @@ describe('what each actor is offered (MOTIR-2468)', () => {
   // MOTIR-5394); MOTIR-5278's browse view is reverted.
   // MOTIR-5278 had inverted this and the VIEWER case below to "offered exactly
   // Approvals — so the area door comes BACK".
-  it('a built-in MEMBER is offered NOTHING off a hosted-runs build — so the area door goes with it', () => {
-    expect(visibleSettingsNav(MEMBER)).toEqual([]);
-    expect(hasVisibleSettingsArea(MEMBER)).toBe(false);
-    expect(hasVisibleSettingsArea(MEMBER, SELF_HOSTED)).toBe(false);
+  // ⚠️ RE-STATED BY MOTIR-8830: the Translation room's view key is
+  // `project:browse`, which every actor in the shell holds, so the area door no
+  // longer goes away for a member — on ANY build. It opens onto that one room.
+  it('a built-in MEMBER is offered exactly Translation off a hosted-runs build — and the area door stays', () => {
+    expect(visibleSettingsNav(MEMBER).map((e) => e.id)).toEqual(['translation']);
+    expect(hasVisibleSettingsArea(MEMBER)).toBe(true);
+    expect(hasVisibleSettingsArea(MEMBER, SELF_HOSTED)).toBe(true);
   });
 
   // MOTIR-6995 — the population consequence the Hosted agent design flagged: its
   // view key is `work_item:edit`, which a member holds, so on a build that runs
   // hosted agents the **Project settings** door COMES BACK for a member, opening
   // onto exactly that one read-only room.
-  it('a built-in MEMBER on a hosted-runs build is offered exactly Hosted agent — and the door returns', () => {
+  it('a built-in MEMBER on a hosted-runs build is offered Hosted agent and Translation', () => {
     const hosted = { publicProjectsAvailable: false, hostedRunsAvailable: true };
     expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_NAV, hosted).map((e) => e.id)).toEqual([
       'hosted-agent',
+      'translation',
     ]);
     expect(hasVisibleSettingsArea(MEMBER, hosted)).toBe(true);
     expect(hasVisibleSettingsArea(MEMBER, ON_CLOUD)).toBe(true);
@@ -721,11 +751,15 @@ describe('what each actor is offered (MOTIR-2468)', () => {
 
   // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
   // MOTIR-5394); MOTIR-5278's browse view is reverted.
-  it('a built-in VIEWER is offered NOTHING either — on any build', () => {
-    expect(visibleSettingsNav(VIEWER)).toEqual([]);
-    expect(hasVisibleSettingsArea(VIEWER)).toBe(false);
+  // ⚠️ RE-STATED BY MOTIR-8830: a viewer holds `project:browse`, so it is offered
+  // the read-only Translation room — and ONLY that — on any build.
+  it('a built-in VIEWER is offered exactly Translation — on any build', () => {
+    expect(visibleSettingsNav(VIEWER).map((e) => e.id)).toEqual(['translation']);
+    expect(hasVisibleSettingsArea(VIEWER)).toBe(true);
     // A viewer may not start a hosted run, so it does not see the Hosted agent room.
-    expect(hasVisibleSettingsArea(VIEWER, ON_CLOUD)).toBe(false);
+    expect(visibleSettingsNav(VIEWER, PROJECT_SETTINGS_NAV, ON_CLOUD).map((e) => e.id)).toEqual([
+      'translation',
+    ]);
   });
 
   it('an actor with no keys at all is offered NOTHING', () => {
@@ -766,12 +800,16 @@ describe('what each actor is offered (MOTIR-2468)', () => {
   // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
   // MOTIR-5394); MOTIR-5278's browse view is reverted.
   // MOTIR-5278 had inverted this to "opens exactly Approvals", as that room's VIEW key.
-  it('`project:browse` alone opens NO door — the entry that used to make it do so is re-keyed', () => {
-    // Every actor who reaches the shell holds `project:browse`. While ANY entry
-    // gated on it, the area door could never disappear for anyone, and the
-    // story's headline was unreachable. This is that invariant, pinned.
+  // ⚠️ INVERTED BY MOTIR-8830 — DELIBERATELY, on the owner's 2026-10-17 decision
+  // (design MOTIR-8822): the Translation room is readable by every reader, so
+  // `project:browse` DOES open a door now. What stays pinned is that no entry's
+  // WRITE key is `project:browse` — only the one declared VIEW key is — so the
+  // door's presence is exactly one read-only room.
+  it('`project:browse` opens exactly ONE door — Translation, by its declared VIEW key', () => {
     expect(PROJECT_SETTINGS_NAV.map((e) => e.permission)).not.toContain('project:browse');
-    expect(hasVisibleSettingsArea(toSettingsNavPermissions(['project:browse']))).toBe(false);
+    const browse = toSettingsNavPermissions(['project:browse']);
+    expect(visibleSettingsNav(browse).map((e) => e.id)).toEqual(['translation']);
+    expect(hasVisibleSettingsArea(browse)).toBe(true);
   });
 });
 
@@ -824,6 +862,11 @@ describe('the VIEW key defaults to the WRITE key — the no-regression proof (MO
     expect(settingsEntryKeys('hosted-agent')).toEqual({
       view: 'work_item:edit',
       write: 'ai:configure',
+    });
+    // MOTIR-8830 — the second declared exception.
+    expect(settingsEntryKeys('translation')).toEqual({
+      view: 'project:browse',
+      write: 'project:administer',
     });
   });
 
@@ -955,9 +998,15 @@ describe('a distinct VIEW key opens the door, and only the door (MOTIR-5193, ove
 // MOTIR-6995 — the Hosted agent room's READ asserts its view key,
 // `projectAccessService.assertPermission(…, 'work_item:edit', …)` in
 // `projectHostedAgentSettingsService.get`.
+// MOTIR-8830 — the Translation room's READ asserts `project:browse` in
+// `projectAutoTranslateSettingsService.getSettings`.
 const VIEW_KEY_EVIDENCE: Record<string, { source: string; gate: string }> = {
   'hosted-agent': {
     source: 'lib/services/projectHostedAgentSettingsService.ts',
+    gate: 'assertPermission',
+  },
+  translation: {
+    source: 'lib/services/projectAutoTranslateSettingsService.ts',
     gate: 'assertPermission',
   },
 };
@@ -1055,7 +1104,8 @@ describe('the VIEW key cannot drift from its destination (MOTIR-5193)', () => {
     // MOTIR-5278 had updated this to `['approvals']`. With that declaration reverted,
     // the drift test rules on the fixture alone again, as MOTIR-5193 shipped it.
     // MOTIR-6995 declares the first again: Hosted agent (`work_item:edit`).
-    expect(declaring.map((e) => e.id)).toEqual(['hosted-agent']);
+    // MOTIR-8830 adds Translation (`project:browse`).
+    expect(declaring.map((e) => e.id)).toEqual(['hosted-agent', 'translation']);
   });
 
   it('every declaring entry has an evidence row, and every evidence row a declaring entry', () => {

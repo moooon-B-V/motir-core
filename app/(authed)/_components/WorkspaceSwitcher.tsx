@@ -170,7 +170,7 @@ export function WorkspaceSwitcher({
                     onClick={() => handleSwitch(w.id)}
                     disabled={isPending}
                     className={cn(
-                      'flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left',
+                      'flex w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x-8) py-(--spacing-control-y-8) text-left',
                       'hover:bg-(--el-surface) focus-visible:bg-(--el-surface) focus-visible:outline-none',
                       'disabled:pointer-events-none disabled:opacity-50',
                       isActive && 'bg-(--el-surface)',
@@ -205,7 +205,7 @@ export function WorkspaceSwitcher({
                 <button
                   type="button"
                   onClick={openCreate}
-                  className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
+                  className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x-8) py-(--spacing-control-y-8) text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
                 >
                   <Plus className="text-(--el-text-muted) h-4 w-4" aria-hidden />
                   {t('workspaceSwitcher.create')}
@@ -240,7 +240,7 @@ export function WorkspaceSwitcher({
             <a
               href="/settings/workspace"
               onClick={() => setOpen(false)}
-              className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
+              className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x-8) py-(--spacing-control-y-8) text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
             >
               <Settings className="text-(--el-text-muted) h-4 w-4" aria-hidden />
               {t('workspaceSwitcher.settings')}
@@ -248,7 +248,7 @@ export function WorkspaceSwitcher({
             <a
               href="/settings/workspace#members"
               onClick={() => setOpen(false)}
-              className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
+              className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x-8) py-(--spacing-control-y-8) text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
             >
               <Mail className="text-(--el-text-muted) h-4 w-4" aria-hidden />
               {t('workspaceSwitcher.invite')}

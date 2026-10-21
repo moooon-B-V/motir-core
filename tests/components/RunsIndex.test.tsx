@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { RunsIndex } from '@/app/(authed)/runs/_components/RunsIndex';
 import type { DispatchRunListItemDto } from '@/lib/dto/dispatchRuns';
@@ -71,6 +71,9 @@ function run(over: Partial<DispatchRunListItemDto> = {}): DispatchRunListItemDto
     createdById: 'usr_1',
     cardCount: 11,
     legs: { ...NO_LEGS, implemented: 9, skipped: 1, not_reached: 1 },
+    targetKey: 'PROD-42',
+    targetWorkItemId: 'itm_1',
+    otherCardCount: 11,
     ...over,
   };
 }
@@ -130,8 +133,21 @@ describe('the row carries the run’s OUTCOME, and survives its subject', () => 
   });
 
   it('⚠️ a deleted scope still renders — the LABEL is stored beside the id', () => {
-    mount([], [run({ scopeWorkItemId: null, scopeLabel: 'Agent runs' })]);
+    // The pair the list read derives for this case: the stored label as TEXT, and
+    // no id, so there is nothing to open.
+    mount(
+      [],
+      [
+        run({
+          scopeWorkItemId: null,
+          scopeLabel: 'Agent runs',
+          targetKey: 'Agent runs',
+          targetWorkItemId: null,
+        }),
+      ],
+    );
     expect(screen.getByText('Agent runs')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Agent runs' })).toBeNull();
   });
 
   it('the STOP REASON is deliberately not a column', () => {
@@ -242,17 +258,19 @@ const mountScoped = (
     />,
   );
 
+const headers = () => screen.getAllByRole('columnheader').map((h) => h.textContent);
+
 const calls = (): string[] => fetchMock.mock.calls.map((c) => String(c[0]));
 
 describe('⚠️ a NARROWED list stays narrowed', () => {
-  it('drops the Scope column — every row would repeat the header', () => {
+  it('keeps the same five headers — the Target cell is the row’s only door', () => {
     mountScoped([], [run()]);
-    expect(screen.queryByRole('columnheader', { name: 'Scope' })).toBeNull();
-    expect(screen.getByRole('columnheader', { name: 'Command' })).toBeTruthy();
-    // The unnarrowed list keeps it.
+    expect(headers()).toEqual(['Target', 'Agent', 'Started', 'Status', 'Work items']);
+    expect(screen.getAllByTestId('run-open')).toHaveLength(1);
+    // The unnarrowed list reads the same.
     cleanup();
     mount([], [run()]);
-    expect(screen.getByRole('columnheader', { name: 'Scope' })).toBeTruthy();
+    expect(headers()).toEqual(['Target', 'Agent', 'Started', 'Status', 'Work items']);
   });
 
   it('carries `scope=` on the live poll AND on the past re-read it triggers', async () => {
@@ -287,7 +305,7 @@ describe('⚠️ a NARROWED list stays narrowed', () => {
     const push = vi.spyOn(window.history, 'pushState');
     try {
       mountScoped([], [run()]);
-      fireEvent.click(screen.getByRole('button', { name: 'run' }));
+      fireEvent.click(screen.getByTestId('run-open'));
       expect(push).toHaveBeenLastCalledWith(null, '', '/runs?scope=PROD-7&run=run_1');
 
       cleanup();
@@ -304,7 +322,7 @@ describe('⚠️ a NARROWED list stays narrowed', () => {
     const push = vi.spyOn(window.history, 'pushState');
     try {
       mount([], [run()]);
-      fireEvent.click(screen.getByRole('button', { name: 'run' }));
+      fireEvent.click(screen.getByTestId('run-open'));
       expect(push).toHaveBeenLastCalledWith(null, '', '/runs?run=run_1');
     } finally {
       push.mockRestore();
@@ -387,5 +405,83 @@ describe('⚠️ the view rides EVERY client read, and the empty lines speak for
       />,
     );
     expect(screen.getByText(/When work in this project is dispatched/)).toBeTruthy();
+  });
+});
+
+// ── THE TARGET COLUMN (Story MOTIR-8982 · MOTIR-9073) ────────────────────────
+describe('the Target cell says what the run was for, and holds the row’s door', () => {
+  const rowOf = () => screen.getAllByRole('row')[1]!;
+
+  it('has no Command or Scope column, and no cell reads the command', () => {
+    mount([], [run({ command: 'run' })]);
+    expect(headers()).toEqual(['Target', 'Agent', 'Started', 'Status', 'Work items']);
+    expect(screen.queryByRole('columnheader', { name: 'Command' })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Scope' })).toBeNull();
+    for (const cell of within(rowOf()).getAllByRole('cell')) {
+      expect(cell.textContent).not.toBe('run');
+    }
+  });
+
+  it('links the key to its work item when the subject still resolves', () => {
+    mount([], [run({ targetKey: 'PROD-42', targetWorkItemId: 'itm_42' })]);
+    const link = within(rowOf()).getByRole('link', { name: 'PROD-42' });
+    expect(link.getAttribute('href')).toBe('/items/PROD-42');
+  });
+
+  it('renders the key as text, not a link, when there is no id', () => {
+    mount([], [run({ targetKey: 'Sprint 12', targetWorkItemId: null })]);
+    expect(within(rowOf()).getByText('Sprint 12')).toBeTruthy();
+    expect(within(rowOf()).queryByRole('link')).toBeNull();
+  });
+
+  it('a run with no subject renders no target and no +N, but still its door and its items line', () => {
+    mount(
+      [],
+      [
+        run({
+          targetKey: null,
+          targetWorkItemId: null,
+          otherCardCount: 0,
+          cardCount: 0,
+          legs: NO_LEGS,
+        }),
+      ],
+    );
+    expect(within(rowOf()).queryByRole('link')).toBeNull();
+    expect(within(rowOf()).queryByText(/\+/)).toBeNull();
+    expect(within(rowOf()).getByTestId('run-open')).toBeTruthy();
+    expect(within(rowOf()).getByText('Took no work items')).toBeTruthy();
+  });
+
+  it('shows +N as inert text with a spoken companion, and nothing at zero', () => {
+    mount([], [run({ otherCardCount: 3 })]);
+    const plus = within(rowOf()).getByText('+3');
+    expect(plus.getAttribute('aria-hidden')).toBe('true');
+    expect(plus.closest('a, button')).toBeNull();
+    expect(within(rowOf()).getByText('and 3 more work items')).toBeTruthy();
+    cleanup();
+    mount([], [run({ otherCardCount: 0 })]);
+    expect(within(rowOf()).queryByText(/\+\d/)).toBeNull();
+  });
+
+  it('carries exactly one door, named, with an aria-hidden glyph, outside the link', () => {
+    mount([], [run()]);
+    const doors = within(rowOf()).getAllByTestId('run-open');
+    expect(doors).toHaveLength(1);
+    const door = doors[0]!;
+    expect(door.getAttribute('aria-label')).toBe('Open run');
+    expect(door.querySelector('svg')!.getAttribute('aria-hidden')).toBe('true');
+    expect(door.closest('a')).toBeNull();
+  });
+
+  it('is not a second door: no other cell opens the run', () => {
+    const push = vi.spyOn(window.history, 'pushState');
+    try {
+      mount([], [run()]);
+      for (const cell of within(rowOf()).getAllByRole('cell').slice(1)) fireEvent.click(cell);
+      expect(push).not.toHaveBeenCalled();
+    } finally {
+      push.mockRestore();
+    }
   });
 });

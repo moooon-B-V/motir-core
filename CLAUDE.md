@@ -599,17 +599,35 @@ blessed mechanism, not a colour-rule violation. See `docs/styles/glassmorphism.m
 
 ### Padding · sizing · elevation — by surface
 
-| Surface                                               | padding / size token(s)                                 |
-| ----------------------------------------------------- | ------------------------------------------------------- |
-| button                                                | `--spacing-btn-x/y` (`-sm`) · `--height-btn-{sm,md,lg}` |
-| input · textarea                                      | `--spacing-input-x/y` · `--height-input`                |
-| card                                                  | `--spacing-card-padding`                                |
-| menu/list row · combobox trigger/search · sidebar row | `--spacing-control-x/y` · `--height-control`            |
-| square icon / close button                            | `--spacing-icon-btn`                                    |
-| badge / pill chip                                     | `--spacing-chip-x/y`                                    |
-| `<kbd>` chip                                          | `--spacing-kbd-x/y`                                     |
-| tooltip · inline code block                           | `--spacing-tooltip-x/y`                                 |
-| shadow / elevation                                    | `--shadow-{subtle,card,elevated,modal}`                 |
+| Surface                                               | padding / size token(s)                                                                                                                                                                                                                                                                                                                                                                                    |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| button                                                | `--spacing-btn-x/y` (`-sm`) · `--height-btn-{sm,md,lg}` — no density steps                                                                                                                                                                                                                                                                                                                                 |
+| input · textarea                                      | `--spacing-input-x/y` · `--height-input` — no density steps                                                                                                                                                                                                                                                                                                                                                |
+| card                                                  | `--spacing-card-padding` (default) · steps `--spacing-card-padding-16` `--spacing-card-padding-12` `--spacing-card-padding-8` `--spacing-card-padding-4`                                                                                                                                                                                                                                                   |
+| menu/list row · combobox trigger/search · sidebar row | `--spacing-control-x` · steps `--spacing-control-x-16` `--spacing-control-x-12` `--spacing-control-x-8` `--spacing-control-x-6` `--spacing-control-x-4` `--spacing-control-x-2`; `--spacing-control-y` · steps `--spacing-control-y-8` `--spacing-control-y-4` `--spacing-control-y-2`; `--height-control` · steps `--height-control-28` `--height-control-32` `--height-control-40` `--height-control-48` |
+| square icon / close button                            | `--spacing-icon-btn` — no density steps                                                                                                                                                                                                                                                                                                                                                                    |
+| badge / pill chip                                     | `--spacing-chip-x` · steps `--spacing-chip-x-8` `--spacing-chip-x-6` `--spacing-chip-x-4` `--spacing-chip-x-2`; `--spacing-chip-y`                                                                                                                                                                                                                                                                         |
+| `<kbd>` chip                                          | `--spacing-kbd-x/y` — no density steps                                                                                                                                                                                                                                                                                                                                                                     |
+| tooltip · inline code block                           | `--spacing-tooltip-x/y` — no density steps                                                                                                                                                                                                                                                                                                                                                                 |
+| shadow / elevation                                    | `--shadow-{subtle,card,elevated,modal}`                                                                                                                                                                                                                                                                                                                                                                    |
+
+**Density steps.** A surface's own padding and height is a SCALE, not one value,
+so the bases above carry derived steps. A step's name is its pixel value in the
+default style (`warm-editorial`): `--spacing-control-x-8` is 8px there. Every
+step is derived from its base in ONE shared rule on `:root, [data-style]` in
+`packages/design-system/theme.css` (`round(nearest, calc(var(<base>) * N / <ref>), 1px)`),
+so it follows the active style and re-resolves inside a nested `[data-style]`
+scope. Steps are never written per style. A new step is one line in that rule,
+added only when at least three real sites need it. In a class a step reads
+`px-(--spacing-control-x-8)` / `h-(--height-control-40)`.
+
+**Snap rule.** A raw own-box value routes to the NEAREST step of its surface's
+base, ties to the smaller one. A sweep PR names every value that changed.
+
+**Stays raw** (layout, not a surface's own box): gaps, `space-*`, margins,
+heights of 24px and under, padding of 32px and over, `rounded-full` surfaces
+and zero padding. A value that fits no step and that a reviewer accepts goes
+into the `shapeSwapLint` allowlist with its reason.
 
 ### Rules
 
@@ -620,15 +638,16 @@ blessed mechanism, not a colour-rule violation. See `docs/styles/glassmorphism.m
   pattern the colour rule uses.
 - ✅ `rounded-full` is fine ONLY for genuinely circular things (spinner, avatar,
   colour swatch, status dot) — not style-dependent.
-- ✅ Layout-only spacing — gaps between siblings (`gap-2`), one-off margins
-  (`mb-1`), page gutters — may stay raw; it is not a surface's shape. Only a
-  control's OWN box padding / radius / size is shape.
+- ✅ Layout-only spacing — gaps between siblings (`gap-2`), `space-*`, one-off
+  margins (`mb-1`), page gutters, heights of 24px and under, padding of 32px and
+  over, `rounded-full` surfaces and zero padding — may stay raw; it is not a
+  surface's shape. Only a control's OWN box padding / radius / size is shape.
 - ❌ `rounded-md` / `rounded-lg` / `rounded-xl`, or `rounded-(--radius-sm|xs)`
   and the rest of the generic radius scale (Tier-0, inert). A pill chip is
   `--radius-badge`, not `--radius-pill`.
 - ❌ A fixed `p-1` / `px-2.5` / `h-9` for a control's own padding or height —
-  use `--spacing-*` / `--height-*` so density flips too. A `shadow-md` on a
-  surface — use `--shadow-*`.
+  use the surface's density step (`px-(--spacing-control-x-8)`, `h-(--height-control-40)`)
+  so density flips too. A `shadow-md` on a surface — use `--shadow-*`.
 
 This rule was adopted alongside the shape-swap work: components had collapsed
 the SHAPE axis by reaching for the generic radius scale (`--radius-sm` ×11) +

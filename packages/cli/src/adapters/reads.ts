@@ -834,6 +834,7 @@ export function toDispatchRunView(body: SuccessBody<'getDispatchRun'>): Dispatch
             baseRef: pr.baseRef,
             headSha: pr.headSha,
           })),
+          resume: body.repair.resume ? { ...body.repair.resume } : null,
           findings: body.repair.findings ? { ...body.repair.findings } : null,
         }
       : null,

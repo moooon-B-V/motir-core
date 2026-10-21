@@ -8,6 +8,8 @@ The container every ephemeral fleet runner boots from — the thing
 | ----------------------- | --------------------------------------------------------------------------- |
 | `Dockerfile`            | The image. Its header carries the toolchain derivation + evidence table.    |
 | `entrypoint.sh`         | dockerd → drop to `runner` → `exec run.sh --jitconfig`. One job, then exit. |
+| `start-dockerd.sh`      | Starts dockerd and proves it can unpack a whiteout layer (MOTIR-8821).      |
+| `job-started.sh`        | Runner hook: prints the dockerd storage outcome into the job log.           |
 | `smoke/assert-image.sh` | The mechanical §7.2 / §7.4 assertions, on sources and on the built image.   |
 | `smoke/prove-boot.sh`   | Boots the real image; proves dockerd + `run.sh` + a `services:` container.  |
 
@@ -48,6 +50,35 @@ The orchestrator puts these on the Machine
 flag and this image has no `config.sh`. The guarantee it restates — no default
 labels — is already made at mint time, because a JIT config's `labels` array is
 the runner's complete label set and GitHub adds no defaults to a JIT runner.
+
+## dockerd storage (MOTIR-8821)
+
+`start-dockerd.sh` does not trust a daemon that merely answers. It loads a
+two-layer image whose second layer deletes a file (an overlay whiteout) and
+creates a container from it, and tries storage candidates in order until that
+works: `default` (containerd store + overlayfs), `overlay2` (classic graph
+driver), `vfs`. A boot where none works fails. The winning candidate is printed
+into every job log by the runner's job-started hook.
+
+To measure a Machine, boot the image with `MOTIR_RUNNER_DOCKER_STORAGE=<candidate>`
+to force one candidate; the boot log shows which are refused and why.
+
+On a Fly Machine's root filesystem both overlay candidates are refused and only
+`vfs` works, which copies every layer and fills the disk (MOTIR-8821, MOTIR-8839).
+So the orchestrator gives each CI runner its own Fly volume at `/var/lib/docker`
+(`MOTIR_CI_DOCKER_VOLUME_GB`, default 20, `0` to turn it off), where `overlay2`
+works. The Fly adapter creates it with the machine, deletes it at teardown, and
+the fleet reconciler sweeps any left behind. The job-started hook prints
+`runner disk:` lines (`df -h / /var/lib/docker`) into every job log.
+
+## Container DNS (MOTIR-8899)
+
+`start-dockerd.sh` starts dockerd with `--dns=1.1.1.1 --dns=8.8.8.8`. Without it
+a container (and each `RUN` step of the daemon's own builder, which is what
+`flyctl deploy --local-only` uses) inherits the Machine's Fly resolver, an IPv6
+address the IPv4 bridge cannot reach, and `apt-get` fails with
+`Temporary failure resolving`. Set `MOTIR_RUNNER_DOCKER_DNS="<ip> <ip>"` on a
+Machine to try other resolvers; the job log's storage line names the ones in use.
 
 ## What is not proven in CI
 

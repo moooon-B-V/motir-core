@@ -14,7 +14,8 @@ import {
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
-import { setProjectAccess } from '@/tests/helpers/projectAccess';
+import { projectAccessData, setProjectAccess } from '@/tests/helpers/projectAccess';
+import { consentedVisitor } from '../../visitor/_consentedVisitor';
 
 // MOTIR-6209 — a Plans row NAMES the refused work item its session was seeded
 // from (story MOTIR-6068; design MOTIR-6206 `plans-sessions--seeded.mock.html`).
@@ -445,5 +446,215 @@ describe('a design Re-plan seed', () => {
       origin: 'refusal',
       chosenLabel: null,
     });
+  });
+});
+
+// MOTIR-8697 — a session started by Confirm on a GUIDE's re-plan offer
+// (MOTIR-8691's `seed_guide_turn_id`) is named by the GUIDED card on its Plans
+// row, and is withheld exactly as a gate seed is.
+
+/** A guide conversation on `guided` (the shape `openGuideWithFirstTurn` writes:
+ *  `origin: 'guide'`, `targetKeys` = that ONE card) holding one assistant reply,
+ *  and a PLANNING session anchored on `anchorKey` stamped with that reply as its
+ *  guide seed. Written directly: the stamp's own write path is MOTIR-8691's. */
+async function guideSeededSession(
+  f: WorkItemFixture,
+  guided: WorkItem,
+  anchorKey: string,
+  minutes: number,
+): Promise<{ sessionId: string; guideSessionId: string; turnId: string }> {
+  const base = { workspaceId: f.workspaceId, projectId: f.projectId, createdById: f.ownerId };
+  const guide = await adminDb.planChangeSession.create({
+    data: {
+      ...base,
+      origin: 'guide',
+      scopeKey: buildScope([guided.identifier]).scopeKey,
+      targetKeys: [guided.identifier],
+      turnCount: 1,
+    },
+  });
+  const reply = await adminDb.planChangeTurn.create({
+    data: {
+      workspaceId: f.workspaceId,
+      sessionId: guide.id,
+      seq: 0,
+      role: 'assistant',
+      body: 'I cannot guide you further: this work item is wrong.',
+    },
+  });
+  const s = await adminDb.planChangeSession.create({
+    data: {
+      ...base,
+      scopeKey: buildScope([anchorKey]).scopeKey,
+      targetKeys: [anchorKey],
+      turnCount: 1,
+      seedGuideTurnId: reply.id,
+      lastActivityAt: minutesAgo(minutes),
+    },
+  });
+  await adminDb.planChangeTurn.create({
+    data: {
+      workspaceId: f.workspaceId,
+      sessionId: s.id,
+      seq: 0,
+      role: 'user',
+      body: `${guided.identifier} · ${guided.title}\nRe-plan this: the guide could not go further.`,
+      authorId: f.ownerId,
+    },
+  });
+  return { sessionId: s.id, guideSessionId: guide.id, turnId: reply.id };
+}
+
+describe('a GUIDE-seeded session is named by the guided card (MOTIR-8697)', () => {
+  it('lists with origin guide and the guided card’s key, beside a gate-seeded and an unseeded row read as before, in one statement', async () => {
+    const parent = await createTestWorkItem(fx, { kind: 'story', title: 'Key rotation' });
+    const guided = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'Rotate the signing key',
+      parentId: parent.id,
+    });
+    const g = await guideSeededSession(fx, guided, parent.identifier, 1);
+    const gate = await seededSession('decision_approval', 'changes_requested', 2);
+    const plainId = await plainSession('plain one', 3);
+
+    const page = await planSessionsService.listSessions(fx.projectId, fx.ctx);
+    const byId = new Map(page.sessions.map((r) => [r.id, r]));
+
+    // The guide conversation itself is never a Plans row.
+    expect(byId.has(g.guideSessionId)).toBe(false);
+    expect(byId.get(g.sessionId)!.seed).toEqual({
+      cardKey: guided.identifier,
+      gateKind: null,
+      origin: 'guide',
+      chosenLabel: null,
+    });
+    expect(byId.get(g.sessionId)!.targetKeys).toEqual([parent.identifier]);
+    expect(byId.get(g.sessionId)!.firstTurn).toContain('the guide could not go further');
+    expect(byId.get(gate.sessionId)!.seed).toEqual({
+      cardKey: gate.card.identifier,
+      gateKind: 'decision_approval',
+      origin: 'refusal',
+      chosenLabel: null,
+    });
+    expect(byId.get(plainId)!.seed).toBeNull();
+    expect(byId.get(plainId)!.firstTurn).toBe('plain one');
+
+    // The `?session=` landing carries it too.
+    expect(
+      (await planSessionsService.getSessionRow(fx.projectId, g.sessionId, fx.ctx))!.seed,
+    ).toMatchObject({ origin: 'guide', cardKey: guided.identifier });
+
+    // The raw row, and still ONE statement for the page.
+    const calls: string[] = [];
+    const rows = await adminDb.$transaction(async (tx) => {
+      const counted = new Proxy(tx, {
+        get(target, prop, receiver) {
+          const value = Reflect.get(target, prop, receiver);
+          if (
+            typeof prop === 'string' &&
+            !prop.startsWith('_') &&
+            prop !== 'then' &&
+            !prop.endsWith('Internal')
+          ) {
+            calls.push(prop);
+          }
+          return value;
+        },
+      });
+      return planChangeSessionRepository.listPageByProject(
+        {
+          projectId: fx.projectId,
+          workspaceId: fx.workspaceId,
+          limit: 10,
+          after: null,
+          state: null,
+        },
+        counted,
+      );
+    });
+    expect(calls).toEqual(['$queryRaw']);
+    const raw = rows.find((r) => r.id === g.sessionId)!;
+    expect(raw).toMatchObject({
+      seedGuideTurnId: g.turnId,
+      seedGuideCardKey: guided.identifier,
+      seedGuideCardInProject: true,
+      seedGateId: null,
+    });
+    const rawGate = rows.find((r) => r.id === gate.sessionId)!;
+    expect(rawGate).toMatchObject({ seedGuideTurnId: null, seedGuideCardKey: null });
+    expect(rawGate.seedGuideCardInProject).toBe(false);
+  });
+
+  it('the guided card moved to another project: no seed, and the first turn is withheld', async () => {
+    const guided = await createTestWorkItem(fx, { kind: 'story', title: 'Rotate the key' });
+    const anchor = await createTestWorkItem(fx, { kind: 'story', title: 'Anchor' });
+    const g = await guideSeededSession(fx, guided, anchor.identifier, 1);
+    await moveOutOfReach(guided);
+
+    const row = await planSessionsService.getSessionRow(fx.projectId, g.sessionId, fx.ctx);
+    expect(row!.seed).toBeNull();
+    expect(row!.firstTurn).toBeNull();
+    expect(JSON.stringify(row)).not.toContain('Rotate the key');
+  });
+
+  it('the guided card deleted: no seed, and the first turn is withheld', async () => {
+    const guided = await createTestWorkItem(fx, { kind: 'story', title: 'Rotate the key' });
+    const anchor = await createTestWorkItem(fx, { kind: 'story', title: 'Anchor' });
+    const g = await guideSeededSession(fx, guided, anchor.identifier, 1);
+    await adminDb.workItem.delete({ where: { id: guided.id } });
+
+    const row = await planSessionsService.getSessionRow(fx.projectId, g.sessionId, fx.ctx);
+    expect(row!.seed).toBeNull();
+    expect(row!.firstTurn).toBeNull();
+  });
+
+  it('a Visitor whose hidden set holds the guided card does not see the session — in the list, the counts, or by id — and still sees an unseeded one', async () => {
+    const previousCloud = process.env['MOTIR_CLOUD'];
+    process.env['MOTIR_CLOUD'] = 'true';
+    try {
+      const identifier = `GS${seq++}`;
+      const pub = await makeWorkItemFixture({ name: `GS ${identifier}`, identifier });
+      await adminDb.project.update({
+        where: { id: pub.projectId },
+        data: projectAccessData('public'),
+      });
+      const epic = await createTestWorkItem(pub, { kind: 'epic', title: 'Private epic' });
+      const guided = await createTestWorkItem(pub, {
+        kind: 'story',
+        title: 'Hidden guided card',
+        parentId: epic.id,
+      });
+      await adminDb.workItem.update({
+        where: { id: epic.id },
+        data: { publicChildrenHidden: true },
+      });
+      const anchor = await createTestWorkItem(pub, { kind: 'story', title: 'Visible anchor' });
+      // The anchor is visible, so only the GUIDE seed can withhold this session.
+      const g = await guideSeededSession(pub, guided, anchor.identifier, 1);
+      const plain = await adminDb.planChangeSession.create({
+        data: {
+          workspaceId: pub.workspaceId,
+          projectId: pub.projectId,
+          createdById: pub.ownerId,
+          targetKeys: [],
+        },
+      });
+
+      const visitor = await consentedVisitor(identifier);
+      const page = await planSessionsService.listSessions(pub.projectId, visitor);
+      expect(page.sessions.map((r) => r.id)).toEqual([plain.id]);
+      const counts = await planSessionsService.countSessionsByPlanState(pub.projectId, visitor);
+      expect(Object.values(counts).reduce((a, b) => a + b, 0)).toBe(1);
+      expect(
+        await planSessionsService.getSessionRow(pub.projectId, g.sessionId, visitor),
+      ).toBeNull();
+
+      // A member of the project still sees both.
+      const member = await planSessionsService.listSessions(pub.projectId, pub.ctx);
+      expect(member.sessions.map((r) => r.id).sort()).toEqual([g.sessionId, plain.id].sort());
+    } finally {
+      if (previousCloud === undefined) delete process.env['MOTIR_CLOUD'];
+      else process.env['MOTIR_CLOUD'] = previousCloud;
+    }
   });
 });

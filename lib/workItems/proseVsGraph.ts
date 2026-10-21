@@ -27,6 +27,11 @@
 
 import { WORKITEM_TOKEN_RE, INTRA_PLAN_REF_TOKEN_RE } from '@/lib/mentions/workItemRefs';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
+import { isTypeableKind } from '@/lib/issues/executorDefaults';
+import type { WorkItemKindDto } from '@/lib/dto/workItems';
+import type { IssueType } from '@/lib/issues/parentRules';
+import { parseSections } from '@/lib/workItems/sections/parse';
+import type { SectionType } from '@/lib/workItems/sections/registry';
 
 /**
  * How strongly a body reference suggests a MISSING `blocked_by` edge. Two tiers,
@@ -392,6 +397,79 @@ export function isOrderingCheckExempt(
   executor: string | null | undefined,
 ): boolean {
   return type === 'deploy' || executor === 'human';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE POST-MERGE CHILD CHECK (MOTIR-8863) — a runnable container is ONE
+// deliverable that ends at its pull request.
+//
+// A child whose own body says it can only start once the deployment exists
+// (`verification` / `deploy` / `manual` / human work that reads production) has no
+// legal position INSIDE the container whose merge it waits on: the parent run's
+// pull request stays a draft until the last child lands so it never merges,
+// `CONTAINER_HAS_OPEN_CHILDREN` refuses the container's flip to `implemented`,
+// and a forced merge cascades `done` onto the child unperformed. The remedy is
+// placement — a sibling the container `blocks`, or a second container.
+//
+// The rule existed in both planners as prose and was missed seven times
+// (MOTIR-3270 · 7498 · 7870 · 8559 · 8589 · 8634 · 8863); this makes the miss
+// visible at `validate_work_item` / `validate_plan`, where it can be repaired
+// before an approval.
+//
+// ⚠️ UNLIKE gate 14's ordering check this scans the WHOLE body, not the AC span:
+// MOTIR-8860 stated its tell in the Context ("Earliest legal start: after the
+// deploy …"), not in a criterion. The scope that keeps that affordable is the
+// CHILD's type/executor — a `code` card is never asked — and the container's kind
+// (an epic's children are SIBLINGS of a story, which is where the remedy puts it).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Phrases that read the deployment, matched whitespace- and markup-tolerantly. */
+export const POST_MERGE_CHILD_PHRASES = [
+  'earliest legal start',
+  'after the deploy',
+  'after the deployment',
+  'once deployed',
+  'once the deploy',
+  'post-deploy',
+  'on production',
+  'in production',
+  'against production',
+  'live tenant',
+  'merged to main',
+  'once this lands',
+  'once it lands',
+  'after release',
+] as const;
+
+const POST_MERGE_CHILD_MATCHERS: ReadonlyArray<{ phrase: string; re: RegExp }> =
+  POST_MERGE_CHILD_PHRASES.map((phrase) => ({
+    phrase,
+    re: new RegExp(`\\b${phrase.split(' ').join('\\s+')}\\b`, 'i'),
+  }));
+
+/** Container kinds whose children may legitimately wait on a SIBLING's merge. */
+export function isPostMergeChildCheckExemptContainer(
+  containerKind: string | null | undefined,
+): boolean {
+  return containerKind == null || containerKind === 'epic';
+}
+
+/** Whether a card of this type/executor is the kind that waits on a deployment. */
+export function isPostMergeChildCandidate(
+  type: string | null | undefined,
+  executor: string | null | undefined,
+): boolean {
+  return type === 'verification' || type === 'deploy' || type === 'manual' || executor === 'human';
+}
+
+/** The first deployment-reading phrase anywhere in a body, or `null`. */
+export function firstPostMergeChildTell(md: string | null | undefined): string | null {
+  if (!md) return null;
+  const text = md.replace(INLINE_MARKUP_RE, '');
+  for (const { phrase, re } of POST_MERGE_CHILD_MATCHERS) {
+    if (re.test(text)) return phrase;
+  }
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1037,6 +1115,83 @@ export function overGateSizing(card: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// THE UNDER-AUTHORED CHECK (MOTIR-5427) — a childless leaf that carries NOTHING a
+// run, a reviewer or a detector reads.
+//
+// Plan-rules gate 20 says a work item with no acceptance criteria is UNSEALABLE
+// because every criterion-level gate passes an empty list vacuously, and it says
+// its own mechanical gap out loud: the over-sizing detector returns at its
+// `executor` guard, `likely-repo-straddle` reads the criteria for foreign paths,
+// so a leaf with no executor, no numbers and no criteria is invisible to both.
+// MOTIR-4956 sealed `ready: true` / `valid: true` in exactly that state.
+//
+// This is a NULL CHECK, not the sizing advisory `CORPUS-MAINTENANCE.md` measured
+// and rejected: that rejection was about a plausible number sized for the wrong
+// half of a card (a judgement), while here every input is an ABSENT field. A leaf
+// either has an enumerated criterion under an `## Acceptance criteria` heading or
+// it does not; a column is either null or it is not. See
+// `docs/decisions/under-authored-shape-family.md`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * WHY a card has no criteria: `no-heading` (no `## Acceptance criteria` section at
+ * all) or `no-criterion` (the heading is there and nothing is enumerated under it).
+ */
+export type UnderAuthoredCriteria = 'no-heading' | 'no-criterion';
+
+/** The UNDER-AUTHORED finding. */
+export interface UnderAuthored {
+  criteria: UnderAuthoredCriteria;
+}
+
+/**
+ * The card read for under-authoring, or `null` when it is not.
+ *
+ * Fires only on a CHILDLESS card carrying ALL of: no enumerated acceptance
+ * criterion, `storyPoints` null, `estimateMinutes` null, `type` null and
+ * `executor` null. The conjunction is deliberate. A card missing only some of
+ * them is a card mid-authoring or a human card that legitimately carries no
+ * estimate; a card missing every one is not described by any other check.
+ *
+ * `hasChildren` is the gate's own scope, not a noise filter: gate 20 is a LEAF
+ * bar, and a container's body is its subtree's, so a parent is never reported
+ * whatever it carries.
+ */
+export function underAuthored(card: {
+  /**
+   * The card's kind, when the caller has it. A container KIND (epic / story) can
+   * never carry a `type` or `executor` — the service refuses one — so null columns
+   * are not a defect there, and a childless story awaiting its children is not an
+   * under-authored leaf. Absent means the caller does not know, and is not exempt.
+   */
+  kind?: string | null | undefined;
+  descriptionMd: string | null | undefined;
+  hasChildren: boolean;
+  storyPoints: number | null | undefined;
+  estimateMinutes: number | null | undefined;
+  type: string | null | undefined;
+  executor: string | null | undefined;
+}): UnderAuthored | null {
+  if (card.hasChildren) return null;
+  if (card.kind != null && !isTypeableKind(card.kind as WorkItemKindDto)) return null;
+  if (card.storyPoints != null || card.estimateMinutes != null) return null;
+  if (card.type != null || card.executor != null) return null;
+  // One parse of the body against the registry decides "has criteria": a
+  // criterion is a FOUND acceptanceCriteria section; a heading with nothing under
+  // it is HEADED but not found. An unknown kind reads as a task, the cell every
+  // childless leaf shares.
+  const parsed = parseSections(
+    card.descriptionMd,
+    (card.kind ?? 'task') as IssueType,
+    (card.type ?? null) as SectionType,
+  );
+  if (parsed.found.includes('acceptanceCriteria')) return null;
+  return {
+    criteria: parsed.headed.includes('acceptanceCriteria') ? 'no-criterion' : 'no-heading',
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // THE SELF-BLOCKING-DESIGN CHECK (MOTIR-3178) — the fourth member of the SHAPE
 // family, and the planning-time design gate read for its PURPOSE rather than its
 // letter.
@@ -1106,10 +1261,36 @@ const DESIGN_ASSET_MATCHERS: ReadonlyArray<RegExp> = [
   // card that has none — and a manufactured design criterion plus any ordinary
   // render criterion is a brand-new false positive, the exact cost this widening
   // is paying down. Every export criterion that motivated it names its mock.
-  /\bmock(?:-?ups?|s)?\b/i,
+  //
+  // A BARE `mock` / `mocks` is read by {@link namesDesignAsset} instead, because
+  // the word has a second meaning this corpus uses constantly (below).
+  /\bmock-?ups?\b/i,
   /\bartboards?\b/i,
   /\bdesign assets?\b/i,
 ];
+
+// ── A TEST DOUBLE is not a drawing ───────────────────────────────────────────
+// A bare `mock` is the commonest export tell above — and the commonest word for
+// a TEST DOUBLE in every test card's criteria: *"asserted on the boundary mock"*,
+// *"no test mocks the helper wholesale"*, *"the lane's `E2E_TEST_BILLING`
+// boundary mock"*. Read as a design asset, such a criterion becomes the DESIGN
+// half of the finding, and the card's ordinary render criterion the SURFACE
+// half, so a test or route card that draws nothing is reported as its own
+// design blocker. Plan `cmvez6dl300gmhmrffl127q95` (2026-10-19) carried four
+// such cards — MOTIR-8637, MOTIR-8640, MOTIR-8643 and the larger-pool E2E —
+// and `check-plan` read each advisory as a guard #3 stop.
+//
+// So a bare `mock` counts only on a line that does not use it as a test double:
+// the verb (*mocks the*, *mocked*, *mocking*, `vi.mock`), a double's noun
+// before it (*boundary mock*, *fetch mock*), the thing it stands in for after
+// it (*mock client*, *mock module*), a module specifier or path after the verb
+// (*mocks @/lib/foo*, *mocks ./foo*, *mocks lib/x* — MOTIR-9077), or an
+// assertion read off it (*asserted on the mock*). `*.mock.html` and *mockup* stay tells on any line, so a design
+// card's export criterion is unaffected.
+const BARE_MOCK_RE = /\bmocks?\b/i;
+
+const TEST_DOUBLE_MOCK_RE =
+  /\b(?:vi|jest)\.mock\b|\bmock(?:ed|ing)\b|\bmocks?\s+(?:the|a|an|its|every|each|out)\b|\b(?:boundary|test|stub|fake|spy|http|fetch|network|transport|server|client|module)\s+mocks?\b|\b(?:asserted|asserts?|recorded|seen|checked|counted)\s+on\s+(?:the\s+)?(?:[\w-]+\s+)?mocks?\b|\bmocks?\s+(?:@\/|\.{1,2}\/|(?!and\/or\b)[\w@.()[\]-]+\/[\w@.()[\]-]+)|\bmocks?\s+(?:clients?|servers?|fetch|calls?|responses?|requests?|modules?|helpers?|leaf|leaves|routes?|boundar(?:y|ies)|transports?|gateways?|adapters?|implementations?|functions?|handlers?)\b/i;
 
 // ── The AMENDMENT, not only the NEW ASSET (MOTIR-4477) ───────────────────────
 // Every matcher above is an ASSET tell — a file, a path, or a word for a
@@ -1227,7 +1408,8 @@ const COMPONENT_PATH_RE = /[A-Za-z0-9_.@()[\]-]+(?:\/[A-Za-z0-9_.@()[\]-]+)*\.[j
  * cannot say WHICH half moved.
  */
 export function namesDesignAsset(text: string): boolean {
-  return DESIGN_ASSET_MATCHERS.some((re) => re.test(text));
+  if (DESIGN_ASSET_MATCHERS.some((re) => re.test(text))) return true;
+  return BARE_MOCK_RE.test(text) && !TEST_DOUBLE_MOCK_RE.test(text);
 }
 
 /**
@@ -1387,4 +1569,58 @@ export function acceptanceCriteriaTexts(md: string | null | undefined): string[]
     criteria[criteria.length - 1] += `\n${raw}`;
   }
   return criteria;
+}
+
+// ── The MISLABELLED-LINK check (MOTIR-9007) ───────────────────────────────────
+//
+// A `[label](motir:<id>)` link whose label says one key while the id opens
+// another card, or whose id opens no card at all. Every other check here reads
+// the id and never the label, so a link the author wrote from memory — the label
+// right, the id copied from a neighbouring card — passed every validation and
+// rendered as a chip for the wrong card. The judgement is pure; the service
+// resolves each id to its key first.
+
+/** A work-item key anywhere in a label, any case: `MOTIR-7656`, `acme-12`. */
+const LABEL_KEY_RE = /\b([A-Za-z][A-Za-z0-9]*)-(\d+)\b/g;
+
+/**
+ * The work-item keys a link LABEL names, upper-cased, in first-seen order — but
+ * only those whose prefix is in `knownPrefixes` (the workspace's project keys,
+ * upper-cased). A label is free text, so `UTF-8`, `RFC-9110` or `ADR-12` have
+ * the shape of a key without being one; a prefix no project carries is read as
+ * a word, which is what keeps a correct link with a descriptive label quiet.
+ */
+export function labelWorkItemKeys(label: string, knownPrefixes: ReadonlySet<string>): string[] {
+  const keys: string[] = [];
+  for (const m of label.matchAll(LABEL_KEY_RE)) {
+    const prefix = (m[1] as string).toUpperCase();
+    if (!knownPrefixes.has(prefix)) continue;
+    const key = `${prefix}-${m[2] as string}`;
+    if (!keys.includes(key)) keys.push(key);
+  }
+  return keys;
+}
+
+/**
+ * Is this link mislabelled? `targetKey` is the key its id resolves to, or `null`
+ * when it resolves to no card the reader can see.
+ *
+ * - A link to NO card is mislabelled whatever its label says — the chip opens
+ *   nothing, and that holds for a label that is a name as much as for a key.
+ * - A link whose label names one or more keys, none of them the target's, is
+ *   mislabelled: a reader trusts the label and acts on the wrong card.
+ * - A label that names no key ("Epic 10", "the export story") is a NAME, and
+ *   says nothing a target could contradict.
+ *
+ * A label naming several keys is satisfied by any one of them matching, since
+ * "MOTIR-12 (was MOTIR-9)" is still a label for MOTIR-12.
+ */
+export function isMislabelledLink(
+  label: string,
+  targetKey: string | null,
+  knownPrefixes: ReadonlySet<string>,
+): boolean {
+  if (targetKey === null) return true;
+  const named = labelWorkItemKeys(label, knownPrefixes);
+  return named.length > 0 && !named.includes(targetKey.toUpperCase());
 }

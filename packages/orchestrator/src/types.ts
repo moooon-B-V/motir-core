@@ -126,6 +126,19 @@ export interface ContainerSpec {
   /** Hard kill after this many seconds, whatever the container is doing. */
   readonly timeoutSeconds: number;
   readonly region: string;
+  /**
+   * Gigabytes of native disk to give the container's own Docker daemon at
+   * `/var/lib/docker` (MOTIR-8839). Omitted or 0 ⇒ none, and the daemon lives on
+   * the container's root filesystem.
+   *
+   * WHY A CI RUNNER NEEDS IT: on a Fly Machine's root filesystem the daemon can
+   * use neither overlay driver (both refuse the whiteout a layer that deletes a
+   * file carries), so it falls back to `vfs`, which stores every layer as a full
+   * copy and fills the rootfs before a `services:` job reaches its tests. A native
+   * ext4 volume takes `overlay2`. The adapter owns the volume's whole life:
+   * created with the container, destroyed with it, swept if it is ever left.
+   */
+  readonly dockerVolumeGb?: number;
 }
 
 /** An opaque, provider-agnostic reference. Persisted; survives a process restart.
@@ -137,6 +150,14 @@ export interface ContainerHandle {
   readonly id: string;
   readonly region: string;
   readonly createdAt: Date;
+  /**
+   * The provider volume created for this container's Docker daemon, when its
+   * spec asked for one (`dockerVolumeGb`). Carried so teardown can delete it
+   * even after the container has destroyed itself. OPTIONAL on read: a handle
+   * persisted before MOTIR-8839, or rebuilt from a provider listing, has none,
+   * and teardown then reads the container's mounts instead.
+   */
+  readonly volumeId?: string;
 }
 
 /**
@@ -418,6 +439,14 @@ export interface ContainerOrchestrator {
     resolve: UsageAttributionResolver,
     spare?: ReapSparePredicate,
   ): Promise<ContainerUsage[]>;
+
+  /** Destroy every Docker volume this adapter created for a container
+   *  (`ContainerSpec.dockerVolumeGb`) that is attached to nothing and older than
+   *  `olderThan`, and answer how many it destroyed (MOTIR-8839). The backstop for
+   *  a teardown that could not delete its volume, or a process that died between
+   *  creating one and booting its container. Optional: an adapter that never
+   *  creates volumes has nothing to sweep. Never throws. */
+  sweepOrphanedVolumes?(olderThan: Date): Promise<number>;
 }
 
 /** Whether the reaper must leave a container it found running (MOTIR-6450). A
@@ -723,7 +752,9 @@ export interface PersistentContainerOrchestrator {
    *
    * `stdin` (`agent-instance-run.md` §1, §2 — MOTIR-7026) is written to the
    * command's standard input: how a run's credential reaches the agent's run
-   * launcher WITHOUT ever being an argument or an environment variable.
+   * launcher WITHOUT being an environment variable. (Fly's exec API drops a
+   * `stdin` field, so that adapter pipes it in through a wrapper whose argv
+   * carries it for the one exec — MOTIR-8872.)
    */
   exec(
     handle: PersistentContainerHandle,

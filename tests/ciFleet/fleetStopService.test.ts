@@ -242,8 +242,9 @@ describe('fleetStopService.stopOrganization', () => {
         failureDetail: "the organization's fleet was stopped at zero credits",
       });
     }
-    // The stopped runner is de-registered, as every teardown path does.
-    expect(runnerJitConfigClient.deleteRunner).toHaveBeenCalledWith(9001);
+    // The stopped runner is de-registered, as every teardown path does — in the
+    // provisioning org, so with no target (MOTIR-8711).
+    expect(runnerJitConfigClient.deleteRunner).toHaveBeenCalledWith(9001, undefined);
     // And each container's cost is recorded, so a stop is still billed.
     expect(await adminDb.ciContainerUsage.count()).toBe(3);
   });

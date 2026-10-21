@@ -182,6 +182,10 @@ Vercel preview deploy.
   Motir asks a person to say yes, what Approve and Request changes each do, who
   is asked versus who may answer, what an approval keeps, and what has not
   shipped yet.
+- [`loadtest/README.md`](./loadtest/README.md) — the load-test runbook:
+  provision or reuse the private staging copy, refresh it from production,
+  deploy a SHA, run at 1 and N instances, check each side-effect sink, and read
+  the report's verdict.
 - [`docs/design-system.md`](./docs/design-system.md) — canonical reference
   for using the design system: tokens, primitives, patterns, voice & tone,
   don'ts. Read this when building any UI.

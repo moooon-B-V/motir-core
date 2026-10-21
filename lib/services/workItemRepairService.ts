@@ -17,7 +17,11 @@ import { pullRequestHead } from '@/lib/github/pullRequestHead';
 import { dispatchRunLabel } from '@/lib/howToTest/author';
 import { toOpenRepairRuns } from '@/lib/mappers/repairRunMappers';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
-import { DispatchRunTerminalError, RepairRunRefusedError } from '@/lib/dispatchRuns/errors';
+import {
+  DispatchRunAgentBusyError,
+  DispatchRunTerminalError,
+  RepairRunRefusedError,
+} from '@/lib/dispatchRuns/errors';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
@@ -148,8 +152,29 @@ export interface HostedRepairOpening {
   idempotencyKey: string;
 }
 
+/**
+ * A repair opened in the person's OWN agent (Story MOTIR-8981 · MOTIR-9049): the
+ * `instance` twin of {@link HostedRepairOpening}. The claim opens the run the agent will
+ * execute — `fix`, `origin: 'instance'`, carrying the agent instance and its profile — so
+ * the lock and the run are one insert under the card's row lock. `agent` is the instance's
+ * `profileId`, never a literal.
+ */
+export interface AgentRepairOpening {
+  origin: 'instance';
+  agent: string;
+  model?: string | null | undefined;
+  agentInstanceId: string;
+  idempotencyKey: string;
+  /**
+   * The card's last run's agent profile and recorded session, read BEFORE this run opened
+   * (Story MOTIR-8981 · MOTIR-9052) — what the CLI needs to resume that conversation
+   * instead of starting a fresh one. Null when the card has no earlier agent run.
+   */
+  resume?: { profile: string; sessionId: string | null; canResume: boolean } | null | undefined;
+}
+
 export interface ClaimRepairOptions {
-  opening?: HostedRepairOpening | undefined;
+  opening?: HostedRepairOpening | AgentRepairOpening | undefined;
   /**
    * Asked under the lock with the class the claim is about to open a run for, BEFORE
    * anything is written; a throw aborts the claim with nothing written. The hosted
@@ -193,14 +218,14 @@ interface RecordedRepairPullRequest extends RepairPullRequestDto {
 }
 
 /**
- * What a hosted repair's claim DECIDED, as its ONE `run_opened` records it (MOTIR-6928)
+ * What a repair's claim DECIDED, as its ONE `run_opened` records it (MOTIR-6928)
  * — so the container ADOPTS the run and reads the decision back rather than claiming a
  * second time (the continue precedent, MOTIR-6795): the class, every pull request on its
  * own branch at its head, and the findings with who decided them and under what authority.
  */
-async function hostedRepairOpenedData(
+async function repairOpenedData(
   item: { id: string; identifier: string; title: string },
-  opening: HostedRepairOpening,
+  opening: HostedRepairOpening | AgentRepairOpening,
   decided: {
     repairClass: WorkItemRepairClass;
     pullRequests: RepairPullRequestDto[];
@@ -243,6 +268,15 @@ async function hostedRepairOpenedData(
       key: item.identifier,
       title: item.title,
       origin: opening.origin,
+      // The agent door's run names the agent it runs in; the hosted payload has no
+      // `agent` key (its agent lives on the run row).
+      ...(opening.origin === 'instance'
+        ? {
+            agent: opening.agent,
+            agentInstanceId: opening.agentInstanceId,
+            resume: opening.resume ?? null,
+          }
+        : {}),
       model: opening.model,
       repairClass: decided.repairClass,
       findings,
@@ -299,7 +333,8 @@ export const workItemRepairService = {
         // The same hosted press again, raced past the hosted start's own short-circuit:
         // answered with the run its key already opened, under this lock, before the lock
         // read below would call that very run `mine`.
-        /* v8 ignore start -- race-only: the hosted start answers a known key before it claims */
+        // A hosted start answers a known key before it claims, so only a race reaches this
+        // for it; the agent door's repeated press reaches it too.
         if (opening) {
           const replayed = await dispatchRunRepository.findByIdempotencyKey(
             ctx.workspaceId,
@@ -317,7 +352,6 @@ export const workItemRepairService = {
             };
           }
         }
-        /* v8 ignore stop */
 
         const verdict = await evaluateRepair(
           { id: item.id, status: state.status, archivedAt: state.archivedAt },
@@ -375,8 +409,11 @@ export const workItemRepairService = {
               ? {
                   origin: opening.origin,
                   agent: opening.agent,
-                  model: opening.model,
+                  ...(opening.model ? { model: opening.model } : {}),
                   idempotencyKey: opening.idempotencyKey,
+                  ...(opening.origin === 'instance'
+                    ? { agentInstanceId: opening.agentInstanceId }
+                    : {}),
                 }
               : {}),
           },
@@ -394,7 +431,7 @@ export const workItemRepairService = {
                 seq: 1,
                 kind: 'run_opened',
                 reportedBy: 'cli',
-                data: await hostedRepairOpenedData(
+                data: await repairOpenedData(
                   item,
                   opening,
                   { repairClass, pullRequests, reviewRefusal, acceptanceRefusal },
@@ -537,6 +574,52 @@ export const workItemRepairService = {
         // A `mine` run the reap closed between the claim's read and this beat.
         // The claim's answer stands; the agent's first touch reads `open: false`.
         /* v8 ignore next -- only a reap landing inside that window reaches here */
+        if (!(err instanceof DispatchRunTerminalError)) throw err;
+      }
+    }
+    return claim;
+  },
+
+  /**
+   * The repair claim as the AGENT DOOR makes it (Story MOTIR-8981 · MOTIR-9049) —
+   * pressing **Fix in my agent**: {@link claimRepair} with an `instance` opening and NO
+   * `admit`, so every class the predicate returns (`ci`, `acceptance_rerun`, `review`)
+   * is admitted — the `review`-only rule is the hosted lane's, not this door's — then,
+   * on `claimed`, ONE heartbeat on the run it opened (the reason is
+   * {@link claimRepairAsAgent}'s: a run with no beat is on the 12-hour age reap).
+   *
+   * A busy agent is refused naming the BUSY run's own card: `openWithin` raises
+   * {@link DispatchRunAgentBusyError} with no card key, and naming the pressed card would
+   * be wrong whenever the agent is busy elsewhere.
+   */
+  async openAgentRepair(
+    projectId: string,
+    identifier: string,
+    ctx: ServiceContext,
+    opening: AgentRepairOpening,
+  ): Promise<WorkItemRepairClaimDto> {
+    let claim: WorkItemRepairClaimDto;
+    try {
+      claim = await workItemRepairService.claimRepair(projectId, identifier, ctx, { opening });
+    } catch (err) {
+      // A lost race carries no run id (the transaction aborted): left as it is rather
+      // than naming a card that may not be the busy one.
+      if (err instanceof DispatchRunAgentBusyError && err.runId && err.workItemKey === null) {
+        const runId = err.runId;
+        const keys = await withWorkspaceContext(
+          { userId: ctx.userId, workspaceId: ctx.workspaceId },
+          (tx) => dispatchRunRepository.findTargetKeys([runId], tx),
+        );
+        throw new DispatchRunAgentBusyError(err.agentInstanceId, runId, keys.get(runId) ?? null);
+      }
+      throw err;
+    }
+    if (claim.outcome === 'claimed' && claim.runId !== null) {
+      try {
+        await dispatchRunService.heartbeat(claim.runId, ctx);
+      } catch (err) {
+        // The run was closed between the claim and this beat; the answer stands.
+        /* v8 ignore next -- only a close landing inside that window reaches here */
         if (!(err instanceof DispatchRunTerminalError)) throw err;
       }
     }

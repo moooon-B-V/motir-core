@@ -72,6 +72,7 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // They make `page:edit` grantable; `CLI_TOKEN_GRANT` is widened by MOTIR-7412.
   create_page: 'page:edit',
   update_page: 'page:edit',
+  rename_page: 'page:edit',
   // `publish_decision_page` (MOTIR-7434) — publishing a decision is EDITING the card,
   // the key both evidence publishers assert; the service also asserts `page:view` on
   // the page. `CLI_TOKEN_GRANT` already carries `work_item:edit`: not widened here.
@@ -108,6 +109,10 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   skeleton: 'project:browse',
   // `foldersService.listProjectFolders` asserts `project:browse` by name.
   list_folders: 'project:browse',
+  // MOTIR-9029 — the section registry read is a product contract, the same for
+  // every tenant: no project and no service call that asserts a key. Gated like
+  // `whoami`, the other project-less read.
+  get_section_sets: 'project:browse',
   // `sprintsService.listByProject` asserts `project:browse` by name.
   list_sprints: 'project:browse',
   validate_sprint: 'project:browse',
@@ -375,6 +380,11 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // planner already shows this content to every `ai:plan` holder —
   // `docs/decisions/member-facing-permissions.md` AMENDMENT 3 to §4.
   get_code_health: 'ai:plan',
+  // MOTIR-9083 — one repository's convention text. The same content
+  // `get_code_health` and the hosted planner show every `ai:plan` holder
+  // (AMENDMENT 3 to §4), and `CLI_TOKEN_GRANT` holds the key, so every `motir run`
+  // token reaches it without the grant widening.
+  get_coding_convention: 'ai:plan',
   // MOTIR-7861 — a file's text from a project repository at a ref. The hosted
   // planner's `read_file` already shows exactly this to every `ai:plan` holder;
   // the same AMENDMENT 3 to §4 names it as a second instance.
@@ -480,6 +490,10 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // verdict, the plan or a bug key — so what that gate protects never reaches
   // the caller (`docs/decisions/run-found-trigger-dispatched-path.md`, *Its key*).
   report_unbuildable_target: 'work_item:edit',
+  // The run discrepancy record (MOTIR-8657) — a comment on the card plus a finding on the
+  // caller's run leg: editing the card. `CLI_TOKEN_GRANT` already holds `work_item:edit`, so a
+  // sandboxed `motir run` agent reaches it with the grant NOT widened.
+  record_run_discrepancy: 'work_item:edit',
 
   // ── removal — the RECOVERABLE and the IRREVERSIBLE, now two keys ─────────
   // ⚠️ CORRECTED (MOTIR-3629). This block used to read: "`archiveWorkItem` /

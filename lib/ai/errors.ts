@@ -47,10 +47,40 @@ export class MotirAiUnauthorizedError extends MotirAiError {
 // motir-ai rejected the request envelope (400) — a bug on the core side.
 export class MotirAiBadRequestError extends MotirAiError {
   readonly code = 'MOTIR_AI_BAD_REQUEST' as const;
-  constructor(detail: string) {
+  // `httpStatus` is the problem's own HTTP status when the error was built from a
+  // response (`errorFromProblem`); absent for the callers that construct one by
+  // hand. It lets a caller tell "the request CONTENT was refused" (400/413/422)
+  // from a 4xx that is about the caller or the moment (401/403/429), which this
+  // class otherwise collapses — see {@link isPerInputRejection}.
+  constructor(
+    detail: string,
+    readonly httpStatus?: number,
+  ) {
     super(`motir-ai rejected the request: ${detail}`);
     this.name = 'MotirAiBadRequestError';
   }
+}
+
+/** The 4xx statuses that mean "this request's CONTENT was refused". */
+const PER_INPUT_REJECTION_STATUSES: ReadonlySet<number> = new Set([400, 413, 422]);
+
+/**
+ * Whether a failed embedding call was refused for the CONTENT of its inputs — the
+ * only class a sweep may isolate to one item (MOTIR-8227). It is a status test on
+ * the typed error, never a message match. Everything else is an outage-class
+ * error and must fail the run: a network failure or 5xx (`MotirAiUnavailableError`),
+ * 401/403 (`MotirAiUnauthorizedError`), 429 and any unknown error, none of which
+ * says anything about one item.
+ *
+ * An error with no recorded status (one built by hand) is NOT a per-input
+ * rejection: the safe answer to "cannot tell" is "treat it as an outage".
+ */
+export function isPerInputRejection(err: unknown): err is MotirAiBadRequestError {
+  return (
+    err instanceof MotirAiBadRequestError &&
+    err.httpStatus !== undefined &&
+    PER_INPUT_REJECTION_STATUSES.has(err.httpStatus)
+  );
 }
 
 // No such job (404).
@@ -264,6 +294,12 @@ export interface JobView {
    * `error` rather than in it. Optional, and absent reads as `false`.
    */
   lostMachine?: boolean;
+  /**
+   * motir-ai's verdict on whether a FAILED planning job can be resumed (MOTIR-9121) —
+   * `false` when it failed before its conversation settled, so a resume would be refused.
+   * Absent when motir-ai did not say (any other status, or an older motir-ai).
+   */
+  resumable?: boolean;
 }
 
 /** The problem code motir-ai's reaper fails an abandoned job with (`src/jobs/reaper.ts`). */
@@ -389,7 +425,21 @@ export function jobErrorFromProblem(p: Problem): MotirAiError {
   return errorFromProblem(p);
 }
 
+// A coding-convention save over a version that moved (409 `conflict` carrying the
+// `conventionConflict` extension member, motir-ai MOTIR-9080). The editor loaded
+// version N and N+1 landed first; nothing was written. Not retryable as sent.
+export class MotirAiConventionConflictError extends MotirAiError {
+  readonly code = 'MOTIR_AI_CONVENTION_CONFLICT' as const;
+  constructor(readonly latestVersion: number) {
+    super(`motir-ai refused the convention save: the convention is at v${latestVersion}`);
+    this.name = 'MotirAiConventionConflictError';
+  }
+}
+
 export function errorFromProblem(p: Problem): MotirAiError {
+  if (p.conventionConflict?.code === 'CONVENTION_VERSION_CONFLICT') {
+    return new MotirAiConventionConflictError(p.conventionConflict.latestVersion);
+  }
   switch (p.code) {
     case 'service_unauthorized':
     case 'token_expired':
@@ -403,7 +453,7 @@ export function errorFromProblem(p: Problem): MotirAiError {
     // different model or a gateway fix. `setPlannerModel` maps it to its own
     // typed error before this generic switch is reached.
     case 'model_unreachable':
-      return new MotirAiBadRequestError(p.detail ?? p.title);
+      return new MotirAiBadRequestError(p.detail ?? p.title, p.status);
     case 'not_found':
       return new MotirAiJobNotFoundError(p.jobId ?? '(unknown)');
     case 'out_of_credits':
@@ -423,6 +473,6 @@ export function errorFromProblem(p: Problem): MotirAiError {
     default:
       return p.status >= 500
         ? new MotirAiUnavailableError(p.detail ?? p.title)
-        : new MotirAiBadRequestError(p.detail ?? p.title);
+        : new MotirAiBadRequestError(p.detail ?? p.title, p.status);
   }
 }

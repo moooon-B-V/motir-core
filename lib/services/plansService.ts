@@ -50,6 +50,7 @@ import {
 } from '@/lib/repositories/workItemRepository';
 import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { manualWorkGateService } from '@/lib/services/manualWorkGateService';
 import {
   workItemRevisionRepository,
   WORK_ITEM_REVISIONS_AFTER_MAX,
@@ -105,6 +106,12 @@ import {
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
 import { validateProposedDifficulty } from '@/lib/plans/validateProposedDifficulty';
+import { applySectionsInput, hasSectionsInput } from '@/lib/plans/applySectionsInput';
+import {
+  languageFor,
+  mergeProposalLanguages,
+  validateProposedLanguages,
+} from '@/lib/plans/validateProposedLanguages';
 import {
   assertReKindedAddKeepsNoLeafFields,
   isContainerKind,
@@ -743,6 +750,12 @@ function validateProposal(p: ProposalInput): void {
         '(the target replaces each ref) and `supersededByAdd` / `supersededByRemove` (each ref replaces the target).',
     );
   }
+  if (p.op !== 'add' && p.languages !== undefined) {
+    throw new InvalidProposalError(
+      `${proposalLabel({ op: p.op, workItemId: p.workItemId })}: \`languages\` beside the fields is an \`add\`'s. ` +
+        'A `modify` names the language of each text field it sets in `patch.languages`.',
+    );
+  }
   assertFolderRefNotBlank(
     p.parentRef,
     'parentRef',
@@ -776,6 +789,12 @@ function validateProposal(p: ProposalInput): void {
     validateProposedDifficulty(
       p.proposedFields.difficulty,
       p.proposedFields.kind ?? DEFAULT_PROPOSED_KIND,
+      proposalLabel({ op: p.op, title: p.proposedFields.title }),
+    );
+    // The language each text field was written in (MOTIR-8743) — beside the
+    // fields on the wire, or (an older producer's spelling) inside them.
+    validateProposedLanguages(
+      p.languages ?? p.proposedFields.languages,
       proposalLabel({ op: p.op, title: p.proposedFields.title }),
     );
     assertKnownPlanningSource(
@@ -832,9 +851,23 @@ function validateProposal(p: ProposalInput): void {
     // A `modify` may RE-JUDGE the target's difficulty (MOTIR-6133). MEMBERSHIP
     // only here — this pass is pure and the target's KIND needs a read, so the
     // container half runs inside `addProposals`' transaction
-    // (`assertModifyDifficultiesLegalAtAppend`), through the same validator.
+    // (`assertModifyLeafFieldsLegalAtAppend`), through the same validator.
     validateProposedDifficulty(
       p.patch.difficulty,
+      null,
+      proposalLabel({ op: p.op, workItemId: p.workItemId }),
+    );
+    // The language of each text field the patch sets (MOTIR-8743).
+    validateProposedLanguages(
+      p.patch.languages,
+      proposalLabel({ op: p.op, workItemId: p.workItemId }),
+    );
+    // A `modify` may REPLACE the target's steps (MOTIR-8668 · AMENDMENT 27). The
+    // rows against the store's caps here; the container half needs the target's
+    // kind, so it runs in `addProposals`' transaction beside the difficulty's
+    // (`assertModifyLeafFieldsLegalAtAppend`).
+    validateProposedTodos(
+      p.patch.todos,
       null,
       proposalLabel({ op: p.op, workItemId: p.workItemId }),
     );
@@ -970,7 +1003,77 @@ function mergeProposedFields(
   // per row: a list has no meaningful partial edit, the same reason a
   // correction's `blockedByRefs` replaces rather than merges.
   if (input.todos !== undefined) next.todos = input.todos;
+  // The LANGUAGES (MOTIR-8743) — per key, and a field this input rewrites
+  // without naming its language drops that field's key, so a person's edit (the
+  // public route sends none) never inherits the planner's claim about text it
+  // replaced. Approve then records that field in the organisation's language.
+  const languages = mergeProposalLanguages(current.languages, input, input.languages);
+  if (languages) next.languages = languages;
+  else delete next.languages;
+  // The card's SECTIONS INPUT (Story MOTIR-9023 · MOTIR-9030) — after the scalar
+  // merge above, so it is judged on the MERGED kind × type, the same pattern
+  // `todos` and `difficulty` follow. Rendered into `descriptionMd` and never
+  // copied into `next`: nothing structured is stored. Sparse at the section key
+  // over the stored body, which `applySectionsInput` parses first. A write that
+  // sends no `sections` never reaches it and stores `descriptionMd` as sent.
+  if (hasSectionsInput(input)) {
+    next.descriptionMd = applySectionsInput({
+      sections: input.sections,
+      descriptionMd: input.descriptionMd,
+      currentBody: current.descriptionMd,
+      kind: next.kind ?? DEFAULT_PROPOSED_KIND,
+      type: next.type,
+      label: proposalLabel({ op: 'add', title: next.title }),
+    });
+  }
   return next;
+}
+
+/**
+ * Resolve every `add`'s sections INPUT into the `descriptionMd` it renders to,
+ * and strip the key (Story MOTIR-9023 · MOTIR-9030). Pure, run FIRST on the
+ * append so every later gate judges the proposal as it will be stored. A `modify`
+ * or `remove` carrying `sections` is refused by name: sections on a committed
+ * card belong to the work-item doors, not to a plan patch.
+ */
+function resolveProposalSections(p: ProposalInput): ProposalInput {
+  if (p.op !== 'add') {
+    const carried =
+      (p as { sections?: unknown }).sections !== undefined ||
+      (p.patch as { sections?: unknown } | null | undefined)?.sections !== undefined;
+    if (carried) {
+      throw new InvalidProposalError(
+        `${proposalLabel({ op: p.op, workItemId: p.workItemId })}: \`sections\` belongs to an \`add\` — ` +
+          'sections on a committed card are written through `update_work_item`, not a plan proposal.',
+      );
+    }
+    return p;
+  }
+  const fields = p.proposedFields;
+  if (!fields || !hasSectionsInput(fields)) return p;
+  const { sections, ...rest } = fields;
+  const descriptionMd = applySectionsInput({
+    sections,
+    descriptionMd: rest.descriptionMd,
+    currentBody: undefined,
+    kind: rest.kind ?? DEFAULT_PROPOSED_KIND,
+    type: rest.type,
+    label: proposalLabel({ op: 'add', title: rest.title }),
+  });
+  return { ...p, proposedFields: { ...rest, descriptionMd } };
+}
+
+/**
+ * An `add`'s fields as STORED (MOTIR-8743): the language statement that arrives
+ * beside them is copied inside, the one place a proposal's fields live, so it
+ * survives every later edit to the row. A statement already inside is kept when
+ * none arrives beside it.
+ */
+function withProposalLanguages(
+  fields: PlanItemProposedFields,
+  languages: ProposalInput['languages'],
+): PlanItemProposedFields {
+  return languages === undefined ? fields : { ...fields, languages };
 }
 
 /** One to-do row a materialized `add` wrote, as the revision diff names it. */
@@ -2533,10 +2636,10 @@ async function materialize(
   if (statusKey == null) throw new NoInitialStatusError(plan.projectId);
 
   const adds = items.filter((i) => i.op === 'add');
-  // The language every approved add's text is recorded in (Story MOTIR-7731 ·
-  // MOTIR-8097). A proposal carries no language of its own, and the planner is
-  // asked to write in the organisation's content language, so that is what the
-  // created rows record. Read ONCE, in this transaction, before the per-item
+  // The language an approved add's text is recorded in when its proposal names
+  // none (Story MOTIR-7731 · MOTIR-8097; MOTIR-8743): the organisation's content
+  // language. A proposal that names one records THAT, whatever the setting has
+  // become since it was generated. Read ONCE, in this transaction, before the per-item
   // loop — approve's round-trip budget (MOTIR-3396) gains one query, not N.
   const orgLanguage = toOrgContentLanguage(
     await organizationRepository.findContentLanguageByWorkspaceId(ctx.workspaceId, tx),
@@ -2645,9 +2748,15 @@ async function materialize(
       explanationMd: normalizedExplanationMd ?? null,
       // The recorded language of each written field (MOTIR-8097); an empty body
       // records NULL. Pass 3's temp-ref rewrite is not an edit and leaves these.
-      titleLanguage: orgLanguage,
-      descriptionLanguage: hasText(normalizedDescriptionMd) ? orgLanguage : null,
-      explanationLanguage: hasText(normalizedExplanationMd) ? orgLanguage : null,
+      // The language is the PROPOSAL's where it names one (MOTIR-8743) — fixed at
+      // generation — and the organisation's setting only where it does not.
+      titleLanguage: languageFor(pf.languages, 'title', orgLanguage),
+      descriptionLanguage: hasText(normalizedDescriptionMd)
+        ? languageFor(pf.languages, 'description', orgLanguage)
+        : null,
+      explanationLanguage: hasText(normalizedExplanationMd)
+        ? languageFor(pf.languages, 'explanation', orgLanguage)
+        : null,
       ...(typeof normalizedExplanationMd === 'string' && normalizedExplanationMd.trim() !== ''
         ? {
             explanationSource:
@@ -2834,8 +2943,8 @@ async function materialize(
           workItemId: created.id,
           text: requireText(todo.text),
           notesMd,
-          textLanguage: orgLanguage,
-          notesLanguage: hasText(notesMd) ? orgLanguage : null,
+          textLanguage: languageFor(pf.languages, 'todos', orgLanguage),
+          notesLanguage: hasText(notesMd) ? languageFor(pf.languages, 'todos', orgLanguage) : null,
           commandText: normalizeCommand(todo.commandText),
           executor: (todo.executor ?? pf.executor ?? 'human') as WorkItemCreateInput['executor'],
           position: keyForAppend(lastTodoPosition),
@@ -3487,15 +3596,29 @@ async function applyModify(
   // org's language is read only when a changed field needs it. Not part of the
   // revision diff — the language is a property of the text, not an edit.
   const changedText = [
-    ['titleLanguage', 'title' in update ? update.title : undefined],
-    ['descriptionLanguage', 'descriptionMd' in update ? update.descriptionMd : undefined],
-    ['explanationLanguage', 'explanationMd' in update ? update.explanationMd : undefined],
+    ['titleLanguage', 'title', 'title' in update ? update.title : undefined],
+    [
+      'descriptionLanguage',
+      'description',
+      'descriptionMd' in update ? update.descriptionMd : undefined,
+    ],
+    [
+      'explanationLanguage',
+      'explanation',
+      'explanationMd' in update ? update.explanationMd : undefined,
+    ],
   ] as const;
   let modifyLanguage: Locale | null = null;
-  for (const [column, value] of changedText) {
+  for (const [column, key, value] of changedText) {
     if (value === undefined) continue;
     if (typeof value !== 'string' || !hasText(value)) {
       update[column] = null;
+      continue;
+    }
+    // The patch's own statement first (MOTIR-8743); the setting only without one.
+    const stated = patch.languages?.[key];
+    if (stated) {
+      update[column] = stated;
       continue;
     }
     modifyLanguage ??= toOrgContentLanguage(
@@ -3781,6 +3904,17 @@ async function applyModify(
     await workItemRepository.update(item.workItemId, update, tx);
   }
 
+  // ⚠️ A RE-SCOPE TAKES THE MANUAL-WORK QUESTION OFF THE CARD (MOTIR-8670;
+  // `manual-work-gate.md` §6, amended). A run raised it about the card it reached;
+  // this approve has just changed what the card asks for — its title, its body (the
+  // stamp's `criteria`) or where it ships — so Waiting on you would ask the person to
+  // mark done work nobody has described to them. Usually the append's park already
+  // withdrew it; this catches a target the append could not park (no edge into
+  // Planning, or one already sitting there). The next run to reach the card re-asks.
+  if (!isMarkOnlyPatch(patch) && patchRescopes(patch, current)) {
+    await manualWorkGateService.withdrawOnReplan(item.workItemId, tx);
+  }
+
   // Edge changes: add/remove `is_blocked_by` links (the target is the `from`).
   // Recorded under the EXISTING `links` revision-diff key + shape that
   // workItemsService uses ({ added/removed: [{ toId, kind }] }) — so the activity
@@ -3831,7 +3965,13 @@ async function applyModify(
       },
       tx,
     );
-    if (created) linkAdded.push({ toId, kind: 'is_blocked_by' });
+    if (created) {
+      linkAdded.push({ toId, kind: 'is_blocked_by' });
+      // An open prerequisite takes the manual-work question off the card too
+      // (MOTIR-8670): the status rule above leaves the column alone, but nobody can
+      // start the work while it waits.
+      await manualWorkGateService.withdrawIfNewBlockerOpen(item.workItemId, toId, tx);
+    }
   }
   const linkRemoved: Array<{ toId: string; kind: string }> = [];
   for (const ref of patch.blockedByRemove ?? []) {
@@ -3897,6 +4037,65 @@ async function applyModify(
       ...(linkAdded.length > 0 ? { added: linkAdded } : {}),
       ...(linkRemoved.length > 0 ? { removed: linkRemoved } : {}),
     };
+  }
+
+  // REPLACE THE STEPS (MOTIR-8668 · `agent-authored-plans.md` AMENDMENT 27,
+  // overturning AMENDMENT 14 D2). Absent leaves the list alone; an array — `[]`
+  // included — or `null` makes the list exactly that array, in order, none
+  // ticked. A replacement and never a merge: every prior row goes, ticked ones
+  // with it, which is the cost D2 refused and AMENDMENT 27 accepts because the
+  // review row and `get_plan` both state it before anyone presses Approve.
+  //
+  // Through the REPOSITORY, for the reason the `add` path gives at its own todo
+  // insert: `workItemTodosService` opens its own transaction and approve applies
+  // in ONE. The normalizers and the executor seed are the same ones that insert
+  // reaches for, with the card's executor AS THIS PATCH LEAVES IT standing in
+  // for the proposal's. Recorded in the revision under the `todos` cell the
+  // service writes (`{ added, removed }`), so the activity feed renders it
+  // through the disposition it already has.
+  if (patch.todos !== undefined) {
+    const before = await workItemTodoRepository.listByWorkItem(item.workItemId, tx);
+    const incoming = patch.todos ?? [];
+    if (before.length > 0 || incoming.length > 0) {
+      await workItemTodoRepository.deleteByWorkItem(item.workItemId, tx);
+      const cardExecutor =
+        update.executor === undefined
+          ? current.executor
+          : typeof update.executor === 'string'
+            ? update.executor
+            : null;
+      const added: MaterializedTodo[] = [];
+      let lastPosition: string | null = null;
+      for (const todo of incoming) {
+        const notesMd = normalizeNotes(todo.notesMd);
+        // The patch's statement for the steps (MOTIR-8743), else the setting.
+        const stepLanguage =
+          patch.languages?.todos ??
+          (modifyLanguage ??= toOrgContentLanguage(
+            await organizationRepository.findContentLanguageByWorkspaceId(ctx.workspaceId, tx),
+          ));
+        const row = await workItemTodoRepository.create(
+          {
+            workspaceId: ctx.workspaceId,
+            workItemId: item.workItemId,
+            text: requireText(todo.text),
+            notesMd,
+            textLanguage: stepLanguage,
+            notesLanguage: hasText(notesMd) ? stepLanguage : null,
+            commandText: normalizeCommand(todo.commandText),
+            executor: (todo.executor ?? cardExecutor ?? 'human') as WorkItemCreateInput['executor'],
+            position: keyForAppend(lastPosition),
+          },
+          tx,
+        );
+        lastPosition = row.position;
+        added.push({ id: row.id, text: row.text });
+      }
+      diff.todos = {
+        ...(added.length > 0 ? { added } : {}),
+        ...(before.length > 0 ? { removed: before.map((t) => ({ id: t.id, text: t.text })) } : {}),
+      };
+    }
   }
 
   // ONE revision for the whole modify (same id — lands as a single entry in the
@@ -4016,18 +4215,20 @@ async function assertReparentsLegalAtAppend(
 }
 
 /**
- * The container refusal for a `modify`'s `patch.difficulty`, at the APPEND
- * (MOTIR-6133 · AMENDMENT 19) — the half `validateProposal` defers because it
- * needs the TARGET's kind. Judged through the same shared validator the `add`
- * path, the deepen and the correction call.
+ * The container refusal for a `modify`'s LEAF-ONLY fields, at the APPEND —
+ * `patch.difficulty` (MOTIR-6133 · AMENDMENT 19) and `patch.todos` (MOTIR-8668 ·
+ * AMENDMENT 27) — the half `validateProposal` defers because it needs the
+ * TARGET's kind. Judged through the same shared validators the `add` path, the
+ * deepen and the correction call.
  *
  * Only the INCOMING batch is judged: rows already on the plan were judged when
  * they were appended, and a target re-kinded since is the approve gate's case
- * (`difficulty_on_container`). A target that resolves to nothing is left to the
- * close, as every other live-row question on this path is. Skipped with no read
- * when no incoming `modify` sets a non-null difficulty.
+ * (`difficulty_on_container` / `todos_on_container`). A target that resolves to
+ * nothing is left to the close, as every other live-row question on this path
+ * is. Skipped with no read when no incoming `modify` sets a non-null difficulty
+ * or a non-empty step list.
  */
-async function assertModifyDifficultiesLegalAtAppend(
+async function assertModifyLeafFieldsLegalAtAppend(
   proposals: readonly ProposalInput[],
   ctx: ServiceContext,
   planProjectId: string,
@@ -4037,8 +4238,8 @@ async function assertModifyDifficultiesLegalAtAppend(
     (p) =>
       p.op === 'modify' &&
       p.workItemId &&
-      p.patch?.difficulty !== undefined &&
-      p.patch?.difficulty !== null,
+      ((p.patch?.difficulty !== undefined && p.patch?.difficulty !== null) ||
+        (Array.isArray(p.patch?.todos) && p.patch.todos.length > 0)),
   );
   if (judged.length === 0) return;
   await withProjectNarrowingSuspended(tx, planProjectId, async () => {
@@ -4053,11 +4254,9 @@ async function assertModifyDifficultiesLegalAtAppend(
       // is judged against the kind it will have.
       const kind = p.patch!.kind ?? kindById.get(p.workItemId!);
       if (kind === undefined) continue;
-      validateProposedDifficulty(
-        p.patch!.difficulty,
-        kind,
-        proposalLabel({ op: p.op, workItemId: p.workItemId }),
-      );
+      const label = proposalLabel({ op: p.op, workItemId: p.workItemId });
+      validateProposedDifficulty(p.patch!.difficulty, kind, label);
+      validateProposedTodos(p.patch!.todos, kind, label);
     }
   });
 }
@@ -4295,6 +4494,11 @@ async function applyAddProposalEdit(
     );
   }
   const current = (item.proposedFields ?? {}) as unknown as PlanItemProposedFields;
+  // The language statement (MOTIR-8743), refused where it is written.
+  validateProposedLanguages(
+    input.languages,
+    proposalLabel({ op: item.op, workItemId: item.workItemId, title: current.title }),
+  );
   const next = mergeProposedFields(current, input);
   if (!next.title?.trim()) {
     throw new InvalidProposalError('An `add` proposal requires a non-empty title.');
@@ -5043,7 +5247,7 @@ export const plansService = {
    */
   async addProposals(
     planId: string,
-    proposals: ProposalInput[],
+    incoming: ProposalInput[],
     ctx: ServiceContext,
     opts: { revision?: boolean } = {},
   ): Promise<PlanWithItemsDto & { appendedItemIds: string[] }> {
@@ -5054,6 +5258,10 @@ export const plansService = {
     await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
     if (opts.revision) assertPlanProposalsEditable(plan);
     else if (plan.status !== 'generating') throw new PlanNotGeneratingError(planId, plan.status);
+    // The sections INPUT is rendered into each `add`'s `descriptionMd` and stripped
+    // BEFORE any gate below reads a proposal (MOTIR-9030), so every gate judges the
+    // proposal as it will be stored and `proposals` never carries a `sections` key.
+    const proposals = incoming.map(resolveProposalSections);
     proposals.forEach(validateProposal);
 
     // ⚠️ THE CLOSE'S OWN GATE, FOR THE ONE APPEND THAT HAS NO CLOSE LEFT
@@ -5229,10 +5437,10 @@ export const plansService = {
           // legal later. One closure read, only when the plan draws such an edge.
           await assertSupersedesAcyclicAtAppend(effectiveNodes, ctx, fresh.projectId, tx);
 
-          // The container half of a `modify`'s DIFFICULTY (MOTIR-6133), which
-          // `validateProposal` could not judge without the target's kind. Costs
-          // one batched read, and only when the batch sets a non-null one.
-          await assertModifyDifficultiesLegalAtAppend(proposals, ctx, fresh.projectId, tx);
+          // The container half of a `modify`'s DIFFICULTY (MOTIR-6133) and STEPS
+          // (MOTIR-8668), which `validateProposal` could not judge without the
+          // target's kind. Costs one batched read, and only when the batch sets one.
+          await assertModifyLeafFieldsLegalAtAppend(proposals, ctx, fresh.projectId, tx);
 
           // The FINISHED-TARGET rule for a `modify` that sets a mark (MOTIR-6663),
           // which `validateProposal` could not judge without the target's live
@@ -5356,7 +5564,12 @@ export const plansService = {
               baseRevision: p.baseRevision ?? null,
               reason: p.op === 'remove' && p.reason ? p.reason.trim() : null,
               ...(p.op === 'add' && p.proposedFields
-                ? { proposedFields: p.proposedFields as unknown as Prisma.InputJsonValue }
+                ? {
+                    proposedFields: withProposalLanguages(
+                      p.proposedFields,
+                      p.languages,
+                    ) as unknown as Prisma.InputJsonValue,
+                  }
                 : {}),
               ...(p.op === 'modify' && patch
                 ? { patch: patch as unknown as Prisma.InputJsonValue }
@@ -6362,6 +6575,11 @@ export const plansService = {
             );
           }
           const current = (item.proposedFields ?? {}) as unknown as PlanItemProposedFields;
+          // The language statement (MOTIR-8743), the deepen's check.
+          validateProposedLanguages(
+            input.languages,
+            proposalLabel({ op: item.op, workItemId: item.workItemId, title: current.title }),
+          );
           const next = mergeProposedFields(current, input);
           // ⚠️ THE REPOSITORY AXIS IS REPLACED, NOT MERGED (bug MOTIR-4904). Every
           // other key here is sparse per KEY; these FOUR spellings are one field in
@@ -6523,6 +6741,11 @@ export const plansService = {
             );
             validateStoryPoints(input.patch?.storyPoints ?? null);
             validateEstimateMinutes(input.patch?.estimateMinutes ?? null);
+            // The replacement patch's language statement (MOTIR-8743).
+            validateProposedLanguages(
+              input.patch?.languages,
+              proposalLabel({ op: item.op, workItemId: item.workItemId }),
+            );
             // The replacement patch's RE-KIND (bug MOTIR-8192), held to the
             // append's membership check here and to its tree check below.
             validateProposedKindChange(
@@ -6576,6 +6799,25 @@ export const plansService = {
               validateProposedDifficulty(
                 input.patch.difficulty,
                 input.patch.kind ?? (target ? target.kind : null),
+                proposalLabel({ op: item.op, workItemId: item.workItemId }),
+              );
+            }
+            // The replacement patch's STEPS (MOTIR-8668), the same way: the rows
+            // against the store's caps always, the container half against the
+            // target's PROJECTED kind, read only when the list is non-empty.
+            if (Array.isArray(input.patch?.todos) && input.patch.todos.length > 0) {
+              const target = item.workItemId
+                ? await workItemRepository.findById(item.workItemId, tx)
+                : null;
+              validateProposedTodos(
+                input.patch.todos,
+                input.patch.kind ?? (target ? target.kind : null),
+                proposalLabel({ op: item.op, workItemId: item.workItemId }),
+              );
+            } else {
+              validateProposedTodos(
+                input.patch?.todos,
+                null,
                 proposalLabel({ op: item.op, workItemId: item.workItemId }),
               );
             }

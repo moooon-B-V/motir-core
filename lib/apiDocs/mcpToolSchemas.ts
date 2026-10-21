@@ -173,6 +173,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                     'The proposed kind. Defaults to `task` (a standalone leaf) when omitted.',
                 },
                 descriptionMd: { type: 'string', description: 'Markdown body — WHAT to do.' },
+                sections: {
+                  type: 'object',
+                  additionalProperties: {},
+                  description:
+                    'OPTIONAL. The card’s sections as named values, instead of composing headings inside `descriptionMd`: the door checks them against the section set for the proposal’s kind × type, refuses a missing, unknown or invalid section BY NAME with INVALID_PROPOSAL, writes the headings itself and stores ONLY the rendered `descriptionMd` — `sections` itself is never stored. Never send it together with `descriptionMd` (refused, naming both). The section sets, their shapes and which are required are served by `get_section_sets`. On an EDIT it is sparse at the section key: the stored body is read back into its sections first, a section you omit is kept, an explicit `null` clears one, and a list REPLACES the list. Omit it to keep sending a plain `descriptionMd` exactly as before.',
+                },
                 explanationMd: { type: 'string', description: 'Markdown body — WHY it matters.' },
                 type: {
                   type: 'string',
@@ -348,6 +354,46 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                   ],
                   description:
                     'Re-judge the target’s difficulty. How hard the work is to REASON about, not how big it is (that is `storyPoints` / `estimateMinutes`): "trivial", "low", "medium", "high", easiest first. Leaf kinds only (task / bug / subtask): a non-null value on an epic or story is refused with INVALID_PROPOSAL naming `difficulty`, never silently dropped. Judged on the target’s MERGED kind. An explicit `null` clears it.',
+                },
+                todos: {
+                  anyOf: [
+                    {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          text: {
+                            type: 'string',
+                            description:
+                              'WHAT to do — ONE operation, at most 200 characters. "Change this one setting", "run this one command". Navigation is NOT an operation: "go to the dashboard and find the panel" belongs in `notesMd` of the row that then changes something.',
+                          },
+                          notesMd: {
+                            type: ['string', 'null'],
+                            description:
+                              'The INSTRUCTIONS for this one operation — Markdown, at most 2000 characters. The HOW, where `text` is the WHAT.',
+                          },
+                          commandText: {
+                            type: ['string', 'null'],
+                            description:
+                              'The command this step runs, if it runs one — at most 500 characters, and in this field rather than inside `text`, because this is what the reader copies.',
+                          },
+                          executor: {
+                            anyOf: [
+                              { type: 'string', enum: ['coding_agent', 'human'] },
+                              { type: 'null' },
+                            ],
+                            description:
+                              'Who this STEP is for, when it differs from the card’s. Omit it and the row inherits the proposal’s own `executor` at approve, falling back to `human`.',
+                          },
+                        },
+                        required: ['text'],
+                        additionalProperties: false,
+                      },
+                    },
+                    { type: 'null' },
+                  ],
+                  description:
+                    'REPLACE the target’s ordered steps (its to-do list). Approve makes the list exactly this array, in order, none ticked, and DELETES every existing row — ticked ones included; the review and `get_plan` show how many steps that drops and how many were ticked. Omit the key to leave the list alone; `[]` or `null` clears it. Leaf kinds only (judged on the target’s MERGED kind). Not a mark key: a `modify` of a done or cancelled card that carries it is refused.',
                 },
                 targetRepo: {
                   type: ['string', 'null'],
@@ -1122,6 +1168,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
           "Optional: the id of a folder (as `list_folders` returns it) to FILE the new item into — the other placement beside parentKey, which it may not be combined with (PLACEMENT_CONFLICT). A filed item is a root, so any kind may be filed, a subtask included. The folder must be in this project: an unknown id is FOLDER_NOT_FOUND, another project's is CROSS_PROJECT_FOLDER.",
       },
       descriptionMd: { type: 'string', description: 'Optional Markdown description body.' },
+      sections: {
+        type: 'object',
+        additionalProperties: {},
+        description:
+          'OPTIONAL. The item’s sections as named values (framing, acceptanceCriteria, scopeBoundary, …), instead of composing headings inside `descriptionMd`: the door checks them against the section set for the item’s kind × type, refuses a missing, unknown or invalid section BY NAME with INVALID_SECTIONS, writes the headings itself and stores ONLY the rendered `descriptionMd` — `sections` is never stored. Never send it together with `descriptionMd` (SECTIONS_AND_DESCRIPTION_CONFLICT). The section sets, their shapes and which are required are served by `get_section_sets`. On an UPDATE it is sparse at the section key: the stored body is read back into its sections first, a section you omit is kept, an explicit `null` clears one, and a list REPLACES the list; it is judged on the item’s type AFTER this write. Omit it to keep sending a plain `descriptionMd` exactly as before.',
+      },
       language: {
         type: 'string',
         enum: ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'],
@@ -1453,6 +1505,26 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  get_coding_convention: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      repo: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The repository whose convention to read — one in this project’s set, by its bare name ("motir-core") or as `owner/name`, case-insensitively. `get_code_health` and `get_project_state` list the set.',
+      },
+    },
+    required: ['projectKey', 'repo'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_design: {
     type: 'object',
     properties: {
@@ -1500,6 +1572,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'The plan id — as returned by an `expand_item` submit, by `get_plan_status`, or shown on the plan in Motir.',
       },
+      includeSections: {
+        type: 'boolean',
+        description:
+          'OPTIONAL, default false. When true the tool also parses the free-text body into the registry’s sections for the card’s kind × type and returns the result as `parsedSections` beside the body: `{ sections, found, missing, invalid, signals }` — the sections found, the required ones missing BY NAME, the ones that could not be read into their shape, and the parser’s signals (`no-headings`, `quoted-gutter`, …). The body is returned unchanged and nothing is stored; a body with no headings is answered, never refused.',
+      },
     },
     required: ['planId'],
     additionalProperties: false,
@@ -1536,6 +1613,23 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  get_section_sets: {
+    type: 'object',
+    properties: {
+      kind: {
+        type: 'string',
+        description:
+          'Only this kind’s sets: epic, story, task, subtask or bug. Omit for every kind.',
+      },
+      type: {
+        type: 'string',
+        description:
+          'Only this type’s sets (code, design, decision, test, …), one cell per kind (a story and an epic have one set whatever the type). Omit for every type.',
+      },
+    },
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_work_item: {
     type: 'object',
     properties: {
@@ -1543,13 +1637,18 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         minLength: 1,
         description:
-          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"), case-insensitive. With `planId`, this may instead be a `planItem:<id>` temp-ref naming an `add` in that plan (case-SENSITIVE, as `add_plan_items` returned it).',
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"), case-insensitive — or the work item\'s internal id, the form a plan names a committed card by (`parentRef`, `blockedByRefs`, `workItemId`). With `planId`, this may instead be a `planItem:<id>` temp-ref naming an `add` in that plan (case-SENSITIVE, as `add_plan_items` returned it).',
       },
       planId: {
         type: 'string',
         minLength: 1,
         description:
           'OPTIONAL — the id of a plan (as returned by `create_plan`) to PROJECT over. When given, the answer is computed over the project’s live tree ⊕ that plan’s proposals, so an agent can check the tree it is proposing BEFORE anyone reviews it. Omit it for the committed tree — a call without this argument behaves exactly as it did before projection existed. Nothing is created, mutated or persisted either way, and a proposal never becomes a work item except by approving the plan in Motir.',
+      },
+      includeSections: {
+        type: 'boolean',
+        description:
+          'OPTIONAL, default false. When true the tool also parses the free-text body into the registry’s sections for the card’s kind × type and returns the result as `parsedSections` beside the body: `{ sections, found, missing, invalid, signals }` — the sections found, the required ones missing BY NAME, the ones that could not be read into their shape, and the parser’s signals (`no-headings`, `quoted-gutter`, …). The body is returned unchanged and nothing is stored; a body with no headings is answered, never refused.',
       },
     },
     required: ['key'],
@@ -2283,6 +2382,45 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  record_run_discrepancy: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The card you built through (e.g. "ACME-7") — on a parent run, the CHILD you were working.',
+      },
+      points: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            planAsked: {
+              type: 'string',
+              description: 'What the plan asked for — the route it laid out.',
+            },
+            built: {
+              type: 'string',
+              description: 'What you built instead — the route you actually took.',
+            },
+            why: {
+              type: 'string',
+              description:
+                'Why the plan could not be built as written. If the point describes something that is STILL BROKEN after the card is done, file it as a bug and cite its key here.',
+            },
+          },
+          required: ['planAsked', 'built', 'why'],
+          additionalProperties: false,
+        },
+        description:
+          'Every discrepancy you found, in ONE call — 1–20 points, each field 1–2000 characters once trimmed.',
+      },
+    },
+    required: ['key', 'points'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   reinforce_lesson: {
     type: 'object',
     properties: {
@@ -2306,6 +2444,28 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['projectKey', 'lessonId', 'occurrenceRef'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  rename_page: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the page belongs to (e.g. "ACME").',
+      },
+      pageId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The page id — the `<id>` in the page’s address `/pages/<id>`.',
+      },
+      title: {
+        type: 'string',
+        description: 'The page’s new title. An empty string makes it untitled.',
+      },
+    },
+    required: ['projectKey', 'pageId', 'title'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -2789,8 +2949,32 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
               'REQUIRED, non-empty, at the far end. How somebody will know it is done, as an observation rather than a test name.',
           },
           assumptions: {
-            type: 'string',
-            description: 'What you concluded that nobody confirmed. May be "" (see `scopeEdge`).',
+            anyOf: [
+              {
+                type: 'array',
+                items: {
+                  anyOf: [
+                    { type: 'string' },
+                    {
+                      type: 'object',
+                      properties: {
+                        id: {
+                          type: 'string',
+                          description:
+                            'A stable id for this recommendation. Assigned (`r<position>`) when omitted.',
+                        },
+                        text: { type: 'string' },
+                      },
+                      required: ['text'],
+                      additionalProperties: false,
+                    },
+                  ],
+                },
+              },
+              { type: 'string' },
+            ],
+            description:
+              'What you concluded that nobody confirmed, as a LIST — one entry per recommendation, each a self-contained sentence (a bare string, or `{ id?, text }` when you want to name it). Each one can then be confirmed or overturned on its own. [] or "" says you concluded nothing (see `scopeEdge`). A single string is accepted and is read as ONE recommendation — it is never split.',
           },
         },
         additionalProperties: false,
@@ -3047,6 +3231,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'Markdown body — WHAT to do. Send `null` to clear it; omit to leave it as it is.',
       },
+      sections: {
+        type: 'object',
+        additionalProperties: {},
+        description:
+          'OPTIONAL. The card’s sections as named values, instead of composing headings inside `descriptionMd`: the door checks them against the section set for the proposal’s kind × type, refuses a missing, unknown or invalid section BY NAME with INVALID_PROPOSAL, writes the headings itself and stores ONLY the rendered `descriptionMd` — `sections` itself is never stored. Never send it together with `descriptionMd` (refused, naming both). The section sets, their shapes and which are required are served by `get_section_sets`. On an EDIT it is sparse at the section key: the stored body is read back into its sections first, a section you omit is kept, an explicit `null` clears one, and a list REPLACES the list. Omit it to keep sending a plain `descriptionMd` exactly as before.',
+      },
       explanationMd: {
         type: ['string', 'null'],
         description:
@@ -3176,6 +3366,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: ['string', 'null'],
         description:
           'Markdown body — WHAT to do. Send `null` to clear it; omit to leave it as it is.',
+      },
+      sections: {
+        type: 'object',
+        additionalProperties: {},
+        description:
+          'OPTIONAL. The card’s sections as named values, instead of composing headings inside `descriptionMd`: the door checks them against the section set for the proposal’s kind × type, refuses a missing, unknown or invalid section BY NAME with INVALID_PROPOSAL, writes the headings itself and stores ONLY the rendered `descriptionMd` — `sections` itself is never stored. Never send it together with `descriptionMd` (refused, naming both). The section sets, their shapes and which are required are served by `get_section_sets`. On an EDIT it is sparse at the section key: the stored body is read back into its sections first, a section you omit is kept, an explicit `null` clears one, and a list REPLACES the list. Omit it to keep sending a plain `descriptionMd` exactly as before.',
       },
       explanationMd: {
         type: ['string', 'null'],
@@ -3399,6 +3595,46 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                 description:
                   'Re-judge the target’s difficulty. How hard the work is to REASON about, not how big it is (that is `storyPoints` / `estimateMinutes`): "trivial", "low", "medium", "high", easiest first. Leaf kinds only (task / bug / subtask): a non-null value on an epic or story is refused with INVALID_PROPOSAL naming `difficulty`, never silently dropped. Judged on the target’s MERGED kind. An explicit `null` clears it.',
               },
+              todos: {
+                anyOf: [
+                  {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        text: {
+                          type: 'string',
+                          description:
+                            'WHAT to do — ONE operation, at most 200 characters. "Change this one setting", "run this one command". Navigation is NOT an operation: "go to the dashboard and find the panel" belongs in `notesMd` of the row that then changes something.',
+                        },
+                        notesMd: {
+                          type: ['string', 'null'],
+                          description:
+                            'The INSTRUCTIONS for this one operation — Markdown, at most 2000 characters. The HOW, where `text` is the WHAT.',
+                        },
+                        commandText: {
+                          type: ['string', 'null'],
+                          description:
+                            'The command this step runs, if it runs one — at most 500 characters, and in this field rather than inside `text`, because this is what the reader copies.',
+                        },
+                        executor: {
+                          anyOf: [
+                            { type: 'string', enum: ['coding_agent', 'human'] },
+                            { type: 'null' },
+                          ],
+                          description:
+                            'Who this STEP is for, when it differs from the card’s. Omit it and the row inherits the proposal’s own `executor` at approve, falling back to `human`.',
+                        },
+                      },
+                      required: ['text'],
+                      additionalProperties: false,
+                    },
+                  },
+                  { type: 'null' },
+                ],
+                description:
+                  'REPLACE the target’s ordered steps (its to-do list). Approve makes the list exactly this array, in order, none ticked, and DELETES every existing row — ticked ones included; the review and `get_plan` show how many steps that drops and how many were ticked. Omit the key to leave the list alone; `[]` or `null` clears it. Leaf kinds only (judged on the target’s MERGED kind). Not a mark key: a `modify` of a done or cancelled card that carries it is refused.',
+              },
               targetRepo: {
                 type: ['string', 'null'],
                 description: 'RE-PIN which repo the item ships in. An explicit `null` unpins it.',
@@ -3530,6 +3766,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       descriptionMd: {
         type: ['string', 'null'],
         description: 'New Markdown description body; null clears it.',
+      },
+      sections: {
+        type: 'object',
+        additionalProperties: {},
+        description:
+          'OPTIONAL. The item’s sections as named values (framing, acceptanceCriteria, scopeBoundary, …), instead of composing headings inside `descriptionMd`: the door checks them against the section set for the item’s kind × type, refuses a missing, unknown or invalid section BY NAME with INVALID_SECTIONS, writes the headings itself and stores ONLY the rendered `descriptionMd` — `sections` is never stored. Never send it together with `descriptionMd` (SECTIONS_AND_DESCRIPTION_CONFLICT). The section sets, their shapes and which are required are served by `get_section_sets`. On an UPDATE it is sparse at the section key: the stored body is read back into its sections first, a section you omit is kept, an explicit `null` clears one, and a list REPLACES the list; it is judged on the item’s type AFTER this write. Omit it to keep sending a plain `descriptionMd` exactly as before.',
       },
       explanationMd: {
         type: ['string', 'null'],
@@ -3856,11 +4098,13 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_approval_gate: 'Get approval gate',
   get_approved_shape_verdict: 'Is this card still what its plan approved?',
   get_code_health: 'Get code health',
+  get_coding_convention: 'Get coding convention',
   get_design: 'Get design',
   get_page: 'Get page',
   get_plan: 'Read plan proposals',
   get_plan_status: 'Plan status',
   get_project_state: 'Get project state',
+  get_section_sets: 'Get section sets',
   get_work_item: 'Get work item',
   get_work_item_activity: 'Get work item activity',
   hold_plan_revision: 'Hold a plan while you revise it',
@@ -3885,7 +4129,9 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   publish_test_instructions: 'Publish How to test',
   read_file: 'Read a file',
   record_plan_revision_reason: 'Record WHY a plan had to change',
+  record_run_discrepancy: 'Record what you built differently from the plan',
   reinforce_lesson: 'Reinforce a lesson',
+  rename_page: 'Rename page',
   report_action: 'Report your next step',
   report_plan_step: 'Report the step a planner session is on',
   report_unbuildable_target: 'Report a card you cannot build',
@@ -4139,11 +4385,17 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     openWorldHint: false,
   },
   get_code_health: { title: 'Get code health', readOnlyHint: true, openWorldHint: false },
+  get_coding_convention: {
+    title: 'Get coding convention',
+    readOnlyHint: true,
+    openWorldHint: false,
+  },
   get_design: { title: 'Get design', readOnlyHint: true, openWorldHint: false },
   get_page: { title: 'Get page', readOnlyHint: true, openWorldHint: false },
   get_plan: { title: 'Read plan proposals', readOnlyHint: true, openWorldHint: false },
   get_plan_status: { title: 'Plan status', readOnlyHint: true, openWorldHint: false },
   get_project_state: { title: 'Get project state', readOnlyHint: true, openWorldHint: false },
+  get_section_sets: { title: 'Get section sets', readOnlyHint: true, openWorldHint: false },
   get_work_item: { title: 'Get work item', readOnlyHint: true, openWorldHint: false },
   get_work_item_activity: {
     title: 'Get work item activity',
@@ -4260,8 +4512,22 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     idempotentHint: false,
     openWorldHint: false,
   },
+  record_run_discrepancy: {
+    title: 'Record what you built differently from the plan',
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   reinforce_lesson: {
     title: 'Reinforce a lesson',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  rename_page: {
+    title: 'Rename page',
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: true,

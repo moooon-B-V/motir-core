@@ -9,6 +9,7 @@ import { agentSession } from './_helpers/agent-authored-plan-seed';
 import {
   addPlanProgressStory,
   makePlanProgressPublic,
+  nudgePlan,
   seedPlanProgress,
   PLAN_PROGRESS_PASSWORD,
   type PlanProgressSeed,
@@ -859,8 +860,11 @@ test('case 10 — earlier notes load above the window through the paged read, an
   await expect(messages(groupOf(r, HEAD_A))).toHaveText(all);
   await expect(earlier).toHaveCount(0);
 
-  // The next poll does not remove them.
-  await planPolled(page, planId, said('pA', sentence(total)));
+  // The next read does not remove them. The pane reads on a push (MOTIR-8542),
+  // so a quiet touch of the plan causes that read.
+  const next = planPolled(page, planId, said('pA', sentence(total)));
+  await nudgePlan(planId);
+  await next;
   await expect(messages(groupOf(r, HEAD_A))).toHaveText(all);
   await expectHead(r, t, HEAD_A, true);
 });

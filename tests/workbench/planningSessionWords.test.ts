@@ -33,14 +33,14 @@ describe('stopPhraseKeyOf — where the walk stopped, in the progress line’s s
   });
 });
 
-describe('resumeReasonKeyOf — TOTAL over the seven stored codes', () => {
+describe('resumeReasonKeyOf — TOTAL over the eight stored codes', () => {
   it('returns a key for each code, and every key has words in both locales', () => {
     for (const code of RESUME_REASON_CODES) {
       expect(resumeReasonKeyOf(code)).toBe(code);
       expect(en.workbench.planningSession.reason[code]).toBeTruthy();
       expect(zh.workbench.planningSession.reason[code]).toBeTruthy();
     }
-    expect(RESUME_REASON_CODES).toHaveLength(7);
+    expect(RESUME_REASON_CODES).toHaveLength(8);
   });
   it('an unknown or missing code reads as `internal`, never the raw code', () => {
     expect(resumeReasonKeyOf('quantum_flux')).toBe('internal');
@@ -77,8 +77,14 @@ describe('resumeRefusalKeyOf — TOTAL over the resume route’s refusals', () =
     }
   });
 
-  it('only `ended` and `notFailed` say the session no longer waits', () => {
-    expect(RESUME_REFUSAL_KEYS.filter(refusalEndsWaiting).sort()).toEqual(['ended', 'notFailed']);
+  // `notResumable` joined them in MOTIR-9121: the server records the attempt as not resumable
+  // and releases it, so the same Resume is never offered again.
+  it('only `ended`, `notFailed` and `notResumable` say the session no longer waits', () => {
+    expect(RESUME_REFUSAL_KEYS.filter(refusalEndsWaiting).sort()).toEqual([
+      'ended',
+      'notFailed',
+      'notResumable',
+    ]);
   });
 });
 

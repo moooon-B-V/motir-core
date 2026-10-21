@@ -171,8 +171,34 @@ export type CiWatchOutcome =
    *  never re-tested, so reporting "five fixes did not work" would be false. */
   | { kind: 'fix_failed'; attempts: number; detail: string };
 
+/**
+ * A sign of life the watch writes to the RUN while it works (MOTIR-8979).
+ *
+ * ⚠️ WHY THE WATCH REPORTS AT ALL. The server decides a run in an agent (or a
+ * hosted one) has STALLED from the latest run EVENT — the CLI's 60 s heartbeat is
+ * not an event. Before this, a watch waiting on a slow build wrote nothing, so a
+ * run whose pull request took more than 15 minutes of CI was ended `timed_out`
+ * and its session killed — taking the fix loop that would have repaired a red
+ * pull request with it. These events are what the stall clock reads in the CI
+ * phase; in the agent phase it keeps reading the agent's own output, so an agent
+ * that goes silent while it works still stalls.
+ */
+export type CiWatchEvent =
+  /** CI is running, or is still running — `data.ci` says which. */
+  | { kind: 'log'; data: { ci: 'pending' | 'waiting'; pending: number } }
+  /** A fixing attempt is about to start. */
+  | { kind: 'ci_fix_attempt'; data: { attempt: number; of: number; failing: string[] } };
+
+/** How often a watch that is still waiting says so. A quarter of the 15-minute
+ *  stall window would be wasteful; a third of it leaves two missed beats of room. */
+export const CI_WAITING_EVENT_INTERVAL_MS = 5 * 60_000;
+
 export interface CiWatchInput {
   client: Pick<MotirClient, 'getWorkItem'>;
+  /** Where {@link CiWatchEvent}s go — the run's reporter, in a lane that has one. */
+  onEvent?: (event: CiWatchEvent) => void;
+  /** The clock the waiting cadence reads. Injected so a test does not wait. */
+  now?: () => number;
   /** The card whose delivery set is watched. For `motir auto`, the run watches
    *  each card it carried in turn — the set is a property of the CARD. */
   key: string;
@@ -220,6 +246,20 @@ export async function watchAndFixCi(input: CiWatchInput): Promise<CiWatchOutcome
   // polls in a row since have shown them unchanged.
   let headsAtAttempt: Map<string, string> | null = null;
   let unchangedPolls = 0;
+  // The last time the RUN heard from this watch (MOTIR-8979), and whether the
+  // state it was told was `pending` — so a change is announced at once and a
+  // steady wait is repeated on a cadence.
+  const clock = input.now ?? Date.now;
+  let lastEventAt = clock();
+  let announcedPending = false;
+  const emit = (event: CiWatchEvent): void => {
+    lastEventAt = clock();
+    try {
+      input.onEvent?.(event);
+    } catch {
+      /* reporting observes the watch and may never change it */
+    }
+  };
 
   for (;;) {
     if (polls >= maxPolls) {
@@ -259,9 +299,17 @@ export async function watchAndFixCi(input: CiWatchInput): Promise<CiWatchOutcome
       return { kind: 'green', attempts: reds };
     }
     if (verdict === 'pending') {
+      const waiting = (deliveries ?? []).filter((d) => d.ci !== 'passing').length;
+      if (!announcedPending) {
+        announcedPending = true;
+        emit({ kind: 'log', data: { ci: 'pending', pending: waiting } });
+      } else if (clock() - lastEventAt >= CI_WAITING_EVENT_INTERVAL_MS) {
+        emit({ kind: 'log', data: { ci: 'waiting', pending: waiting } });
+      }
       await input.wait();
       continue;
     }
+    announcedPending = false;
 
     // RED.
     const failing = failingDeliveries(deliveries);
@@ -297,6 +345,10 @@ export async function watchAndFixCi(input: CiWatchInput): Promise<CiWatchOutcome
       `${input.key}: CI is red in ${failing.map((d) => `${d.repo}#${d.number}`).join(', ')} — ` +
         `fixing attempt ${reds} of ${CI_FIX_ATTEMPTS}.`,
     );
+    emit({
+      kind: 'ci_fix_attempt',
+      data: { attempt: reds, of: CI_FIX_ATTEMPTS, failing: failing.map(deliveryId) },
+    });
     headsAtAttempt = new Map(
       failing.flatMap((d) => (d.queueExit ? [[deliveryId(d), d.queueExit.headSha] as const] : [])),
     );
@@ -793,15 +845,27 @@ export interface CiWatchPhaseInput {
   key: string;
   title: string | null;
   agent: ParsedAgentCommand;
+  /**
+   * The command that CONTINUES the watched run's conversation (MOTIR-9048). The lane
+   * builds it (`resumeFixAgent`); the watch prefers it for every fixing attempt, so
+   * the fix arrives in the session that built the branch. Absent ⇒ every attempt
+   * starts `agent`, a fresh process, exactly as before.
+   */
+  resumeAgent?: ParsedAgentCommand;
   /** Where the fixing agent runs — the checkout holding the branch CI is red on. */
   cwd: string;
   /** Every branch's checkout, named in the prompt — `motir fix` only. */
   checkouts?: readonly FixCheckout[];
   report: (line: string) => void;
+  /** Where the watch's run events go (MOTIR-8979). */
+  onEvent?: (event: CiWatchEvent) => void;
+  /** The fixing agent's output, teed into the run's log (MOTIR-8979). */
+  onOutput?: (chunk: string) => void;
   runAgentFn?: (input: {
     command: ParsedAgentCommand;
     prompt: string;
     cwd: string;
+    onOutput?: (chunk: string) => void;
   }) => Promise<AgentRunResult>;
   wait?: () => Promise<void>;
   maxPolls?: number;
@@ -822,11 +886,18 @@ export async function runCiWatchPhase(input: CiWatchPhaseInput): Promise<CiWatch
     client: input.client,
     key: input.key,
     report: input.report,
+    ...(input.onEvent ? { onEvent: input.onEvent } : {}),
     wait: input.wait ?? realWait,
     ...(input.maxPolls === undefined ? {} : { maxPolls: input.maxPolls }),
     fix: async (failing, attempt) => {
+      // One line naming the form it is about to run — never a continuation it did not launch.
+      input.report(
+        input.resumeAgent
+          ? `Fix attempt ${attempt}: continuing the run’s own agent session.`
+          : `Fix attempt ${attempt}: starting a fresh agent (the run’s session is not resumable).`,
+      );
       const result = await runAgentFn({
-        command: input.agent,
+        command: input.resumeAgent ?? input.agent,
         prompt: renderFixPrompt({
           key: input.key,
           title: input.title,
@@ -835,6 +906,7 @@ export async function runCiWatchPhase(input: CiWatchPhaseInput): Promise<CiWatch
           ...(input.checkouts ? { checkouts: input.checkouts } : {}),
         }),
         cwd: input.cwd,
+        ...(input.onOutput ? { onOutput: input.onOutput } : {}),
       });
       return result.exitCode === 0
         ? { ok: true }

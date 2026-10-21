@@ -1,3 +1,9 @@
+import { resolveSurfaceTranslation } from '@/lib/pages/surfaceTranslation';
+import {
+  SurfaceShowOriginalSwitch,
+  SurfaceTitleTranslationProvider,
+  SurfaceTitlesNotice,
+} from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -113,6 +119,7 @@ export default async function BacklogPage({
     referencedLabels,
     savedFilterCaps,
     aiSettings,
+    titleTranslation,
   ] = await Promise.all([
     workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
     workspacesService.listMembers(ctx.workspaceId, ctx.userId),
@@ -143,6 +150,8 @@ export default async function BacklogPage({
     // re-checks it server-side (`SprintPlanningDisabledError`), so this only
     // governs the affordance, never the permission.
     projectAiSettingsService.getAiSettings(ctx.project.identifier, accessCtx),
+    // The reader's title-translation context (Story MOTIR-7738 · MOTIR-8833).
+    resolveSurfaceTranslation(ctx.project, accessCtx),
   ]);
 
   const viewer = { userId: ctx.userId, ...savedFilterCaps };
@@ -154,73 +163,83 @@ export default async function BacklogPage({
   return (
     <AdvancedFilterProvider>
       <SavedFilterSessionProvider>
-        <div className="flex flex-col gap-6">
-          <header className="flex flex-wrap items-end justify-between gap-4">
-            <div className="flex flex-col gap-1">
-              <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
-              <p className="text-sm text-(--el-text-muted)">
-                {t('subtitle', { project: ctx.project.name })}
-              </p>
-            </div>
-            {/* `flex-wrap`: the cluster wraps onto a second row before the
+        <SurfaceTitleTranslationProvider
+          projectKey={ctx.project.identifier}
+          context={titleTranslation}
+        >
+          <div className="flex flex-col gap-6">
+            <header className="flex flex-wrap items-end justify-between gap-4">
+              <div className="flex flex-col gap-1">
+                <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
+                  {t('heading')}
+                </h1>
+                <p className="text-sm text-(--el-text-muted)">
+                  {t('subtitle', { project: ctx.project.name })}
+                </p>
+              </div>
+              {/* `flex-wrap`: the cluster wraps onto a second row before the
                 link's longer translations squeeze it (MOTIR-7759). */}
-            <div className="flex flex-wrap items-center gap-2">
-              {/* View all issues — Jira's "View in Issue Navigator": deep-links to
+              <div className="flex flex-wrap items-center gap-2">
+                {/* View all issues — Jira's "View in Issue Navigator": deep-links to
                   the project's /items List/Tree (every issue across the backlog
                   AND all sprints), CARRYING the active filter (8.8.18). */}
-              <Link
-                href={viewAllHref}
-                className="inline-flex h-(--height-btn-md) items-center gap-2 rounded-(--radius-btn) whitespace-nowrap border border-(--el-border) px-(--spacing-btn-x) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-              >
-                <ExternalLink className="h-4 w-4" aria-hidden />
-                {t('viewAllIssues')}
-              </Link>
-              {/* The backlog filter cluster (Subtask 8.8.18) — the enabled
+                <Link
+                  href={viewAllHref}
+                  className="inline-flex h-(--height-btn-md) items-center gap-2 rounded-(--radius-btn) whitespace-nowrap border border-(--el-border) px-(--spacing-btn-x) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                >
+                  <ExternalLink className="h-4 w-4" aria-hidden />
+                  {t('viewAllIssues')}
+                </Link>
+                {/* The backlog filter cluster (Subtask 8.8.18) — the enabled
                   `[Filter]` quick popover + `[Advanced]` builder + `[Saved]`
                   picker, the SAME /items components the board reuses (6.15.3). */}
-              <BacklogFilterControls
-                filter={filter}
-                ast={ast}
-                statuses={workflow.statuses}
-                members={assignableMembers}
-                sprints={sprints}
-                customFields={customFields}
-                components={components}
-                referencedLabels={referencedLabels}
-                projectKey={ctx.project.identifier}
-                viewer={viewer}
-              />
-              <NewIssueButton />
-            </div>
-          </header>
+                <BacklogFilterControls
+                  filter={filter}
+                  ast={ast}
+                  statuses={workflow.statuses}
+                  members={assignableMembers}
+                  sprints={sprints}
+                  customFields={customFields}
+                  components={components}
+                  referencedLabels={referencedLabels}
+                  projectKey={ctx.project.identifier}
+                  viewer={viewer}
+                />
+                <SurfaceShowOriginalSwitch />
+                <NewIssueButton />
+              </div>
+            </header>
 
-          {/* The applied-filter summary row (name chip + condition chips +
+            <SurfaceTitlesNotice />
+
+            {/* The applied-filter summary row (name chip + condition chips +
               Save/Discard), above the regions; renders nothing when unfiltered. */}
-          <BacklogAppliedFilterBar
-            projectKey={ctx.project.identifier}
-            viewer={viewer}
-            filter={filter}
-            ast={ast}
-            statuses={workflow.statuses}
-            members={assignableMembers}
-            sprints={sprints}
-            customFields={customFields}
-            components={components}
-            referencedLabels={referencedLabels}
-          />
-
-          <EstimationConfigProvider config={estimationConfig} canEdit={caps.canEdit}>
-            <BacklogContainer
-              workflow={workflow}
-              members={members}
-              projectName={ctx.project.name}
-              filterQuery={filterQuery}
-              filterActive={filterActive}
-              aiSprintPlanningEnabled={aiSettings.aiSprintPlanningEnabled}
-              aiAvailable={aiAvailable}
+            <BacklogAppliedFilterBar
+              projectKey={ctx.project.identifier}
+              viewer={viewer}
+              filter={filter}
+              ast={ast}
+              statuses={workflow.statuses}
+              members={assignableMembers}
+              sprints={sprints}
+              customFields={customFields}
+              components={components}
+              referencedLabels={referencedLabels}
             />
-          </EstimationConfigProvider>
-        </div>
+
+            <EstimationConfigProvider config={estimationConfig} canEdit={caps.canEdit}>
+              <BacklogContainer
+                workflow={workflow}
+                members={members}
+                projectName={ctx.project.name}
+                filterQuery={filterQuery}
+                filterActive={filterActive}
+                aiSprintPlanningEnabled={aiSettings.aiSprintPlanningEnabled}
+                aiAvailable={aiAvailable}
+              />
+            </EstimationConfigProvider>
+          </div>
+        </SurfaceTitleTranslationProvider>
       </SavedFilterSessionProvider>
     </AdvancedFilterProvider>
   );

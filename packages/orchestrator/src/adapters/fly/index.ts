@@ -7,6 +7,7 @@ import {
   stoppedAtOf,
   type FlyMachine,
 } from './flyMachines';
+import { OrchestratorApiError } from '../../errors';
 import { buildContainerUsage } from '../../usage';
 import { sparedByCaller } from '../../reap';
 import type { FleetWorkloadKind } from '../../types';
@@ -63,6 +64,30 @@ export const FLEET_METADATA_VALUES: Record<FleetWorkloadKind, string> = {
 /** Every tag value the fleet answers to — what makes a machine one of OURS,
  *  whatever it is running. `reap()` sweeps the set, never a single value. */
 const FLEET_METADATA_VALUE_SET: ReadonlySet<string> = new Set(Object.values(FLEET_METADATA_VALUES));
+
+/**
+ * The name of every Docker volume the adapter creates (MOTIR-8839), and the
+ * orphan sweep's recognition key. Fly volume names need not be unique within an
+ * app; this one is shared on purpose, so the sweep can find a volume whose id
+ * nothing recorded. Fly limits a volume name to 30 lowercase alphanumerics and
+ * underscores.
+ */
+export const CI_DOCKER_VOLUME_NAME = 'motir_ci_docker';
+
+/** Where the volume is mounted: the Docker daemon's data root. */
+export const CI_DOCKER_VOLUME_PATH = '/var/lib/docker';
+
+/** How many times teardown asks Fly to delete a volume while the destroyed
+ *  machine is still releasing it, and the pause between asks. A volume left after
+ *  the last ask is the orphan sweep's. */
+export const VOLUME_DESTROY_ATTEMPTS = 10;
+export const VOLUME_DESTROY_INTERVAL_MS = 1000;
+
+/** How many times `provision` asks Fly to create the machine when Fly answers
+ *  `volume not found` for the volume it created a moment earlier, and the pause
+ *  (multiplied by the attempt number) between asks (MOTIR-8941). */
+export const MACHINE_CREATE_VOLUME_ATTEMPTS = 4;
+export const MACHINE_CREATE_VOLUME_RETRY_MS = 500;
 
 /** Machine metadata naming the intent a container serves, so the reaper can
  *  resolve attribution from the PROVIDER's own record rather than from a Motir
@@ -152,6 +177,40 @@ function toHandle(machine: FlyMachine, fallbackRegion: string): ContainerHandle 
   };
 }
 
+/** The Docker volumes teardown owns for this container: the handle's, else —
+ *  for a CI runner whose handle was rebuilt from a listing — the machine's own
+ *  mounts. Another workload's mounts are never touched here. */
+function dockerVolumesOf(handle: ContainerHandle, machine: FlyMachine | null): string[] {
+  if (handle.volumeId) return [handle.volumeId];
+  if (machine?.metadata[FLEET_METADATA_KEY] !== FLEET_METADATA_VALUES.ci_runner) return [];
+  return [...(machine.mountedVolumeIds ?? [])];
+}
+
+/**
+ * Delete a volume, asking up to `attempts` times: Fly refuses while a destroyed
+ * machine is still releasing it. Answers whether it is gone. Never throws — a
+ * volume left behind is the orphan sweep's, and must not fail the teardown that
+ * already stopped the machine billing.
+ */
+async function destroyVolumeEventually(volumeId: string, attempts: number): Promise<boolean> {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await flyMachinesClient.destroyVolume(volumeId);
+      return true;
+    } catch (err) {
+      if (attempt === attempts) {
+        console.warn('[flyOrchestrator] could not destroy a CI Docker volume — left to the sweep', {
+          volumeId,
+          detail: err instanceof Error ? err.message : 'unknown',
+        });
+        return false;
+      }
+      await new Promise((resolve) => setTimeout(resolve, VOLUME_DESTROY_INTERVAL_MS));
+    }
+  }
+  return false;
+}
+
 /** Read the machine, tolerating a provider failure — used only on paths where
  *  the machine is about to be destroyed anyway and a read failure must not stop
  *  that. Returns null both for "gone" and for "could not ask". */
@@ -164,6 +223,66 @@ async function readQuietly(id: string): Promise<FlyMachine | null> {
       detail: err instanceof Error ? err.message : 'unknown',
     });
     return null;
+  }
+}
+
+/** Create the fleet machine for `spec`, mounting the Docker volume when there is
+ *  one. Every create goes through here, so the metadata the reaper and the
+ *  reconciler recognise is written in exactly one place. */
+function createFleetMachine(
+  spec: ContainerSpec,
+  region: string,
+  volumeId: string | null,
+): Promise<FlyMachine> {
+  return flyMachinesClient.createMachine({
+    // A deterministic, attributable name: an orphan in the Fly console is
+    // traceable to the work it served with no reverse lookup, the same property
+    // `runnerGroupNameFor` gives a runner group.
+    name: machineNameFor(spec),
+    region,
+    image: spec.image,
+    cpuKind: spec.size.cpuKind,
+    cpus: spec.size.cpus,
+    memoryMb: spec.size.memoryMb,
+    env: spec.env,
+    metadata: {
+      [FLEET_METADATA_KEY]: FLEET_METADATA_VALUES[spec.workload],
+      // Only a CI container has an Actions job to name. The key is OMITTED
+      // rather than set to a placeholder for a workload that has none: an
+      // empty `motir_intent_id` reads, in the console and to anything that
+      // greps metadata, as an intent that could not be resolved.
+      ...(spec.workflowJobId !== null
+        ? { [FLEET_METADATA_INTENT_KEY]: String(spec.workflowJobId) }
+        : {}),
+      motir_org_id: spec.orgId,
+      motir_project_id: spec.projectId,
+    },
+    ...(volumeId ? { mounts: [{ volume: volumeId, path: CI_DOCKER_VOLUME_PATH }] } : {}),
+  });
+}
+
+/** Fly answers a machine create with 400 `volume not found` for a volume it
+ *  created a moment earlier: the volume is not visible yet. Retried a few times
+ *  with a growing pause before the failure is given up on (MOTIR-8941); any other
+ *  failure is thrown at once. */
+async function createFleetMachineAwaitingVolume(
+  spec: ContainerSpec,
+  region: string,
+  volumeId: string | null,
+): Promise<FlyMachine> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await createFleetMachine(spec, region, volumeId);
+    } catch (err) {
+      const volumeNotVisibleYet =
+        volumeId !== null &&
+        err instanceof OrchestratorApiError &&
+        err.status === 400 &&
+        /volume/i.test(err.message) &&
+        /not found/i.test(err.message);
+      if (!volumeNotVisibleYet || attempt >= MACHINE_CREATE_VOLUME_ATTEMPTS) throw err;
+      await new Promise((resolve) => setTimeout(resolve, MACHINE_CREATE_VOLUME_RETRY_MS * attempt));
+    }
   }
 }
 
@@ -184,31 +303,28 @@ export const flyOrchestrator: ContainerOrchestrator = {
    */
   async provision(spec: ContainerSpec): Promise<ContainerHandle> {
     const config = flyFleetConfig();
-    const machine = await flyMachinesClient.createMachine({
-      // A deterministic, attributable name: an orphan in the Fly console is
-      // traceable to the work it served with no reverse lookup, the same property
-      // `runnerGroupNameFor` gives a runner group.
-      name: machineNameFor(spec),
-      region: spec.region || config.region,
-      image: spec.image,
-      cpuKind: spec.size.cpuKind,
-      cpus: spec.size.cpus,
-      memoryMb: spec.size.memoryMb,
-      env: spec.env,
-      metadata: {
-        [FLEET_METADATA_KEY]: FLEET_METADATA_VALUES[spec.workload],
-        // Only a CI container has an Actions job to name. The key is OMITTED
-        // rather than set to a placeholder for a workload that has none: an
-        // empty `motir_intent_id` reads, in the console and to anything that
-        // greps metadata, as an intent that could not be resolved.
-        ...(spec.workflowJobId !== null
-          ? { [FLEET_METADATA_INTENT_KEY]: String(spec.workflowJobId) }
-          : {}),
-        motir_org_id: spec.orgId,
-        motir_project_id: spec.projectId,
-      },
-    });
-    return toHandle(machine, spec.region || config.region);
+    const region = spec.region || config.region;
+    // The Docker volume FIRST, in the machine's region: Fly places a machine on
+    // the host that holds the volume it mounts (MOTIR-8839).
+    const volume =
+      spec.dockerVolumeGb && spec.dockerVolumeGb > 0
+        ? await flyMachinesClient.createVolume({
+            name: CI_DOCKER_VOLUME_NAME,
+            region,
+            sizeGb: spec.dockerVolumeGb,
+          })
+        : null;
+    let machine: FlyMachine;
+    try {
+      machine = await createFleetMachineAwaitingVolume(spec, region, volume?.id ?? null);
+    } catch (err) {
+      // No machine, so no handle and no teardown: the volume is deleted here or
+      // it is an orphan from its first moment.
+      if (volume) await destroyVolumeEventually(volume.id, 1);
+      throw err;
+    }
+    const handle = toHandle(machine, region);
+    return volume ? { ...handle, volumeId: volume.id } : handle;
   },
 
   async describe(handle: ContainerHandle): Promise<ContainerStatus> {
@@ -259,7 +375,41 @@ export const flyOrchestrator: ContainerOrchestrator = {
   ): Promise<ContainerUsage> {
     const machine = await readQuietly(handle.id);
     await flyMachinesClient.destroyMachine(handle.id);
+    // The Docker volume outlives its machine — `auto_destroy` deletes the machine
+    // and leaves what it mounted (MOTIR-8839). The handle names it when this
+    // adapter booted the container; a handle rebuilt from a listing does not, and
+    // then the machine's own mounts do, for a CI runner only.
+    for (const volumeId of dockerVolumesOf(handle, machine)) {
+      await destroyVolumeEventually(volumeId, VOLUME_DESTROY_ATTEMPTS);
+    }
     return usageFor(handle, machine, reason, context);
+  },
+
+  async sweepOrphanedVolumes(olderThan: Date): Promise<number> {
+    let volumes;
+    try {
+      volumes = await flyMachinesClient.listVolumes();
+    } catch (err) {
+      console.error('[flyOrchestrator] could not list volumes for the orphan sweep', {
+        detail: err instanceof Error ? err.message : 'unknown',
+      });
+      return 0;
+    }
+    let destroyed = 0;
+    for (const volume of volumes) {
+      if (volume.name !== CI_DOCKER_VOLUME_NAME || volume.attachedMachineId !== null) continue;
+      // An undated volume cannot be aged, and one created a second ago may be
+      // about to be mounted by a machine still being created.
+      if (!volume.createdAt || volume.createdAt.getTime() >= olderThan.getTime()) continue;
+      if (await destroyVolumeEventually(volume.id, 1)) {
+        destroyed += 1;
+        console.warn('[flyOrchestrator] destroyed an orphaned CI Docker volume', {
+          volumeId: volume.id,
+          createdAt: volume.createdAt.toISOString(),
+        });
+      }
+    }
+    return destroyed;
   },
 
   /**
@@ -337,6 +487,7 @@ export const flyOrchestrator: ContainerOrchestrator = {
 
 /**
  * Build the §5 record from whatever the provider was still able to tell us.
+ * Call it only once the machine has been destroyed: the row says so.
  *
  * The precedence is deliberate and stated once here rather than at three call
  * sites: Fly's own event timestamps WIN (they are provider-attested and measure
@@ -360,7 +511,11 @@ function usageFor(
       createdAt: machine?.createdAt ?? handle.createdAt,
       startedAt: providerStartedAt ?? context.observedStartedAt,
       stoppedAt: providerStoppedAt ?? new Date(),
-      terminalState: machine?.state ?? 'destroyed',
+      // Every caller reaches here only AFTER `destroyMachine` returned, so the
+      // settled row is `destroyed` whatever Fly reported at the pre-destroy read
+      // (`stopped`, `destroying`) — that read exists for the timestamps, not for
+      // the terminal state (MOTIR-8912).
+      terminalState: 'destroyed',
     },
   });
 }

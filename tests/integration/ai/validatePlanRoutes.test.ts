@@ -48,7 +48,18 @@ const mk = (
   title: string,
   kind: 'story' | 'task' | 'subtask',
   parentId?: string,
-) => workItemsService.createWorkItem({ projectId: fx.projectId, kind, title, parentId }, fx.ctx);
+) =>
+  workItemsService.createWorkItem(
+    {
+      projectId: fx.projectId,
+      kind,
+      title,
+      parentId,
+      // Typed so a leaf is not UNDER-AUTHORED (MOTIR-5427); containers cannot carry one.
+      ...(kind === 'task' || kind === 'subtask' ? { type: 'code' as const } : {}),
+    },
+    fx.ctx,
+  );
 
 /** A `planned` plan whose single `modify` makes `targetId` blocked_by `blockerId`. */
 async function planBlocking(
@@ -175,6 +186,7 @@ describe('POST /api/internal/ai/validate-plan', () => {
       crossLevelEdges: [],
       advisories: [],
       softBlocks: [],
+      sectionFindings: expect.any(Array),
     });
 
     // A no-op plan over the same target is valid.
@@ -197,6 +209,7 @@ describe('POST /api/internal/ai/validate-plan', () => {
       crossLevelEdges: [],
       advisories: [],
       softBlocks: [],
+      sectionFindings: expect.any(Array),
     });
   });
 });
@@ -335,6 +348,7 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
       // The cross-parent half (MOTIR-6370), carried verbatim like the rest.
       invalidEdges: [],
       crossLevelEdges: [],
+      sectionFindings: expect.any(Array),
     });
 
     // Invalid: a new root add gated by a not-done cross-project item.
@@ -389,6 +403,7 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
       // The cross-parent half (MOTIR-6370), carried verbatim like the rest.
       invalidEdges: [],
       crossLevelEdges: [],
+      sectionFindings: expect.any(Array),
     });
   });
 });

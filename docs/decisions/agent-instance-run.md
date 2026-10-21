@@ -16,9 +16,18 @@
   - MOTIR-7028, MOTIR-7029: the card control and the My agents panel (§4, §6)
   - MOTIR-7030, MOTIR-7031: the story test gate and the E2E, through the above
   - Also read by MOTIR-6948 and MOTIR-6952 (the image update), which refuse during a run (§5, §6)
+  - Added by MOTIR-8981 (AMENDMENT 2), read by the siblings of MOTIR-9055:
+    - MOTIR-9045, MOTIR-9050: the run mode and the terminal server that acts on it (§7, §8)
+    - MOTIR-9046, MOTIR-9052: the last-run read and `motir fix` in an agent (§7)
+    - MOTIR-9049: the claim a fix in an agent opens, and releases on give-up (§7)
+    - MOTIR-9043, MOTIR-9047, MOTIR-9051, MOTIR-9058, MOTIR-9053: the door's drawing, words and control (§9)
+    - MOTIR-9054, MOTIR-9060: the automatic fix and its setting (§9)
+    - MOTIR-9048, MOTIR-9059: the fix during a run, in the watch's other lanes (§7)
+    - MOTIR-9056, MOTIR-9057: the E2E and the story gate (§7 to §9)
 - **Supersedes:** none.
 - **Evidence refs:** rung-2 paths were read at `origin/main` **`7550573`** (after the MOTIR-6861
-  merge, #3270). Rung-1 sources were read on **2026-09-30**.
+  merge, #3270). Rung-1 sources were read on **2026-09-30**. §7 to §9 and AMENDMENT 2 (MOTIR-8981)
+  were written against `origin/main` **`64932d347`** on **2026-10-19**.
 
 ---
 
@@ -159,7 +168,7 @@ from `POST /api/v1/dispatch-runs/{id}/git-credential`. Motir mints **no gateway 
 
 - **Not in any environment variable.** Only the state directory's PATH is in the session's
   environment, never a token.
-- **Not in `argv`.** The exec carries the run id and the card key, neither of which is a secret.
+- **Not in any long-lived `argv`.** The launcher's own argv carries the run id and the card key, neither of which is a secret. (See the amendment below for the one exec wrapper that holds the token.)
 - **Not in `$HOME`.** `/tmp` is on the rootfs, which is reset on every wake
   ([`agent-instances.md`](agent-instances.md) §1), so nothing survives a stop even if the run was
   killed.
@@ -231,6 +240,25 @@ never falls back to the hosted OpenCode agent.
 - **A profile whose `agentCommand` is `null` is refused** before anything starts, as
   `agent_profile_cannot_run` (§4). Today that is only the two profiles no agent can be created with,
   so the refusal is reachable only by a future profile added with no unattended form.
+
+**AMENDMENT (MOTIR-8980) — the command a run launches is the profile's STREAMING form where it has
+one.** `agentCommand` stays the plain-text form, but `claude -p`, `codex exec` and the rest print
+nothing until the turn ends, so a run in a developer's agent showed no Agent output for the
+whole of the work. Each profile with a headless stream now carries `agentStream` beside it, taken from
+[`agent-chat.md`](agent-chat.md) Q1/Q3 (the Chat tab's flags, so the two cannot drift), and `motir run`
+launches that: `claude -p --output-format stream-json --verbose …`, `codex exec --json …`,
+`opencode run --format json …`, `kimi --output-format stream-json -p`, and `goose run -q --output-format
+stream-json -i -` (without `--no-session`, so there is a session to resume). `aider` has no stream and
+keeps `agentCommand`.
+
+- **The log is readable lines, never the event objects.** `runAgent` reads the stream with the profile's
+  own chat adapter and writes the reply text, one line per tool call (`Edit lib/x.ts`, `Bash: pnpm test`)
+  and a line for each failure, to the terminal and to the run's `log` events alike.
+- **The run records the agent's session id** — `data.sessionId` on `agent_started` where Motir chose it
+  (`claude --session-id`), on `agent_exited` always (from the stream, else the agent's own session store
+  for the run's checkout) — and each profile carries `resumeArgs(sessionId)` for a later fix to continue
+  that conversation.
+- **`MOTIR_AGENT_OUTPUT=text` forces the plain form** for a CLI version that refuses the stream flags.
 
 **Rejected:** **(b) asking the developer to configure a command per agent.** It adds a setting whose
 wrong value is found only when a run hangs at a prompt, and the verified matrix already exists.
@@ -403,6 +431,87 @@ the work left it, with the _run died_ marker, as [`run-death-keeps-work.md`](run
 - **Hibernating under a run and closing it.** Hibernate is a person's button, and a run silently dying
   under it looks like a failure of the run. Refusing names the run and lets the person cancel it first.
 
+### §7 · The fix mode — a repair that resumes the run's own session
+
+**A fix in an agent continues the conversation that built the branch; it does not start a new one.**
+The CI-fix step of a watch re-enters the run's own recorded session with the fix prompt, so the prompt
+arrives in the existing conversation. After a run has ended, a fix started from the door does the same
+for the session that run recorded, when that run was in this same agent.
+
+- **How a fix in an agent is started and adopted.** The door's press opens the `fix` run as the claim's
+  lock, through the agent-run start with `command: 'fix'` (one of `AGENT_RUN_COMMANDS`: `run`, `fix`,
+  `continue`). The launch carries `--command fix` to the agent's terminal server, which spawns
+  `motir fix <KEY>` with `MOTIR_DISPATCH_RUN_ID` set to that run in the process's environment, and
+  `motir fix` ADOPTS the run through the path the hosted lane already uses (`hostedRunId`,
+  `packages/cli/src/hostedMode.ts`) instead of claiming a second time. There is no `--run-id` flag on
+  `motir fix`. An adopted fix run in a person's agent admits the classes the door admits (`ci`,
+  `acceptance_rerun` and `review`); the hosted lane's adopted repair still answers a `review` only.
+- **What is resumed, and by what.** The profile table's own resume form and the session id a run
+  records, both of which arrived with MOTIR-8980 (and MOTIR-8979 stopped the watch being killed as a
+  stall). This record states that a resume happens and cites those cards for how; it carries no
+  per-profile flag string and no per-profile evidence table, because the verification is MOTIR-9044's
+  and a second copy would drift from it.
+- **What happens instead when a profile has no resume form**, or when the recorded session cannot be
+  resumed: a fresh agent process **on the same branch**, and the run says so in words. The fallback is
+  a recorded outcome, never a silent one, and it is never a refusal of the fix.
+- **The budget is unchanged.** `CI_FIX_ATTEMPTS = 5` (`packages/cli/src/ciWatch.ts`) bounds a fix exactly
+  as it bounds a watch. The counter moves on a RED verdict only and is spent per run. A run that
+  exhausts it gives up in words and leaves the door pressable again.
+- **What the claim guarantees**, stated once here: at most one repair of a card at a time; the claim
+  opens the `fix` dispatch run as its lock; a second press is refused naming the holder, and that
+  includes the presser's own fix run in their own agent; giving up releases the claim, so the door
+  offers again. The decision ORDER and the refusal vocabulary are `workItemRepairService.claimRepair`'s
+  (and the claim card MOTIR-9049's for any admission change); this record states the guarantee and one
+  source states the steps.
+
+**Rejected:** **(a) cold-starting a separate agent for each fix.** It re-reads the repository and
+re-derives the failure from a prompt, which is the copying a person does by hand today, paid for on
+every iteration.
+
+### §8 · The continue mode — a dead run's branch, in the same agent
+
+**`continue` carries on work that already began, from the branch the dead run left, in a fresh session
+of the same agent, and it is a different command from `fix` with its own claim.** A card whose pull
+request is already open has nothing to continue, which is the shipped `use_fix` refusal
+(`workItemContinueRefusalSchema`, `lib/api/v1/workLoop/schema.ts`). Running it inside the agent changes
+where it runs, not what it claims or what it writes: the start's `command: 'continue'` reaches the
+terminal server, which spawns `motir continue <KEY>` with `MOTIR_DISPATCH_RUN_ID` set, and
+`motir continue` adopts that run exactly as its hosted path already does.
+
+**Rejected:** **(a) one command that sometimes starts fresh and sometimes resumes.** No person could
+predict which, which is the reason `continue` has its own name in the CLI.
+
+### §9 · Fix in my agent — the offer, the states, and the one fix Motir starts itself
+
+**The door is offered when a delivery's CI is red, no repair is claimed, and the viewer has an agent
+they can use; it defaults to the agent the card's last run used.** Availability is decided on the
+server, where whether the card's fix part offers at all is already computed, extended with the agent
+question, so the control never offers what the claim would refuse and a card in the part's `hidden`
+state offers no door.
+
+The states the two doors (the Development block's fix part and the ended run's modal) must render are
+named here and drawn by MOTIR-9043; their words are MOTIR-9047's:
+
+| state the door shows                       | the fix part's shipped vocabulary                                                     |
+| ------------------------------------------ | ------------------------------------------------------------------------------------- |
+| offered                                    | `offer`                                                                               |
+| preparing (the press is being answered)    | none shipped; the door card (MOTIR-9053) adds it                                      |
+| in progress                                | `in_progress`                                                                         |
+| refused (another repair holds the card)    | `in_progress` with the holder named; refusal vocabulary is the claim's                |
+| fell back to a fresh session               | none shipped; a line in the fix run's own output (MOTIR-9052), shown by the door card |
+| gave up                                    | `offer` with `lastGaveUp`                                                             |
+| settled, the pull request went green first | `hidden` (or `pointer`, as the part already decides)                                  |
+
+**The one exception to "a person presses it."** Behind a project setting that is off by default, a
+delivery set reported red starts the fix in the card's own agent by itself, when three things hold:
+the setting is on, that agent is up (running, never woken for this), and the repair is free. In every
+other case it does nothing, silently. The trigger and its setting are MOTIR-9054's and MOTIR-9060's;
+this record states only that the exception exists, its conditions and the correction it forces to §4.
+
+**Rejected:** **(a) offering the door for any card with a pull request.** A green pull request has
+nothing to fix and a claimed one would be refused. **(b) starting an automatic fix for anyone but the
+card's own agent.** The start spends the agent owner's credits on a machine only they own.
+
 ## Consequences
 
 - **The run's machine time is the agent's interval.** A developer running a card pays for the minutes
@@ -416,23 +525,59 @@ the work left it, with the _run died_ marker, as [`run-death-keeps-work.md`](run
 - **A `motir run` the developer types by hand in the terminal is a `local` run** on their own PAT. It is
   not counted as the agent's running run and is not supervised. The two can run side by side, in
   separate checkouts.
+- **Image currency, restated for the fix and continue modes (MOTIR-8981).** An agent boots from the
+  digest it pinned, so neither the fix door nor the continue mode works on a production agent until its
+  image carries the CLI that has them; an agent on an older image runs a `fix` or `continue` start into
+  the same _image too old_ refusal §4 already gives a `run`.
 
 **Which card acts on each section:**
 
-| section | card(s)                                                                                         |
-| ------- | ----------------------------------------------------------------------------------------------- |
-| §1      | MOTIR-7025 (socket, run session, `run`, `stop`, probes) · MOTIR-7026 (the exec)                 |
-| §2      | MOTIR-7024 (agent mode's state directory and workspace) · MOTIR-7025 (the launcher writes it)   |
-| §3      | MOTIR-7024                                                                                      |
-| §4      | MOTIR-7026 (checks, probes, route, launch job) · MOTIR-7022, MOTIR-7028 (the refusals in words) |
-| §5      | MOTIR-7023                                                                                      |
-| §6      | MOTIR-7027 (supervise, couplings, end path) · MOTIR-7028 (Cancel) · MOTIR-7029 (the live run)   |
+| section | card(s)                                                                                                                         |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| §1      | MOTIR-7025 (socket, run session, `run`, `stop`, probes) · MOTIR-7026 (the exec)                                                 |
+| §2      | MOTIR-7024 (agent mode's state directory and workspace) · MOTIR-7025 (the launcher writes it)                                   |
+| §3      | MOTIR-7024                                                                                                                      |
+| §4      | MOTIR-7026 (checks, probes, route, launch job) · MOTIR-7022, MOTIR-7028 (the refusals in words)                                 |
+| §5      | MOTIR-7023                                                                                                                      |
+| §6      | MOTIR-7027 (supervise, couplings, end path) · MOTIR-7028 (Cancel) · MOTIR-7029 (the live run)                                   |
+| §7      | MOTIR-9045 (the mode) · MOTIR-9050 (spawn) · MOTIR-9049 (claim) · MOTIR-9052, MOTIR-9048, MOTIR-9059 (resume)                   |
+| §8      | MOTIR-9045 · MOTIR-9050                                                                                                         |
+| §9      | MOTIR-9043, MOTIR-9047, MOTIR-9051, MOTIR-9058 (design, words) · MOTIR-9053 (door) · MOTIR-9054, MOTIR-9060 (the automatic fix) |
+
+## AMENDMENT 1 (MOTIR-8872) — Fly's exec API delivers no stdin
+
+§2 assumed the Machines exec API's `stdin` field reaches the command. On production it does not: a
+`stdin` field is accepted and the command reads zero bytes, so the launcher refused every run with no
+credentials. The contract `exec(…, { stdin })` is kept, and the Fly adapter now honours it by wrapping
+the command in a root `sh` that pipes the payload to it (`printf %s "$p" | exec "$@"`). The payload is a
+positional, so it is never quoted into a shell string. **What changes in §2:** the run token is in the
+argv of that one wrapper process for the length of the exec (at most 30 seconds), as the clone's token
+already is; it is still in no environment variable and in no argv of the launcher, the run session or
+anything it spawns. The token stays scoped to one run and is revoked at close. A failed launch now
+records its exit code and a bounded stderr tail (the launcher never prints the token) in the run's
+detail, instead of only the refusal code.
+
+## AMENDMENT 2 (MOTIR-8981) — a run's session id is recorded, and one fix starts itself
+
+Two sentences above stop being true when the fix mode ships. §1 and §4 are left as written, as
+AMENDMENT 1 left §2, and this is what changes in them.
+
+- **§1 says "Motir stores no session id." It now does.** The run's own terminal session id is recorded,
+  so a fix can re-enter that session. **No terminal byte and no session content is stored**, and
+  [`agent-terminal.md`](agent-terminal.md) Q8 stands untouched.
+- **§4 says "Nothing in Motir starts one on its own." That is true of a run and false of a fix.** A
+  **run** is still started only by a person pressing a control. A **fix** may be started by Motir when
+  the project's auto-fix setting is on (§9). Read §4's sentence as about runs.
 
 ## Owed on acceptance
 
 - **MOTIR-6862's image update records `runLauncher` for the digest it moves an agent to** (§4), or
   probes it at the next boot before a run can start. MOTIR-6948 is the decision that says which.
 - **The CLI release that carries the launcher** is MOTIR-7032, already planned.
+- **A release that publishes the sandbox images carrying the CLI with `fix` and `continue` in agent
+  mode** (MOTIR-8981), owed on the same terms as MOTIR-7032's for the launcher, together with a check
+  that the modes are in the binary an agent boots. Until an agent's digest moves, neither door works on
+  it. This record names the obligation and not the release's mechanics.
 
 ## What this does NOT decide
 
@@ -442,10 +587,8 @@ the work left it, with the _run died_ marker, as [`run-death-keeps-work.md`](run
 - **The chat panel** (MOTIR-6863). A chat creates no run.
 - **Moving an agent to a newer image** (MOTIR-6862). This record names the refusal an old image gets
   and the probe the update owes.
-- **Continuing a dead run in an agent.** A run in an agent that died can be continued the ways any
-  dead run can; a _Continue in my agent_ control is not decided here.
-- **Motir-initiated runs in a user's agent.** There are none. The autonomous project lead's runs never
-  target a user's agent.
+- **Motir-initiated runs in a user's agent.** There are none, apart from the single automatic fix §9
+  records. The autonomous project lead's runs never target a user's agent.
 - **Letting anyone but the owner start, watch or cancel a run in an agent.**
   [`agent-instances.md`](agent-instances.md) §8's owner-only rule stands with no exception.
 - **The panel's layout and copy.** They are MOTIR-7022's design. This record names the states and
