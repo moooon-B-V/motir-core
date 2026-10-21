@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   dispositionMarkerFor,
   latestTurnDeclined,
+  latestTurnUnsearchable,
   pendingQuestion,
 } from '@/lib/planning/planChangeThread';
 import { readPlanningTurn } from '@/lib/planning/plannerTurn';
@@ -101,6 +102,34 @@ describe('latestTurnDeclined', () => {
     expect(
       latestTurnDeclined([
         turn('assistant', { codeUnreadable: 'declined' }),
+        turn('user'),
+        turn('system'),
+      ]),
+    ).toBe(false);
+  });
+});
+
+describe('latestTurnUnsearchable', () => {
+  const blocked = [{ repoRef: 'motir-co/motir-core', state: 'never_indexed' as const }];
+
+  it('is true when the latest planner turn stopped on unsearchable code', () => {
+    expect(
+      latestTurnUnsearchable([turn('user'), turn('assistant', { codeUnsearchable: blocked })]),
+    ).toBe(true);
+  });
+
+  it('is false for a plain turn, an empty list and an empty thread', () => {
+    expect(latestTurnUnsearchable([turn('user'), reported()])).toBe(false);
+    expect(
+      latestTurnUnsearchable([turn('user'), turn('assistant', { codeUnsearchable: [] })]),
+    ).toBe(false);
+    expect(latestTurnUnsearchable([])).toBe(false);
+  });
+
+  it('ignores a stopped turn that predates the latest user message', () => {
+    expect(
+      latestTurnUnsearchable([
+        turn('assistant', { codeUnsearchable: blocked }),
         turn('user'),
         turn('system'),
       ]),

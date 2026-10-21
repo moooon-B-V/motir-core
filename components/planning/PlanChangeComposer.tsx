@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { PausedRunIndicator } from '@/components/planning/RunPause';
+import type { PlanChangeRunPauseDto } from '@/lib/dto/planChange';
 import { PlanningTargetChip } from '@/components/planning/PlanningTargetChip';
 import { TargetSearchPopover } from '@/components/planning/TargetSearchPopover';
 import {
@@ -79,7 +80,7 @@ export interface RunningBar {
    * spinner's place, with the same Stop. Derived from an unanswered pause, never
    * stored.
    */
-  paused?: { kind: 'replan' | 'unclear' } | null;
+  paused?: { kind: PlanChangeRunPauseDto['kind'] } | null;
 }
 
 /**

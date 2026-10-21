@@ -17,10 +17,10 @@ import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConve
 // writes.
 
 type SetState = Dispatch<SetStateAction<PlanChangeConversationState>>;
-type Choice = 'start_over' | 'apply' | 'reply';
+type Choice = 'start_over' | 'apply' | 'reply' | 'resume';
 
 /** The answer a 409 carries as the one that STANDS. */
-const STORED_ANSWERS = new Set(['start_over', 'apply', 'replied']);
+const STORED_ANSWERS = new Set(['start_over', 'apply', 'replied', 'resumed']);
 
 function sameRead(a: PlanChangeRunPauseDto | null, b: PlanChangeRunPauseDto | null): boolean {
   return JSON.stringify(a) === JSON.stringify(b);

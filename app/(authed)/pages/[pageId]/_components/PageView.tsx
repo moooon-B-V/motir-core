@@ -16,6 +16,7 @@ import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { IssueQuickViewController } from '@/app/(authed)/items/_components/IssueQuickViewController';
 import { cn } from '@/lib/utils/cn';
 import { HistoryNotice, PageHistoryPanel } from './PageHistoryPanel';
+import { LinkedWorkItemsStrip } from './LinkedWorkItemsStrip';
 import { PageActionsMenu } from './PageActionsMenu';
 import { PageVersionRestore, type RestoreRefusal } from './PageVersionRestore';
 import { PageVersionView } from './PageVersionView';
@@ -53,6 +54,12 @@ export interface PageViewPage {
   projectId?: string;
   /** `PageDto.workItemRefs` — the live data of every work item the body mentions. */
   workItemRefs?: WorkItemRefMap;
+  /**
+   * `work_item:edit` on the page's project (MOTIR-9200) — the Linked work items strip's
+   * own capability. NOT `canEdit` (that is `page:edit`): it decides whether the strip
+   * paints before its read answers, and the write re-checks the pair.
+   */
+  canLinkWorkItems?: boolean;
 }
 
 export interface PageViewProps {
@@ -250,6 +257,16 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
             </div>
           ) : null}
         </div>
+        {/* The Linked work items strip (MOTIR-9200): a LIVE page's hand links, above the
+            editor and — in compare mode — above both columns, never inside either. An
+            archived page mounts none and reads nothing. */}
+        {archived ? null : (
+          <LinkedWorkItemsStrip
+            pageId={page.id}
+            projectId={page.projectId}
+            canLink={page.canLinkWorkItems ?? false}
+          />
+        )}
         {/* ⚠️ The live editor stays MOUNTED while a version is compared: it sits
             in the same slot of the same element either way, so compare never
             unmounts it — unsaved edits, the caret and the save indicator survive.

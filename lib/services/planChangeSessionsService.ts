@@ -45,6 +45,7 @@ import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { readPlanningTurn } from '@/lib/planning/plannerTurn';
 import { readCodeUnreadable } from '@/lib/planning/codeUnreadable';
+import { readCodeUnsearchable, type CodeUnsearchableRepo } from '@/lib/planning/codeUnsearchable';
 import { getJob } from '@/lib/ai/motirAiClient';
 import type { SubmittedRequirement } from '@/lib/ai/types';
 import { readGuideTurnRecord, type GuideTurnRecord } from '@/lib/ai/guideWorkItem';
@@ -415,6 +416,12 @@ async function resolveCitations(
 const DECLINED_FALLBACK_BODY =
   "I can't read your code right now, so I haven't changed your plan. Motir is on it.";
 
+/** The English the unsearchable-code turn row carries (MOTIR-9167): never rendered — the
+ *  overlay draws its banner from the stored repository list — but every turn row has a
+ *  non-empty body. */
+const UNSEARCHABLE_FALLBACK_BODY =
+  "I can't search your code yet, so I haven't planned. Once it can be searched, continue the conversation.";
+
 interface AppendTurn {
   role: PlanChangeTurnRole;
   body: string;
@@ -436,6 +443,8 @@ interface AppendTurn {
   confirm?: PlanChangeTurnConfirm | null;
   /** How a code-graph outage touched this `assistant` turn (MOTIR-8141). */
   codeUnreadable?: PlanChangeTurnOutage | null;
+  /** The target repositories whose code could not be SEARCHED, when the conversation stopped for that (MOTIR-9167). */
+  codeUnsearchable?: CodeUnsearchableRepo[] | null;
   /** The planning job running when a `user` turn was typed (MOTIR-7996). */
   runJobId?: string | null;
   /** The text an `assistant` answer offered to forward (MOTIR-7996). */
@@ -508,6 +517,14 @@ async function appendWithin(
         attachmentIds: turn.attachmentIds ? [...turn.attachmentIds] : [],
         confirm: turn.confirm ?? null,
         codeUnreadable: turn.codeUnreadable ?? null,
+        ...(turn.codeUnsearchable
+          ? {
+              codeUnsearchable: turn.codeUnsearchable.map((r) => ({
+                repoRef: r.repoRef,
+                state: r.state,
+              })),
+            }
+          : {}),
         runJobId: turn.runJobId ?? null,
         forwardOffer: turn.forwardOffer ?? null,
         // An explicit literal, not the DTO itself: Prisma's JSON input wants an
@@ -2842,6 +2859,33 @@ export const planChangeSessionsService = {
           body: DECLINED_FALLBACK_BODY,
           jobId,
           codeUnreadable: 'declined',
+        },
+        {},
+        async (tx) =>
+          (await planChangeTurnRepository.findByJobIdAndRole(
+            session.id,
+            jobId,
+            'assistant',
+            pctx.workspaceId,
+            tx,
+          )) !== null,
+      );
+    }
+
+    // THE CODE-CAN'T-BE-SEARCHED FACE (Story MOTIR-9165 · MOTIR-9167). A conversation that
+    // stopped because a TARGET repository has no usable code graph opened no planning job;
+    // its result carries the blocked list. The turn remembers it, so the overlay's banner
+    // survives a reload. Same idempotency gate as the append below.
+    const unsearchable = readCodeUnsearchable(job.result);
+    if (unsearchable) {
+      return appendLocked(
+        session,
+        pctx,
+        {
+          role: 'assistant',
+          body: UNSEARCHABLE_FALLBACK_BODY,
+          jobId,
+          codeUnsearchable: unsearchable,
         },
         {},
         async (tx) =>

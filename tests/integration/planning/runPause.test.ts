@@ -22,7 +22,7 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
   streamJob: vi.fn(),
 }));
 
-const { planChangeRunPauseService, PAUSE_DECLINE_INSTRUCTION } =
+const { planChangeRunPauseService, PAUSE_DECLINE_INSTRUCTION, PAUSE_RESUME_TEXT } =
   await import('@/lib/services/planChangeRunPauseService');
 const { planChangeMailboxService } = await import('@/lib/services/planChangeMailboxService');
 const { planChangeSessionsService } = await import('@/lib/services/planChangeSessionsService');
@@ -61,7 +61,11 @@ function record(over: Record<string, unknown> = {}) {
   );
 }
 
-function answer(pauseId: string, choice: 'start_over' | 'apply' | 'reply', text?: string) {
+function answer(
+  pauseId: string,
+  choice: 'start_over' | 'apply' | 'reply' | 'resume',
+  text?: string,
+) {
   return planChangeRunPauseService.answer(
     { sessionId, jobId: RUN_JOB, pauseId, choice, text },
     ctx,
@@ -517,5 +521,163 @@ describe('the session DTO', () => {
       answer: 'apply',
       delivery: 'delivered',
     });
+  });
+});
+
+// THE CODE-CAN'T-BE-SEARCHED PAUSE (Story MOTIR-9165 · MOTIR-9167): a target
+// repository has no usable code graph, so the walk stops and the person resumes it
+// once the code can be searched. It carries the blocked repositories, takes no text,
+// and its one answer is `resume`.
+describe('a code_unsearchable pause', () => {
+  const repos = [
+    { repoRef: 'acme/web', state: 'never_indexed' },
+    { repoRef: 'acme/api', state: 'refresh_failing' },
+  ];
+
+  function recordUnsearchable(over: Record<string, unknown> = {}) {
+    return record({
+      kind: 'code_unsearchable',
+      changeTurnIds: [],
+      reason: undefined,
+      repos,
+      idempotencyKey: 'pk-cu',
+      ...over,
+    });
+  }
+
+  it('records the blocked repositories and nothing else', async () => {
+    const { outcome, pause } = await recordUnsearchable();
+
+    expect(outcome).toBe('recorded');
+    expect(pause).toMatchObject({
+      kind: 'code_unsearchable',
+      jobId: RUN_JOB,
+      repos,
+      reason: null,
+      question: null,
+      answer: null,
+      delivery: 'pending',
+      changeTurnIds: [],
+    });
+    const row = await adminDb.planChangeRunPause.findUniqueOrThrow({ where: { id: pause.id } });
+    expect(row.unsearchableRepos).toEqual(repos);
+  });
+
+  it('refuses a missing, empty or malformed list, and a stray reason or question, writing no row', async () => {
+    for (const bad of [
+      { repos: undefined },
+      { repos: [] },
+      { repos: [{ repoRef: 'acme/web', state: 'stale' }] },
+      { repos: [{ state: 'paused' }] },
+      { repos: 'acme/web' },
+      { reason: 'both' },
+      { question: 'both?' },
+    ]) {
+      await expect(recordUnsearchable(bad)).rejects.toMatchObject({
+        code: 'PLAN_CHANGE_RUN_PAUSE_SHAPE',
+      });
+    }
+    expect(await adminDb.planChangeRunPause.count()).toBe(0);
+  });
+
+  it('refuses a list on the other two kinds, and leaves their repos null', async () => {
+    await expect(record({ repos })).rejects.toMatchObject({
+      code: 'PLAN_CHANGE_RUN_PAUSE_SHAPE',
+    });
+    const replan = await record();
+    expect(replan.pause.repos).toBeNull();
+  });
+
+  it('is idempotent on its key, and a different key while open is already_open', async () => {
+    const first = await recordUnsearchable();
+    const again = await recordUnsearchable();
+    expect(again).toMatchObject({ outcome: 'recorded', pause: { id: first.pause.id } });
+    const other = await recordUnsearchable({ idempotencyKey: 'pk-cu-2' });
+    expect(other).toMatchObject({ outcome: 'already_open', pause: { id: first.pause.id } });
+    expect(await adminDb.planChangeRunPause.count()).toBe(1);
+  });
+
+  it('resume records the answer and delivers one fold turn marked as the answer', async () => {
+    const { pause } = await recordUnsearchable();
+
+    const result = await answer(pause.id, 'resume');
+
+    expect(result.outcome).toBe('answered');
+    const turn = (await entries()).find((e) => e.answersPauseId === pause.id)!;
+    expect(turn).toMatchObject({ disposition: 'fold', body: PAUSE_RESUME_TEXT });
+    expect(await planChangeRunPauseService.latestForSession(sessionId, ctx)).toMatchObject({
+      kind: 'code_unsearchable',
+      answer: 'resumed',
+      delivery: 'delivered',
+      repos,
+    });
+    const delivery = await planChangeMailboxService.readForBoundary(RUN_JOB, ctx);
+    expect(delivery.turns.find((t) => t.id === turn.id)).toMatchObject({
+      answersQuestion: pause.id,
+    });
+    expect(submitJobMock).not.toHaveBeenCalled();
+  });
+
+  it('a replayed resume writes no second entry; a different answer is refused', async () => {
+    const { pause } = await recordUnsearchable();
+    await answer(pause.id, 'resume');
+    const before = (await entries()).length;
+
+    const replay = await answer(pause.id, 'resume');
+
+    expect(replay.outcome).toBe('answered');
+    expect((await entries()).length).toBe(before);
+    await expect(answer(pause.id, 'apply')).rejects.toMatchObject({
+      code: 'PLAN_CHANGE_RUN_PAUSE_SHAPE',
+    });
+  });
+
+  it('refuses resume on a replan and on an unclear, writing nothing', async () => {
+    const replan = await record();
+    const before = (await entries()).length;
+    await expect(answer(replan.pause.id, 'resume')).rejects.toMatchObject({
+      code: 'PLAN_CHANGE_RUN_PAUSE_SHAPE',
+    });
+    await adminDb.planChangeRunPause.delete({ where: { id: replan.pause.id } });
+    const unclear = await record({
+      kind: 'unclear',
+      reason: undefined,
+      question: 'Which?',
+      idempotencyKey: 'pk-2',
+    });
+    await expect(answer(unclear.pause.id, 'resume')).rejects.toMatchObject({
+      code: 'PLAN_CHANGE_RUN_PAUSE_SHAPE',
+    });
+    expect((await entries()).length).toBe(before);
+  });
+
+  it('refuses reply, start_over and apply on a code_unsearchable pause', async () => {
+    const { pause } = await recordUnsearchable();
+    for (const choice of ['start_over', 'apply'] as const) {
+      await expect(answer(pause.id, choice)).rejects.toMatchObject({
+        code: 'PLAN_CHANGE_RUN_PAUSE_SHAPE',
+      });
+    }
+    await expect(answer(pause.id, 'reply', 'it is fine now')).rejects.toMatchObject({
+      code: 'PLAN_CHANGE_RUN_PAUSE_SHAPE',
+    });
+  });
+
+  it('a new pause is allowed once the open one is resumed, and the session DTO carries repos', async () => {
+    const first = await recordUnsearchable();
+    expect((await planChangeSessionsService.getById(ctx, sessionId)).runPause).toMatchObject({
+      kind: 'code_unsearchable',
+      repos,
+      answer: null,
+    });
+    await answer(first.pause.id, 'resume');
+
+    const next = await recordUnsearchable({
+      idempotencyKey: 'pk-cu-3',
+      repos: [{ repoRef: 'acme/web', state: 'indexing' }],
+    });
+
+    expect(next.outcome).toBe('recorded');
+    expect(next.pause.repos).toEqual([{ repoRef: 'acme/web', state: 'indexing' }]);
   });
 });

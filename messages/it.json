@@ -6643,6 +6643,63 @@
       "rate": "${unit} ogni {credits} crediti · una tantum · imposte al checkout. I crediti sono una dotazione, non una valuta: questo è il prezzo che paghi a Stripe.",
       "gate": "Le ricariche sono disponibili con un piano AI a pagamento; la prova gratuita non può essere ricaricata (prima scegli un piano qui sopra). Solo proprietario e amministratori, come per ogni azione di fatturazione."
     },
+    "calculator": {
+      "breadcrumb": "Organizzazione · {org} · Calcolatore",
+      "title": "Stima il tuo utilizzo",
+      "subtitle": "Quanti elementi di lavoro completa la tua organizzazione in un mese e quali categorie di modelli usa. Motir stima i crediti e il piano adatto: il risultato è una stima e nulla qui modifica il tuo abbonamento.",
+      "back": "Torna ai piani",
+      "open": "Stima il tuo utilizzo",
+      "marked": "Corrisponde alla tua stima",
+      "inputs": {
+        "rangeLabel": "Elementi di lavoro completati al mese",
+        "rangeHelp": "Va bene anche un intervallo: il minimo e il massimo di un mese normale.",
+        "lowLabel": "Minimo",
+        "highLabel": "Massimo",
+        "categoriesLabel": "Categorie di modelli usate dalla tua organizzazione",
+        "categoriesHelp": "Scegline da una a tre. La stima viene divisa in parti uguali tra quelle che scegli e non scegli mai un modello: ogni categoria elenca come esempio i modelli che offre.",
+        "categoryExamples": "Ad esempio: {models}",
+        "submit": "Stima i crediti"
+      },
+      "categories": {
+        "failed": "Impossibile caricare le categorie di modelli.",
+        "empty": "Al momento questa categoria non ha alcun modello, quindi non può essere scelta."
+      },
+      "split": {
+        "one": "Una sola categoria, quindi tutta la stima ricade su {category}.",
+        "even": "Divisa in parti uguali tra {categories}: {shares} ciascuna."
+      },
+      "result": {
+        "idle": "Non viene stimato nulla finché non lo chiedi: inserisci l'intervallo, scegli da una a tre categorie, poi seleziona «Stima i crediti».",
+        "loading": "Calcolo dei tuoi crediti…",
+        "creditsLabel": "Crediti al mese",
+        "estimateCaveat": "Questa è una stima per l'intervallo inserito: i crediti arrivano come intervallo, mai come una cifra esatta.",
+        "perOrg": "Un piano per l'intera organizzazione: i suoi crediti sono condivisi da tutti.",
+        "planLabel": "Il piano adatto",
+        "topupLabel": "Ricarica stimata",
+        "topupOnly": "Una ricarica copre questo intervallo, quindi non serve cambiare piano.",
+        "largerPoolLabel": "Pool di crediti più grande",
+        "largerPlan": "La tua stima supera il nostro piano standard più grande, quindi la risposta è un pool di crediti più grande, dimensionato su misura: {plan}.",
+        "largerPlanEstimate": "Il pool e il suo prezzo sono calcolati dalla tua stima, quindi entrambi sono una stima: gli importi esatti vengono confermati prima di addebitare qualsiasi cosa.",
+        "aboveTopRung": "Supera i {ceiling} crediti al mese del piano standard più grande e al momento non è disponibile un pool più grande, quindi l'eccedenza viene coperta con ricariche di crediti.",
+        "upgradeNote": "Il passaggio a un piano superiore a metà periodo viene calcolato sui giorni rimanenti. La vista dei piani mostra l'importo prima di addebitare qualsiasi cosa.",
+        "goToPlan": "Vai a questo piano"
+      },
+      "seat": {
+        "included": "{count, plural, one {Ogni piano IA include # postazione Motir senza costi aggiuntivi.} other {Ogni piano IA include # postazioni Motir senza costi aggiuntivi.}}",
+        "feePerUserMonthly": "Postazioni aggiuntive: ${price} per utente al mese.",
+        "feePerUserAnnual": "Postazioni aggiuntive: ${price} per utente all'anno.",
+        "noPlan": "La postazione inclusa è fornita con un piano IA. Senza un piano IA, ogni postazione viene fatturata per utente."
+      },
+      "errors": {
+        "rangeEmpty": "Inserisci quanti elementi di lavoro completa la tua organizzazione al mese.",
+        "rangeInvalid": "Inserisci numeri interi: decimali e numeri negativi non sono accettati.",
+        "rangeOrder": "Il minimo deve essere uguale o inferiore al massimo.",
+        "categoryMissing": "Scegli almeno una categoria di modelli.",
+        "tooManyCategories": "Scegli al massimo tre categorie di modelli.",
+        "unavailable": "Al momento non possiamo fare una stima. Non è stato calcolato nulla: riprova.",
+        "failed": "La stima non è arrivata. Non è cambiato nulla: riprova."
+      }
+    },
     "seats": {
       "breadcrumb": "Organizzazione · {org} · Motir",
       "title": "Fai crescere Motir",
@@ -7886,7 +7943,8 @@
           "refusal": {
             "PLAN_CHANGE_JOB_NOT_RUNNING": "L’esecuzione è terminata prima che la tua risposta la raggiungesse.",
             "generic": "La tua risposta non ha raggiunto l’esecuzione."
-          }
+          },
+          "waitingResume": "In attesa che tu controlli il codice e prosegua."
         },
         "answeringMarker": "Risposta a margine: l’esecuzione prosegue.",
         "answeredAside": "Risposta data a margine: non è stato inviato nulla all’esecuzione.",
@@ -7949,6 +8007,41 @@
       "planBody": "Al momento non riesco a leggere il tuo codice, quindi non ho modificato il tuo piano. Motir se ne sta occupando.",
       "planMarker": "Non è stato scritto nulla — il tuo piano è invariato.",
       "askNotice": "Non sono riuscito a leggere il tuo codice per questa risposta. Considera non confermato tutto ciò che qui riguarda il codice."
+    },
+    "codeUnsearchable": {
+      "title": "Pianificazione in pausa: Motir non riesce ancora a cercare nel tuo codice",
+      "introWalk": "Pianificare senza cercare nel codice significherebbe andare a tentoni, quindi Motir si è fermato qui. Sistema il repository qui sotto, poi continua.",
+      "introConversation": "Pianificare senza cercare nel codice significherebbe andare a tentoni, quindi non è stato pianificato nulla. Sistema il repository qui sotto, poi invia un messaggio per riprovare.",
+      "listLabel": "Repository in cui non si può cercare",
+      "resume": "Ricontrolla e continua",
+      "stillBlocked": "Controllato poco fa: in {repo} non si può ancora cercare. Ora risulta {state}.",
+      "keptRecord": "Mantenuto come proposto finora — {count, plural, one {# elemento di lavoro} other {# elementi di lavoro}}. Non viene aggiunto altro finché la pianificazione non riprende.",
+      "states": {
+        "never_indexed": {
+          "chip": "Mai indicizzato",
+          "line": "Non è ancora stato indicizzato nulla."
+        },
+        "indexing": {
+          "chip": "Indicizzazione in corso",
+          "line": "Il primo indice è ancora in costruzione, quindi non c’è ancora codice in cui cercare."
+        },
+        "refresh_failing": {
+          "chip": "L’indicizzazione continua a fallire",
+          "line": "Gli ultimi tentativi di indicizzazione non sono riusciti."
+        },
+        "paused": {
+          "chip": "Indicizzazione in pausa",
+          "line": "L’indicizzazione è in pausa per questo progetto."
+        },
+        "provider_unsupported": {
+          "chip": "Host non supportato",
+          "line": "Motir non può indicizzare i repository su questo host."
+        },
+        "unavailable": {
+          "chip": "Ricerca nel codice non disponibile",
+          "line": "Poco fa non è stato possibile leggere il codice."
+        }
+      }
     },
     "targets": {
       "sectionLabel": "Elementi di lavoro",

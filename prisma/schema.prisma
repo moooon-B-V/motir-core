@@ -9512,6 +9512,11 @@ model PlanChangeTurn {
   /// every other turn, role and row written before the column existed (no
   /// back-fill): a null reads exactly as the turn always did.
   codeUnreadable        PlanChangeTurnOutage?  @map("code_unreadable")
+  /// The target repositories whose code cannot be SEARCHED, as `[{ repoRef, state }]`
+  /// (MOTIR-9167): written on the `assistant` turn of a conversation that stopped for
+  /// that reason before any planning job opened, so the banner survives a reload.
+  /// Null on every other turn and on rows written before the column existed.
+  codeUnsearchable      Json?                  @map("code_unsearchable")
   /// The exact text an `assistant` ANSWER offered to FORWARD to the running
   /// planner (MOTIR-7996) — the offered `user` turn's own body, in the person's
   /// words. Set only by a mid-run ask settle whose result carried `offerForward`;
@@ -9810,9 +9815,13 @@ model PlanChangeRunPause {
   sessionId           String    @map("session_id")
   /// The planning job whose walk is paused — an OPAQUE job token, not an FK.
   jobId               String    @map("job_id")
-  /// `replan` | `unclear` — CHECK-constrained in the migration (text, like
+  /// `replan` | `unclear` | `code_unsearchable` — CHECK-constrained in the migration (text, like
   /// `PlanRevision.changeKind`: a new kind is then a code change).
   kind                String
+  /// The target repositories whose code cannot be SEARCHED and why, as
+  /// `[{ repoRef, state }]` (MOTIR-9167) — set exactly when `kind = 'code_unsearchable'`.
+  /// Shown to the person, who resumes the walk once the code can be searched.
+  unsearchableRepos   Json?     @map("unsearchable_repos")
   /// The mailbox entry ids of the change turns this pause is about, in the order
   /// the planner named them. Bodies are read back from core's own rows.
   changeTurnIds       String[]  @default([]) @map("change_turn_ids")
@@ -9823,7 +9832,7 @@ model PlanChangeRunPause {
   question            String?   @db.Text
   idempotencyKey      String    @map("idempotency_key")
   createdAt           DateTime  @default(now()) @map("created_at")
-  /// `start_over` | `apply` (replan) or `replied` (unclear); null while open.
+  /// `start_over` | `apply` (replan), `replied` (unclear) or `resumed` (code_unsearchable); null while open.
   answer              String?
   answeredAt          DateTime? @map("answered_at")
   answeredById        String?   @map("answered_by_id")

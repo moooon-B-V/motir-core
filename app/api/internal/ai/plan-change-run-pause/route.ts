@@ -5,10 +5,11 @@ import { mapPlanChangeError } from '@/app/api/ai/plan-change/_errors';
 import { planChangeRunPauseService } from '@/lib/services/planChangeRunPauseService';
 
 // POST /api/internal/ai/plan-change-run-pause
-//   { jobId, kind, changeTurnIds, reason?, question?, idempotencyKey }
+//   { jobId, kind, changeTurnIds, reason?, question?, repos?, idempotencyKey }
 // (Story MOTIR-7990 · MOTIR-8007) — the RUNNING planning job records ONE open
 // PAUSE for its conversation: `kind: 'replan'` (a START OVER offer, with a one-line
-// `reason`) or `kind: 'unclear'` (a question). The walk is paused while its job keeps
+// `reason`), `kind: 'unclear'` (a question) or `kind: 'code_unsearchable'` (a target
+// repository's code cannot be searched; `repos` names each one and why, MOTIR-9167). The walk is paused while its job keeps
 // running; the person's answer rides the shipped mailbox back (`planChangeRunPauseService`).
 //
 // Answers `{ outcome: 'recorded' | 'already_open', pause }`: the same key again is
@@ -45,9 +46,12 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
   const kind = bag['kind'];
-  if (kind !== 'replan' && kind !== 'unclear') {
+  if (kind !== 'replan' && kind !== 'unclear' && kind !== 'code_unsearchable') {
     return NextResponse.json(
-      { code: 'PLAN_CHANGE_RUN_PAUSE_SHAPE', error: '`kind` must be `replan` or `unclear`.' },
+      {
+        code: 'PLAN_CHANGE_RUN_PAUSE_SHAPE',
+        error: '`kind` must be `replan`, `unclear` or `code_unsearchable`.',
+      },
       { status: 400 },
     );
   }
@@ -77,6 +81,7 @@ export async function POST(req: Request): Promise<Response> {
         changeTurnIds: rawIds as string[],
         reason: typeof bag['reason'] === 'string' ? bag['reason'] : null,
         question: typeof bag['question'] === 'string' ? bag['question'] : null,
+        repos: bag['repos'],
         idempotencyKey,
       },
       { userId: auth.ctx.userId, workspaceId: auth.ctx.workspaceId, projectId: auth.projectId },
