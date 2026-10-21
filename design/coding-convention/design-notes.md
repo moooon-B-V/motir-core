@@ -1133,3 +1133,68 @@ Retired with the launcher: `bannerDerivedTitle` and `bannerDerivedBody` (the byl
 | comparison column                 | box                    | `--el-border`, added line `--el-success-surface`                                                          | `--radius-card`, `--spacing-card-padding-12` |
 
 The conflict is a warning, not a danger: nothing is lost (the person's text is on screen), so the danger hue is not used and `--el-danger-text` appears nowhere. Every secondary line is `--el-text-secondary`, which clears AA on `--el-surface-soft`, `--el-warning-surface` and the card; no `--el-text-muted` or `--el-text-faint` carries text. No colour is invented and no panel draws a Plan with AI launcher.
+
+## The per-repository cards as an accordion — one card open at a time (MOTIR-9193)
+
+**Design system (step 1 verdict).** Read `package.json` (`"@motir/design-system": "workspace:*"`) and `app/globals.css` (`@import '@motir/design-system/theme.css'`): both checks hold, so the project is **on Motir Design**. The workspace package is version `0.15.1`. The mock inlines that `theme.css` subset at the app's own default axes, composed from the shipped `Card`, `Pill`, `Button` and `Textarea` markup. No part is missing from the package, so nothing is proposed as an addition and nothing is product-local beyond layout glue.
+
+**Amends** the section _The editable convention card — Edit, Save, conflict, a derived update waiting (MOTIR-9081)_ (its Panel 1 read state and Panel 2 edit state) and the shipped `convention--editable.mock.html`. **The delta mock is `design/coding-convention/convention--accordion.mock.html`**, seven panels. The older mocks are records and are not edited. It amends `ConventionPanel.tsx`, which stacks one open `RepoConventionCard` per repository. Motir has seven repositories and an edited convention runs to about 20 KB, so the page is a long scroll, and on 2026-10-21 motir-core's text was saved into motir-gateway's card.
+
+**The rule.** Every card is collapsible and **at most one is expanded at a time**: expanding one collapses the one that was open. Collapsing the open card leaves none open.
+
+### The panels
+
+| #   | state                  | what is drawn                                                                                                                                  |
+| --- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Collapsed              | Seven header rows, no body open. Repositories are told apart by name, version and state alone                                                  |
+| 2   | Page load              | No `?repo=`: the first repository is expanded                                                                                                  |
+| 3   | The transition         | Before and after: pressing motir-gateway's header collapses motir-core's card, and focus stays on the pressed header                           |
+| 4   | Edit                   | The expanded card in Edit, naming its repository four times, with the accent border and `Save to motir-core`                                   |
+| 5   | Draft kept             | Another card was expanded while one was in Edit: the first collapses to a header carrying the **Unsaved draft** marker                         |
+| 6   | Narrow viewport        | 360 px: the header wraps, nothing is truncated                                                                                                 |
+| 7   | Keyboard and a11y      | Structure, keys, focus, accessible name, announcements                                                                                         |
+
+### The header row (always visible)
+
+One `<button>` spans the row: chevron · repository `owner/name` (the name in `--el-text-strong`, the owner in `--el-text-secondary`, so the part that differs is the part that reads) · version pill · byline · markers.
+
+| element | copy | role |
+| --- | --- | --- |
+| version pill, derived | `v{version} · derived` | `Pill`, tint `--el-tint-lavender`, ink `--el-text-strong` |
+| version pill, edited | `v{version} · edited` | `Pill`, tint `--el-tint-sky`, ink `--el-text-strong` |
+| no convention | `No convention yet` | `Pill`, `--el-chip-bg`, ink `--el-text-secondary` |
+| byline | `Derived from the code` · `Edited by {name} · {date}` | `--el-text-secondary` |
+| pending-derived marker | `Newer derived waiting` (new key `convention.markerPending`; zh `有新的提取版本待处理`) | `Pill`, tint `--el-tint-yellow`, ink `--el-text-strong`; shown only when a parked derived version waits |
+| draft marker | `Unsaved draft` (new key `convention.markerDraft`; zh `有未保存的草稿`) | `Pill`, tint `--el-tint-peach`, ink `--el-text-strong`; shown only on a collapsed card holding a draft |
+| editing marker | `Editing` (new key `convention.markerEditing`; zh `编辑中`) | same peach pill, on the expanded card in Edit |
+
+The **Edit** button is not inside the toggle button (no nested controls). It sits at the row's end, only on the expanded card, as in the shipped card. The header, chevron and markers all come from keys already in `codeHealth.convention.*` except the three above.
+
+### Decisions
+
+- **Default on load.** With no `?repo=` the **first repository is expanded**, so the page never opens on seven closed bars. `?repo=<owner/name>` expands that repository; an unknown value falls back to the first.
+- **Deep link.** The expanded card is deep-linkable through `?repo=<owner/name>`. A header press writes it with `shallowPush` (the body is already in the browser, so the server need not answer; the history entry is kept so Back returns to the previous card). Collapsing the open card removes the parameter, and a reload then loads as the default again.
+- **A card in Edit with unsaved text when another is expanded: the draft is KEPT.** The collapse never drops text and nothing asks or blocks. The editor stays mounted in state; the collapsed header gains **Unsaved draft**; re-expanding returns to Edit with the same text. Only **Cancel** discards a draft and a successful **Save** clears it. One draft per repository may coexist, each marked. Leaving the page with any draft present raises the browser's unsaved-changes prompt. A confirm was rejected as friction on a non-destructive action; blocking was rejected because it traps a person in a 20 KB editor while they look at another repository.
+- **Edit names its repository.** (1) A `--el-tint-sky` banner “You are editing **motir-co/motir-core**”, in the serif display size; (2) the field label carries the full `owner/name`; (3) the helper reads “Saving creates v8 of motir-co/motir-core”; (4) the primary button is **Save to motir-core**. The card takes a 2px `--el-accent` border. Save exists only in the expanded card, so a save can only go to the repository whose banner is on screen. New keys: `convention.editingBanner`, `convention.editFieldLabelRepo`, `convention.saveCreatesRepo`, `convention.saveTo`.
+- **The transition.** Both updates land together; heights animate over `--transition-duration` (150 ms) and not at all under `prefers-reduced-motion`. The pressed header keeps its viewport offset, so the page does not jump when the card above it shrinks.
+
+### Keyboard and screen reader
+
+Each card is an `h3` containing one `<button aria-expanded aria-controls>`; the body is a `role="region"` labelled by that button. **Enter** and **Space** activate; **Tab** walks the headers and, inside the open card, Edit and the editor controls. **Focus stays on the header that was activated**, on expand and on collapse, and does not move into the body or to a sibling. The accessible name reads repository, version and state, byline, then markers. No live region is added.
+
+### Per-element roles
+
+| element | primitive | colour | shape |
+| --- | --- | --- | --- |
+| card | `Card` | `--el-card`, `--el-border`; open `--el-border-strong`; Edit `--el-accent` | `--radius-card` |
+| header button | `<button>` | transparent; focus ring `--focus-ring-color` | `--radius-card`, `--spacing-card-padding-12` |
+| chevron | glyph | `--el-text-secondary` | — |
+| markers and pills | `Pill` | tints above, ink `--el-text-strong` | `--radius-badge`, `--spacing-chip-*` |
+| edit banner | callout | fill `--el-tint-sky`, ink `--el-text-strong` | `--radius-card` |
+| Save · Cancel · Edit | `Button` | as the shipped card | `--radius-btn`, `--height-btn-sm` |
+
+Every secondary line is `--el-text-secondary`, which clears AA on the card, the soft surface and the chip fill in both themes. No `--el-text-muted`, `--el-text-faint` or `--el-danger-text`, no raw colour, and no raw radius.
+
+### Scope
+
+Design only. The audit half of `/code` and the convention's content are untouched. The card asks for light and dark PNGs; this repository's rule (`CLAUDE.md`, _Design assets_) retired the PNG export and refuses a new one, so none is committed. The mock carries a light/dark toggle instead.

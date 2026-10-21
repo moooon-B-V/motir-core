@@ -160,6 +160,7 @@ export function CodeHealthClient({
   initialSelectedRepoKey,
   initialSelectedAudit,
   initialConventions,
+  canConfigure = true,
 }: {
   projectId: string;
   /** The connected repos this page would audit (`owner/name`), resolved by the
@@ -174,6 +175,11 @@ export function CodeHealthClient({
   /** The selected repo's report, read at the FULL findings page size. */
   initialSelectedAudit: CodeAuditSurfaceDTO | null;
   initialConventions: ConventionSurfaceDTO[];
+  /** Does the reader hold `ai:configure` (MOTIR-9173)? The page resolves it on
+   * the server. False renders the audit and the convention READ-ONLY: the
+   * editor, the re-audit buttons and the deepen card are hidden, and the write
+   * routes keep refusing the caller regardless. */
+  canConfigure?: boolean;
 }) {
   const t = useTranslations('codeHealth');
   const [tab, setTab] = useState<Tab>('audit');
@@ -674,7 +680,7 @@ export function CodeHealthClient({
             // ONE POST per press, whatever the poll does — the same invariant the
             // whole-set trigger holds, extended rather than bypassed: both go
             // through `reaudit`, which owns the `reauditing || resuming` guard.
-            onAuditRepos={(repoKeys) => void reaudit(repoKeys)}
+            onAuditRepos={canConfigure ? (repoKeys) => void reaudit(repoKeys) : undefined}
             busy={reauditing || resuming}
           />
           <AuditPanel
@@ -711,6 +717,7 @@ export function CodeHealthClient({
               setPollExhausted(false);
               void reload();
             }}
+            canConfigure={canConfigure}
             deepenDismissed={deepenDismissed}
             onDeepenDismiss={() => writeDismissed(projectId, true)}
             onDeepenReopen={() => writeDismissed(projectId, false)}
@@ -719,6 +726,7 @@ export function CodeHealthClient({
       ) : (
         <ConventionPanel
           conventions={conventions}
+          canEdit={canConfigure}
           // A save re-reads the repository's surface; replace that repo's entry in
           // the island's own state (page-state contract, case 3).
           onSaved={(saved) =>

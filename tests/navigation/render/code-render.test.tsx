@@ -32,6 +32,7 @@ const { getAudit, getConvention } = vi.hoisted(() => ({
   getAudit: vi.fn(),
   getConvention: vi.fn(),
 }));
+const { getPermissions } = vi.hoisted(() => ({ getPermissions: vi.fn() }));
 const { redirect } = vi.hoisted(() => ({
   redirect: vi.fn((path: string) => {
     throw new Error(`REDIRECT:${path}`);
@@ -48,6 +49,9 @@ vi.mock('next-intl/server', async () => ({
 vi.mock('@/lib/auth', () => ({ getSession }));
 vi.mock('@/lib/projects', () => ({ getActiveProject }));
 vi.mock('@/lib/services/codeContextService', () => ({ resolveCodeContextState }));
+vi.mock('@/lib/services/projectAccessService', () => ({
+  projectAccessService: { getPermissions },
+}));
 vi.mock('@/lib/services/aiConventionService', () => ({
   aiConventionService: { getAudit, getConvention },
 }));
@@ -58,7 +62,7 @@ import { CodeSections } from '@/app/(authed)/code/_components/CodeSections';
 import { CodeHealthClient } from '@/app/(authed)/code/_components/CodeHealthClient';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { MotirAiUnavailableError } from '@/lib/ai/errors';
-import { NotProjectAdminError } from '@/lib/projects/errors';
+import { NotProjectAdminError, PermissionDeniedError } from '@/lib/projects/errors';
 import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 const PROJECT = {
@@ -100,6 +104,7 @@ beforeEach(() => {
   });
   getAudit.mockResolvedValue({ audit: null });
   getConvention.mockResolvedValue({ convention: null });
+  getPermissions.mockResolvedValue(new Set(['ai:plan', 'ai:configure']));
 });
 
 afterEach(() => {
@@ -169,6 +174,31 @@ describe('/code — the page’s own branches', () => {
     // \u2026and Repositories is rendered anyway, on the same page load. This is the
     // assertion that fails if the gate ever moves back up to the page.
     expect(findFirst(tree, CodeRepositories)).toBeDefined();
+  });
+
+  it('shows a role without the Health READ key the admin-only state, not an error page (MOTIR-9173)', async () => {
+    // `assertPermission` throws `PermissionDeniedError` for every key but
+    // `project:administer`, and it is not related to `NotProjectAdminError`. The
+    // page used to rethrow it, so the whole room failed for any such role.
+    getPermissions.mockResolvedValue(new Set());
+    getAudit.mockRejectedValue(new PermissionDeniedError('p1', 'ai:plan'));
+    getConvention.mockRejectedValue(new PermissionDeniedError('p1', 'ai:plan'));
+
+    const tree = await renderAt();
+
+    expect(findFirst(tree, CodeHealthClient)).toBeUndefined();
+    expect(textOf(tree)).toContain('adminOnlyTitle');
+    expect(findFirst(tree, CodeRepositories)).toBeDefined();
+  });
+
+  it('renders Health READ-ONLY for a member and writable for a holder of ai:configure (MOTIR-9173)', async () => {
+    getPermissions.mockResolvedValue(new Set(['ai:plan']));
+    const member = findFirst(await renderAt(), CodeHealthClient)!;
+    expect(member.props['canConfigure']).toBe(false);
+
+    getPermissions.mockResolvedValue(new Set(['ai:plan', 'ai:configure']));
+    const admin = findFirst(await renderAt(), CodeHealthClient)!;
+    expect(admin.props['canConfigure']).toBe(true);
   });
 
   it('contains an unreachable motir-ai PER ROW, and still renders the island', async () => {

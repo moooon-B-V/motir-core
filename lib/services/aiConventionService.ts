@@ -309,17 +309,15 @@ export const aiConventionService = {
     ctx: AccessActorContext,
     opts: { repoKey?: string; findingsOffset?: number; findingsLimit?: number } = {},
   ): Promise<CodeAuditSurfaceDTO> {
-    // `ai:configure`, NOT `ai:plan` (Story MOTIR-2291 · Subtask MOTIR-2362).
-    // The inventory mapped the four coding-convention operations to `ai:plan`,
-    // which the decision record puts at `member` — applying that mapping would
-    // have WIDENED admin-only operations to every member, in a story where every
-    // other row narrows. `docs/decisions/member-facing-permissions.md` §4 resolves
-    // it as a MAPPING fix: re-running a convention audit is AI CONFIGURATION
-    // wearing a usage-shaped URL, the same class as the AI settings MOTIR-2300
-    // already put behind `ai:configure`. `assertCanManage` was
-    // `assertPermission(…, 'project:administer')` and `admin` holds
-    // `ai:configure`, so NO actor's answer changes.
-    await projectAccessService.assertPermission(projectId, ctx, 'ai:configure');
+    // THE READ IS `ai:plan`; EVERY WRITE STAYS `ai:configure` (MOTIR-9173).
+    // MOTIR-2362 mapped these reads to `ai:configure` along with the writes, and
+    // that took `/code`'s Health section away from every member — worse, the
+    // refusal is a `PermissionDeniedError` the page did not catch, so the whole
+    // room failed. The owner decided (2026-10-21) that members read the audit and
+    // the convention, read-only. `ai:plan` is the key `getPlanningCodeHealth`
+    // already gates the same data on for the MCP door, so the UI read now matches
+    // it; `saveConvention` and `reaudit` below keep `ai:configure`.
+    await projectAccessService.assertPermission(projectId, ctx, 'ai:plan');
     const raw = await getCodeAudit({
       coreWorkspaceId: ctx.workspaceId,
       coreProjectId: projectId,
@@ -338,17 +336,8 @@ export const aiConventionService = {
     ctx: AccessActorContext,
     opts: { repoKey?: string; versionsCursor?: string } = {},
   ): Promise<ConventionSurfaceDTO> {
-    // `ai:configure`, NOT `ai:plan` (Story MOTIR-2291 · Subtask MOTIR-2362).
-    // The inventory mapped the four coding-convention operations to `ai:plan`,
-    // which the decision record puts at `member` — applying that mapping would
-    // have WIDENED admin-only operations to every member, in a story where every
-    // other row narrows. `docs/decisions/member-facing-permissions.md` §4 resolves
-    // it as a MAPPING fix: re-running a convention audit is AI CONFIGURATION
-    // wearing a usage-shaped URL, the same class as the AI settings MOTIR-2300
-    // already put behind `ai:configure`. `assertCanManage` was
-    // `assertPermission(…, 'project:administer')` and `admin` holds
-    // `ai:configure`, so NO actor's answer changes.
-    await projectAccessService.assertPermission(projectId, ctx, 'ai:configure');
+    // `ai:plan`, the same read key as `getAudit` above (MOTIR-9173).
+    await projectAccessService.assertPermission(projectId, ctx, 'ai:plan');
     const raw = await getConvention({
       coreWorkspaceId: ctx.workspaceId,
       coreProjectId: projectId,
@@ -360,7 +349,7 @@ export const aiConventionService = {
 
   // A person's save of one repository's convention (MOTIR-9082): a NEW version,
   // `edited`, written by motir-ai (`PUT /v1/convention`, MOTIR-9080). Gated on
-  // `ai:configure` exactly as the read is. `baseVersion` is the version the editor
+  // `ai:configure`, which the reads no longer share (MOTIR-9173). `baseVersion` is the version the editor
   // loaded (0 for a repository with none); a stale one is refused by motir-ai and
   // surfaces here as `ConventionVersionConflictError` carrying the version that
   // won, so the editor can offer it. Answers the re-read surface, so the card
@@ -459,7 +448,7 @@ export const aiConventionService = {
   // the door, for the reason `getPlanningCodeHealth` above gives: the hosted
   // planner already shows this text to every `ai:plan` holder, and
   // `CLI_TOKEN_GRANT` holds it, so every `motir run` token reaches it without the
-  // grant widening. The `/code` page's reads stay on `ai:configure`.
+  // grant widening. The `/code` page's reads share this key (MOTIR-9173).
   //
   // `repo` resolves against the project's realized set the way `read_file`'s does
   // (`matchRepoInSet`); a repository outside it answers with the set. Every

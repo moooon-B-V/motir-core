@@ -621,21 +621,34 @@ function frameField(data: unknown, key: string): unknown {
     : undefined;
 }
 
+/** Consecutive lost connections (no frame between them) the run tail rides out before it
+ *  says the stream could not be reached — about two minutes of backoff (MOTIR-9186). */
+const MAX_LOST_RESUBSCRIBES = 12;
+
 /** Wait before subscribing again to a job whose stream closed while it still ran:
  *  1s, doubling, at most 15s — a connection that keeps dropping is not hammered.
- *  Resolves early on abort; the caller checks `aborted` before it waits. */
+ *  Resolves early on abort, and when the page comes back to the foreground or the
+ *  network returns (MOTIR-9186) — the moment a locked screen unlocks is exactly
+ *  when waiting out the backoff helps nobody. The caller checks `aborted` before
+ *  it waits. */
 function pauseBeforeResubscribe(attempt: number, signal: AbortSignal): Promise<void> {
   const ms = Math.min(1000 * 2 ** attempt, 15_000);
   return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      signal.removeEventListener('abort', onAbort);
-      resolve();
-    }, ms);
-    const onAbort = () => {
+    const done = () => {
       clearTimeout(timer);
+      signal.removeEventListener('abort', done);
+      if (typeof window !== 'undefined') window.removeEventListener('online', done);
+      if (typeof document !== 'undefined')
+        document.removeEventListener('visibilitychange', onVisible);
       resolve();
     };
-    signal.addEventListener('abort', onAbort, { once: true });
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') done();
+    };
+    const timer = setTimeout(done, ms);
+    signal.addEventListener('abort', done, { once: true });
+    if (typeof window !== 'undefined') window.addEventListener('online', done, { once: true });
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
   });
 }
 
@@ -1757,6 +1770,7 @@ export function usePlanChangeConversation({
             onError: (code: string | null) => void,
             onDone: () => void,
             onFrame: (event: string, data: unknown) => void,
+            onLost: () => void,
           ) =>
             streamContextualPlanJob(
               anchor.anchorId,
@@ -1765,18 +1779,29 @@ export function usePlanChangeConversation({
               onError,
               onDone,
               onFrame,
+              onLost,
             )
         : (
             onError: (code: string | null) => void,
             onDone: () => void,
             onFrame: (event: string, data: unknown) => void,
-          ) => streamAugmentJob(jobId, controller.signal, onError, onDone, onFrame);
+            onLost: () => void,
+          ) => streamAugmentJob(jobId, controller.signal, onError, onDone, onFrame, onLost);
       // The JOB's own status, as its `status` frames report it (MOTIR-7985). The
       // stream ending says only that a connection closed; this says whether the
       // run did, and how. `null` when no status frame arrived at all.
       let jobStatus: string | null = null;
       let lastSeq = 0;
+      // ⚠️ THE CONNECTION THREW (MOTIR-9186): a fetch or read rejected under a run —
+      // a locked screen, a sleeping laptop. That is no word from the server, so it
+      // is not a failure: the loop subscribes again and the job's own status frames
+      // say how it went.
+      let lost = false;
+      let lostInARow = 0;
       for (let attempt = 0; ; attempt++) {
+        lost = false;
+        const seenBefore = lastSeq;
+        const statusBefore = jobStatus;
         await stream(
           (code) => {
             failed = true;
@@ -1826,14 +1851,38 @@ export function usePlanChangeConversation({
               return next === s ? s : { ...s, ...next };
             });
           },
+          () => {
+            lost = true;
+          },
         );
         if (failed || controller.signal.aborted || !mountedRef.current) break;
+        // Progress between two losses means the connection works; only a stream that
+        // cannot be reached at all runs the count out.
+        lostInARow =
+          lost && lastSeq === seenBefore && jobStatus === statusBefore ? lostInARow + 1 : 0;
+        if (lost && lostInARow >= MAX_LOST_RESUBSCRIBES) {
+          failed = true;
+          if (mountedRef.current) {
+            setState((s) => ({
+              ...s,
+              phase: s.review ? 'review' : 'idle',
+              progress: null,
+              liveReview: null,
+              errorCode: 'FAILED',
+              outOfCredits: false,
+            }));
+          }
+          break;
+        }
         // ⚠️ THE STREAM ENDED, THE JOB DID NOT (MOTIR-7985). The relay follows the
         // job past motir-ai's stream window itself, so this is a connection that
         // closed under a run still going — a dropped network, a restarted
         // server. Settling here would tell the person "Nothing came back" about a
         // run that is still working, so the rail subscribes again instead.
-        if (jobStatus === null || TERMINAL_JOB_STATUSES.has(jobStatus)) break;
+        // A LOST connection with no terminal status seen resubscribes even when no
+        // status frame arrived yet: the job's state is simply unknown, not absent.
+        if (!lost && jobStatus === null) break;
+        if (jobStatus !== null && TERMINAL_JOB_STATUSES.has(jobStatus)) break;
         await pauseBeforeResubscribe(attempt, controller.signal);
         if (controller.signal.aborted || !mountedRef.current) break;
       }

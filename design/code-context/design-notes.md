@@ -172,6 +172,14 @@ nothing to build, because `/code-health` **already** renders an admin-only empty
 refusing — panel H2 composes that state rather than inventing one. Repositories is browse-reachable;
 Health is admin-only _inside the page_.
 
+> **AMENDMENT (MOTIR-9173, owner's decision 2026-10-21) — Health is READ by members, WRITTEN by admins.**
+> The paragraph above drew Health as admin-only _inside the page_. It no longer is: the audit and the
+> coding convention are read with `ai:plan` (the member key, the one `get_code_health` already used), so a
+> member sees the whole page, Health included, **read-only** — no convention editor, no re-audit or
+> deepen control, no "run first audit" action. Every write (`saveConvention`, `reaudit`) stays
+> `ai:configure` and the write routes keep refusing a member. Panel H2's admin-only empty state now
+> shows only for a role that holds neither read key (`project:browse` without `ai:plan`).
+
 **The test this has to pass, and panel H2 is drawn to show it passing: nothing a member could do
 before is gone.**
 

@@ -75,6 +75,9 @@ export async function streamAugmentJob(
    *  / `pass` / `planned` / `validated`), which the conversational rail narrates
    *  live while the delta is computed. Optional — the dock consumers ignore them. */
   onFrame?: (event: string, data: unknown) => void,
+  /** The CONNECTION was lost (a thrown fetch / read), not the job (MOTIR-9186). See
+   *  {@link consumeStream}. */
+  onLost?: () => void,
 ): Promise<void> {
   return consumeStream(
     `/api/ai/augment/${encodeURIComponent(jobId)}/stream`,
@@ -82,6 +85,7 @@ export async function streamAugmentJob(
     onError,
     onDone,
     onFrame,
+    onLost,
   );
 }
 
@@ -119,6 +123,7 @@ export async function streamContextualPlanJob(
   onError: (code: string | null) => void,
   onDone: () => void,
   onFrame?: (event: string, data: unknown) => void,
+  onLost?: () => void,
 ): Promise<void> {
   return consumeStream(
     `/api/work-items/${encodeURIComponent(anchorId)}/ai/plan/${encodeURIComponent(jobId)}/stream`,
@@ -126,6 +131,7 @@ export async function streamContextualPlanJob(
     onError,
     onDone,
     onFrame,
+    onLost,
   );
 }
 
@@ -134,6 +140,13 @@ export async function streamContextualPlanJob(
  * (MOTIR-1750) so the sprint-planning client subscribes through it instead of
  * introducing a second streaming implementation — same frame parsing, same
  * `error` / `done` terminal contract, same abort semantics.
+ *
+ * ⚠️ A LOST CONNECTION IS NOT A FAILED JOB (MOTIR-9186). A `fetch` or `reader.read()`
+ * that THROWS (a screen lock, a sleeping laptop, a dropped network) says nothing
+ * about the job, and `onError` is the SERVER's word that it failed. A caller that
+ * passes `onLost` hears the transport failure there and can ask the server what
+ * became of the job; a caller that does not keeps the shipped behaviour, a lost
+ * connection reported through `onError(null)`.
  */
 export async function consumeStream(
   url: string,
@@ -141,6 +154,7 @@ export async function consumeStream(
   onError: (code: string | null) => void,
   onDone: () => void,
   onFrame?: (event: string, data: unknown) => void,
+  onLost?: () => void,
 ): Promise<void> {
   try {
     const res = await fetch(url, {
@@ -176,7 +190,8 @@ export async function consumeStream(
     onDone();
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') return;
-    onError(null);
+    if (onLost) onLost();
+    else onError(null);
   }
 }
 

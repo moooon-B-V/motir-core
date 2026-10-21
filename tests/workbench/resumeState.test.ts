@@ -153,7 +153,21 @@ describe('the derivation — one answer per case', () => {
     });
   });
 
-  it.each(['changes_requested', 'declined', 'overturned'] as const)(
+  it('a gate answered changes_requested is decided: the run is ready to resume (MOTIR-9185)', async () => {
+    const { parent, held } = await gatedStory();
+    await adminDb.approvalGate.update({
+      where: { id: held.id },
+      data: {
+        state: 'changes_requested',
+        decidedById: fx.ownerId,
+        decidedAt: new Date(),
+        noteMd: 'no',
+      },
+    });
+    expect((await recompute(parent.id)).resumeState).toBe('ready_to_resume');
+  });
+
+  it.each(['declined', 'overturned'] as const)(
     'a gate sent back (%s) stays waiting — a refusal releases nothing',
     async (state) => {
       const { parent, held } = await gatedStory();
