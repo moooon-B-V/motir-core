@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   ArrowUpRight,
   Bot,
+  Calculator,
   Check,
   ChevronRight,
   Clock,
@@ -39,6 +40,7 @@ import { searchLineFigures } from './searchFigures';
 import { agentLineFigures } from './agentFigures';
 import { fmt, fmtDate } from './billingFormat';
 import { DowngradeDialog, UpgradeDialog, type PlanNames } from './PlanChangeDialog';
+import { CalculatorView } from './CalculatorView';
 
 // The §4 free-tier scale caps the Motir (free) line draws — mirrors
 // `lib/billing/entitlements.ts` PM_ENTITLEMENTS.free (the locked ADR §4 numbers).
@@ -101,7 +103,7 @@ export interface BillingClientProps {
   memberCount: number;
 }
 
-type View = 'home' | 'plans' | 'seats';
+type View = 'home' | 'plans' | 'seats' | 'calculator';
 type LoadState = 'loading' | 'idle' | 'error' | 'forbidden';
 
 // The billing settings surface (Story 8.1.7 · design/billing panels 1–6, 8). A
@@ -118,6 +120,12 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
   const [data, setData] = useState<BillingStatusDTO | null>(null);
   const [state, setState] = useState<LoadState>('loading');
   const [view, setView] = useState<View>('home');
+  // ONE billing period for the page (MOTIR-8639): the plans view and the Calculator
+  // read and write this, so the two can never show different cadences.
+  const [cadence, setCadence] = useState<BillingCadence>('annual');
+  // The plan the Calculator's next step distinguishes on arrival — a marker for that
+  // arrival only, apart from the catalog's own `recommended` flag.
+  const [markedPlan, setMarkedPlan] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
   // The post-Checkout return banner (the webhook is the source of truth, so the
   // tier may still be settling — show a pending note until the refetch confirms).
@@ -315,7 +323,36 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
         <HomeView {...shared} goPlans={() => setView('plans')} goSeats={() => setView('seats')} />
       ) : null}
       {view === 'plans' ? (
-        <PlansView {...shared} orgId={orgId} reload={load} back={() => setView('home')} />
+        <PlansView
+          {...shared}
+          orgId={orgId}
+          reload={load}
+          back={() => {
+            setMarkedPlan(null);
+            setView('home');
+          }}
+          cadence={cadence}
+          setCadence={setCadence}
+          markedPlan={markedPlan}
+          openCalculator={() => {
+            setMarkedPlan(null);
+            setView('calculator');
+          }}
+        />
+      ) : null}
+      {view === 'calculator' ? (
+        <CalculatorView
+          orgId={orgId}
+          orgName={orgName}
+          data={data}
+          cadence={cadence}
+          onCadence={setCadence}
+          back={() => setView('plans')}
+          goToPlan={(planKey) => {
+            setMarkedPlan(planKey);
+            setView('plans');
+          }}
+        />
       ) : null}
       {view === 'seats' ? <SeatsView {...shared} back={() => setView('home')} /> : null}
     </div>
@@ -1486,14 +1523,24 @@ function PlansView({
   back,
   orgId,
   reload,
+  cadence,
+  setCadence,
+  markedPlan,
+  openCalculator,
 }: SharedViewProps & {
   back: () => void;
   orgId: string;
   /** Re-read the billing status — after a change of plan (MOTIR-8399). */
   reload: () => Promise<void>;
+  /** The page's one billing period, owned by BillingClient (MOTIR-8639). */
+  cadence: BillingCadence;
+  setCadence: (cadence: BillingCadence) => void;
+  /** The plan the Calculator sent the owner to, distinguished for this arrival. */
+  markedPlan: string | null;
+  /** Open the Calculator view. */
+  openCalculator: () => void;
 }) {
   const locale = useLocale();
-  const [cadence, setCadence] = useState<BillingCadence>('annual');
   // The plan-change dialog open, if any (MOTIR-8399). Mounted only while open, so
   // each opening prices the change afresh.
   const [change, setChange] = useState<{ kind: 'upgrade' | 'downgrade'; planKey: string } | null>(
@@ -1592,6 +1639,16 @@ function PlansView({
         <p className="max-w-prose font-sans text-sm text-(--el-text-muted)">
           {t('plans.chooseSub')}
         </p>
+        <div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={openCalculator}
+            leftIcon={<Calculator className="h-4 w-4" />}
+          >
+            {t('calculator.open')}
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">
@@ -1642,6 +1699,7 @@ function PlansView({
             currentPool={currentPool}
             pendingDowngrade={pendingDowngrade}
             planNames={planNames}
+            marked={markedPlan === plan.key}
             describedBy={planChangeLocked ? reasonId : undefined}
             openChange={(kind) => setChange({ kind, planKey: plan.key })}
             t={t}
@@ -1698,6 +1756,7 @@ function PlanCard({
   currentPool,
   pendingDowngrade,
   planNames,
+  marked,
   describedBy,
   openChange,
   t,
@@ -1718,6 +1777,8 @@ function PlanCard({
   /** The downgrade the live plan has scheduled, or null (MOTIR-8399). */
   pendingDowngrade: BillingStatusDTO['motirAi']['pendingDowngrade'];
   planNames: PlanNames;
+  /** The Calculator's next step ended here: distinguish this card for this arrival. */
+  marked: boolean;
   /** The visible reason the plan-change controls are disabled (a non-manager). */
   describedBy: string | undefined;
   openChange: (kind: 'upgrade' | 'downgrade') => void;
@@ -1726,7 +1787,7 @@ function PlanCard({
   const locale = useLocale();
   const isCurrent = currentKey === plan.key && status !== null && status !== 'canceled';
   const isRecommended = plan.recommended;
-  const accent = isCurrent || isRecommended;
+  const accent = isCurrent || isRecommended || marked;
   const accentIcon =
     plan.key === 'pro' ? (
       <Zap className="h-4 w-4 text-(--el-accent-on-surface)" aria-hidden />
@@ -1854,6 +1915,8 @@ function PlanCard({
 
   return (
     <div
+      data-marked={marked || undefined}
+      aria-current={marked ? 'true' : undefined}
       className="flex grow shrink-0 basis-0 snap-start flex-col gap-2 rounded-(--radius-card) border bg-(--el-surface) p-(--spacing-card-padding) shadow-(--shadow-card)"
       style={{
         minWidth: '10rem',
@@ -1872,6 +1935,11 @@ function PlanCard({
         ) : isRecommended ? (
           <Pill className="bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent">
             {t('plans.recommended')}
+          </Pill>
+        ) : null}
+        {marked ? (
+          <Pill className="bg-(--el-tint-sky) text-(--el-text-strong) border-transparent">
+            {t('calculator.marked')}
           </Pill>
         ) : null}
       </div>

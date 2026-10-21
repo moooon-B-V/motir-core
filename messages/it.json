@@ -6643,6 +6643,63 @@
       "rate": "${unit} ogni {credits} crediti · una tantum · imposte al checkout. I crediti sono una dotazione, non una valuta: questo è il prezzo che paghi a Stripe.",
       "gate": "Le ricariche sono disponibili con un piano AI a pagamento; la prova gratuita non può essere ricaricata (prima scegli un piano qui sopra). Solo proprietario e amministratori, come per ogni azione di fatturazione."
     },
+    "calculator": {
+      "breadcrumb": "Organizzazione · {org} · Calcolatore",
+      "title": "Stima il tuo utilizzo",
+      "subtitle": "Quanti elementi di lavoro completa la tua organizzazione in un mese e quali categorie di modelli usa. Motir stima i crediti e il piano adatto: il risultato è una stima e nulla qui modifica il tuo abbonamento.",
+      "back": "Torna ai piani",
+      "open": "Stima il tuo utilizzo",
+      "marked": "Corrisponde alla tua stima",
+      "inputs": {
+        "rangeLabel": "Elementi di lavoro completati al mese",
+        "rangeHelp": "Va bene anche un intervallo: il minimo e il massimo di un mese normale.",
+        "lowLabel": "Minimo",
+        "highLabel": "Massimo",
+        "categoriesLabel": "Categorie di modelli usate dalla tua organizzazione",
+        "categoriesHelp": "Scegline da una a tre. La stima viene divisa in parti uguali tra quelle che scegli e non scegli mai un modello: ogni categoria elenca come esempio i modelli che offre.",
+        "categoryExamples": "Ad esempio: {models}",
+        "submit": "Stima i crediti"
+      },
+      "categories": {
+        "failed": "Impossibile caricare le categorie di modelli.",
+        "empty": "Al momento questa categoria non ha alcun modello, quindi non può essere scelta."
+      },
+      "split": {
+        "one": "Una sola categoria, quindi tutta la stima ricade su {category}.",
+        "even": "Divisa in parti uguali tra {categories}: {shares} ciascuna."
+      },
+      "result": {
+        "idle": "Non viene stimato nulla finché non lo chiedi: inserisci l'intervallo, scegli da una a tre categorie, poi seleziona «Stima i crediti».",
+        "loading": "Calcolo dei tuoi crediti…",
+        "creditsLabel": "Crediti al mese",
+        "estimateCaveat": "Questa è una stima per l'intervallo inserito: i crediti arrivano come intervallo, mai come una cifra esatta.",
+        "perOrg": "Un piano per l'intera organizzazione: i suoi crediti sono condivisi da tutti.",
+        "planLabel": "Il piano adatto",
+        "topupLabel": "Ricarica stimata",
+        "topupOnly": "Una ricarica copre questo intervallo, quindi non serve cambiare piano.",
+        "largerPoolLabel": "Pool di crediti più grande",
+        "largerPlan": "La tua stima supera il nostro piano standard più grande, quindi la risposta è un pool di crediti più grande, dimensionato su misura: {plan}.",
+        "largerPlanEstimate": "Il pool e il suo prezzo sono calcolati dalla tua stima, quindi entrambi sono una stima: gli importi esatti vengono confermati prima di addebitare qualsiasi cosa.",
+        "aboveTopRung": "Supera i {ceiling} crediti al mese del piano standard più grande e al momento non è disponibile un pool più grande, quindi l'eccedenza viene coperta con ricariche di crediti.",
+        "upgradeNote": "Il passaggio a un piano superiore a metà periodo viene calcolato sui giorni rimanenti. La vista dei piani mostra l'importo prima di addebitare qualsiasi cosa.",
+        "goToPlan": "Vai a questo piano"
+      },
+      "seat": {
+        "included": "{count, plural, one {Ogni piano IA include # postazione Motir senza costi aggiuntivi.} other {Ogni piano IA include # postazioni Motir senza costi aggiuntivi.}}",
+        "feePerUserMonthly": "Postazioni aggiuntive: ${price} per utente al mese.",
+        "feePerUserAnnual": "Postazioni aggiuntive: ${price} per utente all'anno.",
+        "noPlan": "La postazione inclusa è fornita con un piano IA. Senza un piano IA, ogni postazione viene fatturata per utente."
+      },
+      "errors": {
+        "rangeEmpty": "Inserisci quanti elementi di lavoro completa la tua organizzazione al mese.",
+        "rangeInvalid": "Inserisci numeri interi: decimali e numeri negativi non sono accettati.",
+        "rangeOrder": "Il minimo deve essere uguale o inferiore al massimo.",
+        "categoryMissing": "Scegli almeno una categoria di modelli.",
+        "tooManyCategories": "Scegli al massimo tre categorie di modelli.",
+        "unavailable": "Al momento non possiamo fare una stima. Non è stato calcolato nulla: riprova.",
+        "failed": "La stima non è arrivata. Non è cambiato nulla: riprova."
+      }
+    },
     "seats": {
       "breadcrumb": "Organizzazione · {org} · Motir",
       "title": "Fai crescere Motir",

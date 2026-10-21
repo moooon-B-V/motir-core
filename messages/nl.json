@@ -6643,6 +6643,63 @@
       "rate": "${unit} per {credits} credits · eenmalig · btw bij het afrekenen. Credits zijn een toewijzing, geen valuta — dit is de prijs die je aan Stripe betaalt.",
       "gate": "Bijkopen kan met een betaald AI-abonnement; met de gratis proefperiode kun je niet bijkopen (kies eerst hierboven een abonnement). Alleen voor de eigenaar en beheerders, net als elke factureringsactie."
     },
+    "calculator": {
+      "breadcrumb": "Organisatie · {org} · Rekenhulp",
+      "title": "Schat je gebruik",
+      "subtitle": "Hoeveel werkitems je organisatie per maand afrondt en welke modelcategorieën ze gebruikt. Motir schat de credits en het abonnement dat past — het antwoord is een schatting en niets hier wijzigt je abonnement.",
+      "back": "Terug naar abonnementen",
+      "open": "Schat je gebruik",
+      "marked": "Past bij je schatting",
+      "inputs": {
+        "rangeLabel": "Afgeronde werkitems per maand",
+        "rangeHelp": "Een bereik is prima — de onder- en bovengrens van een normale maand.",
+        "lowLabel": "Laag",
+        "highLabel": "Hoog",
+        "categoriesLabel": "Modelcategorieën die je organisatie gebruikt",
+        "categoriesHelp": "Kies er één tot drie. De schatting wordt gelijk verdeeld over wat je kiest en je kiest nooit een model — elke categorie toont de modellen die erbij horen als voorbeeld.",
+        "categoryExamples": "Bijvoorbeeld: {models}",
+        "submit": "Credits schatten"
+      },
+      "categories": {
+        "failed": "We konden de modelcategorieën niet laden.",
+        "empty": "Op dit moment is er geen model in deze categorie, dus je kunt hem niet kiezen."
+      },
+      "split": {
+        "one": "Eén categorie, dus de hele schatting valt op {category}.",
+        "even": "Gelijk verdeeld over {categories} — {shares} per categorie."
+      },
+      "result": {
+        "idle": "Er wordt niets geschat totdat je erom vraagt: vul het bereik in, kies één tot drie categorieën en kies dan Credits schatten.",
+        "loading": "Je credits worden berekend…",
+        "creditsLabel": "Credits per maand",
+        "estimateCaveat": "Dit is een schatting voor het bereik dat je invulde: de credits komen terug als bereik, nooit als één exact getal.",
+        "perOrg": "Eén abonnement voor de hele organisatie — de credits worden door iedereen gedeeld.",
+        "planLabel": "Het abonnement dat past",
+        "topupLabel": "Geschatte bijkoop",
+        "topupOnly": "Met een bijkoop dek je dit bereik, dus je hoeft niet van abonnement te wisselen.",
+        "largerPoolLabel": "Grotere creditpool",
+        "largerPlan": "Je schatting ligt boven ons grootste gewone abonnement, dus het antwoord is een grotere creditpool op maat: {plan}.",
+        "largerPlanEstimate": "De pool en de prijs worden berekend uit je schatting, dus beide zijn een schatting — de exacte bedragen worden bevestigd voordat er iets in rekening wordt gebracht.",
+        "aboveTopRung": "Dat is meer dan de {ceiling} credits per maand van het grootste gewone abonnement en er is nu geen grotere pool beschikbaar, dus het teveel wordt gedekt met bijgekochte credits.",
+        "upgradeNote": "Halverwege de periode upgraden wordt berekend over de resterende dagen. De abonnementenweergave toont het bedrag voordat er iets in rekening wordt gebracht.",
+        "goToPlan": "Naar dit abonnement"
+      },
+      "seat": {
+        "included": "{count, plural, one {Elk AI-abonnement bevat # Motir-plek zonder extra kosten.} other {Elk AI-abonnement bevat # Motir-plekken zonder extra kosten.}}",
+        "feePerUserMonthly": "Extra plekken: ${price} per gebruiker per maand.",
+        "feePerUserAnnual": "Extra plekken: ${price} per gebruiker per jaar.",
+        "noPlan": "De inbegrepen plek hoort bij een AI-abonnement. Zonder AI-abonnement wordt elke plek per gebruiker gefactureerd."
+      },
+      "errors": {
+        "rangeEmpty": "Vul in hoeveel werkitems je organisatie per maand afrondt.",
+        "rangeInvalid": "Vul hele getallen in — decimalen en negatieve getallen worden niet geaccepteerd.",
+        "rangeOrder": "De ondergrens moet gelijk zijn aan of lager zijn dan de bovengrens.",
+        "categoryMissing": "Kies minstens één modelcategorie.",
+        "tooManyCategories": "Kies maximaal drie modelcategorieën.",
+        "unavailable": "We kunnen nu niets schatten. Er is niets berekend — probeer het opnieuw.",
+        "failed": "De schatting kwam niet terug. Er is niets gewijzigd — probeer het opnieuw."
+      }
+    },
     "seats": {
       "breadcrumb": "Organisatie · {org} · Motir",
       "title": "Motir opschalen",

@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { OrganizationClosingError, OrganizationNotFoundError } from '@/lib/organizations/errors';
-import { MotirAiError, MotirAiJobNotFoundError } from '@/lib/ai/errors';
+import {
+  CalculatorRequestRefusedError,
+  CalculatorUnavailableError,
+  MotirAiError,
+  MotirAiJobNotFoundError,
+} from '@/lib/ai/errors';
 import {
   BillingForbiddenError,
   BillingPlanChangeRefusedError,
@@ -83,6 +88,19 @@ export function mapBillingError(err: unknown): NextResponse | null {
     // The org has no Stripe customer yet (portal with nothing to open) — the
     // first-run empty state, not a boundary outage.
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+  }
+  // The Calculator (MOTIR-8637). Both are MotirAiErrors, so they precede the
+  // blanket 502 below: a refused body is the caller's (400, naming the field when
+  // known), and the engine's own unavailable answer means ask again (503). The
+  // surface selects its sentence by `code` and its field by `field`, never `error`.
+  if (err instanceof CalculatorRequestRefusedError) {
+    return NextResponse.json(
+      { code: err.code, ...(err.field ? { field: err.field } : {}), error: err.message },
+      { status: 400 },
+    );
+  }
+  if (err instanceof CalculatorUnavailableError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 503 });
   }
   if (err instanceof MotirAiError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 502 });

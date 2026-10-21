@@ -14,6 +14,13 @@ import { mintJobToken } from './jobToken';
 import { assertFlagOn, evaluateOrgFeatureFlags } from '@/lib/featureFlags/evaluate';
 import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
 import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
+import type {
+  CalculatorAnswerDTO,
+  CalculatorCategoriesDTO,
+  CalculatorEmptyCategoryDTO,
+  CalculatorEstimateDTO,
+  CalculatorEstimateRequestDTO,
+} from '@/lib/dto/billing';
 import {
   parseIndexAllowanceSummary,
   parseIndexAllowanceVerdict,
@@ -36,6 +43,8 @@ import {
   PlannerModelNotQualifiedError,
   PlannerModelUnreachableError,
   AI_JOB_ABANDONED_PROBLEM_CODE,
+  calculatorRefusalOf,
+  calculatorUnavailableOf,
   errorFromProblem,
   jobErrorFromProblem,
   planChangeRefusalOf,
@@ -818,6 +827,161 @@ export async function getBillingHistory(
     );
   }
   return { paymentMethod: body.paymentMethod, invoices: body.invoices };
+}
+
+// ── The public calculator (motir-ai MOTIR-8627 · core MOTIR-8637) ─────────────
+//
+// GET /v1/public/calculator/categories and POST /v1/public/calculator/estimate.
+// Both routes are public on motir-ai's side (no bearer needed); they go through
+// this seam anyway, so the calculator shares the boundary's one deadline and one
+// problem taxonomy (the service token rides along and is ignored there). The
+// request carries exactly the engine's three keys — no organization id, no
+// quantity — and nothing is cached: the engine owns the live model list.
+//
+// Each answer is SHAPE-VALIDATED, never cast: a body missing a field the view
+// reads is a boundary failure (MotirAiUnavailableError → 502), not a half-drawn
+// estimate. The engine's own answers are recognised first: its `unavailable`
+// detail prefix and its rate limit → CalculatorUnavailableError (ask again), its
+// `validation_error` → CalculatorRequestRefusedError.
+
+async function calculatorCall(path: string, init: RequestInit): Promise<unknown> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}${path}`, { ...init, headers: authHeaders(serviceToken) });
+  if (!res.ok) {
+    const problem = await readProblem(res);
+    throw (
+      calculatorUnavailableOf(problem) ?? calculatorRefusalOf(problem) ?? errorFromProblem(problem)
+    );
+  }
+  try {
+    return await res.json();
+  } catch {
+    throw malformedCalculatorBody(path);
+  }
+}
+
+function malformedCalculatorBody(path: string): MotirAiUnavailableError {
+  return new MotirAiUnavailableError(`motir-ai returned a malformed body from ${path}`);
+}
+
+const CALCULATOR_CATEGORIES_PATH = '/v1/public/calculator/categories';
+const CALCULATOR_ESTIMATE_PATH = '/v1/public/calculator/estimate';
+
+export async function getCalculatorCategories(): Promise<CalculatorCategoriesDTO> {
+  const body = await calculatorCall(CALCULATOR_CATEGORIES_PATH, { method: 'GET' });
+  if (!isCalculatorCategories(body)) throw malformedCalculatorBody(CALCULATOR_CATEGORIES_PATH);
+  return body;
+}
+
+export async function estimateCalculator(
+  request: CalculatorEstimateRequestDTO,
+): Promise<CalculatorAnswerDTO> {
+  const body = await calculatorCall(CALCULATOR_ESTIMATE_PATH, {
+    method: 'POST',
+    body: JSON.stringify({
+      itemsPerMonth: { low: request.itemsPerMonth.low, high: request.itemsPerMonth.high },
+      categories: [...request.categories],
+      cadence: request.cadence,
+    }),
+  });
+  if (isCalculatorEstimate(body) || isCalculatorEmptyCategory(body)) return body;
+  throw malformedCalculatorBody(CALCULATOR_ESTIMATE_PATH);
+}
+
+type Json = Record<string, unknown>;
+const CALCULATOR_LANES = ['planning', 'running'] as const;
+
+function isObj(v: unknown): v is Json {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+function isNum(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+function isStr(v: unknown): v is string {
+  return typeof v === 'string';
+}
+function isStrList(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every(isStr);
+}
+function isCadence(v: unknown): boolean {
+  return v === 'annual' || v === 'monthly';
+}
+function perLane(v: unknown, test: (x: unknown) => boolean): boolean {
+  return isObj(v) && CALCULATOR_LANES.every((lane) => test(v[lane]));
+}
+function isTopUpAmount(v: unknown): boolean {
+  return isObj(v) && isNum(v['units']) && isNum(v['credits']) && isNum(v['priceUsd']);
+}
+
+function isSplit(v: unknown): boolean {
+  return (
+    isObj(v) &&
+    isNum(v['count']) &&
+    Array.isArray(v['categories']) &&
+    v['categories'].every(
+      (c) => isObj(c) && isStr(c['key']) && isNum(c['weight']) && isStrList(c['models']),
+    )
+  );
+}
+
+function isCalculatorCategories(v: unknown): v is CalculatorCategoriesDTO {
+  return (
+    isObj(v) &&
+    isNum(v['version']) &&
+    isStr(v['categoryRuleVersion']) &&
+    isStr(v['modelsReadAt']) &&
+    Array.isArray(v['cadences']) &&
+    v['cadences'].every(isCadence) &&
+    isCadence(v['defaultCadence']) &&
+    Array.isArray(v['categories']) &&
+    v['categories'].every(
+      (c) =>
+        isObj(c) &&
+        isStr(c['key']) &&
+        Array.isArray(c['models']) &&
+        c['models'].every((m) => isObj(m) && isStr(m['id']) && isStr(m['provider'])),
+    )
+  );
+}
+
+function isCalculatorEstimate(v: unknown): v is CalculatorEstimateDTO {
+  if (!isObj(v) || v['kind'] !== 'estimate') return false;
+  const { credits, recommendation: rec, topUp, ceiling } = v;
+  return (
+    isNum(v['version']) &&
+    isStr(v['profilesVersion']) &&
+    isStr(v['categoryRuleVersion']) &&
+    isCadence(v['cadence']) &&
+    isObj(credits) &&
+    isNum(credits['low']) &&
+    isNum(credits['high']) &&
+    perLane(v['perItemCredits'], isNum) &&
+    isSplit(v['split']) &&
+    isObj(rec) &&
+    (rec['planKey'] === null || isStr(rec['planKey'])) &&
+    (rec['planName'] === null || isStr(rec['planName'])) &&
+    isNum(rec['monthlyPriceUsd']) &&
+    isObj(topUp) &&
+    isTopUpAmount(topUp['low']) &&
+    isTopUpAmount(topUp['high']) &&
+    isObj(ceiling) &&
+    (ceiling['credits'] === null || isNum(ceiling['credits'])) &&
+    typeof ceiling['exceeded'] === 'boolean' &&
+    isNum(ceiling['excessCredits']) &&
+    (ceiling['outcome'] === 'within_ladder' ||
+      ceiling['outcome'] === 'larger_pool' ||
+      ceiling['outcome'] === 'top_ups_only')
+  );
+}
+
+function isCalculatorEmptyCategory(v: unknown): v is CalculatorEmptyCategoryDTO {
+  return (
+    isObj(v) &&
+    v['kind'] === 'empty_category' &&
+    isNum(v['version']) &&
+    isStr(v['categoryRuleVersion']) &&
+    isStrList(v['categories'])
+  );
 }
 
 // POST /v1/stripe/checkout-session — start a subscription-mode, Stripe-hosted

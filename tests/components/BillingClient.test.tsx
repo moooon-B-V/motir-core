@@ -1165,4 +1165,142 @@ describe('BillingClient — the Agents line', () => {
       .filter((x) => ['Motir', 'Motir AI', 'Motir CI', 'Agents', 'Motir Search'].includes(x ?? ''));
     expect(order).toEqual(['Motir CI', 'Motir', 'Motir AI', 'Agents', 'Motir Search']);
   });
+
+  // ── The Calculator view (MOTIR-8639) ───────────────────────────────────────
+  // The fourth view: ONE control on the plans view opens it, the page's cadence is one
+  // value across the two, and the recommendation's next step returns to the plans view
+  // with that plan distinguished. The calculator routes are stubbed at the same fetch
+  // boundary as the billing read.
+  describe('the Calculator view', () => {
+    const calcCategories = {
+      version: 2,
+      categoryRuleVersion: 'rule-1',
+      modelsReadAt: '2026-10-21T00:00:00.000Z',
+      cadences: ['annual', 'monthly'],
+      defaultCadence: 'annual',
+      categories: [{ key: 'balanced', models: [{ id: 'model-b', provider: 'p' }] }],
+    };
+    const calcEstimate = {
+      version: 2,
+      kind: 'estimate',
+      profilesVersion: 'profiles-1',
+      categoryRuleVersion: 'rule-1',
+      cadence: 'annual',
+      credits: { low: 1000, high: 4000 },
+      perItemCredits: { planning: 1, running: 1 },
+      split: { count: 1, categories: [{ key: 'balanced', weight: 1, models: ['model-b'] }] },
+      recommendation: { planKey: 'pro', planName: 'Pro', monthlyPriceUsd: 50 },
+      topUp: {
+        low: { units: 0, credits: 0, priceUsd: 0 },
+        high: { units: 0, credits: 0, priceUsd: 0 },
+      },
+      ceiling: { credits: 60000, exceeded: false, excessCredits: 0, outcome: 'within_ladder' },
+    };
+
+    function stubCalculator() {
+      const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
+        if (url.endsWith('/calculator/categories')) {
+          return new Response(JSON.stringify(calcCategories), { status: 200 });
+        }
+        if (url.endsWith('/calculator/estimate')) {
+          return new Response(JSON.stringify(calcEstimate), { status: 200 });
+        }
+        return new Response(JSON.stringify(freeOrg()), { status: 200 });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      return fetchMock;
+    }
+
+    async function openPlans() {
+      await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+      fireEvent.click(screen.getByRole('button', { name: 'Choose a Motir AI plan' }));
+      await waitFor(() => expect(screen.getByText('Motir AI — plans & subscription')).toBeTruthy());
+    }
+
+    it('opens from exactly one control on the plans view and reads the categories, not an estimate', async () => {
+      const fetchMock = stubCalculator();
+      renderClient();
+      await openPlans();
+
+      expect(screen.getAllByRole('button', { name: 'Estimate your usage' })).toHaveLength(1);
+      fireEvent.click(screen.getByRole('button', { name: 'Estimate your usage' }));
+
+      await waitFor(() =>
+        expect(screen.getByRole('heading', { name: 'Estimate your usage', level: 1 })).toBeTruthy(),
+      );
+      await screen.findByRole('button', { name: /Balanced/ });
+      const urls = fetchMock.mock.calls.map(([u]) => u);
+      expect(urls.filter((u) => u.endsWith('/calculator/categories'))).toHaveLength(1);
+      expect(urls.filter((u) => u.endsWith('/calculator/estimate'))).toHaveLength(0);
+    });
+
+    it('shares one cadence: a choice in either view is the other view’s value', async () => {
+      stubCalculator();
+      renderClient();
+      await openPlans();
+      expect(screen.getByRole('button', { name: 'Annual' }).getAttribute('aria-pressed')).toBe(
+        'true',
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Monthly' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Estimate your usage' }));
+      await screen.findByRole('button', { name: /Balanced/ });
+      expect(screen.getByRole('button', { name: 'Monthly' }).getAttribute('aria-pressed')).toBe(
+        'true',
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Annual' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Back to plans' }));
+      await waitFor(() => expect(screen.getByText('Motir AI — plans & subscription')).toBeTruthy());
+      expect(screen.getByRole('button', { name: 'Annual' }).getAttribute('aria-pressed')).toBe(
+        'true',
+      );
+    });
+
+    it('sends the shared cadence with the ask', async () => {
+      const fetchMock = stubCalculator();
+      renderClient();
+      await openPlans();
+      fireEvent.click(screen.getByRole('button', { name: 'Monthly' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Estimate your usage' }));
+      await screen.findByRole('button', { name: /Balanced/ });
+      fireEvent.change(screen.getByLabelText('Low'), { target: { value: '5' } });
+      fireEvent.change(screen.getByLabelText('High'), { target: { value: '9' } });
+      fireEvent.click(screen.getByRole('button', { name: /Balanced/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Estimate credits' }));
+      await screen.findByTestId('calculator-credits');
+      const post = fetchMock.mock.calls.find(([u]) => u.endsWith('/calculator/estimate'));
+      expect(JSON.parse((post![1] as unknown as RequestInit).body as string)).toEqual({
+        itemsPerMonth: { low: 5, high: 9 },
+        categories: ['balanced'],
+        cadence: 'monthly',
+      });
+    });
+
+    it('returns to the plans view with the recommended plan distinguished, and buys nothing', async () => {
+      const fetchMock = stubCalculator();
+      renderClient();
+      await openPlans();
+      fireEvent.click(screen.getByRole('button', { name: 'Estimate your usage' }));
+      await screen.findByRole('button', { name: /Balanced/ });
+      fireEvent.change(screen.getByLabelText('Low'), { target: { value: '5' } });
+      fireEvent.change(screen.getByLabelText('High'), { target: { value: '9' } });
+      fireEvent.click(screen.getByRole('button', { name: /Balanced/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Estimate credits' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Go to this plan' }));
+
+      await waitFor(() => expect(screen.getByText('Motir AI — plans & subscription')).toBeTruthy());
+      const marked = document.querySelector('[data-marked="true"]');
+      expect(marked?.textContent).toContain('Pro');
+      expect(marked?.textContent).toContain('Matches your estimate');
+      expect(document.querySelectorAll('[data-marked="true"]')).toHaveLength(1);
+      // No checkout, upgrade or downgrade was started by the hand-off.
+      expect(hrefSetter).not.toHaveBeenCalled();
+      expect(
+        fetchMock.mock.calls.filter(
+          ([, init]) => (init as RequestInit | undefined)?.method === 'POST',
+        ).length,
+      ).toBe(1);
+    });
+  });
 });
