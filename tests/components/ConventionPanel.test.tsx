@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
@@ -84,12 +85,20 @@ const edited = (over: Partial<CodingConventionDTO> = {}) =>
     ...over,
   });
 
+// The toggle button of a repository's card. The repository name is split across a
+// muted owner and a strong name, so it is found by its key rather than by text.
+function cardHeader(repo: string): HTMLButtonElement {
+  const el = document.querySelector<HTMLButtonElement>(`button[data-card-key="${repo}"]`);
+  if (!el) throw new Error(`no card header for ${repo}`);
+  return el;
+}
+
 describe('ConventionPanel', () => {
   it('renders the derived convention document + provenance badges for a repo that has one', () => {
     renderWithIntl(<ConventionPanel conventions={[surface()]} />);
 
     // The repo header + the derived-version pill.
-    expect(screen.getByText('acme/web')).toBeTruthy();
+    expect(cardHeader('acme/web')).toBeTruthy();
     expect(screen.getByText('v2 · derived')).toBeTruthy();
     // The document itself — rendered markdown, not a placeholder.
     expect(screen.getByText('House rules')).toBeTruthy();
@@ -132,8 +141,8 @@ describe('ConventionPanel', () => {
       />,
     );
 
-    expect(screen.getByText('acme/web')).toBeTruthy();
-    expect(screen.getByText('acme/api')).toBeTruthy();
+    expect(cardHeader('acme/web')).toBeTruthy();
+    expect(cardHeader('acme/api')).toBeTruthy();
     expect(screen.getByText('v2 · derived')).toBeTruthy();
     expect(screen.getByText('v1 · derived')).toBeTruthy();
   });
@@ -188,8 +197,12 @@ describe('ConventionPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Write the convention' }));
     expect(screen.getByText('Editing v0')).toBeTruthy();
     // An empty or whitespace-only draft cannot be saved.
-    fireEvent.change(screen.getByLabelText('Convention (Markdown)'), { target: { value: '  ' } });
-    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Convention for acme/web (Markdown)'), {
+      target: { value: '  ' },
+    });
+    expect(
+      (screen.getByRole('button', { name: 'Save to web' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
     expect(screen.getByText('Write something to save.')).toBeTruthy();
   });
 
@@ -201,10 +214,10 @@ describe('ConventionPanel', () => {
     renderWithIntl(<ConventionPanel conventions={[surface()]} onSaved={onSaved} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    fireEvent.change(screen.getByLabelText('Convention (Markdown)'), {
+    fireEvent.change(screen.getByLabelText('Convention for acme/web (Markdown)'), {
       target: { value: '# Changed' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save to web' }));
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(savedSurface));
     const [url, init] = fetchMock.mock.calls[0]!;
@@ -223,15 +236,15 @@ describe('ConventionPanel', () => {
     renderWithIntl(<ConventionPanel conventions={[surface()]} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    fireEvent.change(screen.getByLabelText('Convention (Markdown)'), {
+    fireEvent.change(screen.getByLabelText('Convention for acme/web (Markdown)'), {
       target: { value: '# Mine' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save to web' }));
 
     expect(await screen.findByText(/Couldn.t save the convention/)).toBeTruthy();
-    expect((screen.getByLabelText('Convention (Markdown)') as HTMLTextAreaElement).value).toBe(
-      '# Mine',
-    );
+    expect(
+      (screen.getByLabelText('Convention for acme/web (Markdown)') as HTMLTextAreaElement).value,
+    ).toBe('# Mine');
   });
 
   it('cancels back to the read view without calling the server', () => {
@@ -256,10 +269,10 @@ describe('ConventionPanel', () => {
     renderWithIntl(<ConventionPanel conventions={[surface()]} onSaved={onSaved} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    fireEvent.change(screen.getByLabelText('Convention (Markdown)'), {
+    fireEvent.change(screen.getByLabelText('Convention for acme/web (Markdown)'), {
       target: { value: '# Mine' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save to web' }));
 
     expect(await screen.findByText('Someone saved a newer version')).toBeTruthy();
     expect(onSaved).not.toHaveBeenCalled();
@@ -282,5 +295,226 @@ describe('ConventionPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Compare side by side' }));
     expect(screen.getByText('Waiting · derived')).toBeTruthy();
     expect(screen.getByText('Derived anew')).toBeTruthy();
+  });
+});
+
+// ── MOTIR-9194 — the cards are an accordion, one expanded at a time ──────────
+
+describe('ConventionPanel accordion', () => {
+  function apiSurface(): ConventionSurfaceDTO {
+    const c = convention({
+      id: 'conv_9',
+      repoKey: 'acme/api',
+      version: 1,
+      contentMd: '# API rules',
+    });
+    return surface({ repoKey: 'acme/api', convention: c, versions: [c] });
+  }
+  function emptySurface(): ConventionSurfaceDTO {
+    return surface({ repoKey: 'acme/none', convention: null, versions: [] });
+  }
+  const header = cardHeader;
+  const expandedHeaders = () =>
+    screen.getAllByRole('button', { expanded: true }).filter((b) => b.closest('h3'));
+
+  let push: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    nav.searchParams = new URLSearchParams();
+    push = vi.spyOn(window.history, 'pushState').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    push.mockRestore();
+    nav.searchParams = new URLSearchParams();
+  });
+
+  it('expands the first repository on load and keeps the others to their header row', () => {
+    renderWithIntl(<ConventionPanel conventions={[surface(), apiSurface(), emptySurface()]} />);
+
+    expect(header('acme/web').getAttribute('aria-expanded')).toBe('true');
+    expect(header('acme/api').getAttribute('aria-expanded')).toBe('false');
+    expect(header('acme/none').getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getByText('House rules')).toBeTruthy();
+    expect(screen.queryByText('API rules')).toBeNull();
+    // The collapsed header still tells the repositories apart.
+    expect(screen.getByText('v1 · derived')).toBeTruthy();
+    expect(screen.getByText('No convention yet')).toBeTruthy();
+  });
+
+  it('expands the repository the server resolved from ?repo=, and falls back to the first for an unknown one', () => {
+    // The server reads the same address the client then sees.
+    nav.searchParams = new URLSearchParams('repo=acme/api');
+    renderWithIntl(
+      <ConventionPanel conventions={[surface(), apiSurface()]} initialRepo="acme/api" />,
+    );
+    expect(header('acme/api').getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByText('API rules')).toBeTruthy();
+    cleanup();
+
+    nav.searchParams = new URLSearchParams('repo=x/y');
+    renderWithIntl(<ConventionPanel conventions={[surface(), apiSurface()]} initialRepo="x/y" />);
+    expect(header('acme/web').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('collapses the open card when another is expanded, so at most one is ever open', () => {
+    renderWithIntl(<ConventionPanel conventions={[surface(), apiSurface(), emptySurface()]} />);
+
+    fireEvent.click(header('acme/api'));
+    expect(expandedHeaders()).toEqual([header('acme/api')]);
+    expect(screen.getByText('API rules')).toBeTruthy();
+    expect(screen.queryByText('House rules')).toBeNull();
+
+    fireEvent.click(header('acme/none'));
+    expect(expandedHeaders()).toEqual([header('acme/none')]);
+    expect(screen.getAllByRole('region')).toHaveLength(1);
+  });
+
+  it('collapses the open card on a second press, leaving none open', () => {
+    renderWithIntl(<ConventionPanel conventions={[surface(), apiSurface()]} />);
+
+    fireEvent.click(header('acme/web'));
+    expect(screen.queryAllByRole('region')).toHaveLength(0);
+    expect(header('acme/web').getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('writes the expanded card to ?repo= with a history entry, and drops it on collapse', () => {
+    window.history.replaceState(null, '', '/code?section=health');
+    renderWithIntl(<ConventionPanel conventions={[surface(), apiSurface()]} />);
+
+    fireEvent.click(header('acme/api'));
+    expect(push).toHaveBeenLastCalledWith(null, '', '/code?section=health&repo=acme%2Fapi');
+    fireEvent.click(header('acme/api'));
+    expect(push).toHaveBeenLastCalledWith(null, '', '/code?section=health');
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('follows Back and forward: a ?repo= it did not write expands that card', () => {
+    const { rerender } = renderWithIntl(
+      <ConventionPanel conventions={[surface(), apiSurface()]} />,
+    );
+
+    nav.searchParams = new URLSearchParams('repo=acme/api');
+    rerender(<ConventionPanel conventions={[surface(), apiSurface()]} />);
+    expect(header('acme/api').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('wires aria-expanded, aria-controls and a labelled region, and keeps focus on the pressed header', () => {
+    renderWithIntl(<ConventionPanel conventions={[surface(), apiSurface()]} />);
+
+    const web = header('acme/web');
+    const region = screen.getByRole('region');
+    expect(web.getAttribute('aria-controls')).toBe(region.id);
+    expect(region.getAttribute('aria-labelledby')).toBe(web.id);
+    expect(web.closest('h3')).toBeTruthy();
+
+    const api = header('acme/api');
+    api.focus();
+    fireEvent.click(api);
+    expect(document.activeElement).toBe(api);
+    fireEvent.click(api);
+    expect(document.activeElement).toBe(api);
+  });
+
+  it('names the pending-derived marker in the header of a collapsed card', () => {
+    const e = edited({ pendingDerivedMd: '# Derived anew' });
+    renderWithIntl(
+      <ConventionPanel conventions={[apiSurface(), surface({ convention: e, versions: [e] })]} />,
+    );
+    expect(screen.getByText('Newer derived waiting')).toBeTruthy();
+    expect(header('acme/web').textContent).toContain('Newer derived waiting');
+  });
+
+  it('keeps a draft when another card is expanded, marks the header, and restores the text', () => {
+    renderWithIntl(<ConventionPanel conventions={[surface(), apiSurface()]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Convention for acme/web (Markdown)'), {
+      target: { value: '# Half written' },
+    });
+    expect(header('acme/web').textContent).toContain('Editing');
+
+    fireEvent.click(header('acme/api'));
+    expect(screen.queryByLabelText('Convention for acme/web (Markdown)')).toBeNull();
+    expect(header('acme/web').textContent).toContain('Unsaved draft');
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.click(header('acme/web'));
+    expect(
+      (screen.getByLabelText('Convention for acme/web (Markdown)') as HTMLTextAreaElement).value,
+    ).toBe('# Half written');
+    expect(header('acme/web').textContent).not.toContain('Unsaved draft');
+  });
+
+  it('does not mark an editor nobody typed in, and Cancel discards a draft', () => {
+    renderWithIntl(<ConventionPanel conventions={[surface(), apiSurface()]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(header('acme/api'));
+    expect(header('acme/web').textContent).not.toContain('Unsaved draft');
+
+    fireEvent.click(header('acme/web'));
+    fireEvent.change(screen.getByLabelText('Convention for acme/web (Markdown)'), {
+      target: { value: '# Typed' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(header('acme/api'));
+    expect(header('acme/web').textContent).not.toContain('Unsaved draft');
+  });
+
+  it('asks the browser before leaving the page while a draft exists, and not otherwise', () => {
+    renderWithIntl(<ConventionPanel conventions={[surface(), apiSurface()]} />);
+    const unload = () => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+
+    expect(unload()).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Convention for acme/web (Markdown)'), {
+      target: { value: '# Typed' },
+    });
+    expect(unload()).toBe(true);
+    // Collapsed, the draft is still there to lose.
+    fireEvent.click(header('acme/api'));
+    expect(unload()).toBe(true);
+    fireEvent.click(header('acme/web'));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(unload()).toBe(false);
+  });
+
+  it('names the repository four times in Edit and saves only to it', () => {
+    renderWithIntl(<ConventionPanel conventions={[surface(), apiSurface()]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByRole('group', { name: 'You are editing acme/web' })).toBeTruthy();
+    expect(screen.getByLabelText('Convention for acme/web (Markdown)')).toBeTruthy();
+    expect(screen.getByText(/Saving creates v3 of acme\/web\./)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Save to web' })).toBeTruthy();
+  });
+
+  it('keeps the saved card expanded with the new version', async () => {
+    const saved = edited({ repoKey: 'acme/web', contentMd: '# Changed' });
+    const savedSurface = surface({ convention: saved, versions: [saved] });
+    fetchMock.mockResolvedValue(jsonResponse(200, savedSurface));
+    function Host() {
+      const [list, setList] = useState([surface(), apiSurface()]);
+      return (
+        <ConventionPanel
+          conventions={list}
+          onSaved={(s) => setList((prev) => prev.map((c) => (c.repoKey === s.repoKey ? s : c)))}
+        />
+      );
+    }
+    renderWithIntl(<Host />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Convention for acme/web (Markdown)'), {
+      target: { value: '# Changed' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save to web' }));
+
+    expect(await screen.findByText('v3 · edited')).toBeTruthy();
+    expect(header('acme/web').getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByText('Changed')).toBeTruthy();
   });
 });

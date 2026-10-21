@@ -292,16 +292,22 @@ export const githubRepoRepository = {
    *  ⚠️ The head is stamped at START, not at finish, and the direction of that
    *  imprecision is the point: a push landing mid-run leaves the stored value
    *  behind and the repository reads `stale`. Stamping at finish would read
-   *  `indexed` for a graph that had already missed a commit. */
+   *  `indexed` for a graph that had already missed a commit.
+   *
+   *  ⚠️ SCOPED TO THE ORGANISATION that owns the run (MOTIR-9177). `owner/name`
+   *  alone is not unique across tenants, and an unscoped `updateMany` stamped the
+   *  claim on every organisation's row for that ref, so another tenant's failed
+   *  repository read `queued`. */
   async markIndexStarted(
     repoRef: string,
+    organizationId: string,
     runId: string,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     const [owner, name] = splitRepoRef(repoRef);
     if (!owner) return 0;
     const result = await tx.githubRepo.updateMany({
-      where: { owner, name },
+      where: { owner, name, organizationId },
       data: { indexingRunId: runId },
     });
     return result.count;
@@ -313,13 +319,14 @@ export const githubRepoRepository = {
    *  and only the in-flight claim is cleared. */
   async markIndexSettled(
     repoRef: string,
+    organizationId: string,
     args: { headSha?: string | null; indexedAt?: Date },
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     const [owner, name] = splitRepoRef(repoRef);
     if (!owner) return 0;
     const result = await tx.githubRepo.updateMany({
-      where: { owner, name },
+      where: { owner, name, organizationId },
       data: {
         indexingRunId: null,
         ...(args.headSha
@@ -354,16 +361,22 @@ export const githubRepoRepository = {
   /** Record that indexing is PAUSED for a repository by a hard stop of its
    *  organisation's internal index allowance (MOTIR-4593), and release any claim —
    *  a refused dispatch booted nothing, so no run is in flight for it. The
-   *  `indexedHeadSha` is untouched: the graph that exists is still the graph. */
+   *  `indexedHeadSha` is untouched: the graph that exists is still the graph.
+   *
+   *  ⚠️ SCOPED TO THE ORGANISATION (MOTIR-9177), like {@link markIndexStarted}: this
+   *  write nulls `indexingRunId`, and unscoped it released every other tenant's
+   *  claim on the same `owner/name`, turning their failed repository back into
+   *  `queued`. */
   async markIndexPaused(
     repoRef: string,
+    organizationId: string,
     args: { reason: string; at?: Date },
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     const [owner, name] = splitRepoRef(repoRef);
     if (!owner) return 0;
     const result = await tx.githubRepo.updateMany({
-      where: { owner, name },
+      where: { owner, name, organizationId },
       data: {
         indexPausedReason: args.reason,
         indexPausedAt: args.at ?? new Date(),

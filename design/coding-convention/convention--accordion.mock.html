@@ -1,0 +1,1974 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Coding convention — one card open at a time (MOTIR-9193)</title>
+    <!--
+      DELTA MOCK (docs: CLAUDE.md § Design assets). Amends design/coding-convention/convention--editable.mock.html
+      (Panel 1 read, Panel 2 edit) and the section "The editable convention card" of design-notes.md. It holds ONLY
+      the changed panels: the per-repository cards become an accordion with at most one card open. Composed from the
+      shipped primitives (Card, Pill, Button, Textarea) with --el-* colour and shape tokens only. MOTIR-9193.
+    -->
+    <style>
+      /* ══════════════════════════════════════════════════════════════════════
+         TOKENS — copied from packages/design-system/theme.css.
+         Tier-0 @theme (the --color-* + shape scale) + Tier-3 --el-* element layer
+         + the [data-theme='dark'] overrides. A mock.html can't @import the package CSS,
+         so the used subset is inlined 1:1 (the same convention as design/ready).
+         ══════════════════════════════════════════════════════════════════════ */
+      :root {
+        /* Tier 0 — colour (light base) */
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        /* Tier 0 — shape (warm-editorial base) */
+        --radius-sm: 6px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-card-padding: 24px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-btn-x: 18px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --transition-duration: 150ms;
+        --active-scale: 0.98;
+        --focus-ring-color: var(--color-primary);
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, 'Times New Roman', serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-identifier: var(--color-slate);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-success-surface: var(--color-tint-mint);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-overlay-scrim: #00000066;
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-canvas: var(--color-canvas);
+      }
+
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-fill: #6c5cdd;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --el-overlay-scrim: #000000a6;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ══════════════════════════════════════════════════════════════════════
+         Mock chrome (NOT part of the design — just the review page scaffold,
+         mirroring design/ready/ready.mock.html).
+         ══════════════════════════════════════════════════════════════════════ */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1080px;
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 720px;
+        line-height: 1.5;
+      }
+      .toggle {
+        flex: none;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1080px;
+      }
+      .panel {
+        max-width: 1080px;
+        margin: 0 auto;
+      }
+
+      /* ══════════════════════════════════════════════════════════════════════
+         SHIPPED-PRIMITIVE mirrors — each class reproduces a components/ui/*
+         primitive's shipped classes/tokens (annotated). No new vocabulary.
+         ══════════════════════════════════════════════════════════════════════ */
+
+      /* Card — packages/design-system/src/components/ui/Card.tsx
+         (rounded --radius-card, border --el-border, p --spacing-card-padding,
+          untinted bg --el-card + data-surface="card"). */
+      .card {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+      }
+      .card + .card {
+        margin-top: 12px;
+      }
+
+      /* Button — packages/design-system/src/components/ui/Button.tsx */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        font-size: 12px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-button-border);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+
+      /* Pill — packages/design-system/src/components/ui/Pill.tsx
+         All tones: hue in the TINT background, --el-text-strong ink (AA-safe,
+         finding #35). severity: info|success|warning|danger; status: planned|done. */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill-danger {
+        background: var(--el-tint-rose);
+      } /* severity=danger  → Critical */
+      .pill-warning {
+        background: var(--el-tint-peach);
+      } /* severity=warning → High */
+      .pill-info {
+        background: var(--el-tint-sky);
+      } /* severity=info    → Medium */
+      .pill-neutral {
+        /* tone=neutral → Low */
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .pill-adopted {
+        background: var(--el-tint-mint);
+      } /* severity=success → provenance: Adopted */
+      .pill-proposed {
+        background: var(--el-tint-lavender);
+      } /* status=planned  → provenance: Proposed */
+
+      /* neutral count chip (the Pill tone="neutral" count badge) */
+      .count-pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-chip-border);
+        white-space: nowrap;
+      }
+
+      /* mono file / symbol reference (--el-text-identifier + --el-code-bg) */
+      .coderef {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-identifier);
+        background: var(--el-code-bg);
+        border-radius: var(--radius-control);
+        padding: 1px 6px;
+      }
+      /* convention-rule reference — the audit finding cites the convention section
+         it violates (lavender = the convention identity, matching the Proposed tone) */
+      .conv-ref {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--el-callout-text);
+        background: var(--el-callout-bg);
+        border-radius: var(--radius-badge);
+        padding: 1px 8px;
+      }
+      /* general clean-code finding (convention silent here) — a quiet neutral tag */
+      .base-ref {
+        display: inline-flex;
+        align-items: center;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        background: var(--el-chip-bg);
+        border: 1px solid var(--el-chip-border);
+        border-radius: var(--radius-badge);
+        padding: 1px 8px;
+      }
+
+      /* section header inside a Card */
+      .card-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 4px;
+      }
+      .card-head h2,
+      .card-head h3 {
+        font-family: var(--font-serif);
+        margin: 0;
+      }
+      .card-head h2 {
+        font-size: 20px;
+      }
+      .card-head h3 {
+        font-size: 16px;
+      }
+      .card-head .spacer {
+        flex: 1;
+      }
+      .subtle {
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .eyebrow {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Panel 2/3 — the convention document ───────────────────────────── */
+      .banner {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        border-radius: var(--radius-card);
+        margin-bottom: 14px;
+      }
+      .banner svg {
+        width: 18px;
+        height: 18px;
+        flex: none;
+      }
+      .banner .b-text {
+        flex: 1;
+      }
+      .banner .b-title {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .banner .b-sub {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-top: 1px;
+      }
+      .banner-standard {
+        background: var(--el-success-surface);
+      }
+      .banner-standard svg {
+        color: var(--el-success);
+      }
+
+      .doc-section {
+        padding: 14px 0;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .doc-section:first-of-type {
+        border-top: 0;
+      }
+      .doc-section h4 {
+        font-family: var(--font-serif);
+        font-size: 15px;
+        margin: 0 0 8px;
+      }
+      .rule {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 5px 0;
+      }
+      .rule .r-badge {
+        flex: none;
+        width: 84px;
+      }
+      .rule .r-text {
+        flex: 1;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .rule code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      /* ── Panel 3 — edit + approve ──────────────────────────────────────── */
+      .field-label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+        margin-bottom: 6px;
+      }
+      .textarea {
+        /* Textarea — packages/design-system/src/components/ui/Textarea.tsx
+           (w-full, rounded --radius-input, border --el-input-border, bg --el-page-bg,
+            px/py --spacing-input-*). */
+        width: 100%;
+        min-height: 200px;
+        resize: vertical;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-input-border);
+        background: var(--el-page-bg);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        font-family: var(--font-mono);
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text);
+        white-space: pre-wrap;
+      }
+      .helper {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 6px;
+      }
+
+      /* Modal — packages/design-system/src/components/ui/Modal.tsx (Radix dialog).
+         Drawn OPEN over its scrim so the confirm gate is reviewable in the static
+         mock. role="alertdialog" (a destructive-style deliberate confirm). */
+      .modal-stage {
+        position: relative;
+        margin-top: 14px;
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        min-height: 260px;
+        border: 1px dashed var(--el-border-strong);
+      }
+      .scrim {
+        position: absolute;
+        inset: 0;
+        background: var(--el-overlay-scrim);
+      }
+      .modal {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: min(28rem, 90%);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .modal h3 {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        margin: 0 0 8px;
+      }
+      .modal p {
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-subtitle);
+        margin: 0 0 8px;
+      }
+      .modal-foot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      :root {
+        --spacing-card-padding-12: 12px;
+      }
+      /* ── MOTIR-9081 additions: only layout glue for the editable card. Every colour is an
+            --el-* token and every shaped surface a shape token; nothing here is a new primitive. ── */
+      .card-top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .card-top .who {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .repo-name {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+      }
+      .byline {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .pill-edited {
+        background: var(--el-tint-sky);
+      }
+      .pill-derived {
+        background: var(--el-tint-lavender);
+      }
+      .notice {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px 16px;
+        border-radius: var(--radius-card);
+      }
+      .notice svg {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .notice .n-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .notice .n-title {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .notice .n-sub {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin-top: 2px;
+        line-height: 1.5;
+      }
+      .notice .n-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .notice-warning {
+        background: var(--el-warning-surface);
+      }
+      .notice-warning svg {
+        color: var(--el-warning);
+      }
+      .notice-info {
+        background: var(--el-surface-soft);
+      }
+      .notice-info svg {
+        color: var(--el-accent-on-surface);
+      }
+      .editbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .editbar .meta {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .editbar .btns {
+        display: flex;
+        gap: 8px;
+      }
+      .textarea.tall {
+        min-height: 260px;
+      }
+      .copybox {
+        margin-top: 10px;
+      }
+      .copybox .textarea {
+        min-height: 96px;
+        background: var(--el-surface-soft);
+      }
+      .side-by-side {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 12px;
+      }
+      .side-by-side .col {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding-12);
+        min-width: 0;
+      }
+      .side-by-side .col h5 {
+        margin: 0 0 6px;
+        font-size: 12px;
+        font-family: var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-secondary);
+      }
+      .side-by-side .col p,
+      .side-by-side .col li {
+        font-size: 13px;
+        line-height: 1.5;
+        margin: 4px 0;
+        color: var(--el-text);
+      }
+      .side-by-side .col ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .diff-add {
+        background: var(--el-success-surface);
+        border-radius: var(--radius-control);
+        padding: 0 4px;
+      }
+      .viewer-note {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 0 0 10px;
+      }
+      .empty-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 8px;
+        padding: 24px 12px;
+      }
+      .empty-wrap svg {
+        width: 32px;
+        height: 32px;
+        color: var(--el-icon-muted);
+      }
+      .empty-wrap h3 {
+        font-family: var(--font-serif);
+        font-size: 16px;
+        margin: 0;
+      }
+      .empty-wrap p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-subtitle);
+        max-width: 44ch;
+        line-height: 1.5;
+      }
+      .phone {
+        width: 360px;
+        max-width: 100%;
+        margin: 0 auto;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 12px;
+        background: var(--el-page-bg);
+      }
+      .phone .btns {
+        flex-wrap: wrap;
+      }
+      .phone .editbar .btns .btn {
+        flex: 1;
+      }
+      .phone .side-by-side {
+        grid-template-columns: 1fr;
+      }
+      .annot {
+        max-width: 1080px;
+        margin: 6px auto 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+      }
+
+      /* ── MOTIR-9193 additions: accordion glue only. Colour is --el-*, shape is the shape tokens. ── */
+      .acc {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .acc-card {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .acc-card.open {
+        border-color: var(--el-border-strong);
+      }
+      .acc-card.editing {
+        border: 2px solid var(--el-accent);
+      }
+      .acc-h {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-right: var(--spacing-card-padding-12);
+      }
+      .acc-toggle {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 10px;
+        text-align: left;
+        background: transparent;
+        border: 0;
+        border-radius: var(--radius-card);
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        padding: var(--spacing-card-padding-12) 16px;
+      }
+      .acc-toggle:focus-visible,
+      .focused .acc-toggle {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: -2px;
+      }
+      .acc-toggle .chev {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-secondary);
+        transition: transform var(--transition-duration);
+      }
+      .acc-card.open .chev {
+        transform: rotate(90deg);
+      }
+      .repo {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+      }
+      .repo b {
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .acc-toggle .byline {
+        flex-basis: auto;
+      }
+      .acc-body {
+        border-top: 1px solid var(--el-border);
+        padding: var(--spacing-card-padding);
+      }
+      .pill-pending {
+        background: var(--el-tint-yellow);
+      }
+      .pill-draft {
+        background: var(--el-tint-peach);
+      }
+      .pill-none {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .doc p,
+      .doc li {
+        font-size: 13px;
+        line-height: 1.55;
+        margin: 4px 0;
+        color: var(--el-text);
+      }
+      .doc h4 {
+        margin: 12px 0 4px;
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .doc ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .fade {
+        max-height: 92px;
+        overflow: hidden;
+        position: relative;
+      }
+      .fade::after {
+        content: '';
+        position: absolute;
+        inset: auto 0 0 0;
+        height: 36px;
+        background: linear-gradient(transparent, var(--el-card));
+      }
+      .repo-banner {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+        padding: 12px 16px;
+        margin-bottom: 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .repo-banner .lbl {
+        font-size: 12px;
+        font-family: var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .repo-banner .big {
+        font-size: 18px;
+        font-weight: 600;
+        font-family: var(--font-serif);
+      }
+      .repo-banner .sub {
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .two {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        max-width: 1080px;
+        margin: 0 auto;
+        align-items: start;
+      }
+      .two .tag {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        margin: 0 0 8px;
+      }
+      .url {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        padding: 2px 8px;
+        border-radius: var(--radius-control);
+      }
+      .kbd {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-control);
+        padding: 0 6px;
+      }
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      table.spec th,
+      table.spec td {
+        text-align: left;
+        vertical-align: top;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--el-border);
+        color: var(--el-text);
+      }
+      table.spec th {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        font-family: var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .phone .acc-toggle {
+        padding: 10px 12px;
+      }
+      @media (max-width: 760px) {
+        .two {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Coding convention — the per-repository cards as an accordion</h1>
+        <p>
+          Delta of design/coding-convention/convention--editable.mock.html (Panel 1 and Panel 2).
+          Seven panels: collapsed headers, the page-load default, the open-one-closes-the-other
+          transition, the Edit state naming its repository, a kept draft, a narrow viewport, and
+          keyboard / screen-reader behaviour.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle light / dark
+      </button>
+    </div>
+    <div class="panel-label">
+      Panel 1 — Collapsed: every header row tells the repositories apart without opening one
+    </div>
+    <div class="panel">
+      <div class="acc">
+        <div class="acc-card">
+          <h3 class="acc-h">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="p-motir-core"
+              id="h-motir-core"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>motir-core</b></span
+              ><span class="pill pill-edited">v7 · edited</span
+              ><span class="byline">Edited by Zhu Yue · Oct 21, 2026</span
+              ><span class="pill pill-pending">Newer derived waiting</span>
+            </button>
+          </h3>
+        </div>
+        <div class="acc-card">
+          <h3 class="acc-h">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="p-motir-ai"
+              id="h-motir-ai"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>motir-ai</b></span
+              ><span class="pill pill-derived">v4 · derived</span
+              ><span class="byline">Derived from the code</span>
+            </button>
+          </h3>
+        </div>
+        <div class="acc-card">
+          <h3 class="acc-h">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="p-motir-gateway"
+              id="h-motir-gateway"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>motir-gateway</b></span
+              ><span class="pill pill-edited">v2 · edited</span
+              ><span class="byline">Edited by Zhu Yue · Oct 20, 2026</span>
+            </button>
+          </h3>
+        </div>
+        <div class="acc-card">
+          <h3 class="acc-h">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="p-motir-meta"
+              id="h-motir-meta"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>motir-meta</b></span
+              ><span class="pill pill-derived">v1 · derived</span
+              ><span class="byline">Derived from the code</span>
+            </button>
+          </h3>
+        </div>
+        <div class="acc-card">
+          <h3 class="acc-h">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="p-motir-skills"
+              id="h-motir-skills"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>motir-skills</b></span
+              ><span class="pill pill-derived">v3 · derived</span
+              ><span class="byline">Derived from the code</span>
+            </button>
+          </h3>
+        </div>
+        <div class="acc-card">
+          <h3 class="acc-h">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="p-motir-marketing"
+              id="h-motir-marketing"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>motir-marketing</b></span
+              ><span class="pill pill-none">No convention yet</span><span class="byline"></span>
+            </button>
+          </h3>
+        </div>
+        <div class="acc-card">
+          <h3 class="acc-h">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="p-nextjs-prisma-vercel-starter"
+              id="h-nextjs-prisma-vercel-starter"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>nextjs-prisma-vercel-starter</b></span
+              ><span class="pill pill-derived">v1 · derived</span
+              ><span class="byline">Derived from the code</span>
+            </button>
+          </h3>
+        </div>
+      </div>
+    </div>
+    <div class="annot">
+      Header row = chevron · <code>owner/name</code> (name in strong ink, owner in secondary) ·
+      version pill (<code>v7 · edited</code> sky / <code>v4 · derived</code> lavender /
+      <code>No convention yet</code> neutral) · byline · the yellow
+      <b>Newer derived waiting</b> marker when a re-audit parked a version. The whole row is one
+      button; <b>Edit</b> does not appear while a card is collapsed.
+    </div>
+    <div class="panel-label">
+      Panel 2 — Page load: no <code>?repo=</code> → the first repository is expanded
+    </div>
+    <div class="panel">
+      <div class="acc">
+        <div class="acc-card open">
+          <h3 class="acc-h">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="true"
+              aria-controls="p-motir-core"
+              id="h-motir-core"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>motir-core</b></span
+              ><span class="pill pill-edited">v7 · edited</span
+              ><span class="byline">Edited by Zhu Yue · Oct 21, 2026</span
+              ><span class="pill pill-pending">Newer derived waiting</span></button
+            ><button class="btn btn-secondary btn-sm" type="button">Edit</button>
+          </h3>
+          <div class="acc-body" id="p-motir-core" role="region" aria-labelledby="h-motir-core">
+            <div class="stack">
+              <div class="notice notice-info">
+                <div class="n-body">
+                  <div class="n-title">A newer version was derived from the code</div>
+                  <div class="n-sub">
+                    A re-audit on Oct 21, 2026 produced a derived version. It is not in use — the
+                    text below is.
+                  </div>
+                </div>
+              </div>
+              <div class="doc">
+                <h4>Layering</h4>
+                <p>Route → Service → Repository → Prisma. Routes never call Prisma directly.</p>
+                <ul>
+                  <li>Repositories are single-operation functions.</li>
+                  <li>Services own every <code>$transaction</code>.</li>
+                </ul>
+                <h4>Errors</h4>
+                <p>Every error is a typed <code>ApiError</code> rendered as problem+json.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="acc-card">
+          <h3 class="acc-h">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="p-motir-ai"
+              id="h-motir-ai"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>motir-ai</b></span
+              ><span class="pill pill-derived">v4 · derived</span
+              ><span class="byline">Derived from the code</span>
+            </button>
+          </h3>
+        </div>
+        <div class="acc-card">
+          <h3 class="acc-h">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="p-motir-gateway"
+              id="h-motir-gateway"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>motir-gateway</b></span
+              ><span class="pill pill-edited">v2 · edited</span
+              ><span class="byline">Edited by Zhu Yue · Oct 20, 2026</span>
+            </button>
+          </h3>
+        </div>
+        <div class="acc-card">
+          <h3 class="acc-h">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="p-motir-meta"
+              id="h-motir-meta"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>motir-meta</b></span
+              ><span class="pill pill-derived">v1 · derived</span
+              ><span class="byline">Derived from the code</span>
+            </button>
+          </h3>
+        </div>
+        <div class="acc-card">
+          <h3 class="acc-h">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="p-motir-skills"
+              id="h-motir-skills"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>motir-skills</b></span
+              ><span class="pill pill-derived">v3 · derived</span
+              ><span class="byline">Derived from the code</span>
+            </button>
+          </h3>
+        </div>
+        <div class="acc-card">
+          <h3 class="acc-h">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="p-motir-marketing"
+              id="h-motir-marketing"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>motir-marketing</b></span
+              ><span class="pill pill-none">No convention yet</span><span class="byline"></span>
+            </button>
+          </h3>
+        </div>
+        <div class="acc-card">
+          <h3 class="acc-h">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="p-nextjs-prisma-vercel-starter"
+              id="h-nextjs-prisma-vercel-starter"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>nextjs-prisma-vercel-starter</b></span
+              ><span class="pill pill-derived">v1 · derived</span
+              ><span class="byline">Derived from the code</span>
+            </button>
+          </h3>
+        </div>
+      </div>
+    </div>
+    <div class="annot">
+      Default: <b>with no <span class="url">?repo=</span> the first repository is expanded</b>; with
+      <span class="url">?repo=motir-co/motir-ai</span> that repository is expanded instead (an
+      unknown value falls back to the first). The expanded card is deep-linkable: activating a
+      header writes <span class="url">?repo=owner/name</span> with <code>shallowPush</code> (the
+      body is already in the browser; Back returns to the previous card), and collapsing the open
+      card removes the parameter, which loads as “first expanded” — so a person who collapsed
+      everything and reloads sees the first card open again.
+    </div>
+    <div class="panel-label">
+      Panel 3 — The transition: opening a second card collapses the first
+    </div>
+    <div class="panel">
+      <div class="two">
+        <div>
+          <p class="tag">Before — motir-core open</p>
+          <div class="acc">
+            <div class="acc-card open">
+              <h3 class="acc-h">
+                <button
+                  class="acc-toggle"
+                  type="button"
+                  aria-expanded="true"
+                  aria-controls="p-motir-core"
+                  id="h-motir-core"
+                >
+                  <svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m9 18 6-6-6-6" /></svg
+                  ><span class="repo">motir-co/<b>motir-core</b></span
+                  ><span class="pill pill-edited">v7 · edited</span
+                  ><span class="byline">Edited by Zhu Yue · Oct 21, 2026</span
+                  ><span class="pill pill-pending">Newer derived waiting</span></button
+                ><button class="btn btn-secondary btn-sm" type="button">Edit</button>
+              </h3>
+              <div class="acc-body" id="p-motir-core" role="region" aria-labelledby="h-motir-core">
+                <div class="doc fade">
+                  <div class="doc">
+                    <h4>Layering</h4>
+                    <p>Route → Service → Repository → Prisma. Routes never call Prisma directly.</p>
+                    <ul>
+                      <li>Repositories are single-operation functions.</li>
+                      <li>Services own every <code>$transaction</code>.</li>
+                    </ul>
+                    <h4>Errors</h4>
+                    <p>Every error is a typed <code>ApiError</code> rendered as problem+json.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="acc-card">
+              <h3 class="acc-h">
+                <button
+                  class="acc-toggle"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="p-motir-ai"
+                  id="h-motir-ai"
+                >
+                  <svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m9 18 6-6-6-6" /></svg
+                  ><span class="repo">motir-co/<b>motir-ai</b></span
+                  ><span class="pill pill-derived">v4 · derived</span
+                  ><span class="byline">Derived from the code</span>
+                </button>
+              </h3>
+            </div>
+            <div class="acc-card">
+              <h3 class="acc-h">
+                <button
+                  class="acc-toggle"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="p-motir-gateway"
+                  id="h-motir-gateway"
+                >
+                  <svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m9 18 6-6-6-6" /></svg
+                  ><span class="repo">motir-co/<b>motir-gateway</b></span
+                  ><span class="pill pill-edited">v2 · edited</span
+                  ><span class="byline">Edited by Zhu Yue · Oct 20, 2026</span>
+                </button>
+              </h3>
+            </div>
+          </div>
+        </div>
+        <div>
+          <p class="tag">After — the person pressed the motir-gateway header</p>
+          <div class="acc">
+            <div class="acc-card">
+              <h3 class="acc-h">
+                <button
+                  class="acc-toggle"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="p-motir-core"
+                  id="h-motir-core"
+                >
+                  <svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m9 18 6-6-6-6" /></svg
+                  ><span class="repo">motir-co/<b>motir-core</b></span
+                  ><span class="pill pill-edited">v7 · edited</span
+                  ><span class="byline">Edited by Zhu Yue · Oct 21, 2026</span
+                  ><span class="pill pill-pending">Newer derived waiting</span>
+                </button>
+              </h3>
+            </div>
+            <div class="acc-card">
+              <h3 class="acc-h">
+                <button
+                  class="acc-toggle"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="p-motir-ai"
+                  id="h-motir-ai"
+                >
+                  <svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m9 18 6-6-6-6" /></svg
+                  ><span class="repo">motir-co/<b>motir-ai</b></span
+                  ><span class="pill pill-derived">v4 · derived</span
+                  ><span class="byline">Derived from the code</span>
+                </button>
+              </h3>
+            </div>
+            <div class="acc-card open">
+              <h3 class="acc-h focused">
+                <button
+                  class="acc-toggle"
+                  type="button"
+                  aria-expanded="true"
+                  aria-controls="p-motir-gateway"
+                  id="h-motir-gateway"
+                >
+                  <svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m9 18 6-6-6-6" /></svg
+                  ><span class="repo">motir-co/<b>motir-gateway</b></span
+                  ><span class="pill pill-edited">v2 · edited</span
+                  ><span class="byline">Edited by Zhu Yue · Oct 20, 2026</span></button
+                ><button class="btn btn-secondary btn-sm" type="button">Edit</button>
+              </h3>
+              <div
+                class="acc-body"
+                id="p-motir-gateway"
+                role="region"
+                aria-labelledby="h-motir-gateway"
+              >
+                <div class="doc fade">
+                  <div class="doc">
+                    <h4>Layering</h4>
+                    <p>Route → Service → Repository → Prisma. Routes never call Prisma directly.</p>
+                    <ul>
+                      <li>Repositories are single-operation functions.</li>
+                      <li>Services own every <code>$transaction</code>.</li>
+                    </ul>
+                    <h4>Errors</h4>
+                    <p>Every error is a typed <code>ApiError</code> rendered as problem+json.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annot">
+      Opening <b>motir-gateway</b> collapses <b>motir-core</b> in the same update, so at most one
+      body is ever on screen. Focus stays on the <b>motir-gateway</b> header (focus ring shown).
+      Heights animate over <code>--transition-duration</code> (150ms) and not at all under
+      <code>prefers-reduced-motion</code>. The page does not scroll to the card: the header the
+      person pressed is the anchor, and the collapsed card above it shrinks, so the scroll position
+      is corrected to keep the pressed header at the same viewport offset.
+    </div>
+    <div class="panel-label">
+      Panel 4 — Edit state: the repository being edited is named four times and it is the only way
+      to save
+    </div>
+    <div class="panel">
+      <div class="acc">
+        <div class="acc-card open editing">
+          <h3 class="acc-h">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="true"
+              aria-controls="p-motir-core"
+              id="h-motir-core"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>motir-core</b></span
+              ><span class="pill pill-edited">v7 · edited</span
+              ><span class="byline">Edited by Zhu Yue · Oct 21, 2026</span
+              ><span class="pill pill-draft">Editing</span>
+            </button>
+          </h3>
+          <div class="acc-body" id="p-motir-core" role="region" aria-labelledby="h-motir-core">
+            <div class="repo-banner" role="group" aria-label="You are editing motir-co/motir-core">
+              <span class="lbl">You are editing</span><span class="big">motir-co/motir-core</span
+              ><span class="sub">Saving creates v8 of this repository only. Currently v7.</span>
+            </div>
+            <div class="stack">
+              <div style="font-size: 12px; font-weight: 500; color: var(--el-text-secondary)">
+                Convention for motir-co/motir-core (Markdown)
+              </div>
+              <div
+                class="textarea tall"
+                style="
+                  border: 1px solid var(--el-input-border);
+                  border-radius: var(--radius-input);
+                  padding: 12px 16px;
+                  font-family: var(--font-mono);
+                  font-size: 12px;
+                  line-height: 1.6;
+                  white-space: pre-wrap;
+                  background: var(--el-page-bg);
+                  color: var(--el-text);
+                "
+              >
+                # Layering Route → Service → Repository → Prisma. Routes never call Prisma directly.
+                - Repositories are single-operation functions. - Services own every `$transaction`.
+                - NEW: a read that guards a write takes the tx and locks the row.
+              </div>
+              <div class="editbar">
+                <div class="meta">
+                  Saving creates v8 of motir-co/motir-core. 19,874 / 65,536 characters.
+                </div>
+                <div class="btns">
+                  <button class="btn btn-ghost btn-sm" type="button">Cancel</button
+                  ><button class="btn btn-primary btn-sm" type="button">Save to motir-core</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annot">
+      (1) a sky banner “You are editing <b>motir-co/motir-core</b>” above the field, in the serif
+      display size; (2) the field label carries the full <code>owner/name</code>; (3) the helper
+      says “Saving creates v8 of motir-co/motir-core”; (4) the primary button is
+      <b>Save to motir-core</b>, not a bare Save. The card also takes a 2px
+      <code>--el-accent</code> border so the card being edited is distinguishable at a glance in a
+      long page, and its header stays visible with the state marker <b>Editing</b>. Save is only
+      reachable from the expanded card, so a save can only ever go to the repository whose banner is
+      on screen.
+    </div>
+    <div class="panel-label">
+      Panel 5 — Expanding another card while one is in Edit: the draft is KEPT, the card collapses,
+      and says so
+    </div>
+    <div class="panel">
+      <div class="acc">
+        <div class="acc-card">
+          <h3 class="acc-h">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="p-motir-core"
+              id="h-motir-core"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>motir-core</b></span
+              ><span class="pill pill-edited">v7 · edited</span
+              ><span class="byline">Edited by Zhu Yue · Oct 21, 2026</span
+              ><span class="pill pill-draft">Unsaved draft</span>
+            </button>
+          </h3>
+        </div>
+        <div class="acc-card open">
+          <h3 class="acc-h focused">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="true"
+              aria-controls="p-motir-ai"
+              id="h-motir-ai"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>motir-ai</b></span
+              ><span class="pill pill-derived">v4 · derived</span
+              ><span class="byline">Derived from the code</span></button
+            ><button class="btn btn-secondary btn-sm" type="button">Edit</button>
+          </h3>
+          <div class="acc-body" id="p-motir-ai" role="region" aria-labelledby="h-motir-ai">
+            <div class="doc fade">
+              <div class="doc">
+                <h4>Layering</h4>
+                <p>Route → Service → Repository → Prisma. Routes never call Prisma directly.</p>
+                <ul>
+                  <li>Repositories are single-operation functions.</li>
+                  <li>Services own every <code>$transaction</code>.</li>
+                </ul>
+                <h4>Errors</h4>
+                <p>Every error is a typed <code>ApiError</code> rendered as problem+json.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="acc-card">
+          <h3 class="acc-h">
+            <button
+              class="acc-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="p-motir-gateway"
+              id="h-motir-gateway"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" /></svg
+              ><span class="repo">motir-co/<b>motir-gateway</b></span
+              ><span class="pill pill-edited">v2 · edited</span
+              ><span class="byline">Edited by Zhu Yue · Oct 20, 2026</span>
+            </button>
+          </h3>
+        </div>
+      </div>
+    </div>
+    <div class="annot">
+      Decision: <b>keep the draft, never block, never ask</b>. The editor stays mounted in state
+      with its text; the collapsed header gains the peach <b>Unsaved draft</b> marker (part of the
+      button’s accessible name, so a screen reader hears it). Expanding that card again returns
+      straight into Edit with the text and the cursor position intact. A collapse never drops text.
+      Only <b>Cancel</b> discards a draft, and a successful <b>Save</b> clears it. Several drafts
+      may coexist (one per repository); each is marked. Leaving the page (reload, navigation,
+      closing the tab) with any draft present raises the browser’s unsaved-changes prompt. A confirm
+      dialog was rejected as friction on a non-destructive action, and blocking was rejected because
+      it traps the person in a 20 KB editor while they look up another repository.
+    </div>
+    <div class="panel-label">
+      Panel 6 — Narrow viewport (360px): the header row wraps; nothing is truncated
+    </div>
+    <div class="panel">
+      <div class="phone">
+        <div class="acc">
+          <div class="acc-card">
+            <h3 class="acc-h">
+              <button
+                class="acc-toggle"
+                type="button"
+                aria-expanded="false"
+                aria-controls="p-motir-core"
+                id="h-motir-core"
+              >
+                <svg
+                  class="chev"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m9 18 6-6-6-6" /></svg
+                ><span class="repo">motir-co/<b>motir-core</b></span
+                ><span class="pill pill-edited">v7 · edited</span
+                ><span class="byline">Edited by Zhu Yue · Oct 21, 2026</span
+                ><span class="pill pill-pending">Newer derived waiting</span
+                ><span class="pill pill-draft">Unsaved draft</span>
+              </button>
+            </h3>
+          </div>
+          <div class="acc-card">
+            <h3 class="acc-h">
+              <button
+                class="acc-toggle"
+                type="button"
+                aria-expanded="false"
+                aria-controls="p-nextjs-prisma-vercel-starter"
+                id="h-nextjs-prisma-vercel-starter"
+              >
+                <svg
+                  class="chev"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m9 18 6-6-6-6" /></svg
+                ><span class="repo">motir-co/<b>nextjs-prisma-vercel-starter</b></span
+                ><span class="pill pill-derived">v1 · derived</span
+                ><span class="byline">Derived from the code</span>
+              </button>
+            </h3>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annot">
+      The chevron and repository stay on the first line, the state pill and byline wrap beneath. A
+      long name such as <code>nextjs-prisma-vercel-starter</code> breaks at the slash-free word
+      boundary rather than ellipsising, because the name is the thing that tells repositories apart.
+    </div>
+    <div class="panel-label">Panel 7 — Keyboard and screen-reader behaviour</div>
+    <div class="panel">
+      <div class="card">
+        <table class="spec">
+          <thead>
+            <tr>
+              <th>Concern</th>
+              <th>Behaviour</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Structure</td>
+              <td>
+                Each card is a heading (<code>h3</code>) containing one <code>&lt;button&gt;</code>;
+                the body is a <code>role="region"</code> labelled by that button
+                (<code>aria-labelledby</code>), and the button carries
+                <code>aria-controls</code> pointing at it.
+              </td>
+            </tr>
+            <tr>
+              <td><code>aria-expanded</code></td>
+              <td>
+                <code>true</code> on the one open header, <code>false</code> on every other; it
+                flips in the same update that collapses the previous card.
+              </td>
+            </tr>
+            <tr>
+              <td>Keys</td>
+              <td>
+                <span class="kbd">Enter</span> and <span class="kbd">Space</span> activate the
+                focused header. <span class="kbd">Tab</span> moves through the headers and, inside
+                the open card, through Edit and the editor controls. No arrow-key roving is added:
+                seven headers is a short tab path and the page already has other tab stops.
+              </td>
+            </tr>
+            <tr>
+              <td>Focus</td>
+              <td>
+                Focus <b>stays on the header that was activated</b> — on expand, on collapse, and
+                when a sibling collapses as a result. It never moves into the body and never jumps
+                to the newly open card. Re-expanding a card with a draft returns focus nowhere new;
+                the person tabs into the editor.
+              </td>
+            </tr>
+            <tr>
+              <td>Accessible name</td>
+              <td>
+                The button’s name reads, in order: repository <code>owner/name</code>, version and
+                state, byline, then markers — “motir-co/motir-core, v7 edited, Edited by Zhu Yue Oct
+                21 2026, Newer derived waiting, Unsaved draft”.
+              </td>
+            </tr>
+            <tr>
+              <td>Announcements</td>
+              <td>
+                No live region. The expanded state change is announced by the button itself; a
+                collapsed draft is announced by its marker in the name.
+              </td>
+            </tr>
+            <tr>
+              <td>Contrast</td>
+              <td>
+                Every ink is <code>--el-text-strong</code> or <code>--el-text-secondary</code>;
+                markers put the hue in the tint background. No <code>--el-text-muted</code>,
+                <code>--el-text-faint</code> or <code>--el-danger-text</code>.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </body>
+</html>
