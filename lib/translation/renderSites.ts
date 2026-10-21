@@ -157,6 +157,6 @@ export const WORK_CONTENT_RENDER_SITES: readonly RenderSite[] = [
   ),
   deferred(
     'app/(authed)/pages/[pageId]/_components/LinkWorkItemControl.tsx',
-    "a search picker for linking a work item to a page, drawn outside any item-scope host; registering it with the title kit is a follow-up (MOTIR-9200)",
+    'a search picker for linking a work item to a page, drawn outside any item-scope host; registering it with the title kit is a follow-up (MOTIR-9200)',
   ),
 ];
