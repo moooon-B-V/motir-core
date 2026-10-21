@@ -51,6 +51,12 @@ export interface PageBodyUpdate {
  * One row of the `/pages` index (MOTIR-7300): the page's identity, title and its
  * last edit — no body columns, which are up to 2 MiB a row.
  */
+/** The Link page picker's seek key: the last row served, in `[updatedAt desc, id desc]` order. */
+export interface PageTitleSearchSeek {
+  updatedAt: Date;
+  id: string;
+}
+
 export type PageListRecord = Pick<Page, 'id' | 'title' | 'updatedAt' | 'updatedById'>;
 
 /**
@@ -270,22 +276,35 @@ export const pageRepository = {
    * (MOTIR-7697). Prisma's `contains` escapes `%` and `_`, so a query is matched
    * literally. Carries what the row's PLACE needs: the ancestor chain (its last
    * entry is the parent page) and the folder.
+   *
+   * `after` is the Link page picker's keyset seek (MOTIR-9204): rows strictly
+   * after `(updatedAt, id)` in the same `[updatedAt desc, id desc]` order. Called
+   * without it the `where` and order are exactly the `@` popup's.
    */
   async searchLiveByTitle(
     projectId: string,
     q: string,
     take: number,
     tx: Prisma.TransactionClient,
-  ): Promise<Array<Pick<Page, 'id' | 'title' | 'ancestorPageIds' | 'folderId'>>> {
+    after?: PageTitleSearchSeek | null,
+  ): Promise<Array<Pick<Page, 'id' | 'title' | 'ancestorPageIds' | 'folderId' | 'updatedAt'>>> {
     return tx.page.findMany({
       where: {
         projectId,
         archivedAt: null,
         title: { contains: escapeLikePattern(q), mode: 'insensitive' },
+        ...(after
+          ? {
+              OR: [
+                { updatedAt: { lt: after.updatedAt } },
+                { updatedAt: after.updatedAt, id: { lt: after.id } },
+              ],
+            }
+          : {}),
       },
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       take,
-      select: { id: true, title: true, ancestorPageIds: true, folderId: true },
+      select: { id: true, title: true, ancestorPageIds: true, folderId: true, updatedAt: true },
     });
   },
 

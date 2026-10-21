@@ -452,6 +452,13 @@ export interface PageMentionCandidateDto {
   };
 }
 
+/** One page of the Link page picker's title search (MOTIR-9204). */
+export interface PageLinkCandidatesDto {
+  items: PageMentionCandidateDto[];
+  /** Opaque; non-null exactly when a further match exists. */
+  nextCursor: string | null;
+}
+
 /**
  * The live data a page chip renders. `unavailable` carries NO title by
  * construction: it is the one answer for a reader without `page:view`, a
