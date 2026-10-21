@@ -10,7 +10,7 @@ import {
   setOrgBillingState,
   type BillingSeed,
 } from './_helpers/billing';
-import { db } from './_helpers/db-reset';
+import { adminDb } from './_helpers/db-reset';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { msg, saveAccountLanguageInSettings } from './_helpers/i18n-walk';
 import {
@@ -214,8 +214,12 @@ async function openTab(page: Page, locale = L) {
 }
 
 async function fillRange(page: Page, low: string, high: string, locale = L) {
-  await page.getByLabel(t('calculator.inputs.lowLabel', {}, locale)).fill(low);
-  await page.getByLabel(t('calculator.inputs.highLabel', {}, locale)).fill(high);
+  await live(page)
+    .getByLabel(t('calculator.inputs.lowLabel', {}, locale))
+    .fill(low);
+  await live(page)
+    .getByLabel(t('calculator.inputs.highLabel', {}, locale))
+    .fill(high);
 }
 
 /** Set exactly these categories (deselecting any other already on). */
@@ -233,7 +237,12 @@ async function ask(page: Page, locale = L): Promise<Response> {
   return sent;
 }
 
-const result = (page: Page) => page.getByTestId('calculator-result');
+// The LIVE subtree: a text, label or test-id locator rooted at `page` can match the
+// outgoing copy React keeps mounted while the next view streams, so it is scoped to
+// the page's main landmark. Absence assertions stay page-wide on purpose.
+const live = (page: Page) => page.getByRole('main');
+
+const result = (page: Page) => live(page).getByTestId('calculator-result');
 
 // ── the walk ────────────────────────────────────────────────────────────────
 
@@ -260,7 +269,7 @@ test.describe('The Calculator on Billing & plans', () => {
         await openTab(page);
         expect(page.url()).toContain(billingPath);
         await expect(page.getByTestId('calculator-credits')).toHaveCount(0);
-        await expect(page.getByText(t('calculator.result.idle'))).toBeVisible();
+        await expect(live(page).getByText(t('calculator.result.idle'))).toBeVisible();
         expect(stub.estimates).toHaveLength(0);
         expect(stub.categoryReads).toBe(1);
       },
@@ -302,11 +311,11 @@ test.describe('The Calculator on Billing & plans', () => {
         result(page).getByText(t('calculator.split.one', { category: label(first!) })),
       ).toBeVisible();
       const answer = estimateFor([first!], 'annual');
-      expect(numerals(await page.getByTestId('calculator-credits').textContent())).toEqual([
+      expect(numerals(await live(page).getByTestId('calculator-credits').textContent())).toEqual([
         answer.credits.low,
         answer.credits.high,
       ]);
-      await expect(page.getByText(t('calculator.result.estimateCaveat'))).toBeVisible();
+      await expect(live(page).getByText(t('calculator.result.estimateCaveat'))).toBeVisible();
     });
     await beat();
 
@@ -341,11 +350,11 @@ test.describe('The Calculator on Billing & plans', () => {
     await chapter(
       'The plan fits as the catalog names it, with the seat rule beside it',
       async () => {
-        await expect(page.getByTestId('calculator-plan')).toContainText(TOP.name);
-        await expect(page.getByTestId('calculator-price')).toHaveText(
+        await expect(live(page).getByTestId('calculator-plan')).toContainText(TOP.name);
+        await expect(live(page).getByTestId('calculator-price')).toHaveText(
           t('plans.annualSub', { yr: catalogAmount(TOP, 'annual').toLocaleString('en-US') }),
         );
-        const seatLine = page.getByTestId('calculator-seat');
+        const seatLine = live(page).getByTestId('calculator-seat');
         await expect(seatLine).toContainText(
           format(t('calculator.seat.included'), { count: TOP.includedTrackerSeats }),
         );
@@ -355,7 +364,7 @@ test.describe('The Calculator on Billing & plans', () => {
           }),
         );
         await expect(result(page)).not.toContainText(/two max|× ?2 ?×/i);
-        await expect(page.getByTestId('calculator-topup')).toBeVisible();
+        await expect(live(page).getByTestId('calculator-topup')).toBeVisible();
       },
     );
     await beat();
@@ -366,10 +375,10 @@ test.describe('The Calculator on Billing & plans', () => {
         await page.getByRole('button', { name: t('plans.monthly'), exact: true }).click();
         await ask(page);
         expect(stub.estimates.at(-1)!.body['cadence']).toBe('monthly');
-        await expect(page.getByTestId('calculator-price')).toHaveText(
+        await expect(live(page).getByTestId('calculator-price')).toHaveText(
           t('plans.perMoEquiv', { n: String(catalogAmount(TOP, 'monthly')) }),
         );
-        await expect(page.getByTestId('calculator-seat')).toContainText(
+        await expect(live(page).getByTestId('calculator-seat')).toContainText(
           t('calculator.seat.feePerUserMonthly', {
             price: String(BILLING_CATALOG.seatPlan.prices.monthly.amountUsd),
           }),
@@ -400,7 +409,7 @@ test.describe('The Calculator on Billing & plans', () => {
             }),
           );
         await ask(page);
-        const larger = page.getByTestId('calculator-larger');
+        const larger = live(page).getByTestId('calculator-larger');
         await expect(larger).toContainText(t('calculator.result.largerPoolLabel'));
         await expect(larger).toContainText(t('calculator.result.largerPlanEstimate'));
         await expect(larger).toContainText('Larger pool');
@@ -431,15 +440,15 @@ test.describe('The Calculator on Billing & plans', () => {
           );
         await ask(page);
         await expect(
-          page.getByText(
+          live(page).getByText(
             t('calculator.result.aboveTopRung', {
               ceiling: maxMonthlyPlanCredits().toLocaleString('en-US'),
             }),
           ),
         ).toBeVisible();
         await expect(page.getByTestId('calculator-larger')).toHaveCount(0);
-        await expect(page.getByTestId('calculator-plan')).toContainText(TOP.name);
-        await expect(page.getByTestId('calculator-topup')).toBeVisible();
+        await expect(live(page).getByTestId('calculator-plan')).toContainText(TOP.name);
+        await expect(live(page).getByTestId('calculator-topup')).toBeVisible();
       },
     );
     await beat();
@@ -450,23 +459,23 @@ test.describe('The Calculator on Billing & plans', () => {
       // blank
       await fillRange(page, '', '');
       await submit.click();
-      await expect(page.getByText(t('calculator.errors.rangeEmpty'))).toBeVisible();
+      await expect(live(page).getByText(t('calculator.errors.rangeEmpty'))).toBeVisible();
       // decimal, then negative
       await fillRange(page, '1.5', '4');
       await submit.click();
-      await expect(page.getByText(t('calculator.errors.rangeInvalid'))).toBeVisible();
+      await expect(live(page).getByText(t('calculator.errors.rangeInvalid'))).toBeVisible();
       await fillRange(page, '-2', '4');
       await submit.click();
-      await expect(page.getByText(t('calculator.errors.rangeInvalid'))).toBeVisible();
+      await expect(live(page).getByText(t('calculator.errors.rangeInvalid'))).toBeVisible();
       // low above high
       await fillRange(page, '9', '4');
       await submit.click();
-      await expect(page.getByText(t('calculator.errors.rangeOrder'))).toBeVisible();
+      await expect(live(page).getByText(t('calculator.errors.rangeOrder'))).toBeVisible();
       // no category
       await fillRange(page, '1', '4');
       await pickOnly(page, []);
       await submit.click();
-      await expect(page.getByText(t('calculator.errors.categoryMissing'))).toBeVisible();
+      await expect(live(page).getByText(t('calculator.errors.categoryMissing'))).toBeVisible();
       await expect(page.getByTestId('calculator-credits')).toHaveCount(0);
       expect(stub.estimates).toHaveLength(before);
     });
@@ -476,23 +485,23 @@ test.describe('The Calculator on Billing & plans', () => {
       await pickOnly(page, [first!]);
       stub.estimate = () => ({ status: 503, body: { code: 'CALCULATOR_UNAVAILABLE' } });
       await ask(page);
-      await expect(page.getByText(t('calculator.errors.unavailable'))).toBeVisible();
+      await expect(live(page).getByText(t('calculator.errors.unavailable'))).toBeVisible();
       await expect(page.getByText(t('calculator.errors.failed'))).toHaveCount(0);
       await expect(page.getByTestId('calculator-credits')).toHaveCount(0);
 
       stub.estimate = () => ({ status: 500, body: { code: 'INTERNAL' } });
       await page.getByRole('button', { name: t('states.retry') }).click();
-      await expect(page.getByText(t('calculator.errors.failed'))).toBeVisible();
+      await expect(live(page).getByText(t('calculator.errors.failed'))).toBeVisible();
       await expect(page.getByText(t('calculator.errors.unavailable'))).toHaveCount(0);
 
       stub.estimate = () => 'abort';
       await page.getByRole('button', { name: t('states.retry') }).click();
-      await expect(page.getByText(t('calculator.errors.failed'))).toBeVisible();
+      await expect(live(page).getByText(t('calculator.errors.failed'))).toBeVisible();
 
       stub.estimate = (body) =>
         ok(estimateFor(body['categories'] as string[], body['cadence'] as 'annual' | 'monthly'));
       await page.getByRole('button', { name: t('states.retry') }).click();
-      await expect(page.getByTestId('calculator-credits')).toBeVisible();
+      await expect(live(page).getByTestId('calculator-credits')).toBeVisible();
       await expect(page.getByText(t('calculator.errors.failed'))).toHaveCount(0);
     });
     await beat();
@@ -522,7 +531,7 @@ test.describe('The Calculator on Billing & plans', () => {
         await pickOnly(page, [first!, second!]);
         const res = await ask(page);
         expect(res.status()).toBe(200);
-        await expect(page.getByTestId('calculator-credits')).toBeVisible();
+        await expect(live(page).getByTestId('calculator-credits')).toBeVisible();
       },
     );
     await beat();
@@ -536,14 +545,16 @@ test.describe('The Calculator on Billing & plans', () => {
       await pickOnly(page, [first!, second!]);
       await ask(page, 'zh');
       const answer = estimateFor([first!, second!], 'annual');
-      expect(numerals(await page.getByTestId('calculator-credits').textContent())).toEqual([
+      expect(numerals(await live(page).getByTestId('calculator-credits').textContent())).toEqual([
         answer.credits.low,
         answer.credits.high,
       ]);
-      await expect(page.getByTestId('calculator-price')).toContainText(
+      await expect(live(page).getByTestId('calculator-price')).toContainText(
         String(catalogAmount(TOP, 'annual')).replace(/\B(?=(\d{3})+$)/g, ','),
       );
-      await expect(page.getByText(t('calculator.result.estimateCaveat', {}, 'zh'))).toBeVisible();
+      await expect(
+        live(page).getByText(t('calculator.result.estimateCaveat', {}, 'zh')),
+      ).toBeVisible();
       await expect(page.getByText(/billing\.calculator\./)).toHaveCount(0);
     });
     await beat();
@@ -572,7 +583,7 @@ test.describe('The Calculator on Billing & plans', () => {
         ),
       );
     await ask(page);
-    await expect(page.getByText(t('calculator.result.upgradeNote'))).toBeVisible();
+    await expect(live(page).getByText(t('calculator.result.upgradeNote'))).toBeVisible();
     await expect(result(page)).not.toContainText(/proration|prorated/i);
 
     stub.estimate = (body) =>
@@ -609,7 +620,7 @@ test.describe('The Calculator on Billing & plans', () => {
     );
     const adminEmail = `acc-calc-adm-${Date.now().toString(36)}@example.com`;
     const admin = await addOrgMember(seed, adminEmail);
-    await db.organizationMembership.updateMany({
+    await adminDb.organizationMembership.updateMany({
       where: { organizationId: seed.organizationId, userId: admin.id },
       data: { role: ORGANIZATION_ROLE.admin },
     });
@@ -627,7 +638,7 @@ test.describe('The Calculator on Billing & plans', () => {
     await pickOnly(page, [KEYS[0]!]);
     await ask(page);
     const answer = estimateFor([KEYS[0]!], 'annual');
-    expect(numerals(await page.getByTestId('calculator-credits').textContent())).toEqual([
+    expect(numerals(await live(page).getByTestId('calculator-credits').textContent())).toEqual([
       answer.credits.low,
       answer.credits.high,
     ]);
