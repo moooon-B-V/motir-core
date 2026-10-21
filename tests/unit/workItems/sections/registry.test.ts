@@ -211,6 +211,37 @@ describe('describeSectionSets', () => {
   });
 });
 
+describe('the planner-recorded decision brief (MOTIR-9211)', () => {
+  const BRIEF = [
+    ['decisionBrief', 'Decision'],
+    ['whatChanged', 'What changed'],
+    ['supersedes', 'Supersedes'],
+    ['resultingDirection', 'Resulting direction'],
+  ] as const;
+
+  it.each(['task', 'subtask', 'bug'] as const)(
+    'the %s decision cell serves the four brief sections as optional',
+    (kind) => {
+      const cell = describeSectionSets().sets.find((s) => s.kind === kind && s.type === 'decision');
+      for (const [name] of BRIEF) {
+        expect(cell?.sections).toContainEqual({ name, required: false });
+      }
+    },
+  );
+
+  it('carries the headings type-decision.md requires, in its order', () => {
+    const { sections } = describeSectionSets();
+    expect(BRIEF.map(([name]) => sections[name]?.heading)).toEqual(BRIEF.map(([, h]) => h));
+    const order = BRIEF.map(([name]) => SECTION_ORDER.indexOf(name));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it('is not offered to a cell of another type', () => {
+    expect(sectionSetFor('task', 'choice').sections).not.toContain('decisionBrief');
+    expect(sectionSetFor('task', 'code').sections).not.toContain('supersedes');
+  });
+});
+
 describe('headings', () => {
   it('matches the regexes planBody.ts reads', () => {
     expect(SECTION_CATALOGUE.acceptanceCriteria.heading).toMatch(/acceptance\s+criteria/i);

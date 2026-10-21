@@ -69,6 +69,80 @@ describe('sectionFindingFor (MOTIR-9032)', () => {
     ).toBeNull();
   });
 
+  // MOTIR-9211: the planner-recorded decision's brief (`type-decision.md`) used to
+  // land in `otherSections` and make every such card `incomplete`.
+  it.each(['task', 'subtask'] as const)(
+    'is silent for a %s decision body carrying the planner-recorded brief',
+    (kind) => {
+      const {
+        decisionBrief: _d,
+        whatChanged: _w,
+        supersedes: _s,
+        resultingDirection: _r,
+        ...researched
+      } = fixture(kind, 'decision');
+      // Hand-written after the refs, where the brief stood as `otherSections`.
+      const body = `${renderSections(kind, 'decision', researched)}
+## Decision
+
+No intent classifier.
+
+## What changed
+
+**Change:** workflow
+It said X; it says Y.
+
+## Supersedes
+
+MOTIR-1, MOTIR-2
+
+## Resulting direction
+
+The whole direction.
+`;
+      expect(
+        sectionFindingFor({ item: 'MOTIR-5', kind, type: 'decision', descriptionMd: body }),
+      ).toBeNull();
+    },
+  );
+
+  it('still reports a researched decision body missing its required sections', () => {
+    const {
+      question: _q,
+      options: _o,
+      recommendation: _r,
+      decisionBrief: _d,
+      whatChanged: _w,
+      supersedes: _s,
+      resultingDirection: _rd,
+      ...rest
+    } = fixture('task', 'decision');
+    const f = sectionFindingFor({
+      item: 'MOTIR-6',
+      kind: 'task',
+      type: 'decision',
+      descriptionMd: renderSections('task', 'decision', rest),
+    });
+    expect(f?.state).toBe('incomplete');
+    expect(f?.missing).toEqual(['question', 'options', 'recommendation']);
+    expect(f?.otherHeadings).toEqual([]);
+  });
+
+  it('still lists an undefined heading on a decision card as an other heading', () => {
+    const body = `${renderSections('task', 'decision', fixture('task', 'decision'))}
+## Notes
+
+Extra.
+`;
+    const f = sectionFindingFor({
+      item: 'MOTIR-7',
+      kind: 'task',
+      type: 'decision',
+      descriptionMd: body,
+    });
+    expect(f?.otherHeadings).toEqual(['Notes']);
+  });
+
   it('is silent for a kind or type the registry has no cell for', () => {
     expect(sectionFindingFor({ ...card, kind: 'nope', descriptionMd: null })).toBeNull();
     expect(sectionFindingFor({ ...card, type: 'nope', descriptionMd: null })).toBeNull();
