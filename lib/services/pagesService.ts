@@ -33,6 +33,7 @@ import {
   PageNotFoundError,
   PageVersionNotFoundError,
   archivePage as archivePageProcedure,
+  deriveFormats,
   extractLinks,
   createPage as createPageProcedure,
   deletePage as deletePageProcedure,
@@ -895,16 +896,35 @@ export const pagesService = {
 
   /** One version with its snapshot — `page:view`. An unknown number is `PageVersionNotFoundError`. */
   async getPageVersion(ctx: ServiceContext, input: GetPageVersionInput): Promise<PageVersionDto> {
-    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
-      await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
-      const store = pageStoreFor(tx);
-      await findInProject(store, input.projectId, input.pageId);
-      const version = await store.findVersion(input.pageId, input.number);
-      if (!version) throw new PageVersionNotFoundError(input.pageId, input.number);
-      const latest = await store.latestVersion(input.pageId);
-      const [author] = await userRepository.findByIds([version.authorId], tx);
-      return toPageVersionDto(version, author?.name, version.number === latest?.number);
-    });
+    const { version, authorName, isCurrent, mentionedIds } = await withWorkspaceContext(
+      scopeTo(ctx, input.projectId),
+      async (tx) => {
+        await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
+        const store = pageStoreFor(tx);
+        await findInProject(store, input.projectId, input.pageId);
+        const version = await store.findVersion(input.pageId, input.number);
+        if (!version) throw new PageVersionNotFoundError(input.pageId, input.number);
+        const latest = await store.latestVersion(input.pageId);
+        const [author] = await userRepository.findByIds([version.authorId], tx);
+        // The version's own snapshot names the work items its chips draw, so the
+        // ids come from its stored state, not the live body.
+        const links = extractLinks(deriveFormats(version.bodyState).json);
+        return {
+          version,
+          authorName: author?.name,
+          isCurrent: version.number === latest?.number,
+          mentionedIds: links.map((l) => l.workItemId),
+        };
+      },
+    );
+    // `{}` with no query for a version that mentions nothing, and the reader's
+    // own access decides each summary — the same resolver the page read uses.
+    const workItemRefs = await resolveWorkItemRefSummaries(
+      { ids: mentionedIds, keys: [] },
+      input.projectId,
+      ctx,
+    );
+    return toPageVersionDto(version, authorName, isCurrent, workItemRefs);
   },
 
   /**
