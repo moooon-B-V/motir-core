@@ -365,7 +365,10 @@ describe('plansService.approvePlan — materialize per op', () => {
     const fx = await makeWorkItemFixture();
     // The append now refuses a dangling body link (bug MOTIR-9175), so the row is
     // seeded directly: this is the backstop for a plan appended before that shipped.
-    const planId = await plannedPlan(fx, []);
+    // An empty plan is declined at close, so it holds one unrelated `add`.
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Unrelated card', kind: 'task' } },
+    ]);
     await adminDb.planItem.create({
       data: {
         workspaceId: fx.workspaceId,
@@ -2592,7 +2595,10 @@ describe('plansService.approvePlan — a MODIFY body carries an intra-plan chip 
     const fx = await makeWorkItemFixture();
     const survivorId = await seedItem(fx, 'Survivor with a dangling ref');
 
-    const planId = await plannedPlan(fx, []);
+    // An empty plan is declined at close, so it holds one unrelated `add`.
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Unrelated card', kind: 'task' } },
+    ]);
     await adminDb.planItem.create({
       data: {
         workspaceId: fx.workspaceId,
