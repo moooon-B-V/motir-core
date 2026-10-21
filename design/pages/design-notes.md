@@ -5,11 +5,12 @@ the `/pages` index with **New page**, and the page at its own address, `/pages/<
 the story ships — fresh, being written, saved / saving / offline, refused as too large, read-only,
 loading and not found.
 
-| Surface                 | Asset                     | States | Gates                                                 |
-| ----------------------- | ------------------------- | ------ | ----------------------------------------------------- |
-| The rail row and index  | `pages.mock.html`         | 1–5    | MOTIR-7300 (section, rail row, ⌘K, index, New page)   |
-| The page at its address | `page.mock.html`          | 6–12   | MOTIR-7275 (editor, toolbar, indicator), MOTIR-7280   |
-| A page’s history        | `page--history.mock.html` | 1–14   | MOTIR-5754 (History control, panel, compare, restore) |
+| Surface                     | Asset                               | States | Gates                                                 |
+| --------------------------- | ----------------------------------- | ------ | ----------------------------------------------------- |
+| The rail row and index      | `pages.mock.html`                   | 1–5    | MOTIR-7300 (section, rail row, ⌘K, index, New page)   |
+| The page at its address     | `page.mock.html`                    | 6–12   | MOTIR-7275 (editor, toolbar, indicator), MOTIR-7280   |
+| A page’s history            | `page--history.mock.html`           | 1–14   | MOTIR-5754 (History control, panel, compare, restore) |
+| The Linked work items strip | `page--linked-work-items.mock.html` | 1–12   | MOTIR-9200 (the strip), MOTIR-9202 (E2E + clip)       |
 
 ## ⚠️ This is a REDRAW, and it follows a refusal
 
@@ -1006,3 +1007,173 @@ New keys live under `pages.history.*`. ICU arguments as in the shipped catalogue
 - **History of an archived page** — MOTIR-5755 (archive and restore of a page).
 - **The page tree sidebar and breadcrumb** — MOTIR-7367's, unchanged; drawn only as context.
 - **Co-editing while comparing** — MOTIR-5750.
+
+## The page's Linked work items strip (MOTIR-7567 · hand links)
+
+**Story MOTIR-7567 · design subtask MOTIR-9196.** A DELTA of `page.mock.html` states 6–12 (the page at its
+own address, drawn by `PageView.tsx`): the **Linked work items** strip between the title row and the
+editor — the work items linked to this page **by hand**, as the product's live work-item chips, with **Link
+work item**, **Unlink** on each row, **Show more** when the read served a cursor, and — when there is
+nothing to show and nobody to show it to — no strip at all. `page--linked-work-items.mock.html`, panels
+1–12, each in light and dark.
+
+The other end of the same link — the work item's **Pages** section — is the Pages-section design's
+(MOTIR-9195, `design/work-items/design-notes.md`); this asset neither draws it nor allocates anything
+inside it. The chip's spec of record would be `page--work-item-mention.mock.html`, which
+`workItemMention.tsx` and `WorkItemPicker.tsx` cite and which does not resolve on `main`; the chip is
+therefore drawn from those two components and `WorkItemRefChip.tsx` themselves, and **if that mock lands it
+governs and this asset is corrected against it**.
+
+### Panel table
+
+| Panel | Frame                                        |
+| ----- | -------------------------------------------- |
+| 1     | Populated, a reader who may link             |
+| 2     | Populated, a Viewer                          |
+| 3     | Empty, a reader who may link                 |
+| 4     | Hidden                                       |
+| 5     | Loading, the linkable reader                 |
+| 6     | First read failed                            |
+| 7     | The row: live, archived, unavailable         |
+| 8     | At the page size: Show more, pending, failed |
+| 9     | The picker in six boards                     |
+| 10    | Linking in flight, and the three refusals    |
+| 11    | Unlink busy, unlinked, failed                |
+| 12    | ~390px, the picker at 390px, compare mode    |
+
+### Decisions
+
+- **D1 — the strip is a bare band**, no card frame and no border, between the title row and the editor's
+  `mt-3` slot. It touches neither the title row's controls nor the page menu.
+- **D2 — one rule chooses among panels 1–4:** paint iff the page is live AND (the read served rows OR this
+  reader may link). A loading frame is drawn only for a reader the capability says may link, and an
+  archived page mounts no strip and issues no read (the story hides a page's hand links on both sides until
+  it is restored).
+- **D3 — the capability is its own value.** `PageView`'s `canEdit` is the page's own edit right and gates
+  the title, the page menu and version restore, so it cannot answer for these controls. The route resolves
+  `work_item:edit` from `ProjectPageContext.permissions()` before the first paint, so the frame can be
+  drawn on it. Which key the write asserts is the write path's; this asset only renders it.
+- **D4 — no control while loading.** A control must not appear over a list that has not answered, and a
+  reader who may not link gets no frame at all (a promise the product would then withdraw).
+- **D5 — an unanswered read never renders as _no links_** and never draws the control (panel 6).
+- **D6 — three renderings of four data states** (panel 7). Live, archived (the shipped `is-archived` chip,
+  still navigable — a hand link can predate the archive, so it is never drawn as unavailable), and
+  Unavailable for both `accessible: false` and `summary: null`: chip-shaped, non-interactive, no key, no
+  title, no status, keeping its Unlink. The strip cannot use the chip's bare-key fallback: that exists for
+  a body token, where the author typed the key, and this row's only data is an id.
+- **D7 — the strip never re-sorts.** Newest hand link first, the read's order, so a row that just arrived
+  settles where it already is.
+- **D8 — paging.** Fifty per read, capped at 100 (`levelPageSize`, behind
+  `lib/pages/workItemPagesCursor.ts`). Show more appends in place and keeps scroll position and focus; no
+  count line, since a keyset read knows no total; no hand-made row is ever truncated off the list. A failed
+  page retries exactly the cursor that failed, never the first page.
+- **D9 — the picker is its own popover over the project-scoped search** (`?q=&projectId=`, an eight-row
+  window, the minimum-length floor and a 250 ms settle). **No candidate carries an already-linked mark:**
+  the strip's rows are keyset-paged and a first page's knowledge would be a half-truth, so the write's
+  refusal answers.
+- **D10 — a window, not a total.** Exactly eight rows back shows one quiet line, _More work items match —
+  keep typing to narrow._ — the search has no cursor, so the picker says it is a window.
+- **D11 — a search failure is never the no-results line**, and offers one active option, Try again, so
+  Enter retries without leaving the keyboard.
+- **D12 — one press, no confirm, no toast.** Removing a hand link changes nothing but this list and is one
+  click to remake; the row's arrival and its removal are the feedback, announced once through the polite
+  live region.
+- **D13 — already-linked is informational.** The pair was linked after this strip's read, from the work
+  item's side or another tab: no second row appears and the existing one stays single.
+- **D14 — compare mode.** Links belong to the page, not to a version: the strip spans the full content
+  width **above** the two compare columns and is never duplicated inside either.
+
+### Per-element colour and shape
+
+| Element          | Primitive                                              | Colour and shape                                                                                                         |
+| ---------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Strip            | a bare band on the page canvas                         | spacing only                                                                                                             |
+| Label            | 12.5px semibold                                        | `--el-text-secondary`                                                                                                    |
+| Chip             | the shipped `.wi-chip`, `max-w-full`, title truncating | its own classes; `is-archived` and `is-noaccess` reused; 6px gaps                                                        |
+| Unlink           | icon button OUTSIDE the chip's anchor                  | `--el-text-secondary`, hover `--el-danger-on-surface`; `--height-control` square, `--radius-control`                     |
+| Link work item   | `Button` secondary sm + `Plus`                         | `--el-button-border`, `--el-text`; `--radius-btn`, `--height-btn-sm`                                                     |
+| Skeleton bars    | two chip-shaped blocks, `aria-hidden`                  | `--el-muted`, `--radius-badge`                                                                                           |
+| Inline alert row | `TriangleAlert` + sentence + action                    | glyph `--el-danger-on-surface`, text `--el-text`, action `--el-link`                                                     |
+| Already linked   | informational line                                     | `--el-tint-sky` with `--el-text-strong`                                                                                  |
+| Picker panel     | the `@` popover surface                                | `--el-page-bg`, `--el-border`, `--radius-card`, `--shadow-elevated`, max 22rem, capped to the viewport minus the gutters |
+| Picker row       | type icon · mono key · title                           | `--el-text`; active `--el-surface`, `--radius-control`                                                                   |
+
+**Ink.** Every secondary line is `--el-text-secondary`; `--el-text-faint` is not used; `--el-text-muted` is
+the picker field's placeholder only. The shipped archived chip's own ink is `--el-text-faint`, which clears
+AA on no surface (2.37–2.61:1); this asset draws the archived and unavailable chips in `--el-text-secondary`
+and the build card should carry that correction, since the chip is its to restyle.
+
+### Copy
+
+Indicative key names under the build card's group; the words are this asset's and a value that differs is
+drift to correct.
+
+| Key                | en                                               | zh                                   |
+| ------------------ | ------------------------------------------------ | ------------------------------------ |
+| `title`            | Linked work items                                | 关联的工作项                         |
+| `listAria`         | Work items linked by hand                        | 手动关联的工作项                     |
+| `link`             | Link work item                                   | 关联工作项                           |
+| `unlinkAria`       | Unlink {key}                                     | 取消关联 {key}                       |
+| `empty`            | No work items linked by hand yet.                | 还没有手动关联的工作项。             |
+| `loading`          | Loading linked work items…                       | 正在加载关联的工作项…                |
+| `readFailed`       | Couldn’t load linked work items.                 | 无法加载关联的工作项。               |
+| `showMore`         | Show more                                        | 显示更多                             |
+| `loadMoreFailed`   | Couldn’t load the rest of the linked work items. | 无法加载其余的关联工作项。           |
+| `unavailable`      | Unavailable                                      | 不可用                               |
+| `unavailableTitle` | This work item isn’t available to you.           | 此工作项对你不可用。                 |
+| `pickerLabel`      | Work items in this project                       | 此项目中的工作项                     |
+| `typeToSearch`     | Type at least {min} characters to search.        | 至少输入 {min} 个字符开始搜索。      |
+| `searching`        | Searching…                                       | 正在搜索…                            |
+| `noResults`        | No work items match.                             | 没有匹配的工作项。                   |
+| `moreMatch`        | More work items match — keep typing to narrow.   | 还有更多匹配项——继续输入可缩小范围。 |
+| `searchFailed`     | Couldn’t search work items.                      | 无法搜索工作项。                     |
+| `alreadyLinked`    | That work item is already linked to this page.   | 该工作项已与此页面关联。             |
+| `writeFailed`      | Couldn’t link that work item. Try again.         | 无法关联该工作项，请重试。           |
+| `refused`          | You can’t change this page’s links.              | 你无法更改此页面的关联。             |
+| `gone`             | That work item no longer exists.                 | 该工作项已不存在。                   |
+| `unlinkFailed`     | Couldn’t unlink that work item. Try again.       | 无法取消关联该工作项，请重试。       |
+
+- **Reused, by key only:** Try again is `common.retry`; the word for a hand-made link, where the strip
+  needs it, is `issueViews.pagesSourceManual`'s. Their values are read from the catalogue, never retyped.
+- `{min}` is the picker's minimum query length, interpolated so it cannot drift from the search it
+  describes. `{key}` is the identifier, never the title — a title can be long and can change between the
+  read and the answer. The strip raises no toast, so no toast strings exist.
+
+### Obligations handed to the cards
+
+**To the strip's build card (MOTIR-9200):**
+
+- mount the strip between the title row and the editor slot in `PageView`, and only for a live page;
+- take the link capability as its own prop, resolved in `page.tsx` from `ProjectPageContext.permissions()`
+  — **not** `PageView`'s `canEdit` — so the frame can paint before the read settles;
+- draw rows in the shipped `wi-chip` classes and their `is-archived` / `is-noaccess` variants, with
+  **Unlink** outside the chip's anchor and the same Unavailable drawing for both `accessible: false` and
+  `summary: null`;
+- build the picker as a popover with its own field over
+  `GET /api/work-items/mention-search?q=&projectId=<this page's project>`, with the two-character floor and
+  the 250 ms settle, and **do not mount `packages/pages/src/editor/WorkItemPicker.tsx`** — it is the `@`
+  suggestion's listbox, takes its query as a prop and receives its keys from Tiptap, so it cannot live
+  outside the editor;
+- export or move the route's eight-row window beside the client fetcher so the full-window line can be
+  drawn;
+- page at fifty with **Show more** and the read's cursor, and write the `en` + `zh` entries above into the
+  catalogue.
+
+**From the page-side read (MOTIR-9198)** — per row the work item's id, its `linkedAt` and either the live
+summary or the unavailable arm; once, `nextCursor` and `canLink`; and the archived-page answer (no rows, no
+capability). **From the hand-link write path (MOTIR-9197)** — the two operations the controls call
+(`POST /api/work-items/[id]/pages`, `DELETE /api/work-items/[id]/pages/[pageId]`) and the refusals this
+asset words; it names the sentences, never the error codes. **To E2E and the clip (MOTIR-9202)** — panels
+1, 2, 7, 10 and 11 are the page-side acceptance path, and the accessible names it resolves controls by come
+from the copy table.
+
+### Allocation sweep
+
+**GIVES** the build and E2E cards the panels and copy above. **TAKES** from none. It composes with three
+sibling cards: the Pages-section design (MOTIR-9195), the page-side read (MOTIR-9198) and the write path
+(MOTIR-9197).
+
+### What this does not decide
+
+The work item's Pages section and its picker; the read's order beyond "newest hand link first"; the write
+path's error names; embedded cards; and the page tree and breadcrumb (MOTIR-7367's, unchanged).
