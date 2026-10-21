@@ -116,7 +116,7 @@ test('A. a change asked for over unsearchable code plans nothing and says which 
   beat,
   acceptanceStory,
 }) => {
-  acceptanceStory('MOTIR-7990');
+  acceptanceStory('MOTIR-9165');
   writeFileSync(
     process.env['MOTIR_AI_JOBS_FIXTURE_PATH']!,
     JSON.stringify(
@@ -207,7 +207,7 @@ test('B. a run that meets unsearchable code pauses, links to the Codebase page, 
   beat,
   acceptanceStory,
 }) => {
-  acceptanceStory('MOTIR-7990');
+  acceptanceStory('MOTIR-9165');
   const seed = await seedAiAugmentReplan(`code-unsearchable-b-${Date.now()}@example.com`);
   await markProjectOnboarded(seed.projectId);
   await stubAiAccess(page);
