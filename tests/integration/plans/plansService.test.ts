@@ -363,16 +363,25 @@ describe('plansService.approvePlan — materialize per op', () => {
 
   it('leaves a DANGLING intra-plan ref inert when materialized (no crash, no edge)', async () => {
     const fx = await makeWorkItemFixture();
+    // The append now refuses a dangling body link (bug MOTIR-9175), so the row is
+    // seeded directly: this is the backstop for a plan appended before that shipped.
+    // An empty plan is declined at close, so it holds one unrelated `add`.
     const planId = await plannedPlan(fx, [
-      {
+      { op: 'add', proposedFields: { title: 'Unrelated card', kind: 'task' } },
+    ]);
+    await adminDb.planItem.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        planId,
         op: 'add',
+        blockedByRefs: [],
         proposedFields: {
           title: 'Orphan ref card',
           kind: 'task',
           descriptionMd: 'See [gone](motir-ref:planItem:pi_does_not_exist).',
         },
       },
-    ]);
+    });
     // Must NOT throw — a dangling temp-ref is body text, never a materialize failure.
     await plansService.approvePlan(planId, fx.ctx);
     const created = await adminDb.workItem.findFirstOrThrow({
@@ -2586,13 +2595,20 @@ describe('plansService.approvePlan — a MODIFY body carries an intra-plan chip 
     const fx = await makeWorkItemFixture();
     const survivorId = await seedItem(fx, 'Survivor with a dangling ref');
 
+    // An empty plan is declined at close, so it holds one unrelated `add`.
     const planId = await plannedPlan(fx, [
-      {
+      { op: 'add', proposedFields: { title: 'Unrelated card', kind: 'task' } },
+    ]);
+    await adminDb.planItem.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        planId,
         op: 'modify',
         workItemId: survivorId,
+        blockedByRefs: [],
         patch: { descriptionMd: 'See [gone](motir-ref:planItem:pi_does_not_exist).' },
       },
-    ]);
+    });
     // Must NOT throw — a dangling temp-ref is body text on either op.
     await plansService.approvePlan(planId, fx.ctx);
 
@@ -2663,5 +2679,139 @@ describe('plansService.approvePlan — a MODIFY body carries an intra-plan chip 
         },
       }),
     ).toBe(0);
+  });
+});
+
+// Bug MOTIR-9175 — a body `motir-ref:planItem:<id>` link naming no proposal on the
+// plan is refused at every proposal write door, instead of shipping as dead text.
+describe('plansService — a body link to a planItem the plan does not hold (MOTIR-9175)', () => {
+  const DEAD = 'See [gone](motir-ref:planItem:pi_does_not_exist).';
+
+  async function openPlanWithSibling(fx: WorkItemFixture) {
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Links' }, fx.ctx);
+    const withSibling = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Sibling', kind: 'task' } }],
+      fx.ctx,
+    );
+    return { planId: plan.id, siblingId: withSibling.items[0]!.id };
+  }
+
+  it('the append refuses an `add` and a `modify` whose body names an unknown id, and appends nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId } = await openPlanWithSibling(fx);
+    const targetId = await seedItem(fx, 'Committed target');
+
+    for (const field of ['descriptionMd', 'explanationMd'] as const) {
+      const err = await plansService
+        .addProposals(
+          planId,
+          [{ op: 'add', proposedFields: { title: 'Links it', kind: 'task', [field]: DEAD } }],
+          fx.ctx,
+        )
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(InvalidProposalError);
+      expect((err as Error).message).toContain('pi_does_not_exist');
+    }
+    await expect(
+      plansService.addProposals(
+        planId,
+        [{ op: 'modify', workItemId: targetId, patch: { descriptionMd: DEAD } }],
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(InvalidProposalError);
+    expect(await adminDb.planItem.count({ where: { planId } })).toBe(1);
+  });
+
+  it('the append accepts a link to an `add` the plan already holds, and refuses one to a sibling of the same call', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, siblingId } = await openPlanWithSibling(fx);
+
+    const ok = await plansService.addProposals(
+      planId,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Links it',
+            kind: 'task',
+            descriptionMd: `After [the sibling](motir-ref:planItem:${siblingId}). Syntax: \`[x](motir-ref:planItem:pi_not_checked)\`.`,
+          },
+        },
+      ],
+      fx.ctx,
+    );
+    expect(ok.items).toHaveLength(2);
+
+    // An id belonging to a proposal in the SAME call cannot exist yet, so the
+    // only way to write one is to name an id the plan does not hold.
+    await expect(
+      plansService.addProposals(
+        planId,
+        [
+          { op: 'add', proposedFields: { title: 'Later', kind: 'task' } },
+          {
+            op: 'add',
+            proposedFields: { title: 'Early', kind: 'task', descriptionMd: DEAD },
+          },
+        ],
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(InvalidProposalError);
+  });
+
+  it('the deepen / review edit refuses a dangling link it writes, accepts a resolving one, and leaves the proposal as it was', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, siblingId } = await openPlanWithSibling(fx);
+    const withTarget = await plansService.addProposals(
+      planId,
+      [{ op: 'add', proposedFields: { title: 'Target', kind: 'task' } }],
+      fx.ctx,
+    );
+    const targetItemId = withTarget.items.find((i) => i.id !== siblingId)!.id;
+
+    await expect(
+      plansService.deepenProposal(planId, targetItemId, { descriptionMd: DEAD }, fx.ctx),
+    ).rejects.toBeInstanceOf(InvalidProposalError);
+    const untouched = await adminDb.planItem.findUniqueOrThrow({ where: { id: targetItemId } });
+    expect((untouched.proposedFields as { descriptionMd?: string }).descriptionMd).toBeUndefined();
+
+    await plansService.deepenProposal(
+      planId,
+      targetItemId,
+      { descriptionMd: `Needs [the sibling](motir-ref:planItem:${siblingId}).` },
+      fx.ctx,
+    );
+  });
+
+  it('the correction refuses a dangling link on an `add` and on a `modify`, and accepts a resolving one', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, siblingId } = await openPlanWithSibling(fx);
+    const targetId = await seedItem(fx, 'Committed target');
+    const withModify = await plansService.addProposals(
+      planId,
+      [{ op: 'modify', workItemId: targetId, patch: { title: 'Renamed' } }],
+      fx.ctx,
+    );
+    const modifyItemId = withModify.items.find((i) => i.op === 'modify')!.id;
+
+    await expect(
+      plansService.correctProposal(planId, siblingId, { descriptionMd: DEAD }, fx.ctx),
+    ).rejects.toBeInstanceOf(InvalidProposalError);
+    await expect(
+      plansService.correctProposal(
+        planId,
+        modifyItemId,
+        { patch: { descriptionMd: DEAD } },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(InvalidProposalError);
+
+    await plansService.correctProposal(
+      planId,
+      modifyItemId,
+      { patch: { descriptionMd: `After [the sibling](motir-ref:planItem:${siblingId}).` } },
+      fx.ctx,
+    );
   });
 });
