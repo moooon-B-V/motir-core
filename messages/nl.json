@@ -6648,6 +6648,7 @@
       "subtitle": "Hoeveel werkitems je organisatie per maand afrondt en welke modelcategorieën ze gebruikt. Motir schat de credits en het abonnement dat past — het antwoord is een schatting en niets hier wijzigt je abonnement.",
       "back": "Terug naar abonnementen",
       "open": "Schat je gebruik",
+      "marked": "Past bij je schatting",
       "inputs": {
         "rangeLabel": "Afgeronde werkitems per maand",
         "rangeHelp": "Een bereik is prima — de onder- en bovengrens van een normale maand.",

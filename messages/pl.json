@@ -6648,6 +6648,7 @@
       "subtitle": "Ile elementów roboczych Twoja organizacja kończy w miesiącu i z jakich kategorii modeli korzysta. Motir szacuje kredyty i pasujący plan — wynik jest szacunkiem, a nic tutaj nie zmienia Twojej subskrypcji.",
       "back": "Wróć do planów",
       "open": "Oszacuj swoje zużycie",
+      "marked": "Pasuje do Twojego szacunku",
       "inputs": {
         "rangeLabel": "Elementy robocze kończone w miesiącu",
         "rangeHelp": "Wystarczy przedział — dolna i górna granica zwykłego miesiąca.",

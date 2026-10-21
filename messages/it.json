@@ -6648,6 +6648,7 @@
       "subtitle": "Quanti elementi di lavoro completa la tua organizzazione in un mese e quali categorie di modelli usa. Motir stima i crediti e il piano adatto: il risultato è una stima e nulla qui modifica il tuo abbonamento.",
       "back": "Torna ai piani",
       "open": "Stima il tuo utilizzo",
+      "marked": "Corrisponde alla tua stima",
       "inputs": {
         "rangeLabel": "Elementi di lavoro completati al mese",
         "rangeHelp": "Va bene anche un intervallo: il minimo e il massimo di un mese normale.",

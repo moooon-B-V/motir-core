@@ -5400,6 +5400,7 @@
   "billing.calculator.subtitle": "What your organization finishes in a month, and which model categories it uses. Motir estimates the credits and the plan that fits — the answer is an estimate, and nothing here changes your subscription.",
   "billing.calculator.back": "Back to plans",
   "billing.calculator.open": "Estimate your usage",
+  "billing.calculator.marked": "Matches your estimate",
   "billing.calculator.inputs.rangeLabel": "Work items finished a month",
   "billing.calculator.inputs.rangeHelp": "A range is fine — the low and high ends of a normal month.",
   "billing.calculator.inputs.lowLabel": "Low",

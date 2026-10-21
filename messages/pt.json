@@ -6648,6 +6648,7 @@
       "subtitle": "Quantos itens de trabalho sua organização conclui por mês e quais categorias de modelos ela usa. A Motir estima os créditos e o plano ideal — o resultado é uma estimativa, e nada aqui altera sua assinatura.",
       "back": "Voltar aos planos",
       "open": "Estime seu uso",
+      "marked": "Combina com sua estimativa",
       "inputs": {
         "rangeLabel": "Itens de trabalho concluídos por mês",
         "rangeHelp": "Um intervalo basta — o mínimo e o máximo de um mês normal.",

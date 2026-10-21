@@ -6648,6 +6648,7 @@
       "subtitle": "What your organization finishes in a month, and which model categories it uses. Motir estimates the credits and the plan that fits — the answer is an estimate, and nothing here changes your subscription.",
       "back": "Back to plans",
       "open": "Estimate your usage",
+      "marked": "Matches your estimate",
       "inputs": {
         "rangeLabel": "Work items finished a month",
         "rangeHelp": "A range is fine — the low and high ends of a normal month.",

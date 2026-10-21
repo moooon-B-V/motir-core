@@ -6648,6 +6648,7 @@
       "subtitle": "Le nombre d'éléments de travail que votre organisation termine en un mois, et les catégories de modèles qu'elle utilise. Motir estime les crédits et le forfait adapté — le résultat est une estimation, et rien ici ne modifie votre abonnement.",
       "back": "Retour aux forfaits",
       "open": "Estimer votre utilisation",
+      "marked": "Correspond à votre estimation",
       "inputs": {
         "rangeLabel": "Éléments de travail terminés par mois",
         "rangeHelp": "Une fourchette suffit — les valeurs basse et haute d'un mois normal.",

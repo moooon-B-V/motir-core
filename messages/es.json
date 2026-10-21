@@ -6648,6 +6648,7 @@
       "subtitle": "Cuántos elementos de trabajo termina tu organización al mes y qué categorías de modelos usa. Motir estima los créditos y el plan que mejor encaja: el resultado es una estimación y nada de aquí cambia tu suscripción.",
       "back": "Volver a los planes",
       "open": "Calcula tu uso",
+      "marked": "Encaja con tu estimación",
       "inputs": {
         "rangeLabel": "Elementos de trabajo terminados al mes",
         "rangeHelp": "Un rango basta: el mínimo y el máximo de un mes normal.",

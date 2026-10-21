@@ -6648,6 +6648,7 @@
       "subtitle": "Wie viele Arbeitselemente Ihre Organisation im Monat abschließt und welche Modellkategorien sie nutzt. Motir schätzt die nötigen Credits und den passenden Plan – das Ergebnis ist eine Schätzung, und hier ändert sich nichts an Ihrem Abonnement.",
       "back": "Zurück zu den Plänen",
       "open": "Nutzung schätzen",
+      "marked": "Passt zu Ihrer Schätzung",
       "inputs": {
         "rangeLabel": "Abgeschlossene Arbeitselemente pro Monat",
         "rangeHelp": "Ein Bereich genügt – die untere und die obere Grenze eines normalen Monats.",
