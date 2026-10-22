@@ -6933,3 +6933,133 @@ gathers. No key is added in either language.
 - The canvas pane, the progress line and every word in the rail.
 - A new door: the overlay is opened exactly as `planning-workspace.mock.html` draws, from the Plan with
   AI orb or the header pill.
+
+## ⭐ The overlay's History section — your own conversations in this project, under the rail head (MOTIR-9305, 2026-10-22)
+
+**Mock:** `design/ai-chat/planning-workspace--history.mock.html` (a delta; panels 1–9).
+**Amends** §_The conversation_ (the rail, `planning-workspace.mock.html`) by adding one collapsible
+section between the rail head and the thread, and §_Plan something new_ (MOTIR-7647,
+`planning-workspace--plan-something-new.mock.html`) only in that its rail head now sits above the
+section. The rows reuse the Plans list's row vocabulary (`design/ai-planning/plans-tabbed-list.mock.html`,
+MOTIR-3233; shipped as `app/(authed)/plans/_components/SessionRow.tsx`) at rail size, without
+redrawing that page. No existing mock is edited.
+
+**What was drawn from.** The mock mirrors the shipped markup of `components/planning/PlanChangeRail.tsx`
+(the aside, the head, the `role="log"` thread and the composer slot), `components/planning/SessionEndParts.tsx`
+(the end marker and the ended composer slot), `components/ui/Pill.tsx` and the Plans row. It was
+composed from those components' classes and the theme's tokens; the live app was not rendered for
+this card.
+
+**The ask (MOTIR-9218).** A member sees, inside the planning overlay, the conversations THEY started in
+this project (`created_by_id` = viewer, `origin <> 'guide'`), open or ended, newest activity first,
+ten at a time, and can open any of them in place. The read is `GET /api/ai/plan-change/sessions/history`
+(MOTIR-9306).
+
+### Panel 1 — the entry path (collapsed)
+
+- A `<section class="hx" aria-label="History">` placed directly under the rail head and above the
+  `role="log"` thread, in every rail mode. It is chrome like the head: it does not scroll with the
+  thread.
+- The header is one `<button aria-expanded="false" aria-controls="hx-region">` row: `ChevronRight`
+  (14px, rotates 90° when open), `History` glyph (14px), label `planningWorkspace.history.header`.
+  Height `--height-control`, padding `0 --spacing-control-x-16`, 13px/500 `--el-text`; the section's
+  bottom hairline is `--el-border-soft` (the head's own hairline token).
+- Hover `--el-muted` fill; focus the shipped `--focus-ring-color` ring (drawn on panel 1 as the
+  focused state).
+- **Collapsed on every overlay open.** Nothing is fetched while it is collapsed.
+- `data-testid="planning-history-toggle"`.
+
+### Panel 2 — expanded: the first page
+
+- Expanding re-reads page 1 (no stale cache between expands) and shows the loading state: three
+  skeleton rows (`.hx-skel`, `--el-muted` bars, `--radius-control`) under a polite
+  `role="status"` reading `planningWorkspace.history.loading` (visually hidden beside the bars).
+  `prefers-reduced-motion: reduce` drops the shimmer.
+- The list is `<ul id="hx-region" aria-label="{planningWorkspace.history.regionAria}">`, max-height
+  300px, scrolling on its own; the thread below keeps the remaining height.
+- Ten rows per page. Drawn: row 1 the currently open session (marker below), row 2 hovered
+  (`--el-muted`), row 3 focused (ring).
+- `data-testid="planning-history-list"`, each row `planning-history-row`.
+
+### Panel 3 — the row, named once
+
+| element            | what it shows                                                                                                                                                          | tokens                                                                   |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| row                | an `<a>` (one tab stop) to the session; padding `--spacing-control-y-8` / `--spacing-control-x-8`, `--radius-control`                                                  | hover `--el-muted`; focus `--focus-ring-color`                           |
+| first-turn line    | the session's first user turn, one line, ellipsis; else the latest plan's title; else `aiPlanning.sessions.untitled`. Full text in `title`.                            | 13px/500 `--el-text`; ended rows `--el-text-secondary`                   |
+| anchor chip        | the first anchor key in mono, `aiPlanning.sessions.anchorMore` for more, full set in `title`; a project-wide session reads `aiPlanning.sessions.anchorProject` as text | neutral chip (`--el-chip-bg`, `--el-chip-border`, `--el-text-secondary`) |
+| last-active time   | `aiPlanning.sessions.lastActive`, relative                                                                                                                             | 12px `--el-text-secondary`                                               |
+| status pill        | `planningWorkspace.history.status.open` or `.ended`                                                                                                                    | `Pill` mint (`--el-tint-mint`, `--el-text-strong`) · archived tone       |
+| plan state pill    | only when `planCount > 0` and the state is not `none` / `closed`: `aiPlanning.sessions.planState.*` with the Plans page's tone (Writing sky, Waiting lavender, …)      | `Pill` tinted tones, `--el-text-strong` ink                              |
+| ended treatment    | secondary ink on the first-turn line plus the Ended pill. No opacity.                                                                                                  | `--el-text-secondary`                                                    |
+| currently open row | the session the rail shows now: page-white fill with a 2px leading accent bar, `aria-current="true"`                                                                   | `--el-page-bg`, `--el-accent`                                            |
+
+The row's accessible name is `planningWorkspace.history.rowAria`. A long first turn truncates on one
+line at every width (drawn on panel 3 and at the floor on panel 8).
+
+### Panel 4 — paging states
+
+- **Loading more.** An `IntersectionObserver` sentinel after the last row fetches the next page; the
+  last row receiving keyboard focus fetches it too. While it loads, a `role="status"` footer row:
+  spinner (`--el-text-secondary`) + `planningWorkspace.history.loadingMore`.
+- **End of list.** `nextCursor` null: hairline–text–hairline (`--el-border-soft`, 12px
+  `--el-text-secondary`) reading `planningWorkspace.history.end`.
+- **Error, first page.** In place of the list: `CircleAlert` glyph (`--el-danger-on-surface`) +
+  `planningWorkspace.history.error` in `--el-text`, and a link-styled **Retry** button
+  (`aiPlanning.sessions.loadMoreRetry`, `--el-link`). `role="alert"`.
+- **Error, next page.** The rows stay; the footer row reads `aiPlanning.sessions.loadMoreError` with
+  the same Retry.
+
+### Panel 5 — empty, and who sees the section
+
+- **Empty.** `MessagesSquare` glyph (`--el-text-secondary`, `aria-hidden`), title
+  `planningWorkspace.history.emptyTitle` (13px/600 `--el-text`), body
+  `planningWorkspace.history.emptyBody` (12px `--el-text-secondary`).
+- **Visitors get no section** — not collapsed, not disabled: absent. Members see it in every mode,
+  including a read-only reopen.
+
+### Panel 6 — opening a row
+
+- The row opens the session INSIDE the overlay through the shipped `planSession` reopen, with the
+  same launch context the Plans row builds (`launchContextFor`: the first anchor key, or the project,
+  carrying the session id). The overlay, the canvas frame and the rail width stay put; the section
+  stays expanded and keeps its scroll, and the opened row becomes the current row.
+- **An open row** opens the live conversation with its composer.
+- **An ended row** opens read-only: the thread ends with the shipped `SessionEndMarker` and the
+  composer slot is the shipped `EndedComposerSlot` — its gloss and **Start a new session**, which
+  carries the conversation into a new session. Nothing new is drawn for it.
+
+### Panels 7–9 — dark parity, the 352px floor and zh
+
+Every element is drawn under `data-theme="dark"`; all inks are `--el-text`, `--el-text-secondary`,
+`--el-text-strong` on tints, `--el-link` and `--el-danger-on-surface`, which clear AA on both themes.
+At the rail's 352px floor the first-turn line truncates first, then the anchor chip (max 11rem); the
+pills never wrap. The zh panel shows the header, the pills and a row in Chinese.
+
+### Keyboard and assistive tech
+
+- Tab reaches the header button, then each row (one stop each), then the thread. Enter / Space on the
+  header toggles; Enter on a row opens it.
+- `aria-expanded` and `aria-controls` on the header; the list is labelled by `regionAria`;
+  the current row carries `aria-current="true"`; loading and loading-more are polite `role="status"`;
+  errors are `role="alert"`.
+- Focus is never moved by loading a page.
+
+### Copy index
+
+| key                                      | en                                                                     | zh                                             |
+| ---------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------- |
+| `planningWorkspace.history.header`       | History                                                                | 历史记录                                       |
+| `planningWorkspace.history.regionAria`   | Your past conversations in this project                                | 你在此项目中的过往对话                         |
+| `planningWorkspace.history.status.open`  | Open                                                                   | 进行中                                         |
+| `planningWorkspace.history.status.ended` | Ended                                                                  | 已结束                                         |
+| `planningWorkspace.history.loading`      | Loading your conversations…                                            | 正在加载你的对话…                              |
+| `planningWorkspace.history.loadingMore`  | Loading more…                                                          | 正在加载更多…                                  |
+| `planningWorkspace.history.end`          | No older conversations                                                 | 没有更早的对话                                 |
+| `planningWorkspace.history.emptyTitle`   | No conversations yet                                                   | 还没有对话                                     |
+| `planningWorkspace.history.emptyBody`    | Questions you ask and plans you start in this project are listed here. | 你在此项目中提出的问题和开始的规划会列在这里。 |
+| `planningWorkspace.history.error`        | Couldn’t load your conversations.                                      | 无法加载你的对话。                             |
+| `planningWorkspace.history.rowAria`      | {title} · {status} · active {when}                                     | {title} · {status} · {when}活跃                |
+
+Reused, unchanged: `aiPlanning.sessions.untitled`, `.lastActive`, `.anchorProject`, `.anchorMore`,
+`.planState.*`, `.loadMoreError`, `.loadMoreRetry`.
