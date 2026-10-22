@@ -1370,6 +1370,26 @@ describe('the MULTI-REPOSITORY per-item-PR workflow', () => {
     expect(prompt).not.toContain('git branch -d');
   });
 
+  it('has the agent take a no-change repository OFF the card and record why (MOTIR-9235)', () => {
+    // Reporting it was not enough: the repository stayed on the card, the
+    // completion gate counted it `awaiting`, and the card was held after its
+    // real work merged. The sentence is pinned whole, because each clause is a
+    // step: the tool, the field, the order, and the discrepancy it is recorded as.
+    const prompt = built();
+    expect(prompt).toContain(
+      [
+        'If one repository turns out to need no change at all, open no pull request there.',
+        'Take it off the card instead: call the update_work_item tool with key PROD-7',
+        'and targetRepos set to the repositories you DID change, in their current order.',
+        'The item completes only when every repository on its list has merged, so a',
+        'repository left there holds it open for ever. Then record why as a point of your',
+        'ONE record_run_discrepancy call — planAsked: that repository; built: no change;',
+        'why: what made the change unnecessary — and name it in your outcome report.',
+      ].join('\n'),
+    );
+    expect(prompt).not.toContain('somebody has to decide what it means');
+  });
+
   it('names every repository in CONTEXT, marks the working directory, and asserts no absolute path', () => {
     const prompt = built();
     expect(prompt).toContain('- Repositories (2) — this item ships in EVERY one of them:');

@@ -1983,9 +1983,18 @@ function multiRepoPerItemPrWorkflow(
     'delete any branch. This item is not complete until EVERY one of them has merged —',
     'a single merged pull request leaves it held, waiting on the others.',
     '',
-    'If one repository turns out to need no change at all, say so in the outcome report',
-    'rather than opening an empty pull request; that is a fact about the card, and',
-    'somebody has to decide what it means.',
+    // MOTIR-9235 — this used to say only "say so in the outcome report", and
+    // nothing turned that report into a decision: the repository stayed on the
+    // card, the completion gate counted it `awaiting`, and the card was held at
+    // its last status for ever after the real work merged. The agent is the one
+    // reader who KNOWS the repository needs nothing, so it settles the card.
+    'If one repository turns out to need no change at all, open no pull request there.',
+    `Take it off the card instead: call the update_work_item tool with key ${src.key}`,
+    'and targetRepos set to the repositories you DID change, in their current order.',
+    'The item completes only when every repository on its list has merged, so a',
+    'repository left there holds it open for ever. Then record why as a point of your',
+    'ONE record_run_discrepancy call — planAsked: that repository; built: no change;',
+    'why: what made the change unnecessary — and name it in your outcome report.',
   ];
 }
 
