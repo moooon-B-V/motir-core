@@ -210,7 +210,8 @@ describe('whose sessions are listed', () => {
     const plansMine = await planSessionsService.listSessions(fx.projectId, reader, {
       view: 'mine',
     });
-    expect(ids(plansMine).sort()).toEqual([own, routed.sessionId].sort());
+    // `own` holds no plan, so the Plans page (MOTIR-9300) leaves it out.
+    expect(ids(plansMine)).toEqual([routed.sessionId]);
   });
 });
 

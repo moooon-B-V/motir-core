@@ -311,9 +311,8 @@ describe('the History population, seeded beside the Plans page’s', () => {
     expect(ids(plansMine)).toContain(s.routed.sessionId);
 
     // The Plans read is exactly the repository read with its own arguments and NO
-    // `ownerId`: the option History added changes nothing for it. Whether a
-    // zero-plan session is in it is the Plans page's own rule (MOTIR-9300), so it
-    // is compared, never pinned.
+    // `ownerId`: the option History added changes nothing for it. The Plans page
+    // reads with `planOnly` (MOTIR-9300), so the direct read passes it too.
     const direct = await withWorkspaceServiceContext(s.viewer.workspaceId, (tx) =>
       planChangeSessionRepository.listPageByProject(
         {
@@ -322,6 +321,7 @@ describe('the History population, seeded beside the Plans page’s', () => {
           limit: 101,
           after: null,
           state: null,
+          planOnly: true,
           mine: { userId: s.viewer.userId, routedPlanIds: [s.routed.planId] },
         },
         tx,
