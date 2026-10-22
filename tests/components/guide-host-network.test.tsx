@@ -263,6 +263,50 @@ describe('opening the guide', () => {
     await waitFor(() => expect(posted('/api/ai/guide/settle')).toHaveLength(1));
     await waitFor(() => expect(rowsDone()).toEqual([true]));
   });
+
+  // MOTIR-9254: the opening turn's submit failed, so it was written with no job.
+  // Reopening resumes that thread; without this the rail sat idle on the person's
+  // own message, with no answer, no failure line and no Try again.
+  it('a resume that ends on a turn with no job says so, and Try again re-runs it', async () => {
+    handler = ordinary({ before: [todo('r1', 'One')], after: [todo('r1', 'One', true)] });
+    const resume = handler;
+    const JOBLESS = turn(0, { jobId: null });
+    handler = (method, path, body) => {
+      if (method === 'POST' && path === '/api/ai/guide') {
+        const b = body as { turnId?: string };
+        return b.turnId
+          ? json({
+              outcome: 'guiding',
+              jobId: 'job-1',
+              turnId: 't0',
+              started: false,
+              session: thread([OPENING]),
+            })
+          : json({
+              outcome: 'guiding',
+              jobId: null,
+              turnId: null,
+              started: false,
+              session: thread([JOBLESS]),
+            });
+      }
+      return resume(method, path, body);
+    };
+    renderHost({ ...CARD, identifier: 'PROD-76' });
+    await waitFor(() => expect(screen.getByTestId('guide-error')).toBeTruthy());
+    expect(screen.getByTestId('guide-error').textContent).toContain(
+      'nothing on the work item changed',
+    );
+    // Opening submitted nothing and streamed nothing.
+    expect(posted('/api/ai/guide')).toHaveLength(1);
+    expect(sent.some((r) => /\/stream$/.test(r.path))).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    await waitFor(() => expect(posted('/api/ai/guide/settle')).toHaveLength(1));
+    expect(posted('/api/ai/guide').at(-1)!.body).toEqual({ sessionId: 's1', turnId: 't0' });
+    await waitFor(() => expect(screen.queryByTestId('guide-error')).toBeNull());
+    await waitFor(() => expect(rowsDone()).toEqual([true]));
+  });
 });
 
 describe('the canvas pane', () => {

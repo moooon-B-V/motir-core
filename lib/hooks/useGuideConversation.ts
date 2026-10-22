@@ -234,17 +234,21 @@ export function useGuideConversation({ itemKey, workItemId, todos }: UseGuideCon
         phase: 'idle',
         planning: response.planning ?? s.planning,
       }));
-      const pending = response.jobId
-        ? { jobId: response.jobId }
-        : (() => {
-            // A RESUME that reopened mid-turn (a reload while a turn ran): the
-            // thread ends on a turn with a job and no answer, so follow that job.
-            // The settle is replayable, so following a job another tab already
-            // landed lands nothing and returns the thread.
-            const open = unansweredTurn(response.session);
-            return open?.jobId ? { jobId: open.jobId } : null;
-          })();
-      if (pending) await follow(pending.jobId, response.session.id);
+      const open = response.jobId ? null : unansweredTurn(response.session);
+      // A RESUME that ends on a turn whose submit failed (MOTIR-9254): it has no
+      // job to follow, so say it did not finish and offer Try again — which
+      // re-runs that same turn. Never resubmitted here: opening must not start a
+      // billed job the person did not ask for.
+      if (open && !open.jobId) {
+        setState((s) => ({ ...s, errorCode: 'GUIDE_FAILED' }));
+        return;
+      }
+      // A RESUME that reopened mid-turn (a reload while a turn ran): the thread
+      // ends on a turn with a job and no answer, so follow that job. The settle
+      // is replayable, so following a job another tab already landed lands
+      // nothing and returns the thread.
+      const jobId = response.jobId ?? open?.jobId;
+      if (jobId) await follow(jobId, response.session.id);
     },
     [follow],
   );
