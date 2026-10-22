@@ -122,13 +122,16 @@ describe('the @motir/cli publish metadata', () => {
   it('points repository / homepage / bugs at the RENAMED repo', () => {
     // The 0.0.1 name-claim on npm still advertises `moooon-B-V/prodect-core`,
     // which 404s since the MOTIR-668 rename. The registry is not evidence these
-    // fields are right — this is.
-    expect(pkg.repository?.url).toBe('git+https://github.com/moooon-B-V/motir-core.git');
+    // fields are right — this is. The repo then moved again, from `moooon-B-V`
+    // to `motir-co`, and npm refuses a provenance publish whose `repository.url`
+    // names a different repo than the one that signed it (E422, MOTIR-9320).
+    expect(pkg.repository?.url).toBe('git+https://github.com/motir-co/motir-core.git');
     expect(pkg.repository?.directory).toBe('packages/cli');
     expect(pkg.homepage).toBe('https://motir.co');
-    expect(pkg.bugs?.url).toBe('https://github.com/moooon-B-V/motir-core/issues');
+    expect(pkg.bugs?.url).toBe('https://github.com/motir-co/motir-core/issues');
     for (const field of [pkg.repository?.url, pkg.bugs?.url]) {
       expect(field, 'no pre-rename prodect-core URL survives').not.toContain('prodect-core');
+      expect(field, 'no pre-move moooon-B-V URL survives').not.toContain('moooon-B-V');
     }
   });
 
