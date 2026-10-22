@@ -8423,6 +8423,38 @@
         "noAi": "Motir AI n’est pas configuré ici, la planification ne peut donc pas démarrer. Vous pouvez tout de même partager cette requête."
       }
     },
+    "planOffer": {
+      "label": "Offre de planification",
+      "labelMidPlanning": "Offre de planifier autre chose",
+      "target": "Cible",
+      "noTarget": "Aucun élément de travail n’est ciblé. Ce qui est planifié, c’est la requête ci-dessus.",
+      "targetElsewhere": "{key} n’est pas l’élément de travail sur lequel cette conversation a été ouverte.",
+      "confirm": "Confirmer",
+      "confirming": "Démarrage…",
+      "decline": "Refuser",
+      "declining": "Refus en cours…",
+      "confirmHelp": "Confirmer lance la planification de {key} avec cette requête, ici dans cette conversation. Répondre « oui » fait de même.",
+      "confirmHelpNoTarget": "Confirmer lance la planification de cette requête seule, ici dans cette conversation. Répondre « oui » fait de même.",
+      "declineHelp": "Refuser ne planifie rien, et la conversation continue.",
+      "midPlanning": "Cette conversation planifie déjà autre chose. Confirmer met fin à ce plan et lance celui-ci, comme le fait « Planifier autre chose ».",
+      "started": "Planification lancée",
+      "startedBy": "Confirmé · {when}",
+      "startedHere": "La planification se déroule ici, dans cette conversation.",
+      "beingPlanned": "{key} est en cours de planification, je n’ai donc pas proposé de le planifier à nouveau. Vous pouvez suivre cette planification ou me poser une autre question.",
+      "beingPlannedHere": "{key} est déjà en cours de planification ici, dans cette conversation : c’est le plan ci-dessous.",
+      "declined": "Refusé",
+      "declinedBy": "Refusé · {when}",
+      "recorded": "Rien n’a été planifié.",
+      "replaced": "Remplacée par une offre plus récente",
+      "showAll": "Tout afficher",
+      "showLess": "Afficher moins",
+      "cannotStart": {
+        "planningUnavailable": "La planification ne peut pas démarrer ici : Motir AI n’est pas configuré pour ce projet, ou vous n’avez pas l’autorisation de planifier et de modifier des éléments de travail.",
+        "outOfCredits": "Votre organisation n’a plus de crédits AI, la planification ne peut donc pas démarrer.",
+        "targetUnavailable": "Vous ne pouvez plus ouvrir {key}, la planification ne peut donc pas démarrer.",
+        "generic": "La planification ne peut pas démarrer à partir de cette offre."
+      }
+    },
     "restart": {
       "control": "Planifier autre chose",
       "confirm": {

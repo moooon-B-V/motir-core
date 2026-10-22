@@ -30,6 +30,7 @@ import {
 import { workflowsService } from '@/lib/services/workflowsService';
 import { CLEARED_FAILURE_COLUMNS, sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
+import { planOfferService } from '@/lib/services/planOfferService';
 import {
   clearWithin as clearPlanningSessionGate,
   raiseWithin as raisePlanningSessionGate,
@@ -51,10 +52,12 @@ import type { SubmittedRequirement } from '@/lib/ai/types';
 import { turnSubmitKey } from '@/lib/ai/turnSubmitKey';
 import { readGuideTurnRecord, type GuideTurnRecord } from '@/lib/ai/guideWorkItem';
 import type {
+  AnswerOfferInput,
   CopyableSessionDto,
   DebugLandingDto,
   PlanChangeSessionDto,
   PlanChangeSubmitResultDto,
+  PlanOfferRestartResultDto,
   PlanSessionRestartResultDto,
   ResumableSessionDto,
 } from '@/lib/dto/planChange';
@@ -95,6 +98,7 @@ import {
   type StalePlanFinishedCard,
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
+import { offerRestartStopKey } from '@/lib/planChange/offerRestart';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { endSession, endSessionWithin } from '@/lib/services/planSessionEndService';
 import { replanOfferOf, replanOfferStateOf } from '@/lib/planning/guideReplanOffer';
@@ -299,7 +303,20 @@ async function toDto(
       ? await readAnswerEntry(tx)
       : await withWorkspaceServiceContext(pctx.workspaceId, readAnswerEntry)
     : undefined;
-  const base = toPlanChangeSessionDto(row, turns, workItemRefs, runPause, entryRead);
+  const mapped = toPlanChangeSessionDto(row, turns, workItemRefs, runPause, entryRead);
+  // Every offer's two DERIVED fields (MOTIR-9290), resolved where every turn DTO is
+  // built so no reader sees a stored offer without its state.
+  const offers = await planOfferService.resolveFor(row.id, turns, pctx, tx);
+  const base =
+    offers.size === 0
+      ? mapped
+      : {
+          ...mapped,
+          turns: mapped.turns.map((t) => {
+            const resolved = t.offer ? offers.get(t.id) : undefined;
+            return resolved ? { ...t, offer: { ...t.offer!, ...resolved } } : t;
+          }),
+        };
   // Whether a FAILED session holds a half-written walk that only Resume continues, or a plan
   // that waits for the person (situation 2) — the one fact the overlay needs to choose between
   // Resume + a held composer and the decide door + an open one (MOTIR-7918 / MOTIR-7941). The
@@ -450,6 +467,8 @@ interface AppendTurn {
   runJobId?: string | null;
   /** The text an `assistant` answer offered to forward (MOTIR-7996). */
   forwardOffer?: string | null;
+  /** The ONE offer an `assistant` answer ended with (MOTIR-9288), stored undecided. */
+  answerOffer?: AnswerOfferInput | null;
 }
 
 async function appendLocked(
@@ -477,8 +496,11 @@ async function appendLocked(
  * Every append moves `lastActivityAt` in the SAME update that bumps `turnCount`
  * (§3): the idle close and the Plans page's order both read it, and a turn
  * that did not move it would let a live conversation age out mid-sentence.
+ *
+ * Exported for One start per offer (MOTIR-9291), which appends the offer's request
+ * inside its own claim transaction rather than in a second one.
  */
-async function appendWithin(
+export async function appendWithin(
   sessionId: string,
   pctx: ProjectContext,
   turn: AppendTurn,
@@ -538,6 +560,23 @@ async function appendWithin(
                 workItemKey: turn.debugLanding.workItemKey,
                 title: turn.debugLanding.title,
                 createdInTriage: turn.debugLanding.createdInTriage,
+              },
+            }
+          : {}),
+        // The offer (MOTIR-9288): spelled field by field like `debugLanding`, with
+        // every disposition field written NULL, so the stored record is exactly the
+        // wire shape and an undecided offer never has an absent field.
+        ...(turn.answerOffer
+          ? {
+              answerOffer: {
+                kind: turn.answerOffer.kind,
+                requestMd: turn.answerOffer.requestMd,
+                targetKey: turn.answerOffer.targetKey,
+                declinedAt: null,
+                declinedById: null,
+                confirmedAt: null,
+                confirmedById: null,
+                confirmedSessionId: null,
               },
             }
           : {}),
@@ -2262,6 +2301,10 @@ export const planChangeSessionsService = {
       /** Set when the answer was given WITHOUT the code (MOTIR-8141): the stored
        *  face its notice is drawn from. */
       codeUnreadable?: PlanChangeTurnOutage | null;
+      /** The ONE offer this answer ended with (MOTIR-9288), persisted with the turn
+       *  in this append — undecided. No gate here: an offer that cannot start is a
+       *  state the rail renders, so the write refuses none. */
+      answerOffer?: AnswerOfferInput | null;
     },
     pctx: ProjectContext,
     address: PlanChangeSessionAddress,
@@ -2281,6 +2324,7 @@ export const planChangeSessionsService = {
         debugLanding: input.debugLanding ?? null,
         forwardOffer: input.forwardOffer ?? null,
         codeUnreadable: input.codeUnreadable ?? null,
+        answerOffer: input.answerOffer ?? null,
       },
       {},
       async (tx) =>
@@ -2496,6 +2540,127 @@ export const planChangeSessionsService = {
         };
       },
     );
+  },
+
+  /**
+   * PLANNING SOMETHING ELSE MID-PLANNING (Story MOTIR-9219 · MOTIR-9293; AMENDMENT 5
+   * clause 7): a confirmed plan offer on a conversation that already holds an undecided
+   * plan ends that conversation through the restart lifecycle Plan something new uses,
+   * and puts the offered request on the session that follows it. It DISPATCHES NO JOB:
+   * the confirm entry (`planOfferStartService`) runs its one `submit` on the returned
+   * session when `ownsStart` is true, and starts nothing when it is false.
+   *
+   *  - refuses another member's session and a guide conversation as the button does
+   *    (`PLAN_SESSION_NOT_FOUND`), and a caller without `ai:plan` (`requireSession`);
+   *  - an addressed session that already ENDED ends nothing, creates nothing and
+   *    appends nothing: `ownsStart: false`, with the caller's open session for the
+   *    offer's scope when there is one — which is what makes a replayed confirm harmless;
+   *  - a session with a run records the shipped Stop for its `lastJobId` FIRST, outside
+   *    the transaction, so the walk reads it at its next boundary (a no-op when the run
+   *    already finished). A restart that then fails leaves a stopped run on an open
+   *    session, which the person can confirm again;
+   *  - then, in ONE transaction: the offer's scope lock, the end (`restarted`, by the
+   *    caller), the successor resolved the way a first turn resolves it — so it holds
+   *    the offered targets' lease, which `submit` only refreshes — and the request as
+   *    its `user` turn. A refused lease rolls all three back.
+   */
+  async restartForPlanOffer(
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+    input: { requestMd: string; scope: PlanChangeScope; offerRef: string },
+  ): Promise<PlanOfferRestartResultDto> {
+    const session = await requireSession(pctx, address);
+    assertRestartable(session, pctx);
+    const request = input.requestMd.trim();
+    if (!request) throw new EmptyPlanChangeTurnError();
+    const txCtx = { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId };
+
+    const openForScope = async (tx: Prisma.TransactionClient) =>
+      planChangeSessionRepository.findResumableForUser(
+        pctx.projectId,
+        input.scope.scopeKey,
+        pctx.userId,
+        pctx.workspaceId,
+        tx,
+      );
+    if (session.endedAt) {
+      return withWorkspaceContext(txCtx, async (tx) => {
+        const open = await openForScope(tx);
+        return {
+          outcome: 'already' as const,
+          endedSessionId: null,
+          session: open ? await toDto(open, pctx, tx) : null,
+          ownsStart: false,
+        };
+      });
+    }
+
+    if (session.lastJobId) {
+      await planChangeMailboxService.raiseStop(
+        session.lastJobId,
+        offerRestartStopKey(input.offerRef),
+        pctx,
+        session.id,
+      );
+    }
+
+    const now = new Date();
+    return withWorkspaceContext(txCtx, async (tx) => {
+      // The offer's scope lock FIRST, as every start takes it, so a first turn racing
+      // this confirm serialises instead of opening a second session beside the
+      // successor. The session's row lock is NOT taken before the end: the end locks
+      // the plan and then the session, and the other order deadlocks.
+      await planChangeSessionRepository.lockScopeForUser(
+        pctx.projectId,
+        input.scope.scopeKey,
+        pctx.userId,
+        tx,
+      );
+      const ended = await endSessionWithin(tx, session.id, pctx.workspaceId, 'restarted', {
+        endedById: pctx.userId,
+        actor: { userId: pctx.userId, workspaceId: pctx.workspaceId },
+        now,
+      });
+      // Ended by another write between the read above and this lock: its end stands,
+      // and this call owns no start.
+      if (!ended.ended) {
+        const open = await openForScope(tx);
+        return {
+          outcome: 'already' as const,
+          endedSessionId: null,
+          session: open ? await toDto(open, pctx, tx) : null,
+          ownsStart: false,
+        };
+      }
+      const successorId = await resumeOrStartWithin(pctx, input.scope, now, tx);
+      const row = await appendWithin(
+        successorId,
+        pctx,
+        { role: 'user', body: request, authorId: pctx.userId },
+        {},
+        tx,
+      );
+      return {
+        outcome: 'restarted' as const,
+        endedSessionId: session.id,
+        session: await toDto(row, pctx, tx),
+        ownsStart: true,
+      };
+    });
+  },
+
+  /**
+   * The conversation's latest UNDECIDED plan with its status as the next turn reads it
+   * (MOTIR-9291) — the read {@link submit} routes by, for a start that must refuse a
+   * conversation already planning. Null when it holds none. `tx` joins the caller's.
+   */
+  async heldPlanOf(
+    _pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; status: SessionTurnPlanStatus } | null> {
+    const row = await planRepository.findLatestUndecidedBySession(address.sessionId, tx);
+    return row ? { id: row.id, status: await turnStatusOf(row, tx) } : null;
   },
 
   /**

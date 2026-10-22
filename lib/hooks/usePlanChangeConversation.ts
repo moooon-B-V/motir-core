@@ -34,6 +34,7 @@ import {
   startCopiedSession,
   requestRestartConfirm,
   answerRestart,
+  answerPlanOffer,
   submitAskTurn,
   submitContextualPlan,
   attachMidRunTurn,
@@ -454,6 +455,15 @@ export interface PlanChangeConversationState {
    * `null`. The failure line stays; this adds the *could not start* words beside it.
    */
   resumeError?: string | null;
+  /**
+   * THE PLAN OFFER's answer is IN FLIGHT (Story MOTIR-9219 · MOTIR-9294): the offer
+   * turn whose Confirm or Decline was pressed, until its door answers. Optional for
+   * the same reason as the fields above.
+   */
+  offerAnsweringTurnId?: string | null;
+  /** The last REFUSED offer answer — the offer's turn and the door's reason (or
+   *  code). The row draws the refusal line in place of its actions. */
+  offerRefusal?: { turnId: string; code: string } | null;
   /**
    * THE CARRY IS IN FLIGHT (Story MOTIR-7928 · MOTIR-7932; design state 3): the
    * owner wrote in an ENDED session whose plan still waits, and the turn that starts
@@ -929,6 +939,15 @@ export function guideOfferClosedCode(err: unknown): string | null {
 }
 
 /** Whether a thread has ENDED (AMENDMENT 23 §1) — read from the server's row. */
+/** The code a refused plan-offer answer is drawn from (MOTIR-9294): out of credits,
+ *  else the refused start's `reason`, else the door's code. */
+export function offerRefusalCodeOf(err: unknown): string {
+  if (!(err instanceof PlanEditsClientError)) return 'FAILED';
+  if (err.isOutOfCredits) return 'MOTIR_AI_OUT_OF_CREDITS';
+  const reason = (err.body as { reason?: unknown } | null)?.reason;
+  return typeof reason === 'string' ? reason : (err.code ?? 'FAILED');
+}
+
 export function sessionEnded(session: PlanChangeSessionDto | null | undefined): boolean {
   return Boolean(session?.endedAt);
 }
@@ -1035,6 +1054,9 @@ export function usePlanChangeConversation({
   /** Plan it again is in flight (MOTIR-7932) — set before the await, so a double
    *  press finds it set and a refusal knows it answers the press. */
   const planAgainRef = useRef(false);
+  /** A plan offer's answer is in flight (MOTIR-9294) — set before the await, so a
+   *  double press finds it set. */
+  const offerAnsweringRef = useRef(false);
   const restartedCbRef = useRef(onRestarted);
   // A read-only mirror of the latest state, so a callback can read `jobId`/`planId`
   // without listing them as dependencies (which would re-create the callback — and
@@ -3465,6 +3487,91 @@ export function usePlanChangeConversation({
     }
   }, []);
 
+  /**
+   * ANSWER A PLAN OFFER (Story MOTIR-9219 · MOTIR-9294): the offer row's Confirm or
+   * Decline, one post per press. The doors decide everything — whether the start
+   * runs here, on the target's conversation, or after ending a plan in progress —
+   * and the hook only follows: the conversation is REFETCHED, never read from the
+   * answer's body, so the refetched offer is what flips the row to confirmed or
+   * declined.
+   *
+   * A confirm whose start landed on ANOTHER conversation (a targeted offer, or the
+   * mid-planning restart's successor) swaps the overlay onto it in place, the way
+   * Plan something new does, and then follows the new run. A refusal is recorded on
+   * the offer's turn and the in-flight id cleared.
+   */
+  const answerOffer = useCallback(
+    async (turnId: string, answer: 'confirm' | 'decline') => {
+      const session = stateRef.current.session;
+      if (!session || sessionEnded(session) || stateRef.current.readOnly) return;
+      if (offerAnsweringRef.current) return;
+      offerAnsweringRef.current = true;
+      setState((s) => ({ ...s, offerAnsweringTurnId: turnId, offerRefusal: null }));
+      try {
+        if (answer === 'decline') {
+          await answerPlanOffer(session.id, turnId, 'decline');
+          const read = await getPlanChangeSession(session.id);
+          if (!mountedRef.current) return;
+          setState((s) => (s.session?.id === read.id ? { ...s, session: read } : s));
+          return;
+        }
+        const started = await answerPlanOffer(session.id, turnId, 'confirm');
+        const read = await getPlanChangeSession(started.sessionId);
+        if (!mountedRef.current) return;
+        // The run in flight (a mid-planning confirm) was stopped by the door; its
+        // stream stops being followed here before the new one is.
+        abortRef.current?.abort();
+        if (read.id !== session.id) {
+          adoptedSessionRef.current = read.id;
+          lastAskTurnRef.current = null;
+          lastAskAnchorRef.current = null;
+          setState((s) => ({
+            ...s,
+            session: read,
+            review: null,
+            liveReview: null,
+            discardedReview: null,
+            decided: null,
+            planId: null,
+            earlier: null,
+            reopened: null,
+            readOnly: false,
+            copyable: null,
+            targetHeld: null,
+            stalePlan: null,
+            offerAnsweringTurnId: null,
+          }));
+          restartedCbRef.current?.(read.id);
+        } else {
+          setState((s) => ({ ...s, offerAnsweringTurnId: null }));
+        }
+        // The answer is in; what follows is the run, which owns its own state.
+        offerAnsweringRef.current = false;
+        await run(null, async () => ({
+          jobId: started.jobId,
+          ...(started.planId ? { planId: started.planId } : {}),
+          session: read,
+        }));
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        if (!mountedRef.current) return;
+        setState((s) => ({ ...s, offerRefusal: { turnId, code: offerRefusalCodeOf(err) } }));
+      } finally {
+        offerAnsweringRef.current = false;
+        if (mountedRef.current) setState((s) => ({ ...s, offerAnsweringTurnId: null }));
+      }
+    },
+    [run],
+  );
+  const confirmPlanOffer = useCallback(
+    (turnId: string) => answerOffer(turnId, 'confirm'),
+    [answerOffer],
+  );
+  const declinePlanOffer = useCallback(
+    (turnId: string) => answerOffer(turnId, 'decline'),
+    [answerOffer],
+  );
+
   return {
     state: exposed,
     send,
@@ -3477,6 +3584,8 @@ export function usePlanChangeConversation({
     startCopied,
     requestRestart,
     answerRestartConfirm,
+    confirmPlanOffer,
+    declinePlanOffer,
     planAgain,
     resume,
     answerRunPause,

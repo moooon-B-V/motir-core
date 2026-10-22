@@ -8423,6 +8423,38 @@
         "noAi": "Motir AI nie jest tu skonfigurowany, więc planowania nie można rozpocząć. Nadal możesz udostępnić tę prośbę."
       }
     },
+    "planOffer": {
+      "label": "Propozycja planowania",
+      "labelMidPlanning": "Propozycja zaplanowania czegoś innego",
+      "target": "Cel",
+      "noTarget": "Żaden element roboczy nie jest celem. Planowane jest żądanie powyżej.",
+      "targetElsewhere": "{key} nie jest elementem roboczym, dla którego otwarto tę rozmowę.",
+      "confirm": "Potwierdź",
+      "confirming": "Uruchamianie…",
+      "decline": "Odrzuć",
+      "declining": "Odrzucanie…",
+      "confirmHelp": "Potwierdź, aby rozpocząć planowanie {key} na podstawie tego żądania, tutaj w tej rozmowie. Odpowiedź „tak” działa tak samo.",
+      "confirmHelpNoTarget": "Potwierdź, aby rozpocząć planowanie samego tego żądania, tutaj w tej rozmowie. Odpowiedź „tak” działa tak samo.",
+      "declineHelp": "Odrzucenie niczego nie planuje, a rozmowa trwa dalej.",
+      "midPlanning": "Ta rozmowa już coś planuje. Potwierdzenie kończy ten plan i rozpoczyna ten, tak jak „Zaplanuj coś nowego”.",
+      "started": "Planowanie rozpoczęte",
+      "startedBy": "Potwierdzono · {when}",
+      "startedHere": "Planowanie odbywa się tutaj, w tej rozmowie.",
+      "beingPlanned": "{key} jest właśnie planowany, więc nie zaproponowałem ponownego planowania. Możesz śledzić to planowanie albo zapytać mnie o coś innego.",
+      "beingPlannedHere": "{key} jest już planowany tutaj, w tej rozmowie — to plan poniżej.",
+      "declined": "Odrzucono",
+      "declinedBy": "Odrzucono · {when}",
+      "recorded": "Niczego nie zaplanowano.",
+      "replaced": "Zastąpiona nowszą propozycją",
+      "showAll": "Pokaż wszystko",
+      "showLess": "Pokaż mniej",
+      "cannotStart": {
+        "planningUnavailable": "Planowanie nie może się tu rozpocząć: Motir AI nie jest skonfigurowany dla tego projektu albo nie masz uprawnień do planowania i edytowania elementów roboczych.",
+        "outOfCredits": "Twoja organizacja nie ma już kredytów AI, więc planowanie nie może się rozpocząć.",
+        "targetUnavailable": "Nie możesz już otworzyć {key}, więc planowanie nie może się rozpocząć.",
+        "generic": "Planowanie nie może się rozpocząć z tej propozycji."
+      }
+    },
     "restart": {
       "control": "Zaplanuj coś nowego",
       "confirm": {

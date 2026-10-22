@@ -67,6 +67,8 @@ import {
 import type { PlanGateView } from '@/lib/planning/planGateView';
 import type { PlanningSeedGuideDTO, PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
 import { GuideOriginCard } from '@/components/planning/GuideOriginCard';
+import { PlanOffer, type PlanOfferProps } from '@/components/planning/PlanOffer';
+import { alreadyPlanning, offerAnswerable } from '@/lib/planning/planOfferRow';
 import { GUIDE_OFFER_CLOSED } from '@/lib/planning/guideOfferClosed';
 import { claimPickAutoSend } from '@/lib/planning/pickAutoSend';
 import {
@@ -344,6 +346,17 @@ export interface PlanChangeRailProps {
   onAnswerRunPause?: (choice: 'start_over' | 'apply' | 'resume') => void;
   /** "N earlier notes" (MOTIR-8064): page earlier narration sentences in. */
   onShowEarlierNarration?: () => void;
+  /**
+   * THE PLAN OFFER's two answers (Story MOTIR-9219 · MOTIR-9294), each with the
+   * offer's turn id. Optional: a host that offers neither draws the offer as a
+   * record with no controls.
+   */
+  onConfirmPlanOffer?: (turnId: string) => void;
+  onDeclinePlanOffer?: (turnId: string) => void;
+  /** The offer whose answer is in flight — its controls are disabled. */
+  offerAnsweringTurnId?: string | null;
+  /** The last refused answer, on the offer it was for. */
+  offerRefusal?: { turnId: string; code: string } | null;
 }
 
 export function PlanChangeRail({
@@ -387,6 +400,10 @@ export function PlanChangeRail({
   onSelectProposal,
   onAnswerRunPause,
   onShowEarlierNarration,
+  onConfirmPlanOffer,
+  onDeclinePlanOffer,
+  offerAnsweringTurnId = null,
+  offerRefusal = null,
 }: PlanChangeRailProps) {
   const t = useTranslations('planningWorkspace');
   const tp = useTranslations('approvalGate.planApproval');
@@ -621,6 +638,13 @@ export function PlanChangeRail({
   // THE ENDED SESSION (AMENDMENT 23 §1): read from the server's row, so a reload
   // draws the same end. It accepts no turn — the composer slot says so instead.
   const ended = Boolean(state.session?.endedAt);
+  // The plan offer's MID-PLANNING variant (MOTIR-9294): a PLANNING run in flight, or
+  // a plan still waiting for its decision. An ask streaming carries no plan id, and
+  // plans nothing.
+  const offerMidPlanning = alreadyPlanning({
+    phase: state.planId ? state.phase : 'idle',
+    hasUndecidedPlan: Boolean(state.review) && !state.decided,
+  });
   // A FAILED HOSTED ATTEMPT WAITS TO BE RESUMED (Story MOTIR-7905 · MOTIR-7918): the session
   // is OPEN, so there is no end marker, no *Start a new session* and no Try again — the
   // failure line with Resume stands in their place. Read from the server's row, so a reload
@@ -1075,6 +1099,27 @@ export function PlanChangeRail({
               outageRetry={
                 latest && turn.id === latest.id && turn.codeUnreadable === 'declined'
                   ? { onRetry, disabled: busy || userTurns.length === 0 }
+                  : null
+              }
+              planOffer={
+                turn.role === 'assistant' && turn.offer
+                  ? {
+                      answerable: offerAnswerable(turns, i, {
+                        canContinue: !ended && !state.readOnly,
+                        hasActions: Boolean(onConfirmPlanOffer && onDeclinePlanOffer),
+                      }),
+                      answering: offerAnsweringTurnId === turn.id,
+                      // An ASK turn running holds the row still; a planning run does
+                      // not — that is the mid-planning confirm's whole case.
+                      busy:
+                        state.phase === 'deciding' ||
+                        (state.phase === 'streaming' && !state.planId),
+                      midPlanning: offerMidPlanning,
+                      refusal: offerRefusal?.turnId === turn.id ? offerRefusal.code : null,
+                      sessionTargetKeys: state.session?.targetKeys ?? [],
+                      ...(onConfirmPlanOffer ? { onConfirm: onConfirmPlanOffer } : {}),
+                      ...(onDeclinePlanOffer ? { onDecline: onDeclinePlanOffer } : {}),
+                    }
                   : null
               }
             />
@@ -1870,6 +1915,9 @@ interface TurnProps {
   /** Try again under a declined outage turn (MOTIR-8141) — null on every turn but the
    *  latest assistant one. */
   outageRetry: { onRetry: () => void; disabled: boolean } | null;
+  /** The PLAN OFFER's row inputs (MOTIR-9294) — null on every turn but an assistant
+   *  turn carrying a stored offer. */
+  planOffer: Omit<PlanOfferProps, 'turnId' | 'offer' | 'workItemRefs'> | null;
 }
 
 /** What a turn needs to draw the mid-run conversation: the mailbox entry its
@@ -1935,6 +1983,7 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
     restartConfirm,
     midRun,
     outageRetry,
+    planOffer,
   }: TurnProps) {
     const tc = useTranslations('planningWorkspace.conversation');
     const tr = useTranslations('planningWorkspace.restart');
@@ -2045,6 +2094,28 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
           ) : null}
           {turn.forwardOffer ? <ForwardOffer turn={turn} stale={midRun.offerStale} /> : null}
         </Bubble>
+        {/* THE PLAN OFFER (MOTIR-9294; design `plan-offer.mock.html`): under the answer
+            bubble, aligned with its left edge, a sibling of the mid-run panels. A
+            cannot-start or being-planned line carries its own avatar spacer. */}
+        {planOffer && turn.offer ? (
+          turn.offer.state === 'undecided' && turn.offer.cannotStart ? (
+            <PlanOffer
+              turnId={turn.id}
+              offer={turn.offer}
+              workItemRefs={workItemRefs}
+              {...planOffer}
+            />
+          ) : (
+            <div className="pl-9">
+              <PlanOffer
+                turnId={turn.id}
+                offer={turn.offer}
+                workItemRefs={workItemRefs}
+                {...planOffer}
+              />
+            </div>
+          )
+        ) : null}
         {midRun.answeredAside ? <AnsweredAside /> : null}
         {/* The CORRECTION (ADR §3, as amended by AMENDMENT 3) — an interactive
             line in the shipped marker vocabulary, distinguished from the passive

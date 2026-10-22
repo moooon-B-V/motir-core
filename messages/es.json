@@ -8423,6 +8423,38 @@
         "noAi": "Motir AI no está configurado aquí, así que no se puede iniciar la planificación. Aun así, puedes compartir esta solicitud."
       }
     },
+    "planOffer": {
+      "label": "Propuesta de planificación",
+      "labelMidPlanning": "Propuesta de planificar otra cosa",
+      "target": "Destino",
+      "noTarget": "No hay ningún elemento de trabajo como destino. Lo que se planifica es la solicitud de arriba.",
+      "targetElsewhere": "{key} no es el elemento de trabajo con el que se abrió esta conversación.",
+      "confirm": "Confirmar",
+      "confirming": "Iniciando…",
+      "decline": "Rechazar",
+      "declining": "Rechazando…",
+      "confirmHelp": "Confirmar inicia la planificación de {key} con esta solicitud, aquí en esta conversación. Responder “sí” hace lo mismo.",
+      "confirmHelpNoTarget": "Confirmar inicia la planificación de esta solicitud por sí sola, aquí en esta conversación. Responder “sí” hace lo mismo.",
+      "declineHelp": "Rechazar no planifica nada y la conversación continúa.",
+      "midPlanning": "Esta conversación ya está planificando algo. Confirmar termina ese plan e inicia este, como hace “Planificar algo nuevo”.",
+      "started": "Planificación iniciada",
+      "startedBy": "Confirmado · {when}",
+      "startedHere": "La planificación se hace aquí, en esta conversación.",
+      "beingPlanned": "{key} se está planificando ahora mismo, así que no te he ofrecido planificarlo de nuevo. Puedes seguir esa planificación o preguntarme otra cosa.",
+      "beingPlannedHere": "{key} ya se está planificando aquí, en esta conversación: el plan de abajo es ese.",
+      "declined": "Rechazado",
+      "declinedBy": "Rechazado · {when}",
+      "recorded": "No se planificó nada.",
+      "replaced": "Sustituida por una propuesta más reciente",
+      "showAll": "Mostrar todo",
+      "showLess": "Mostrar menos",
+      "cannotStart": {
+        "planningUnavailable": "La planificación no puede empezar aquí: Motir AI no está configurado para este proyecto, o no tienes permiso para planificar y editar elementos de trabajo.",
+        "outOfCredits": "Tu organización no tiene créditos de AI, así que la planificación no puede empezar.",
+        "targetUnavailable": "Ya no puedes abrir {key}, así que la planificación no puede empezar.",
+        "generic": "La planificación no puede empezar desde esta propuesta."
+      }
+    },
     "restart": {
       "control": "Planificar algo nuevo",
       "confirm": {

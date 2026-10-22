@@ -8417,6 +8417,38 @@
         "noAi": "这里还没有配置 Motir AI，无法开始规划。你仍可以分享此请求。"
       }
     },
+    "planOffer": {
+      "label": "提议规划",
+      "labelMidPlanning": "提议规划其他内容",
+      "target": "目标",
+      "noTarget": "没有指定工作项。将规划的是上面的请求。",
+      "targetElsewhere": "{key} 不是打开本次会话时的那个工作项。",
+      "confirm": "确认",
+      "confirming": "正在开始…",
+      "decline": "拒绝",
+      "declining": "正在拒绝…",
+      "confirmHelp": "确认后将以这个请求开始规划 {key}，就在本次会话中进行。回复“是”也一样。",
+      "confirmHelpNoTarget": "确认后将单独为这个请求开始规划，就在本次会话中进行。回复“是”也一样。",
+      "declineHelp": "拒绝不会规划任何内容，对话会继续。",
+      "midPlanning": "本次会话已在规划其他内容。确认后将结束该计划并开始这一个，与“规划新内容”的做法相同。",
+      "started": "已开始规划",
+      "startedBy": "已确认 · {when}",
+      "startedHere": "规划就在这里，在本次会话中进行。",
+      "beingPlanned": "{key} 正在被规划，所以没有再次提议规划它。可以关注那次规划，或者问我别的事情。",
+      "beingPlannedHere": "{key} 已经在这里、在本次会话中被规划——下面的计划就是它。",
+      "declined": "已拒绝",
+      "declinedBy": "已拒绝 · {when}",
+      "recorded": "没有规划任何内容。",
+      "replaced": "已被更新的提议取代",
+      "showAll": "展开全部",
+      "showLess": "收起",
+      "cannotStart": {
+        "planningUnavailable": "无法在这里开始规划：此项目尚未配置 Motir AI，或没有规划和编辑工作项的权限。",
+        "outOfCredits": "所在组织的 AI 额度已用完，因此无法开始规划。",
+        "targetUnavailable": "已无法打开 {key}，因此无法开始规划。",
+        "generic": "无法从这条提议开始规划。"
+      }
+    },
     "restart": {
       "control": "规划新内容",
       "confirm": {

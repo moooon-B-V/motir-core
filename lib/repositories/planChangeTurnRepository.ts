@@ -105,6 +105,19 @@ export const planChangeTurnRepository = {
     await tx.planChangeTurn.updateMany({ where: { id, workspaceId }, data: { guideTurn } });
   },
 
+  /** Rewrite ONE turn's `answer_offer` JSON (MOTIR-9288) — the one door an offer's
+   *  disposition is written through, shape for shape {@link setGuideTurn}. Only that
+   *  column changes. Repository only: the caller holds the session's row lock and
+   *  owns the rule. `workspaceId` scopes the write. Requires `tx`. */
+  async setAnswerOffer(
+    id: string,
+    workspaceId: string,
+    answerOffer: Prisma.InputJsonValue,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.planChangeTurn.updateMany({ where: { id, workspaceId }, data: { answerOffer } });
+  },
+
   /** CLAIM a `debug` turn's one write (MOTIR-7049): stamp `debugLandingClaimedAt`
    *  ONLY while it is still null — a compare-and-set in one statement. Returns
    *  whether THIS call claimed it. Called under the session's row lock, so two
@@ -149,6 +162,75 @@ export const planChangeTurnRepository = {
       where: { id, workspaceId },
       data: { debugLandingClaimedAt: null },
     });
+  },
+
+  /** CLAIM a targeted turn's one plan start (MOTIR-9291): stamp `planStartClaimedAt`
+   *  only while it is still null. `true` when THIS call took it. The caller holds the
+   *  session's row lock, so two settles of one ask job serialise here. */
+  async claimPlanStart(
+    id: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.planChangeTurn.updateMany({
+      where: { id, workspaceId, planStartClaimedAt: null },
+      data: { planStartClaimedAt: new Date() },
+    });
+    return count === 1;
+  },
+
+  /** RELEASE a targeted turn's plan-start claim whose submit threw, so nothing was
+   *  spent and a later settle may start it (MOTIR-9291). */
+  async releasePlanStart(
+    id: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.planChangeTurn.updateMany({
+      where: { id, workspaceId },
+      data: { planStartClaimedAt: null },
+    });
+  },
+
+  /** CLAIM a plan offer's one start (MOTIR-9291): move the stored offer off pending by
+   *  writing `confirmedAt` / `confirmedById`, ONLY while it is neither confirmed nor
+   *  declined — a compare-and-set over the JSON in one statement, whose affected-row
+   *  count is the claim. Every other key of the offer rides through. The caller holds
+   *  the session's row lock and owns the rule of who may claim. */
+  async claimAnswerOfferStart(
+    id: string,
+    workspaceId: string,
+    confirmedById: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const at = new Date().toISOString();
+    const count = await tx.$executeRaw`
+      UPDATE "plan_change_turn"
+         SET "answer_offer" = "answer_offer"
+               || jsonb_build_object('confirmedAt', ${at}::text, 'confirmedById', ${confirmedById}::text)
+       WHERE "id" = ${id}
+         AND "workspace_id" = ${workspaceId}
+         AND "answer_offer" IS NOT NULL
+         AND ("answer_offer" ->> 'confirmedAt') IS NULL
+         AND ("answer_offer" ->> 'declinedAt') IS NULL`;
+    return count === 1;
+  },
+
+  /** RELEASE a plan offer's start claim back to pending, ONLY while no session was
+   *  stamped on it — a start that succeeded is never given back (MOTIR-9291). */
+  async releaseAnswerOfferStart(
+    id: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.$executeRaw`
+      UPDATE "plan_change_turn"
+         SET "answer_offer" = "answer_offer"
+               || jsonb_build_object('confirmedAt', NULL, 'confirmedById', NULL)
+       WHERE "id" = ${id}
+         AND "workspace_id" = ${workspaceId}
+         AND "answer_offer" IS NOT NULL
+         AND ("answer_offer" ->> 'confirmedSessionId') IS NULL`;
   },
 
   /** The thread's LATEST turn (highest `seq`), or null on an empty thread — the

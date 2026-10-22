@@ -8423,6 +8423,38 @@
         "noAi": "Motir AI is hier niet ingesteld, dus de planning kan niet starten. Je kunt dit verzoek nog wel delen."
       }
     },
+    "planOffer": {
+      "label": "Voorstel om te plannen",
+      "labelMidPlanning": "Voorstel om iets anders te plannen",
+      "target": "Doel",
+      "noTarget": "Er is geen werkitem als doel. Gepland wordt het verzoek hierboven.",
+      "targetElsewhere": "{key} is niet het werkitem waarop dit gesprek is geopend.",
+      "confirm": "Bevestigen",
+      "confirming": "Bezig met starten…",
+      "decline": "Afwijzen",
+      "declining": "Bezig met afwijzen…",
+      "confirmHelp": "Bevestigen start de planning van {key} met dit verzoek, hier in dit gesprek. Antwoorden met ‘ja’ doet hetzelfde.",
+      "confirmHelpNoTarget": "Bevestigen start de planning van alleen dit verzoek, hier in dit gesprek. Antwoorden met ‘ja’ doet hetzelfde.",
+      "declineHelp": "Afwijzen plant niets, en het gesprek gaat door.",
+      "midPlanning": "Dit gesprek plant al iets. Bevestigen beëindigt dat plan en start dit, zoals ‘Iets nieuws plannen’ dat doet.",
+      "started": "Planning gestart",
+      "startedBy": "Bevestigd · {when}",
+      "startedHere": "De planning gebeurt hier, in dit gesprek.",
+      "beingPlanned": "{key} wordt op dit moment gepland, dus ik heb niet opnieuw aangeboden het te plannen. Je kunt die planning volgen of me iets anders vragen.",
+      "beingPlannedHere": "{key} wordt hier al gepland, in dit gesprek: het plan hieronder is het.",
+      "declined": "Afgewezen",
+      "declinedBy": "Afgewezen · {when}",
+      "recorded": "Er is niets gepland.",
+      "replaced": "Vervangen door een nieuwer voorstel",
+      "showAll": "Alles tonen",
+      "showLess": "Minder tonen",
+      "cannotStart": {
+        "planningUnavailable": "De planning kan hier niet starten: Motir AI is niet ingesteld voor dit project, of je hebt geen toestemming om werkitems te plannen en te bewerken.",
+        "outOfCredits": "Je organisatie heeft geen AI-tegoed meer, dus de planning kan niet starten.",
+        "targetUnavailable": "Je kunt {key} niet meer openen, dus de planning kan niet starten.",
+        "generic": "De planning kan niet starten vanuit dit voorstel."
+      }
+    },
     "restart": {
       "control": "Iets nieuws plannen",
       "confirm": {

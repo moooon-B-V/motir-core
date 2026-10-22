@@ -69,6 +69,15 @@ export interface AskJobOutcome {
   offerForward?: { text: string } | null;
   run?: { readable: boolean; reason?: string | null } | null;
   /**
+   * THE PLAN OFFER (Story MOTIR-9219 · MOTIR-9297): the answer envelope's one offer
+   * field, in motir-ai's shape (`{ kind, requestText, targetKey?, immediate }`), and
+   * the typed reply read against the pending offer (`{ seq, kind, decision }`). Each
+   * is passed onto `result.ask` only when declared, so every other reply is
+   * byte-identical to before.
+   */
+  offer?: { kind: 'plan'; requestText: string; targetKey?: string; immediate?: boolean } | null;
+  offerReply?: { seq: number; kind: 'plan'; decision: 'agree' | 'decline' } | null;
+  /**
    * The code graph could not be read for this answer (Story MOTIR-8136 · MOTIR-8144):
    * the result carries motir-ai's top-level `codeUnreadable` signal beside the answer.
    * Present only when declared, so every other reply is byte-identical to before.
@@ -924,6 +933,9 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
                   ? { offerForward: outcome.offerForward }
                   : {}),
                 ...(outcome.run !== undefined ? { run: outcome.run } : {}),
+                // The plan offer (MOTIR-9297): present only when the fixture declared them.
+                ...(outcome.offer !== undefined ? { offer: outcome.offer } : {}),
+                ...(outcome.offerReply !== undefined ? { offerReply: outcome.offerReply } : {}),
               },
               ...(outcome.codeUnreadable
                 ? { codeUnreadable: codeUnreadableSignal(outcome.codeUnreadable) }

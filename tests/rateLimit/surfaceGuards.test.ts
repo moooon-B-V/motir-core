@@ -868,6 +868,9 @@ describe('the routes are actually WIRED to the guards', () => {
     // A change forwarded after the walk finished becomes ONE revision job, so it
     // spends provider money like the revise door it reuses (MOTIR-7997).
     'app/api/ai/plan-change/session/late-changes/route.ts',
+    // A plan offer's CONFIRM starts its planning run — one `plan` job per offer
+    // (Story MOTIR-9219 · MOTIR-9291).
+    'app/api/ai/plan-change/session/offer/confirm/route.ts',
   ];
 
   // Each of these submits NO model job. The reason is in the route's own header
@@ -904,6 +907,9 @@ describe('the routes are actually WIRED to the guards', () => {
     // one row each, no model job submitted, the `turns` precedent exactly.
     'app/api/ai/plan-change/session/mailbox/route.ts',
     'app/api/ai/plan-change/session/mailbox/stop/route.ts',
+    // A plan offer's DECLINE stamps the decision on the offer and plans nothing
+    // (MOTIR-9294).
+    'app/api/ai/plan-change/session/offer/decline/route.ts',
     'app/api/ai/plan-change/session/planner-turn/route.ts',
     // PLAN SOMETHING NEW (Story MOTIR-7631 · MOTIR-7649): the control writes a
     // fixed confirm turn and the answer ends a session and opens an empty one —

@@ -4,7 +4,9 @@ import type {
   PlanChangeTurn,
 } from '@/generated/prisma/client';
 import type {
+  AnswerOfferKindDto,
   DebugLandingDto,
+  PlanAnswerOfferDto,
   PlanChangeRunPauseDto,
   PlanChangeSessionDto,
   PlanChangeTurnConfirmDto,
@@ -45,6 +47,42 @@ function toDebugLandingDto(value: unknown): DebugLandingDto | null {
     workItemKey: typeof v.workItemKey === 'string' ? v.workItemKey : null,
     title: typeof v.title === 'string' ? v.title : null,
     createdInTriage: v.createdInTriage === true,
+  };
+}
+
+const ANSWER_OFFER_KINDS: ReadonlySet<string> = new Set<AnswerOfferKindDto>(['plan']);
+
+/** A string, or null; `undefined` when the value is neither — the wrong type. */
+function nullableString(value: unknown): string | null | undefined {
+  if (value === null || value === undefined) return null;
+  return typeof value === 'string' ? value : undefined;
+}
+
+/**
+ * The persisted `answer_offer` JSON → its DTO (MOTIR-9288), on the model of
+ * `readReplanOffer` in `lib/ai/guideWorkItem.ts`. A NARROWING, not a repair: the
+ * whole offer reads as null when any field is the wrong type, and a `kind` outside
+ * the union reads as NO offer — never as a `plan` one, which would put a working
+ * Confirm under the wrong action's words.
+ */
+function toAnswerOfferDto(value: unknown): PlanAnswerOfferDto | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.kind !== 'string' || !ANSWER_OFFER_KINDS.has(v.kind)) return null;
+  if (typeof v.requestMd !== 'string' || v.requestMd.trim().length === 0) return null;
+  const fields = {
+    targetKey: nullableString(v.targetKey),
+    declinedAt: nullableString(v.declinedAt),
+    declinedById: nullableString(v.declinedById),
+    confirmedAt: nullableString(v.confirmedAt),
+    confirmedById: nullableString(v.confirmedById),
+    confirmedSessionId: nullableString(v.confirmedSessionId),
+  };
+  if (Object.values(fields).some((f) => f === undefined)) return null;
+  return {
+    kind: v.kind as AnswerOfferKindDto,
+    requestMd: v.requestMd,
+    ...(fields as { [K in keyof typeof fields]: string | null }),
   };
 }
 
@@ -95,6 +133,7 @@ export function toPlanChangeTurnDto(row: PlanChangeTurn): PlanChangeTurnDto {
     codeUnsearchable: parseCodeUnsearchableRepos(row.codeUnsearchable),
     runJobId: row.runJobId,
     forwardOffer: row.forwardOffer,
+    offer: toAnswerOfferDto(row.answerOffer),
     forwarded: row.forwardedEntryId ? { mailboxEntryId: row.forwardedEntryId } : null,
     revisedLate: row.revisedLateJobId ? { revisionJobId: row.revisedLateJobId } : null,
     authorId: row.authorId,

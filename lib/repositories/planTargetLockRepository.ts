@@ -83,6 +83,22 @@ export const planTargetLockRepository = {
    * — the board projection's ONE batched plan-hold read. A SESSION-held lease
    * (`planId` null) is not returned: it never holds (AMENDMENT 21 §1).
    */
+  /** Every lease on a SET of work items, by holder and expiry only — the plan
+   *  offer's `target_held` read (MOTIR-9290), which asks WHO holds a target and
+   *  whether the lease is still good, and nothing about the holder beyond that. */
+  async listHoldersByWorkItemIds(
+    workItemIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    { workItemId: string; sessionId: string | null; planId: string | null; expiresAt: Date }[]
+  > {
+    if (workItemIds.length === 0) return [];
+    return tx.planTargetLock.findMany({
+      where: { workItemId: { in: [...workItemIds] } },
+      select: { workItemId: true, sessionId: true, planId: true, expiresAt: true },
+    });
+  },
+
   async listPlanHeldByWorkItemIds(
     workItemIds: readonly string[],
     tx: Prisma.TransactionClient,

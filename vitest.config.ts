@@ -3360,6 +3360,32 @@ export default defineConfig({
         'lib/runs/legLabel.ts',
         'app/**/runs/_components/RunSetListPane.tsx',
         'app/**/runs/_components/useRunSetLevel.ts',
+        // Story MOTIR-9219 · MOTIR-9295 — the plan offer's NEW core modules (the offer
+        // lifecycle rule, the mid-planning route rule, the offer and start services,
+        // the rail row and its decisions, and the two answer doors). MEASURED
+        // 2026-10-22 on the story branch against the story's own specs
+        // (`tests/integration/planning/planOffer{Seam,Refusals}`,
+        // `planChangeAnswerOfferStore`, `tests/planning/planOffer*`,
+        // `tests/components/plan-offer-rail`, `use-plan-offer-answer`,
+        // `tests/ai/planChangeAnswerOffer`), lines / branches / functions / statements:
+        // planOffer.ts, offerRestart.ts, planOfferRow.ts and both routes 100 on all
+        // four; PlanOffer.tsx 100 / 94.11 / 100 / 100; planOfferService.ts 96.34 /
+        // 90.54 / 100 / 94.89; planOfferStartService.ts 96.77 / 88.35 / 100 / 94.41.
+        // Pinned at the floor below, except the start service's BRANCHES, pinned at
+        // 88: its 17 uncovered branches are lock-race arms (a claim lost between the
+        // read and the write, a release finding its turn gone) and project-guard
+        // catches the keyed read cannot raise, which no single-process test reaches
+        // without mocking the repository the gate exists to exercise. The shared files
+        // the story only changed (`aiAskService.ts`, `planChangeSessionsService.ts`,
+        // `PlanChangeRail.tsx`, …) keep the pins they had.
+        'lib/planChange/planOffer.ts',
+        'lib/planChange/offerRestart.ts',
+        'lib/planning/planOfferRow.ts',
+        'lib/services/planOfferService.ts',
+        'lib/services/planOfferStartService.ts',
+        'components/planning/PlanOffer.tsx',
+        'app/api/ai/plan-change/session/offer/confirm/route.ts',
+        'app/api/ai/plan-change/session/offer/decline/route.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -3370,6 +3396,56 @@ export default defineConfig({
       // fails SILENTLY when it matches nothing — see the route-group note on
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
+        // Story MOTIR-9219 · MOTIR-9295 — measured above, pinned at the floor (the start
+        // service's branches at 88, for the reason the `include` block gives).
+        'lib/planChange/planOffer.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/planChange/offerRestart.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/planning/planOfferRow.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/planOfferService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/planOfferStartService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 88,
+          statements: 90,
+        },
+        'components/planning/PlanOffer.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/ai/plan-change/session/offer/confirm/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/ai/plan-change/session/offer/decline/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // ── Story MOTIR-8538 · THE LOAD TEST (Subtask MOTIR-8681) — see `include`. ──
         'loadtest/staging/sideEffectSwitches.ts': {
           lines: 90,

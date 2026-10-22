@@ -14,9 +14,21 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { readAskOutcome } from '@/lib/planning/askResult';
+import { planOfferService, type PendingPlanOfferStatement } from '@/lib/services/planOfferService';
 import { readCodeUnreadable } from '@/lib/planning/codeUnreadable';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
-import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  PermissionDeniedError,
+  ProjectAccessDeniedError,
+  ProjectNotFoundError,
+} from '@/lib/projects/errors';
+import { MotirAiOutOfCreditsError } from '@/lib/ai/errors';
+import { pendingPlanOfferOf } from '@/lib/planChange/planOffer';
+import type { AskOfferReply } from '@/lib/planning/askResult';
+import {
+  planOfferStartService,
+  type PlanOfferStartResult,
+} from '@/lib/services/planOfferStartService';
 import {
   AskAnchorNotAvailableError,
   EmptyPlanChangeTurnError,
@@ -25,6 +37,10 @@ import {
   PlanChangeJobNotRunningError,
   PlanChangeMailboxJobMismatchError,
   PlanChangeTurnNotFoundError,
+  PlanOfferNotOpenError,
+  PlanOfferStartRefusedError,
+  PlanSessionEndedError,
+  PlanTargetLockedError,
   TurnFilesGuideOnlyError,
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE, PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
@@ -185,6 +201,9 @@ async function submitAsk(
   /** The turn this job answers, and the job it held before (MOTIR-9255): the
    *  submit is keyed on that attempt, so a re-send never runs it twice. */
   keyedOn?: TurnAttempt,
+  /** NO RUN only (MOTIR-9290): the offer standing when the person spoke, read before
+   *  their turn was appended; undefined when none is, so the key is not sent. */
+  pendingPlanOffer?: PendingPlanOfferStatement,
 ): Promise<{ jobId: string }> {
   const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
     userId: ctx.userId,
@@ -208,6 +227,8 @@ async function submitAsk(
     prompt,
     ...(anchorKey ? { anchorKey } : {}),
     ...(run ? { run } : {}),
+    // One carrier per fact: with a run, the snapshot's own `pendingOffer` states it.
+    ...(!run && pendingPlanOffer ? { pendingPlanOffer } : {}),
     ...(code ? { code } : {}),
   };
   return submitJob(
@@ -283,6 +304,47 @@ async function resolveAnchor(anchorKey: string, ctx: ProjectContext): Promise<st
       err instanceof ProjectNotFoundError
     ) {
       throw new AskAnchorNotAvailableError();
+    }
+    throw err;
+  }
+}
+
+/**
+ * The offer a typed reply decides, or null (MOTIR-9291). Judged over CORE's own
+ * thread BEFORE the turn being settled — the `seq < turn.seq` slice `settleMidRun`
+ * reads — so a reply's own answer can never confirm itself, and the reply must name
+ * exactly the offer that was pending, by its turn's `seq` and its kind.
+ */
+function repliedOffer(
+  session: PlanChangeSessionDto,
+  turn: PlanChangeTurnDto,
+  reply: AskOfferReply | undefined,
+): { turnId: string; decision: AskOfferReply['decision'] } | null {
+  if (!reply) return null;
+  const pending = pendingPlanOfferOf(session.turns.filter((t) => t.seq < turn.seq));
+  if (!pending || pending.seq !== reply.seq || pending.offer.kind !== reply.kind) return null;
+  return { turnId: pending.turnId, decision: reply.decision };
+}
+
+/**
+ * A start a settle makes, or null when it was refused. The answer lands either way: a
+ * typed yes that cannot start is still a turn the person must see answered, and the
+ * refusal leaves the offer as the start found it (`out_of_credits` recorded on it).
+ */
+async function startOrNothing(
+  start: () => Promise<PlanOfferStartResult | null>,
+): Promise<PlanOfferStartResult | null> {
+  try {
+    return await start();
+  } catch (err) {
+    if (
+      err instanceof PlanOfferStartRefusedError ||
+      err instanceof PlanTargetLockedError ||
+      err instanceof PlanSessionEndedError ||
+      err instanceof MotirAiOutOfCreditsError ||
+      err instanceof PermissionDeniedError
+    ) {
+      return null;
     }
     throw err;
   }
@@ -609,6 +671,9 @@ export const aiAskService = {
       };
     }
 
+    // Read BEFORE the append, so it is the offer standing when the person spoke
+    // (MOTIR-9290) — the shape `submitMidRunTurn` uses for its forward offer.
+    const pendingPlanOffer = planOfferService.statingPending(current.turns);
     const appended = await planChangeSessionsService.appendTurn(trimmed, ctx, address, {
       intent: 'ask',
       // Recorded even here: a turn sent from the answer bar when nothing was
@@ -622,7 +687,14 @@ export const aiAskService = {
     const turn = appended.turns.at(-1);
     if (!turn) throw new PlanChangeTurnNotFoundError('(the turn just appended)');
 
-    const { jobId } = await submitAsk(trimmed, anchor, ctx, undefined, attemptOf(turn));
+    const { jobId } = await submitAsk(
+      trimmed,
+      anchor,
+      ctx,
+      undefined,
+      attemptOf(turn),
+      pendingPlanOffer,
+    );
     const session = await planChangeSessionsService.recordTurnIntent(
       turn.id,
       'ask',
@@ -771,6 +843,8 @@ export const aiAskService = {
       ctx,
       undefined,
       opts.flip ? undefined : attemptOf(turn),
+      // The offer that stood when this turn was first typed: the thread before it.
+      planOfferService.statingPending(current.turns.filter((t) => t.seq < turn.seq)),
     );
     const session = await planChangeSessionsService.recordTurnIntent(
       turnId,
@@ -839,6 +913,32 @@ export const aiAskService = {
 
     if (!outcome.answer) return { outcome: 'silent', session };
 
+    // THE REPLY TO A PENDING OFFER (MOTIR-9291), decided BEFORE the answer is
+    // appended: the answer supersedes the offer, so it must still be undecided when
+    // it is judged. A decline writes `declined`; an agree starts exactly what the
+    // Confirm button starts, through the same claim. A replayed settle finds the offer
+    // decided and does neither again.
+    const replied = repliedOffer(session, turn, outcome.offerReply);
+    if (replied?.decision === 'decline') {
+      await planOfferService.declinePlanOffer(replied.turnId, ctx, address).catch((err) => {
+        if (!(err instanceof PlanOfferNotOpenError)) throw err;
+      });
+    }
+    let started =
+      replied?.decision === 'agree'
+        ? await startOrNothing(() =>
+            planOfferStartService.confirmPlanOffer(ctx, {
+              conversationId: session.id,
+              offerTurnId: replied.turnId,
+            }),
+          )
+        : null;
+
+    // The offer (MOTIR-9290) is gated HERE, where the answer lands, and rides the
+    // SAME append: it can never precede its answer or outlive a failed write, and a
+    // failed gate stores no offer while the answer still lands. Nothing on this arm
+    // submits or records a `plan_change` / `new_session` intent.
+    const answerOffer = await planOfferService.land(outcome.offer, ctx);
     const updated = await planChangeSessionsService.appendAnswerTurn(
       {
         jobId,
@@ -846,10 +946,31 @@ export const aiAskService = {
         citations: outcome.citations,
         // The answer was given without the code (MOTIR-8141): stored with the turn.
         codeUnreadable: readCodeUnreadable(job.result) === 'answered' ? 'answered' : null,
+        answerOffer,
       },
       ctx,
       address,
     );
+    // "Plan this" with a grounded target (`immediate`): no offer was stored, and the
+    // plan starts at once, claimed on the person's turn so a replay starts nothing.
+    if (!started && outcome.offer?.immediate && outcome.offer.targetKey) {
+      const anchorKey = outcome.offer.targetKey;
+      started = await startOrNothing(() =>
+        planOfferStartService.startTargetedPlan(ctx, {
+          conversationId: session.id,
+          askJobId: jobId,
+          anchorKey,
+        }),
+      );
+    }
+    if (started) {
+      return {
+        outcome: 'redirected',
+        jobId: started.jobId,
+        planId: started.planId,
+        session: started.session,
+      };
+    }
     return { outcome: 'answered', session: updated };
   },
 

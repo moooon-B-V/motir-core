@@ -1,0 +1,182 @@
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { db } from '@/lib/db';
+import type { ProjectContext } from '@/lib/projects';
+import { buildScope } from '@/lib/planChange/scope';
+import { toPlanChangeSessionDto } from '@/lib/mappers/planChangeMappers';
+import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
+import { truncateAuthTables } from '../../helpers/db';
+
+// THE ANSWER OFFER, STORED (Story MOTIR-9219 · MOTIR-9288), on real Postgres with RLS
+// on: an offer appended with its answer re-reads identical through the thread, an
+// answer without one stores NULL, and `setAnswerOffer` rewrites only that column,
+// only in its own workspace.
+
+const { planChangeSessionsService } = await import('@/lib/services/planChangeSessionsService');
+const { workItemsService } = await import('@/lib/services/workItemsService');
+
+const T = { timeout: 120_000 };
+
+let fx: WorkItemFixture;
+let jobSeq = 0;
+
+beforeEach(async () => {
+  await truncateAuthTables();
+  fx = await makeWorkItemFixture();
+});
+
+afterAll(async () => {
+  await db.$disconnect();
+  await adminDb.$disconnect();
+});
+
+function me(f: WorkItemFixture = fx): ProjectContext {
+  return {
+    userId: f.ownerId,
+    workspaceId: f.workspaceId,
+    projectId: f.projectId,
+    project: f.project,
+  };
+}
+
+const OFFER = {
+  kind: 'plan' as const,
+  requestMd: 'Plan a fix for the CSV export dropping custom fields.',
+  targetKey: null as string | null,
+};
+
+/** A conversation with one answer turn, the offer on it when given. */
+async function answered(answerOffer?: typeof OFFER | null) {
+  const target = await workItemsService.createWorkItem(
+    { projectId: fx.projectId, kind: 'task', title: 'CSV export' },
+    fx.ctx,
+  );
+  const s = await planChangeSessionsService.startWithFirstTurn(
+    me(),
+    buildScope([target.identifier]),
+    'Plan a fix for the export',
+  );
+  const offer = answerOffer ? { ...answerOffer, targetKey: target.identifier } : answerOffer;
+  await planChangeSessionsService.appendAnswerTurn(
+    {
+      jobId: `job-${++jobSeq}`,
+      body: 'I can plan that.',
+      ...(offer ? { answerOffer: offer } : {}),
+    },
+    me(),
+    { sessionId: s.id },
+  );
+  const turn = await adminDb.planChangeTurn.findFirstOrThrow({
+    where: { sessionId: s.id, role: 'assistant' },
+  });
+  return { sessionId: s.id, turn, offer };
+}
+
+/** The thread re-read on its own connection, through the repository and the mapper. */
+async function reread(sessionId: string) {
+  const row = await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sessionId } });
+  const turns = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+    planChangeTurnRepository.listBySessionId(sessionId, fx.workspaceId, tx),
+  );
+  return toPlanChangeSessionDto(row, turns);
+}
+
+const UNDECIDED = {
+  declinedAt: null,
+  declinedById: null,
+  confirmedAt: null,
+  confirmedById: null,
+  confirmedSessionId: null,
+};
+
+describe('the answer offer is stored with its turn', () => {
+  it('persists all eight keys, every disposition null, and re-reads identical', T, async () => {
+    const { sessionId, turn, offer } = await answered(OFFER);
+
+    expect(turn.answerOffer).toEqual({ ...offer, ...UNDECIDED });
+    expect(Object.keys(turn.answerOffer as object).sort()).toEqual(
+      [
+        'confirmedAt',
+        'confirmedById',
+        'confirmedSessionId',
+        'declinedAt',
+        'declinedById',
+        'kind',
+        'requestMd',
+        'targetKey',
+      ].sort(),
+    );
+
+    const dto = await reread(sessionId);
+    const assistant = dto.turns.find((t) => t.role === 'assistant')!;
+    expect(assistant.offer).toEqual({ ...offer, ...UNDECIDED });
+    expect(assistant.forwardOffer).toBeNull();
+    // The service's own read agrees, plus the two fields it derives (MOTIR-9290).
+    const viaService = await planChangeSessionsService.getById(me(), sessionId);
+    expect(viaService.turns.find((t) => t.role === 'assistant')!.offer).toEqual({
+      ...offer,
+      ...UNDECIDED,
+      state: 'undecided',
+      cannotStart: expect.toBeOneOf([null, 'planning_unavailable']),
+    });
+  });
+
+  it(
+    'stores NULL for an answer with no offer, and every other turn reads no offer',
+    T,
+    async () => {
+      const { sessionId, turn } = await answered();
+      expect(turn.answerOffer).toBeNull();
+      const dto = await reread(sessionId);
+      expect(dto.turns.every((t) => t.offer === null)).toBe(true);
+    },
+  );
+});
+
+describe('setAnswerOffer rewrites the offer and nothing else', () => {
+  it('changes only the offer column of its own turn', T, async () => {
+    const { sessionId, turn, offer } = await answered(OFFER);
+    const confirmed = {
+      ...offer!,
+      ...UNDECIDED,
+      confirmedAt: '2026-10-22T19:14:00.000Z',
+      confirmedById: fx.ownerId,
+      confirmedSessionId: sessionId,
+    };
+
+    await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planChangeTurnRepository.setAnswerOffer(turn.id, fx.workspaceId, confirmed, tx),
+    );
+
+    const after = await adminDb.planChangeTurn.findUniqueOrThrow({ where: { id: turn.id } });
+    expect(after.answerOffer).toEqual(confirmed);
+    const { answerOffer: _a, ...rest } = after;
+    const { answerOffer: _b, ...before } = turn;
+    expect(rest).toEqual(before);
+    const dto = await reread(sessionId);
+    expect(dto.turns.find((t) => t.id === turn.id)!.offer).toEqual(confirmed);
+  });
+
+  it("writes nothing for another workspace's turn id", T, async () => {
+    const { turn } = await answered(OFFER);
+    const other = await makeWorkItemFixture();
+    const declined = {
+      ...(turn.answerOffer as Record<string, unknown>),
+      declinedAt: 'x',
+      declinedById: other.ownerId,
+    };
+
+    await withWorkspaceServiceContext(other.workspaceId, (tx) =>
+      planChangeTurnRepository.setAnswerOffer(turn.id, other.workspaceId, declined, tx),
+    );
+    // Scoped by workspace id even where row security would let the write through.
+    await adminDb.$transaction((tx) =>
+      planChangeTurnRepository.setAnswerOffer(turn.id, other.workspaceId, declined, tx),
+    );
+
+    const after = await adminDb.planChangeTurn.findUniqueOrThrow({ where: { id: turn.id } });
+    expect(after).toEqual(turn);
+  });
+});

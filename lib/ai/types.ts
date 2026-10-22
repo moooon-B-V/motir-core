@@ -369,6 +369,15 @@ export interface JobContextBag {
   // ABSENT ⇒ `ask_project` behaves exactly as it always has. Loosely typed here by
   // design, like `discovery`: each side declares its own types against the contract.
   run?: unknown;
+  // The LIVE PLAN OFFER of an `ask_project` turn typed with NO run (Story MOTIR-9219 ·
+  // MOTIR-9290 producer ↔ MOTIR-9292 consumer) — `{ kind, requestText, targetKey,
+  // seq }` (`PendingPlanOfferStatement`, lib/services/planOfferService.ts), the offer
+  // that stood when the person spoke, read before their turn was appended. ABSENT —
+  // never null, never empty — when no offer is pending, and never sent beside `run`:
+  // a mid-run turn's offer is stated inside the snapshot (`run.pendingOffer`). The two
+  // names differ on purpose, so nobody reads them as one field. Loosely typed by
+  // design, like `run`.
+  pendingPlanOffer?: unknown;
   // The workspace's connected repo SET — the PLURAL cross-repo contract with
   // motir-ai's multi-repo code-graph reads (7.10.15/MOTIR-1598 producer ↔
   // 7.10.16/MOTIR-1599 consumer): `{ repos: [{ provider, repoRef,

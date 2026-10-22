@@ -1,6 +1,7 @@
 import type { AttachmentDTO } from '@/lib/dto/attachments';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { GuideTurnRecord } from '@/lib/ai/guideWorkItem';
+import type { PlanOfferCannotStart, PlanOfferState } from '@/lib/planChange/planOffer';
 
 // DTO types for the plan-change CONVERSATION (Story 7.30 · MOTIR-1728) — the
 // shape that crosses the API boundary. No Prisma row leaks: the
@@ -223,6 +224,15 @@ export interface PlanChangeTurnDto {
    * Optional for the reason {@link anchorKey} is.
    */
   forwardOffer?: string | null;
+  /**
+   * The ONE offer this `assistant` answer ended with (MOTIR-9288; AMENDMENT 5 clause
+   * 1) — mapped from the row's `answerOffer`. ⚠️ NOT {@link forwardOffer}: that is the
+   * mid-run offer to forward a turn to a running planner, a different offer on the
+   * same turn. Its state (undecided / superseded / declined / confirmed) is derived
+   * from the thread plus the disposition fields, never stored. Null on every other
+   * turn. Optional for the reason {@link anchorKey} is.
+   */
+  offer?: PlanAnswerOfferDto | null;
   /**
    * Set on a mid-run `user` turn that was FORWARDED to the running planner: the
    * mailbox entry it went down as. The rail draws forwarded → queued → read from
@@ -516,6 +526,52 @@ export interface CopyableSessionDto {
 }
 
 /**
+ * What an answer turn can OFFER (MOTIR-9288). A closed union: `'plan'` only today;
+ * the bug offer adds `'log_bug'` HERE, so the compiler finds every switch on it. A
+ * stored kind outside the union reads as no offer, never as a `plan` one.
+ */
+export type AnswerOfferKindDto = 'plan';
+
+/**
+ * The offer stored on an answer turn (MOTIR-9288) — the shape the guide's
+ * `GuideReplanOffer` keeps: what was offered, then the disposition core writes after
+ * the fact. Every disposition field is null on an undecided offer.
+ */
+export interface PlanAnswerOfferDto {
+  kind: AnswerOfferKindDto;
+  /** The request the answering session wrote — model output, never empty. */
+  requestMd: string;
+  /** The work item the offer would plan, or null when it carried none. */
+  targetKey: string | null;
+  declinedAt: string | null;
+  declinedById: string | null;
+  confirmedAt: string | null;
+  confirmedById: string | null;
+  /** The planning session the confirm started. */
+  confirmedSessionId: string | null;
+  /**
+   * DERIVED on every read (MOTIR-9290), never stored: which of the four states the
+   * offer is in, from the thread's own shape (`planOfferStateOf`). Filled where the
+   * session DTO is built; absent only on a turn mapped outside it.
+   */
+  state?: PlanOfferState;
+  /**
+   * DERIVED on every read (MOTIR-9290): why the offer cannot start right now, as a
+   * reason CODE (the words are the copy's), or null when it can. Resolved from live
+   * reads, so a permission revoked or a target closed since the answer shows here.
+   */
+  cannotStart?: PlanOfferCannotStart | null;
+}
+
+/** What a writer passes to store an offer: what was offered, and no disposition —
+ *  the append writes every disposition field null. */
+export interface AnswerOfferInput {
+  kind: AnswerOfferKindDto;
+  requestMd: string;
+  targetKey: string | null;
+}
+
+/**
  * What a settled `debug` turn LANDED (Story MOTIR-7042 · MOTIR-7049; ADR
  * `conversation-turn-intent.md` AMENDMENT 1 · A1.4) — the rail's account of the
  * one card the turn touched. Exactly one of A1.4's rows:
@@ -555,6 +611,27 @@ export interface PlanSessionRestartResultDto {
   outcome: 'restarted';
   endedSessionId: string;
   session: PlanChangeSessionDto;
+}
+
+/**
+ * What the mid-planning restart for a confirmed plan offer answered (Story MOTIR-9219 ·
+ * MOTIR-9293). It differs from {@link PlanSessionRestartResultDto} on three axes, and a
+ * caller switches on each:
+ *
+ *  - `outcome` is `'restarted'` when this call ended the session, `'already'` when the
+ *    session had ended before it (nothing ends twice);
+ *  - `endedSessionId` and `session` are NULLABLE: nothing was ended, or the caller has
+ *    no open session for the offer's scope;
+ *  - `ownsStart` says whether the caller starts the plan on `session`. `false` is the
+ *    instruction to submit NOTHING: the start, if there was one, belonged to an earlier
+ *    call. When `true`, `session` is the successor — open, holding the offer's targets,
+ *    with the offer's request as its first `user` turn — and no job has been sent.
+ */
+export interface PlanOfferRestartResultDto {
+  outcome: 'restarted' | 'already';
+  endedSessionId: string | null;
+  session: PlanChangeSessionDto | null;
+  ownsStart: boolean;
 }
 
 /**
