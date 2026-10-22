@@ -696,7 +696,7 @@ describe('the larger-pool arm — sold from the answer', () => {
   });
 
   it('names a pool key this catalog cannot sell as the answer does, with no buy', async () => {
-    client.fetchCalculatorEstimate.mockResolvedValue(answer(larger('pool_x', 'Pool X')));
+    client.fetchCalculatorEstimate.mockResolvedValue(answer(larger('pool_999k', 'Pool X')));
     renderView();
     await ask();
     const plan = await screen.findByTestId('calculator-plan');
