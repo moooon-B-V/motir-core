@@ -20,7 +20,6 @@ import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import {
   BAR_GHOST_HOVER,
-  BAR_SECONDARY_HOVER,
   OnboardingHero,
   OnboardingWizardBar,
   OnboardingWorkBand,
@@ -313,12 +312,15 @@ export function MigrateWizard({
           onRetried={refreshIndexStatus}
         />
       ) : null}
+      {/* The way back to the idea flow is the bar's one COLOURED control
+          (MOTIR-8934 Change 3): ink and border in the accent ink the lockup
+          already wears, the accent's own tint on hover. Save & exit stays a
+          plain ghost. */}
       <Link
         href="/onboarding/discovery"
         className={cn(
           buttonVariants({ variant: 'secondary', size: 'sm' }),
-          'gap-1.5',
-          BAR_SECONDARY_HOVER,
+          'gap-1.5 border-(--el-accent-on-surface) text-(--el-accent-on-surface) hover:bg-(--el-tint-sky)',
         )}
       >
         {t('brandBar.planAi')}

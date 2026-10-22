@@ -10,6 +10,7 @@ import {
   FilePenLine,
   GitPullRequest,
   History,
+  Hourglass,
   ListChecks,
   MessageSquare,
   RefreshCw,
@@ -32,6 +33,7 @@ import {
   GuideSentFiles,
 } from '@/components/planning/GuideTurnFiles';
 import { GUIDE_FILES_MAX } from '@/lib/ai/guideFiles';
+import { MOTIR_AI_UNAVAILABLE } from '@/lib/planning/submitStartingUp';
 import { ALLOWED_UPLOAD_TYPES } from '@/lib/blob/allowlist';
 import { useGuideTurnFiles } from '@/lib/hooks/useGuideTurnFiles';
 import type { GuideAction } from '@/lib/ai/guideWorkItem';
@@ -82,6 +84,8 @@ export interface GuideRailProps {
   view: GuideView;
   phase: GuidePhase;
   errorCode: string | null;
+  /** The turn's submit has waited long on a waking Motir AI (MOTIR-9255). */
+  startingUp?: boolean;
   outOfCredits: boolean;
   markers: readonly GuidePersonMarker[];
   /** Send a turn. `attachmentIds` are files already on the card (A3.1). */
@@ -113,7 +117,15 @@ function errorKey(code: string): string {
   if (code === 'GUIDE_CARD_CLOSED') return 'errors.closed';
   if (code === 'FORBIDDEN' || code === 'PERMISSION_DENIED') return 'errors.forbidden';
   if (code === 'GUIDE_REPLAN_OFFER_NOT_OPEN') return 'errors.offerClosed';
+  // Motir AI never answered within the submit's budget (MOTIR-9255).
+  if (code === MOTIR_AI_UNAVAILABLE) return 'errors.unavailable';
   return 'failed';
+}
+
+/** The failures Try again can recover: the turn is still on the thread. */
+function isRetryable(code: string): boolean {
+  const key = errorKey(code);
+  return key === 'failed' || key === 'errors.unavailable';
 }
 
 export function GuideRail({
@@ -122,6 +134,7 @@ export function GuideRail({
   view,
   phase,
   errorCode,
+  startingUp = false,
   outOfCredits,
   markers,
   onSend,
@@ -332,6 +345,15 @@ export function GuideRail({
                     : tg('reading', { key: card.identifier })}
                 </span>
               </li>
+              {startingUp ? (
+                <li
+                  className="flex items-start gap-2 text-xs text-(--el-text-secondary)"
+                  data-testid="guide-starting-up"
+                >
+                  <Hourglass className="mt-px size-3.5 flex-none" aria-hidden="true" />
+                  <span className="min-w-0 flex-1">{tg('startingUp')}</span>
+                </li>
+              ) : null}
             </ol>
           ) : null}
         </div>
@@ -345,7 +367,7 @@ export function GuideRail({
             >
               {tg(errorKey(errorCode))}
             </p>
-            {errorKey(errorCode) === 'failed' ? (
+            {isRetryable(errorCode) ? (
               <Button
                 variant="secondary"
                 size="sm"

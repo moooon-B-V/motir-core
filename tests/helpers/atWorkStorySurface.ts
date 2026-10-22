@@ -1,8 +1,10 @@
 // STORY MOTIR-8413's SURFACE — the ONE enumeration (Subtask MOTIR-8418).
 //
 // Motir at work: the drafted card turns warm orange, pops and breathes while it is
-// being written, and the Motir mark in the rail header breathes beside it
-// (`design/ai-chat/design-notes.md` § _Motir at work_). Two readers import this
+// being written, and the Motir mark moves beside the planner's notes — since
+// MOTIR-9213 the working turn's avatar, flowing in colour
+// (`design/ai-chat/design-notes.md` § _Motir at work_ and § _The Motir mark at
+// work_). Two readers import this
 // module, and that is its whole purpose:
 //
 //   • `vitest.coverage.plan-at-work.config.ts` — the coverage FLOOR, built from
@@ -19,8 +21,11 @@
 
 /** The files this story WROTE — each held to the floor, whole-file. */
 export const GATED = [
-  // MOTIR-8417 — the mark, new.
+  // MOTIR-8417 — the mark, new; MOTIR-9213 made it the working turn's avatar.
   'components/planning/PlanAtWorkMark.tsx',
+  // MOTIR-9213 — the colour wave flow the avatar runs: the frames and their loop.
+  'components/brand/waveBandFlow.ts',
+  'components/brand/BrandMarkFlow.tsx',
   // MOTIR-8415 — `readPlanAtWork` and `PLAN_AT_WORK_MOVES` were added to the
   // shipped derivation's own file. GATED, not reported: this lane runs that file's
   // own suite (`tests/plans/planProgress.test.ts`), so its whole-file number
@@ -41,7 +46,8 @@ export const REPORTED = [
   'components/planning/PlanReviewCanvas.tsx',
   // MOTIR-8416 — `readPlanAtWork` once, `movingSteps`, the stalled hold.
   'components/planning/PlanProposalViews.tsx',
-  // MOTIR-8417 — the one `PlanAtWorkMark` mount in the header.
+  // MOTIR-8417 — the one `PlanAtWorkMark` mount; MOTIR-9213 moved it from the
+  // header to the working-turn row.
   'components/planning/PlanChangeRail.tsx',
 ] as const;
 
@@ -50,9 +56,11 @@ export const REPORTED = [
  * of every sweep rides this list instead of the coverage lists.
  */
 export const STYLESHEETS = [
-  // The cue's colour and motion and the mark's breath (MOTIR-8416 / MOTIR-8417).
+  // The cue's colour and motion (MOTIR-8416). The mark's breath (MOTIR-8417) left
+  // it with MOTIR-9213: the mark's motion is the frame loop's, not a stylesheet's.
   'app/globals.css',
-  // The two new roles, `--el-drafting` / `--el-drafting-surface` (MOTIR-8416).
+  // The two new roles, `--el-drafting` / `--el-drafting-surface` (MOTIR-8416), and
+  // the mark's three, `--el-mark-wave-1..3` (MOTIR-9213).
   'packages/design-system/theme.css',
 ] as const;
 
@@ -73,6 +81,10 @@ export const SPECS = [
   'tests/components/plan-change-rail.test.tsx',
   // MOTIR-8418 — the seam: one snapshot, the cue and the mark.
   'tests/integration/planning/atWorkStoryGate.test.tsx',
+  // MOTIR-9213 — the flow's frames and its loop.
+  'tests/brand/waveBandFlow.test.ts',
+  'tests/components/brand-mark-flow.test.tsx',
+  'tests/components/plan-work-row.test.tsx',
 ] as const;
 
 /** The class / attribute hooks the approved design names — what the sweeps match. */

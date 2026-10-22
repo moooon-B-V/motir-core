@@ -77,9 +77,17 @@ default.
 | zh     | `chinese-simplified`                                     | `zh-Hans`               | L58         |
 | ja     | `japanese`                                               | `ja`                    | L60         |
 | ko     | `korean`                                                 | `ko`                    | L61         |
+| zh-tw  | `chinese-traditional`                                    | `zh-Hant`               | L59         |
 
 zh, ja and ko map to three different sets. dooooWeb's `chinese-traditional`
-group (`zh-Hant`, L59) has no Motir locale, so no `zh-Hant` set is proposed.
+group (`zh-Hant`, L59) had no Motir locale when this document was written, so
+no `zh-Hant` set was proposed then. **Amended by MOTIR-9239 (2026-10-22):**
+motir.co gained a Traditional Chinese (Taiwan) locale, `/zh-tw` (story
+MOTIR-8937), so the `zh-Hant` set below exists. `zh-tw` is NOT an app.motir.co
+locale: the registry lists it in `FONT_SET_EXTRA_LOCALES`, apart from the eleven
+in `FONT_SET_LOCALES`, which stay closed over the app's stored font picks.
+`resolveFontSet` tries the whole tag before the primary subtag, so `zh-TW` reaches
+`zh-Hant` rather than reading as `zh`.
 
 The ids `zh-Hans`, `ja` and `ko` are BCP 47 tags, so each can serve as both the
 registry id and its `:lang()` selector. dooooWeb's group names
@@ -166,6 +174,36 @@ How to read the member rows:
   stack, so the set only needs to supply the Han glyphs, and those are the
   sans face's.
 
+### `zh-Hant`: zh-tw (motir.co only)
+
+Added by MOTIR-9239. Its `:lang()` tag is `zh-TW`, the `<html lang>` motir.co
+renders for `/zh-tw`. Because `:lang(zh)` also matches `zh-TW`, its blocks in
+`theme.css` come after both `:lang(zh)` blocks, so source order decides the tie.
+
+| Role  | Member id        | Face           | Default | Tag                                                                        |
+| ----- | ---------------- | -------------- | ------- | -------------------------------------------------------------------------- |
+| sans  | `noto-sans-tc`   | Noto Sans TC   | ✓       | added (not in dooooWeb). Noto Sans CJK's Traditional Chinese region font.  |
+| serif | `noto-serif-tc`  | Noto Serif TC  | ✓       | added (not in dooooWeb). Noto Serif CJK's Traditional Chinese region font. |
+| serif | `lxgw-wenkai-tc` | LXGW WenKai TC |         | added (not in dooooWeb). A handwritten-style face, so a pick.              |
+| mono  | `noto-sans-tc`   | Noto Sans TC   | ✓       | added (not in dooooWeb). Reuses the sans face, as for zh-Hans.             |
+
+The `added` tags record that these rows were not copied from dooooWeb's
+`chinese-traditional` list; that list was not re-read for this set.
+
+| Face           | `next/font/google` source | Weights / axes            | Licence |
+| -------------- | ------------------------- | ------------------------- | ------- |
+| Noto Sans TC   | `Noto_Sans_TC`            | variable, `wght` 100–900  | OFL-1.1 |
+| Noto Serif TC  | `Noto_Serif_TC`           | variable, `wght` 200–900  | OFL-1.1 |
+| LXGW WenKai TC | `LXGW_WenKai_TC`          | static, `300` `400` `700` | OFL-1.1 |
+
+- **Weights** are read from the `next/font/google` declarations in
+  `next@16.2.6`; the slice counts were not measured for this set.
+- **LXGW WenKai TC** is loaded twice in app.motir.co's `app/fonts.ts`, once per
+  set, because each set reads its own variable
+  (`--font-set-zh-Hans-serif-lxgw-wenkai-tc`,
+  `--font-set-zh-Hant-serif-lxgw-wenkai-tc`). Neither fetches a file unless a
+  page renders its `:lang()`.
+
 ### `ja`: ja
 
 | Role  | Member id           | Face              | Default | Tag                                                            |
@@ -244,6 +282,7 @@ and `KR` to Korean, root `README.md`).
 | `zh-Hans` | Noto Sans SC / Noto Serif SC | Simplified Chinese (Mainland China) forms |
 | `ja`      | Noto Sans JP / Noto Serif JP | Japanese forms                            |
 | `ko`      | Noto Sans KR / Noto Serif KR | Korean forms                              |
+| `zh-Hant` | Noto Sans TC / Noto Serif TC | Traditional Chinese (Taiwan) forms        |
 
 So 骨 and 直, which have different regional forms, draw differently on a zh
 page and a ja page. The E2E card (MOTIR-7851) proves this in a browser.

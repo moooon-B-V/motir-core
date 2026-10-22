@@ -266,18 +266,20 @@ function describeTransportFailure(err: unknown): string {
  * `MotirAiUnavailableError` — the single typed error every caller (and every
  * job retry budget) already understands.
  */
-async function aiFetch(input: string, init: RequestInit): Promise<Response> {
+async function aiFetch(
+  input: string,
+  init: RequestInit,
+  timeoutMs: number = MOTIR_AI_REQUEST_TIMEOUT_MS,
+): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), MOTIR_AI_REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(input, { ...init, signal: controller.signal });
   } catch (err) {
     // The abort is OURS, so report the deadline rather than the opaque
     // "This operation was aborted" the runtime throws.
     if (controller.signal.aborted) {
-      throw new MotirAiUnavailableError(
-        `motir-ai did not respond within ${MOTIR_AI_REQUEST_TIMEOUT_MS}ms`,
-      );
+      throw new MotirAiUnavailableError(`motir-ai did not respond within ${timeoutMs}ms`);
     }
     throw new MotirAiUnavailableError(describeTransportFailure(err), { cause: err });
   } finally {
@@ -304,6 +306,49 @@ async function readProblem(res: Response): Promise<Problem> {
   };
 }
 
+/**
+ * How long a KEYED submit keeps re-sending before it gives up (MOTIR-9255).
+ *
+ * motir-ai's conversation machines suspend after a minute idle, and waking one was
+ * measured at ~76 s — and two minutes when Fly's own wake timed out. A single
+ * 30 s attempt therefore fails the first turn after a quiet spell while the
+ * request is still served once the machine is up: a billed job nobody follows.
+ * A submit that carries an `idempotencyKey` re-sends under the SAME key until
+ * this budget is spent; motir-ai answers every repeat with the one job the key
+ * created, so a re-send can never run or bill a turn twice.
+ */
+export const MOTIR_AI_SUBMIT_BUDGET_MS = 90_000;
+
+/** The pause between two attempts of a keyed submit. */
+export const MOTIR_AI_SUBMIT_RESEND_PAUSE_MS = 2_000;
+
+/**
+ * POST /v1/jobs once per attempt until one answers or the budget is spent. Only a
+ * `MotirAiUnavailableError` — a timeout, a transport failure, a 5xx from a proxy
+ * that could not wake the machine — is re-sent; anything else is final. Without a
+ * key there is ONE attempt, as there always was: a keyless re-send could create a
+ * second job.
+ */
+async function postJobWithinBudget(
+  url: string,
+  init: RequestInit,
+  keyed: boolean,
+): Promise<Response> {
+  const deadline = Date.now() + MOTIR_AI_SUBMIT_BUDGET_MS;
+  for (;;) {
+    const remaining = deadline - Date.now();
+    try {
+      const res = await aiFetch(url, init, Math.min(MOTIR_AI_REQUEST_TIMEOUT_MS, remaining));
+      if (!res.ok) throw errorFromProblem(await readProblem(res));
+      return res;
+    } catch (err) {
+      const left = deadline - Date.now() - MOTIR_AI_SUBMIT_RESEND_PAUSE_MS;
+      if (!keyed || !(err instanceof MotirAiUnavailableError) || left <= 0) throw err;
+      await new Promise((resolve) => setTimeout(resolve, MOTIR_AI_SUBMIT_RESEND_PAUSE_MS));
+    }
+  }
+}
+
 // POST /v1/jobs — mint the read-back token, post a valid v1 envelope, return the
 // jobId. Never blocks on execution (motir-ai returns 202 immediately).
 export async function submitJob(
@@ -311,7 +356,12 @@ export async function submitJob(
   tenant: Tenant,
   context: JobContextBag,
   actor: RequestActor,
-  opts: { resume?: { planId: string; fromJobId: string } } = {},
+  opts: {
+    resume?: { planId: string; fromJobId: string };
+    /** One job per key (MOTIR-9255): a keyed submit is re-sent within
+     *  {@link MOTIR_AI_SUBMIT_BUDGET_MS}, and a repeat answers the first job. */
+    idempotencyKey?: string;
+  } = {},
 ): Promise<{ jobId: string }> {
   const { url, serviceToken } = config();
   // THE PER-ORG KILL-SWITCHES (MOTIR-750), read here because every new planning
@@ -339,14 +389,15 @@ export async function submitJob(
     readBackToken,
     // Only when resuming a failed walk (MOTIR-7916): absent ⇒ the body is byte-identical to today.
     ...(opts.resume ? { resume: opts.resume } : {}),
+    // Only on a keyed submit (MOTIR-9255): absent ⇒ the body is byte-identical to today.
+    ...(opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : {}),
   };
 
-  const res = await aiFetch(`${url}/v1/jobs`, {
-    method: 'POST',
-    headers: authHeaders(serviceToken),
-    body: JSON.stringify(envelope),
-  });
-  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const res = await postJobWithinBudget(
+    `${url}/v1/jobs`,
+    { method: 'POST', headers: authHeaders(serviceToken), body: JSON.stringify(envelope) },
+    Boolean(opts.idempotencyKey),
+  );
 
   const body: unknown = await res.json();
   const jobId = (body as { jobId?: unknown })?.jobId;
@@ -961,6 +1012,8 @@ function isCalculatorEstimate(v: unknown): v is CalculatorEstimateDTO {
     (rec['planKey'] === null || isStr(rec['planKey'])) &&
     (rec['planName'] === null || isStr(rec['planName'])) &&
     isNum(rec['monthlyPriceUsd']) &&
+    // Absent from an engine older than MOTIR-9189; a number whenever it is sent.
+    (rec['poolCredits'] === undefined || isNum(rec['poolCredits'])) &&
     isObj(topUp) &&
     isTopUpAmount(topUp['low']) &&
     isTopUpAmount(topUp['high']) &&

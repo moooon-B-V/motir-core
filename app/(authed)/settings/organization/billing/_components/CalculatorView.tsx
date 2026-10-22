@@ -559,6 +559,15 @@ function Estimate({
           <span className="font-serif text-2xl text-(--el-text)">
             {t('plans.perMoEquiv', { n: fmt(recommendation.monthlyPriceUsd, locale) })}
           </span>
+          {/* The pool's size is the answer's own: a derived pool may have no catalog row. */}
+          {recommendation.poolCredits ? (
+            <p
+              className="font-sans text-sm font-semibold text-(--el-text-strong)"
+              data-testid="calculator-larger-pool"
+            >
+              {t('plans.creditsAllotment', { n: fmt(recommendation.poolCredits, locale) })}
+            </p>
+          ) : null}
           <p className="font-sans text-xs text-(--el-text-secondary)">
             {t('calculator.result.largerPlanEstimate')}
           </p>

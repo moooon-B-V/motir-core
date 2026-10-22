@@ -1,6 +1,7 @@
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { submitJob } from '@/lib/ai/motirAiClient';
+import { turnSubmitKey } from '@/lib/ai/turnSubmitKey';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { resolvePlanningCodeContext } from '@/lib/ai/codeContext';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
@@ -375,6 +376,9 @@ async function submitGuideJob(
     },
     context,
     { userId: ctx.userId },
+    // Keyed on the turn (MOTIR-9255): a submit that outlives a waking machine is
+    // re-sent, and a Try again re-sends it, without a second job or charge.
+    { idempotencyKey: turnSubmitKey(turn.id, 'guide_work_item', turn.jobId ?? null) },
   );
 }
 

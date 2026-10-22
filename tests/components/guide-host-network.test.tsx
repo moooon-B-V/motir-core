@@ -30,6 +30,7 @@ const { listTodosAction, setTodoDoneAction } = vi.hoisted(() => ({
 vi.mock('@/app/(authed)/items/[key]/todoActions', () => ({ listTodosAction, setTodoDoneAction }));
 
 import { GuideWorkspaceHost } from '@/components/planning/GuideWorkspaceHost';
+import { STARTING_UP_AFTER_MS } from '@/lib/planning/submitStartingUp';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -113,7 +114,11 @@ const json = (body: unknown, status = 200) =>
 const sse = (frame: string) =>
   new Response(frame, { headers: { 'content-type': 'text/event-stream' } });
 
-type Handler = (method: string, path: string, body: unknown) => Response | undefined;
+type Handler = (
+  method: string,
+  path: string,
+  body: unknown,
+) => Response | undefined | Promise<Response | undefined>;
 let handler: Handler;
 
 async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -121,7 +126,7 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   const method = (init?.method ?? 'GET').toUpperCase();
   const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : null;
   sent.push({ method, path: url.pathname, body });
-  return handler(method, url.pathname, body) ?? json({ code: 'NOT_FOUND' }, 404);
+  return (await handler(method, url.pathname, body)) ?? json({ code: 'NOT_FOUND' }, 404);
 }
 
 /** The ordinary server: a card with two rows, an opening turn whose job ticks
@@ -306,6 +311,53 @@ describe('opening the guide', () => {
     expect(posted('/api/ai/guide').at(-1)!.body).toEqual({ sessionId: 's1', turnId: 't0' });
     await waitFor(() => expect(screen.queryByTestId('guide-error')).toBeNull());
     await waitFor(() => expect(rowsDone()).toEqual([true]));
+  });
+});
+
+describe('a door waiting on a waking Motir AI (MOTIR-9255)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('says Motir AI is starting up — and no error — while the door waits, then answers', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let release!: () => void;
+    const waking = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const base = ordinary({ before: [todo('r1', 'One')], after: [todo('r1', 'One', true)] });
+    handler = async (method, path, body) => {
+      if (method === 'POST' && path === '/api/ai/guide') await waking;
+      return base(method, path, body);
+    };
+    renderHost({ ...CARD, identifier: 'PROD-91' });
+    await waitFor(() => expect(posted('/api/ai/guide')).toHaveLength(1));
+    expect(screen.queryByTestId('guide-starting-up')).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(STARTING_UP_AFTER_MS);
+    });
+    expect(screen.getByTestId('guide-starting-up').textContent).toContain(
+      'Motir AI is starting up',
+    );
+    expect(screen.queryByTestId('guide-error')).toBeNull();
+
+    release();
+    await waitFor(() => expect(screen.getByTestId('guide-outcome')).toBeTruthy());
+    expect(screen.queryByTestId('guide-starting-up')).toBeNull();
+    expect(posted('/api/ai/guide')).toHaveLength(1);
+  });
+
+  it('a door that never heard back says so in its own words, with Try again', async () => {
+    listTodosAction.mockResolvedValue({ ok: true, items: [], progress: { done: 0, total: 0 } });
+    handler = (method, path) =>
+      method === 'POST' && path === '/api/ai/guide'
+        ? json({ code: 'MOTIR_AI_UNAVAILABLE', error: 'motir-ai is unavailable' }, 502)
+        : undefined;
+    renderHost({ ...CARD, identifier: 'PROD-92' });
+    await waitFor(() => expect(screen.getByTestId('guide-error')).toBeTruthy());
+    expect(screen.getByTestId('guide-error').textContent).toContain("you won't be charged twice");
+    expect(screen.getByRole('button', { name: /try again/i })).toBeTruthy();
   });
 });
 

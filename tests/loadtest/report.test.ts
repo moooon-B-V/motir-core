@@ -22,6 +22,7 @@ import {
   APP,
   ENDED,
   ROOT,
+  STEADY,
   STEADY_END,
   STEADY_START,
   T0,
@@ -343,6 +344,174 @@ describe('rate-limit refusals', () => {
     expect(r.line('perInstance.errorRate').value).toBe('0 % (0 of 5100)');
     expect(r.line('perInstance.targetRps').value).toBe('16 rps served');
     expect(r.line('perInstance.mutateP95Ms').value).toBe('302 ms');
+  });
+});
+
+describe('the agent mix (MOTIR-9152)', () => {
+  const vusOf = (dir: string) =>
+    JSON.parse(readFileSync(join(dir, 'profile.resolved.json'), 'utf8')).vus as Record<
+      string,
+      number
+    >;
+  const row = (json: { tables: { mix: { value: { rows: { class: string }[] } } } }, c: string) =>
+    json.tables.mix.value.rows.find((x) => x.class === c);
+
+  it('splits the served rps by class, from the group and role tags, and the rows sum to it', async () => {
+    const r = await report();
+    const vus = vusOf(r.dir);
+    expect(r.json.tables.mix.state).toBe('ok');
+    expect(r.json.tables.mix.value.rows.map((x: { class: string }) => x.class)).toEqual([
+      'read',
+      'write',
+      'claim',
+      'burst',
+      'run',
+      'readers',
+    ]);
+    // Per steady second: 6 MCP reads, 3 writes, 1 empty claim, 2 run steps (the
+    // recycle step is in no class) and 4 reader pages — 16 served.
+    expect(row(r.json, 'read')).toMatchObject({
+      offeredVus: vus['read'],
+      servedRps: 6,
+      share: 6 / 16,
+      ok: 1800,
+      empty: 0,
+      error: 0,
+      limited: 0,
+      p95Ms: 105,
+      p99Ms: 105,
+    });
+    expect(row(r.json, 'write')).toMatchObject({ offeredVus: vus['write'], servedRps: 3 });
+    expect(row(r.json, 'claim')).toMatchObject({
+      offeredVus: vus['claim'],
+      servedRps: 1,
+      ok: 0,
+      empty: 300,
+      p95Ms: 'unmeasured',
+    });
+    expect(row(r.json, 'run')).toMatchObject({ offeredVus: vus['run'], servedRps: 2, ok: 600 });
+    expect(row(r.json, 'readers')).toMatchObject({
+      offeredVus: vus['readers'],
+      servedRps: 4,
+      p95Ms: 200,
+    });
+    const total = r.json.tables.mix.value.total;
+    expect(total.servedRps).toBe(16);
+    expect(total.servedRps).toBe(r.json.servedRps);
+    expect(total.offeredVus).toBe(
+      vus['read']! + vus['write']! + vus['claim']! + vus['burst']! + vus['run']! + vus['readers']!,
+    );
+    expect(r.md).toContain(
+      '## Agent mix (steady window)\n\n| class | offered VUs | served rps | share | ok | empty | error | limited | p95 ms | p99 ms |',
+    );
+    expect(r.md).toContain(`| read | ${vus['read']} | 6 | 37.5 % | 1800 | 0 | 0 | 0 | 105 | 105 |`);
+    expect(r.md).toContain(`| total | ${total.offeredVus} | 16 |`);
+  });
+
+  it('a class with no points reads unmeasured in every measured column, never 0', async () => {
+    const r = await report();
+    expect(row(r.json, 'burst')).toMatchObject({
+      offeredVus: vusOf(r.dir)['burst'],
+      servedRps: 'unmeasured',
+      share: 'unmeasured',
+      ok: 'unmeasured',
+      error: 'unmeasured',
+      limited: 'unmeasured',
+      p95Ms: 'unmeasured',
+      p99Ms: 'unmeasured',
+    });
+    expect(r.md).toMatch(
+      /\| burst \| \d+ \| unmeasured \| unmeasured \| unmeasured \| unmeasured \| unmeasured \| unmeasured \| unmeasured \| unmeasured \|/,
+    );
+  });
+
+  it('counts error and limited per class, and its latency is ok samples only, in the steady window', async () => {
+    const points = healthyPoints();
+    for (let s = 0; s < STEADY; s += 1) {
+      const t = STEADY_START + s * 1000 + 700;
+      points.push(...request('mcp', 'burst', 'ok', 900, t, 'add_comment'));
+      points.push(...request('mcp', 'burst', 'limited', 0, t, 'add_comment'));
+      points.push(...request('mcp', 'claim', 'error', 0, t, 'claim_work_item'));
+    }
+    const r = await report({ points });
+    expect(row(r.json, 'burst')).toMatchObject({
+      servedRps: 1,
+      ok: 300,
+      limited: 300,
+      error: 0,
+      p95Ms: 900,
+    });
+    expect(row(r.json, 'claim')).toMatchObject({ servedRps: 1, empty: 300, error: 300 });
+    // The ramp's 9 s reads, errors and refusals are outside the window.
+    expect(row(r.json, 'read')).toMatchObject({ error: 0, limited: 0, p99Ms: 105 });
+    expect(r.json.tables.mix.value.total.servedRps).toBe(r.json.servedRps);
+  });
+
+  it('splits the readers into tab and browse by k6’s scenario tag, and leaves the stream out', async () => {
+    const points = healthyPoints().map((p) =>
+      p.tags['role'] === 'reader'
+        ? {
+            ...p,
+            tags: { ...p.tags, scenario: p.t % 2000 < 1000 ? 'reader_tab' : 'reader_browse' },
+          }
+        : p,
+    );
+    for (let s = 0; s < STEADY; s += 1)
+      points.push(
+        ...request('reader', 'workbench_stream', 'ok', 0, STEADY_START + s * 1000 + 800).map(
+          (p) => ({ ...p, tags: { ...p.tags, scenario: 'reader_tab' } }),
+        ),
+      );
+    const r = await report({ points });
+    const vus = vusOf(r.dir);
+    expect(r.json.tables.mix.value.rows.map((x: { class: string }) => x.class)).toEqual([
+      'read',
+      'write',
+      'claim',
+      'burst',
+      'run',
+      'readers',
+      'readers.tab',
+      'readers.browse',
+    ]);
+    expect(row(r.json, 'readers')).toMatchObject({ servedRps: 4, ok: 1200 });
+    expect(row(r.json, 'readers.tab')).toMatchObject({
+      of: 'readers',
+      offeredVus: vus['tab'],
+      servedRps: 2,
+      share: 2 / 16,
+    });
+    expect(row(r.json, 'readers.browse')).toMatchObject({
+      of: 'readers',
+      offeredVus: vus['browse'],
+      servedRps: 2,
+    });
+    expect(r.json.tables.mix.value.total.servedRps).toBe(16);
+    expect(r.md).toContain('| readers · tab |');
+  });
+
+  it('an MCP group the profile does not name still gets a row, so the rows keep summing', async () => {
+    const points = healthyPoints();
+    for (let s = 0; s < STEADY; s += 1)
+      points.push(...request('mcp', 'probe', 'ok', 10, STEADY_START + s * 1000 + 600, 'whoami'));
+    const r = await report({ points });
+    expect(row(r.json, 'probe')).toMatchObject({ offeredVus: 'unmeasured', servedRps: 1 });
+    expect(r.json.tables.mix.value.total.servedRps).toBe(17);
+    expect(r.json.tables.mix.value.total.servedRps).toBe(r.json.servedRps);
+  });
+
+  it('an unreadable profile.resolved.json leaves the offered VUs unmeasured, the served columns stand', async () => {
+    const r = await report({ omit: ['profile.resolved.json'] });
+    expect(row(r.json, 'read')).toMatchObject({ offeredVus: 'unmeasured', servedRps: 6 });
+    expect(r.json.tables.mix.value.total.offeredVus).toBe('unmeasured');
+  });
+
+  it('no k6 points makes the whole table unmeasured, with the reason', async () => {
+    const r = await report({ points: null });
+    expect(r.json.tables.mix.state).toBe('unmeasured');
+    expect(r.md).toContain(
+      `## Agent mix (steady window)\n\nunmeasured — ${r.json.tables.mix.reason}`,
+    );
   });
 });
 

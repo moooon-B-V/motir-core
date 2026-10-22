@@ -38,8 +38,18 @@ export const FONT_SET_LOCALES = [
   'pt',
 ] as const;
 
-/** A locale the font-set registry knows. */
+/** One of the eleven app locales. */
 export type FontSetLocale = (typeof FONT_SET_LOCALES)[number];
+
+/**
+ * Languages with a font set that only motir.co ships (MOTIR-8937 · MOTIR-9239).
+ * Kept apart from `FONT_SET_LOCALES`, which is app.motir.co's own locale set and
+ * is closed over its stored font picks (one `fontPick<Locale>` column each).
+ */
+export const FONT_SET_EXTRA_LOCALES = ['zh-tw'] as const;
+
+/** A language the font-set registry knows: an app locale or an extra one. */
+export type FontSetLanguage = FontSetLocale | (typeof FONT_SET_EXTRA_LOCALES)[number];
 
 /** The three type roles every set covers: the same roles `--font-*` carries. */
 export const FONT_SET_ROLES = ['sans', 'serif', 'mono'] as const;
@@ -163,6 +173,29 @@ export const FONT_SET_REGISTRY = {
       },
     },
   },
+  // Not in dooooWeb: Traditional Chinese (Taiwan) for motir.co's `/zh-tw`
+  // (MOTIR-8937). The zh-Hans set with its Traditional-form faces.
+  'zh-Hant': {
+    id: 'zh-Hant',
+    label: 'Traditional Chinese',
+    lang: 'zh-TW',
+    cjk: true,
+    roles: {
+      sans: { default: 'noto-sans-tc', members: [google('noto-sans-tc', 'Noto Sans TC', false)] },
+      serif: {
+        default: 'noto-serif-tc',
+        members: [
+          google('noto-serif-tc', 'Noto Serif TC', false),
+          // A handwritten-style face, so a pick rather than the default.
+          google('lxgw-wenkai-tc', 'LXGW WenKai TC', false),
+        ],
+      },
+      mono: {
+        default: 'noto-sans-tc',
+        members: [google('noto-sans-tc', 'Noto Sans TC', false, 'sans')],
+      },
+    },
+  },
   // dooooWeb: `japanese`.
   ja: {
     id: 'ja',
@@ -235,16 +268,27 @@ export const LOCALE_FONT_SET = {
   nl: 'latin',
   pl: 'latin',
   pt: 'latin',
-} as const satisfies Record<FontSetLocale, FontSetId>;
+  'zh-tw': 'zh-Hant',
+} as const satisfies Record<FontSetLanguage, FontSetId>;
 
 /** Narrowing guard: is an arbitrary value one of the eleven locales? */
 export function isFontSetLocale(value: unknown): value is FontSetLocale {
   return typeof value === 'string' && (FONT_SET_LOCALES as readonly string[]).includes(value);
 }
 
+/** Narrowing guard: is an arbitrary value an app locale or an extra language? */
+export function isFontSetLanguage(value: unknown): value is FontSetLanguage {
+  return (
+    isFontSetLocale(value) ||
+    (typeof value === 'string' && (FONT_SET_EXTRA_LOCALES as readonly string[]).includes(value))
+  );
+}
+
 /**
- * The set for an `<html lang>` value. Matches the primary subtag
- * case-insensitively (`ja-JP` → ja, `PT-br` → pt, `zh-Hans` → zh).
+ * The set for an `<html lang>` value. Tries the whole tag first, case-insensitively
+ * and reading `_` as `-` (`zh-TW` / `zh_tw` → zh-Hant), then the primary subtag
+ * (`ja-JP` → ja, `PT-br` → pt, `zh-Hans` → zh). No script or region heuristics:
+ * `zh-Hant` and `zh-HK` reach zh-Hant only through a page whose `lang` is `zh-TW`.
  *
  * The fallback is explicit: an empty or unknown tag returns the Latin set,
  * because the app renders an unknown language in English. It never falls back
@@ -252,7 +296,9 @@ export function isFontSetLocale(value: unknown): value is FontSetLocale {
  * a fallback from a match.
  */
 export function resolveFontSet(lang: string): FontSet {
-  const primary = lang.trim().split(/[-_]/)[0]?.toLowerCase() ?? '';
+  const tag = lang.trim().toLowerCase().replace(/_/g, '-');
+  if (isFontSetLanguage(tag)) return FONT_SET_REGISTRY[LOCALE_FONT_SET[tag]];
+  const primary = tag.split('-')[0] ?? '';
   const id = isFontSetLocale(primary) ? LOCALE_FONT_SET[primary] : DEFAULT_FONT_SET_ID;
   return FONT_SET_REGISTRY[id];
 }
@@ -311,7 +357,7 @@ export type FontSetPickAttribute = `data-font-set-${FontSetRole}`;
  * is why it lives here, free of any `'use client'` boundary.
  */
 export function fontSetPickAttributes(
-  locale: FontSetLocale,
+  locale: FontSetLanguage,
   memberId: string | null,
 ): Partial<Record<FontSetPickAttribute, string>> {
   if (memberId === null) return {};
