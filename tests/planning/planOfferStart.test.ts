@@ -291,22 +291,32 @@ describe('confirmPlanOffer — the Confirm door', () => {
     expect((await rawOffer(offerTurnId))['confirmedAt']).toBeNull();
   });
 
-  it('refuses already_planning on a conversation that holds an undecided plan', T, async () => {
-    const { conversationId, offerTurnId } = await offered(owner());
-    await planChangeSessionsService.submit(owner(), { sessionId: conversationId });
-    const turnsBefore = (await turnsOf(conversationId)).length;
-    const before = planSubmits();
-    const err = await planOfferStartService
-      .confirmPlanOffer(owner(), { conversationId, offerTurnId })
-      .catch((e: unknown) => e);
-    expect((err as InstanceType<typeof PlanOfferStartRefusedError>).reason).toBe(
-      'already_planning',
-    );
-    expect(planSubmits()).toBe(before);
-    expect(await turnsOf(conversationId)).toHaveLength(turnsBefore);
-    expect(await plansOf(conversationId)).toHaveLength(1);
-    expect((await rawOffer(offerTurnId))['confirmedAt']).toBeNull();
-  });
+  it(
+    'a targeted turn refuses already_planning on a conversation that holds an undecided plan',
+    T,
+    async () => {
+      // A confirmed OFFER there restarts instead (MOTIR-9293, planOfferRestart.test.ts).
+      const target = await task();
+      const { conversationId } = await offered(owner());
+      await planChangeSessionsService.submit(owner(), { sessionId: conversationId });
+      const askTurn = (await turnsOf(conversationId)).find((t) => t.role === 'user' && t.jobId)!;
+      const turnsBefore = (await turnsOf(conversationId)).length;
+      const before = planSubmits();
+      const err = await planOfferStartService
+        .startTargetedPlan(owner(), {
+          conversationId,
+          askJobId: askTurn.jobId!,
+          anchorKey: target.identifier,
+        })
+        .catch((e: unknown) => e);
+      expect((err as InstanceType<typeof PlanOfferStartRefusedError>).reason).toBe(
+        'already_planning',
+      );
+      expect(planSubmits()).toBe(before);
+      expect(await turnsOf(conversationId)).toHaveLength(turnsBefore);
+      expect(await plansOf(conversationId)).toHaveLength(1);
+    },
+  );
 
   it(
     'refuses an ended conversation with PlanSessionEndedError, submitting nothing',

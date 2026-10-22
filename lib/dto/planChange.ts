@@ -614,6 +614,27 @@ export interface PlanSessionRestartResultDto {
 }
 
 /**
+ * What the mid-planning restart for a confirmed plan offer answered (Story MOTIR-9219 ·
+ * MOTIR-9293). It differs from {@link PlanSessionRestartResultDto} on three axes, and a
+ * caller switches on each:
+ *
+ *  - `outcome` is `'restarted'` when this call ended the session, `'already'` when the
+ *    session had ended before it (nothing ends twice);
+ *  - `endedSessionId` and `session` are NULLABLE: nothing was ended, or the caller has
+ *    no open session for the offer's scope;
+ *  - `ownsStart` says whether the caller starts the plan on `session`. `false` is the
+ *    instruction to submit NOTHING: the start, if there was one, belonged to an earlier
+ *    call. When `true`, `session` is the successor — open, holding the offer's targets,
+ *    with the offer's request as its first `user` turn — and no job has been sent.
+ */
+export interface PlanOfferRestartResultDto {
+  outcome: 'restarted' | 'already';
+  endedSessionId: string | null;
+  session: PlanChangeSessionDto | null;
+  ownsStart: boolean;
+}
+
+/**
  * Whether the viewer may START planning from a guide's re-plan offer (Story
  * MOTIR-8684 · MOTIR-8694), read once per guide-door response. The door itself
  * asserts `ai:plan` before it answers (`requireGuidableCard`), so a viewer who

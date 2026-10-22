@@ -14,6 +14,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { buildScope } from '@/lib/planChange/scope';
 import { pendingPlanOfferOf, type PlanOfferTurn } from '@/lib/planChange/planOffer';
+import { planOfferStartPath } from '@/lib/planChange/offerRestart';
 import {
   PlanChangeSessionNotFoundError,
   PlanChangeTurnNotFoundError,
@@ -46,6 +47,13 @@ import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/e
 //
 // A second door arriving in the same instant finds the claim taken and is answered
 // with the winner's session and job, never a second run and never an error.
+//
+// ── MID-PLANNING (MOTIR-9293) ───────────────────────────────────────────────────
+// A confirm on a conversation that already holds an undecided plan would REVISE that
+// plan through `submit`. So it takes `planChangeSessionsService.restartForPlanOffer`:
+// the conversation ends `restarted` (its run stopped, a generating plan discarded) and
+// the request becomes the first turn of the session that follows, which this seam then
+// submits. The targeted "plan this" door keeps refusing `already_planning`.
 //
 // ── WHERE THE REQUEST LANDS ─────────────────────────────────────────────────────
 // `submit` forks on the session's own `targetKeys`, and the ask overlay's conversation
@@ -143,8 +151,8 @@ async function lockOwnConversation(
   return session;
 }
 
-/** A conversation that already waits on an undecided plan starts nothing more here;
- *  Planning something else mid-planning (MOTIR-9293) replaces this refusal. */
+/** A targeted "plan this" turn on a conversation that already waits on an undecided
+ *  plan starts nothing: only a confirmed offer takes the mid-planning restart. */
 async function assertNotPlanning(
   pctx: ProjectContext,
   conversationId: string,
@@ -249,12 +257,16 @@ async function winnerOf(
   }
 }
 
-type ClaimOutcome = { kind: 'claimed' } | { kind: 'lost' };
+/** How a claimed start proceeds: on its own conversation (`submit`), through the
+ *  mid-planning restart (`restart`), or on the successor an earlier restart of this same
+ *  offer already put its request on, whose start then threw (`resume`). */
+type ClaimOutcome = { kind: 'claimed'; path: 'submit' | 'restart' | 'resume' } | { kind: 'lost' };
 
 /**
- * Claim the offer under the conversation's lock, and — for an offer with no target —
- * append its request in the SAME transaction, so a refused append (an ended
- * conversation) rolls the claim back with it.
+ * Claim the offer under the conversation's lock. An offer with no target, starting on
+ * its own conversation, also appends its request in the SAME transaction, so a refused
+ * append rolls the claim back with it. A conversation holding an undecided plan takes
+ * the restart (MOTIR-9293) instead of `submit`, which would revise that plan.
  */
 async function claimOffer(
   pctx: ProjectContext,
@@ -262,7 +274,13 @@ async function claimOffer(
 ): Promise<ClaimOutcome> {
   return withWorkspaceContext(txScope(pctx), async (tx) => {
     const conversation = await lockOwnConversation(pctx, input.conversationId, tx);
-    if (conversation.endedAt) throw new PlanSessionEndedError(conversation.id);
+    // Ended by the caller's own restart: only the retry of a restart whose start threw
+    // may still start here, on the successor. Any other end refuses.
+    const restartedByCaller =
+      conversation.endReason === 'restarted' && conversation.endedById === pctx.userId;
+    if (conversation.endedAt && !restartedByCaller) {
+      throw new PlanSessionEndedError(conversation.id);
+    }
     const rows = await planChangeTurnRepository.listBySessionId(
       input.conversationId,
       pctx.workspaceId,
@@ -275,7 +293,14 @@ async function claimOffer(
     if (typeof offer['confirmedAt'] === 'string') return { kind: 'lost' };
     const pending = pendingPlanOfferOf(offerTurns(rows));
     if (pending?.turnId !== offerRow.id) throw new PlanOfferStartRefusedError('offer_not_open');
-    await assertNotPlanning(pctx, input.conversationId, tx);
+    const held = conversation.endedAt
+      ? null
+      : await planChangeSessionsService.heldPlanOf(pctx, { sessionId: input.conversationId }, tx);
+    const route = planOfferStartPath({
+      endedAt: conversation.endedAt,
+      latestUndecidedStatus: held?.status ?? null,
+    });
+    const path = route === 'no-start' ? 'resume' : route;
     const claimed = await planChangeTurnRepository.claimAnswerOfferStart(
       offerRow.id,
       pctx.workspaceId,
@@ -283,7 +308,7 @@ async function claimOffer(
       tx,
     );
     if (!claimed) return { kind: 'lost' };
-    if (!input.targeted) {
+    if (path === 'submit' && !input.targeted) {
       const request = input.requestMd.trim();
       await appendWithin(
         input.conversationId,
@@ -296,8 +321,20 @@ async function claimOffer(
           rows.some((t) => t.role === 'user' && t.seq >= offerRow.seq && t.body === request),
       );
     }
-    return { kind: 'claimed' };
+    return { kind: 'claimed', path };
   });
+}
+
+/** THE one call site of the shipped submit this seam adds (MOTIR-9291): every start
+ *  that is not a targeted landing runs it, on the conversation the plan belongs to. */
+async function submitOn(pctx: ProjectContext, sessionId: string): Promise<PlanOfferStartResult> {
+  const submitted = await planChangeSessionsService.submit(pctx, { sessionId });
+  return {
+    sessionId: submitted.session.id,
+    jobId: submitted.jobId,
+    planId: submitted.planId,
+    session: submitted.session,
+  };
 }
 
 async function releaseOffer(pctx: ProjectContext, conversationId: string, offerTurnId: string) {
@@ -348,9 +385,10 @@ export const planOfferStartService = {
    *  - an offer turn that is absent, another member's or another project's ⇒ the
    *    shipped `PlanChangeTurnNotFoundError` (404), the three alike;
    *  - a declined or superseded offer ⇒ `offer_not_open`; a target that no longer
-   *    resolves ⇒ `target_not_available`; a closed one ⇒ `target_closed`; a
-   *    conversation with an undecided plan ⇒ `already_planning` — each a 409
+   *    resolves ⇒ `target_not_available`; a closed one ⇒ `target_closed` — each a 409
    *    `PlanOfferStartRefusedError`, written before any claim;
+   *  - a conversation holding an undecided plan is ended `restarted` and the plan
+   *    starts on the session that follows it (MOTIR-9293), never beside that plan;
    *  - an ended conversation ⇒ `PlanSessionEndedError`; a held target ⇒
    *    `PlanTargetLockedError`; a refused submit ⇒ its own error, the offer pending
    *    again (and `out_of_credits` recorded on it for a 402).
@@ -452,25 +490,37 @@ async function confirm(
     return confirm(pctx, input, attempts - 1);
   }
 
+  // The scope the plan runs in: the target's, or the conversation's own.
+  const scope = target ? buildScope([target.identifier]) : buildScope(thread.targetKeys);
   let started: PlanOfferStartResult;
   try {
-    if (target) {
+    if (claim.path === 'restart') {
+      // MID-PLANNING (MOTIR-9293): end the conversation through the restart lifecycle
+      // and start on the session that follows it, never `submit` on this one.
+      const restarted = await planChangeSessionsService.restartForPlanOffer(
+        pctx,
+        { sessionId: input.conversationId },
+        { requestMd: offer.requestMd, scope, offerRef: input.offerTurnId },
+      );
+      if (!restarted.ownsStart || !restarted.session) {
+        throw new PlanOfferStartRefusedError('offer_not_open');
+      }
+      started = await submitOn(pctx, restarted.session.id);
+    } else if (claim.path === 'resume') {
+      const successor = await planChangeSessionsService.findResumable(pctx, scope.scopeKey);
+      const last = successor?.turns.at(-1);
+      if (!successor || last?.role !== 'user' || last.body !== offer.requestMd.trim()) {
+        throw new PlanSessionEndedError(input.conversationId);
+      }
+      started = await submitOn(pctx, successor.id);
+    } else if (target) {
       started = await landTargeted(pctx, {
         conversationId: input.conversationId,
         target,
         prompt: offer.requestMd,
       });
     } else {
-      // THE one new call site of the shipped submit (MOTIR-9291).
-      const submitted = await planChangeSessionsService.submit(pctx, {
-        sessionId: input.conversationId,
-      });
-      started = {
-        sessionId: submitted.session.id,
-        jobId: submitted.jobId,
-        planId: submitted.planId,
-        session: submitted.session,
-      };
+      started = await submitOn(pctx, input.conversationId);
     }
   } catch (err) {
     await releaseOffer(pctx, input.conversationId, input.offerTurnId);

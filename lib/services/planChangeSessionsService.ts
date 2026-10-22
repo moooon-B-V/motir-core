@@ -57,6 +57,7 @@ import type {
   DebugLandingDto,
   PlanChangeSessionDto,
   PlanChangeSubmitResultDto,
+  PlanOfferRestartResultDto,
   PlanSessionRestartResultDto,
   ResumableSessionDto,
 } from '@/lib/dto/planChange';
@@ -97,6 +98,7 @@ import {
   type StalePlanFinishedCard,
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
+import { offerRestartStopKey } from '@/lib/planChange/offerRestart';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { endSession, endSessionWithin } from '@/lib/services/planSessionEndService';
 import { replanOfferOf, replanOfferStateOf } from '@/lib/planning/guideReplanOffer';
@@ -2541,12 +2543,112 @@ export const planChangeSessionsService = {
   },
 
   /**
-   * CLAIM the ONE write a `debug` turn may make (MOTIR-7049; ADR AMENDMENT 1 ·
-   * A1.4) — a compare-and-set of the turn's `debugLandingClaimedAt` under the
-   * session's row lock, the serialisation every turn write takes. Returns `true` when THIS call claimed it; `false` when an
-   * earlier or concurrent settle of the same job already had — the loser's cue to
-   * write nothing. Only a `user` turn that ran as `debug` can be claimed.
+   * PLANNING SOMETHING ELSE MID-PLANNING (Story MOTIR-9219 · MOTIR-9293; AMENDMENT 5
+   * clause 7): a confirmed plan offer on a conversation that already holds an undecided
+   * plan ends that conversation through the restart lifecycle Plan something new uses,
+   * and puts the offered request on the session that follows it. It DISPATCHES NO JOB:
+   * the confirm entry (`planOfferStartService`) runs its one `submit` on the returned
+   * session when `ownsStart` is true, and starts nothing when it is false.
+   *
+   *  - refuses another member's session and a guide conversation as the button does
+   *    (`PLAN_SESSION_NOT_FOUND`), and a caller without `ai:plan` (`requireSession`);
+   *  - an addressed session that already ENDED ends nothing, creates nothing and
+   *    appends nothing: `ownsStart: false`, with the caller's open session for the
+   *    offer's scope when there is one — which is what makes a replayed confirm harmless;
+   *  - a session with a run records the shipped Stop for its `lastJobId` FIRST, outside
+   *    the transaction, so the walk reads it at its next boundary (a no-op when the run
+   *    already finished). A restart that then fails leaves a stopped run on an open
+   *    session, which the person can confirm again;
+   *  - then, in ONE transaction: the offer's scope lock, the end (`restarted`, by the
+   *    caller), the successor resolved the way a first turn resolves it — so it holds
+   *    the offered targets' lease, which `submit` only refreshes — and the request as
+   *    its `user` turn. A refused lease rolls all three back.
    */
+  async restartForPlanOffer(
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+    input: { requestMd: string; scope: PlanChangeScope; offerRef: string },
+  ): Promise<PlanOfferRestartResultDto> {
+    const session = await requireSession(pctx, address);
+    assertRestartable(session, pctx);
+    const request = input.requestMd.trim();
+    if (!request) throw new EmptyPlanChangeTurnError();
+    const txCtx = { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId };
+
+    const openForScope = async (tx: Prisma.TransactionClient) =>
+      planChangeSessionRepository.findResumableForUser(
+        pctx.projectId,
+        input.scope.scopeKey,
+        pctx.userId,
+        pctx.workspaceId,
+        tx,
+      );
+    if (session.endedAt) {
+      return withWorkspaceContext(txCtx, async (tx) => {
+        const open = await openForScope(tx);
+        return {
+          outcome: 'already' as const,
+          endedSessionId: null,
+          session: open ? await toDto(open, pctx, tx) : null,
+          ownsStart: false,
+        };
+      });
+    }
+
+    if (session.lastJobId) {
+      await planChangeMailboxService.raiseStop(
+        session.lastJobId,
+        offerRestartStopKey(input.offerRef),
+        pctx,
+        session.id,
+      );
+    }
+
+    const now = new Date();
+    return withWorkspaceContext(txCtx, async (tx) => {
+      // The offer's scope lock FIRST, as every start takes it, so a first turn racing
+      // this confirm serialises instead of opening a second session beside the
+      // successor. The session's row lock is NOT taken before the end: the end locks
+      // the plan and then the session, and the other order deadlocks.
+      await planChangeSessionRepository.lockScopeForUser(
+        pctx.projectId,
+        input.scope.scopeKey,
+        pctx.userId,
+        tx,
+      );
+      const ended = await endSessionWithin(tx, session.id, pctx.workspaceId, 'restarted', {
+        endedById: pctx.userId,
+        actor: { userId: pctx.userId, workspaceId: pctx.workspaceId },
+        now,
+      });
+      // Ended by another write between the read above and this lock: its end stands,
+      // and this call owns no start.
+      if (!ended.ended) {
+        const open = await openForScope(tx);
+        return {
+          outcome: 'already' as const,
+          endedSessionId: null,
+          session: open ? await toDto(open, pctx, tx) : null,
+          ownsStart: false,
+        };
+      }
+      const successorId = await resumeOrStartWithin(pctx, input.scope, now, tx);
+      const row = await appendWithin(
+        successorId,
+        pctx,
+        { role: 'user', body: request, authorId: pctx.userId },
+        {},
+        tx,
+      );
+      return {
+        outcome: 'restarted' as const,
+        endedSessionId: session.id,
+        session: await toDto(row, pctx, tx),
+        ownsStart: true,
+      };
+    });
+  },
+
   /**
    * The conversation's latest UNDECIDED plan with its status as the next turn reads it
    * (MOTIR-9291) — the read {@link submit} routes by, for a start that must refuse a
@@ -2561,6 +2663,13 @@ export const planChangeSessionsService = {
     return row ? { id: row.id, status: await turnStatusOf(row, tx) } : null;
   },
 
+  /**
+   * CLAIM the ONE write a `debug` turn may make (MOTIR-7049; ADR AMENDMENT 1 ·
+   * A1.4) — a compare-and-set of the turn's `debugLandingClaimedAt` under the
+   * session's row lock, the serialisation every turn write takes. Returns `true` when THIS call claimed it; `false` when an
+   * earlier or concurrent settle of the same job already had — the loser's cue to
+   * write nothing. Only a `user` turn that ran as `debug` can be claimed.
+   */
   async claimDebugLanding(
     turnId: string,
     pctx: ProjectContext,
