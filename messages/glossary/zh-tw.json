@@ -1,0 +1,301 @@
+{
+  "locale": "zh-tw",
+  "register": {
+    "formality": "Plain declarative; no 您 where avoidable, as messages/zh.json writes.",
+    "quotes": "「…」 (nested 『…』)",
+    "note": "Traditional Chinese in Taiwan usage (軟體, 資料庫, 專案, 程式; never 軟件, 項目 for a project, 程序 for a program). Full-width punctuation in running text (，。：；！？), a sentence-final ellipsis as ……, and a {placeholder} written inline with no spaces around it. Decided for MOTIR-8937 on 2026-10-18; the terms are written fresh, not a conversion of zh.json."
+  },
+  "terms": {
+    "Motir": {
+      "translation": "Motir",
+      "doNotTranslate": true,
+      "source": "Product name (story MOTIR-7730 copy rules)"
+    },
+    "Motir AI": {
+      "translation": "Motir AI",
+      "doNotTranslate": true,
+      "source": "Product name (story MOTIR-7730 copy rules)"
+    },
+    "Sprint": {
+      "translation": "Sprint",
+      "source": "Recorded decision, messages/glossary/README.md (Sprint stays Latin in every language)",
+      "note": "Kept in Latin script, the same recorded decision as every other glossary (README: never translated)."
+    },
+    "work item": {
+      "translation": "工作項目",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "banned": ["議題", "問題", "卡片", "工單"],
+      "allowedSenses": "'card' (and its translation) stays correct for a PAYMENT card (billing) and a UI PANEL (a dashboard or board card component) — the same senses tests/i18n-catalog.test.ts's CARD_SENSE_ALLOWLIST allows in en and zh. It is banned only as a name for a work item.",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "item": {
+      "translation": "項目",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "epic": {
+      "translation": "史詩",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "story": {
+      "translation": "使用者故事",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "task": {
+      "translation": "工作",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "bug": {
+      "translation": "錯誤",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not 缺陷 (the zh reference column's word): 錯誤 is the everyday Taiwan word for a software bug. Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "subtask": {
+      "translation": "子工作",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "To do": {
+      "translation": "待辦",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "Blocked": {
+      "translation": "已封鎖",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "Planning": {
+      "translation": "規劃中",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "In progress": {
+      "translation": "進行中",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "Implemented": {
+      "translation": "已實作",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "實作 is the Taiwan word; never 實現 / 实现. Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "In review": {
+      "translation": "審查中",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "Done": {
+      "translation": "已完成",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "backlog": {
+      "translation": "待辦清單",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "board": {
+      "translation": "看板",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "dashboard": {
+      "translation": "儀表板",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "story points": {
+      "translation": "故事點數",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "estimate": {
+      "translation": "預估工時",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "assignee": {
+      "translation": "負責人",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "reporter": {
+      "translation": "建立者",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "priority": {
+      "translation": "優先順序",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not 優先級 (a Mainland form). Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "label": {
+      "translation": "標籤",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "component": {
+      "translation": "元件",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "元件 is the Taiwan word; never 組件 / 模块. Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "folder": {
+      "translation": "資料夾",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not 文件夾 (a Mainland form). Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "project": {
+      "translation": "專案",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not 項目 (the Mainland word for a project); 項目 is reserved for 'item'. Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "workspace": {
+      "translation": "工作區",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "organization": {
+      "translation": "組織",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "member": {
+      "translation": "成員",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "plan": {
+      "translation": "計畫",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "計畫 is the Taiwan Ministry of Education form; not 計劃 / 计划. Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "proposal": {
+      "translation": "提案",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "approve": {
+      "translation": "核准",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "approval": {
+      "translation": "核准",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "acceptance criteria": {
+      "translation": "驗收標準",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "agent": {
+      "translation": "代理程式",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not 智能體 (a Mainland coinage). 程式 is the Taiwan word for a program. Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "run": {
+      "translation": "執行",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "pull request": {
+      "translation": "提取要求",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "design result": {
+      "translation": "設計結果",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "acceptance video": {
+      "translation": "驗收影片",
+      "source": "Taiwan usage (owner decision, MOTIR-8937); rendering proposed on MOTIR-9238",
+      "note": "影片 is the Taiwan word; never 視頻 / 视频. Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "Motir AI Planner": {
+      "translation": "Motir AI 規劃器",
+      "source": "Product name, translated (Yue, 2026-10-09); descriptive words in Taiwan usage, Motir / Motir AI verbatim",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "Motir Project Management": {
+      "translation": "Motir 專案管理",
+      "source": "Product name, translated (Yue, 2026-10-09); descriptive words in Taiwan usage, Motir / Motir AI verbatim",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "Motir Project Manager": {
+      "translation": "Motir 專案經理",
+      "source": "Product name, translated (Yue, 2026-10-09); descriptive words in Taiwan usage, Motir / Motir AI verbatim",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "Motir AI Debugging": {
+      "translation": "Motir AI 偵錯",
+      "source": "Product name, translated (Yue, 2026-10-09); descriptive words in Taiwan usage, Motir / Motir AI verbatim",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "Motir MCP": {
+      "translation": "Motir MCP",
+      "doNotTranslate": true,
+      "source": "Product name, kept in English (Yue, 2026-10-09; the zh glossary in motir-marketing does the same)"
+    },
+    "Motir CLI": {
+      "translation": "Motir CLI",
+      "doNotTranslate": true,
+      "source": "Product name, kept in English (Yue, 2026-10-09; the zh glossary in motir-marketing does the same)"
+    },
+    "Motir Claude Code connector": {
+      "translation": "Motir Claude Code connector",
+      "doNotTranslate": true,
+      "source": "Product name, kept in English (Yue, 2026-10-09; the zh glossary in motir-marketing does the same)"
+    },
+    "Motir Claude Code plugin": {
+      "translation": "Motir Claude Code plugin",
+      "doNotTranslate": true,
+      "source": "Product name, kept in English (Yue, 2026-10-09; the zh glossary in motir-marketing does the same)"
+    },
+    "Motir Agent Fleet": {
+      "translation": "Motir 代理程式叢集",
+      "source": "Product name, translated (Yue, 2026-10-09); descriptive words in Taiwan usage, Motir / Motir AI verbatim",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "Motir Agent Hosting": {
+      "translation": "Motir 代理程式託管",
+      "source": "Product name, translated (Yue, 2026-10-09); descriptive words in Taiwan usage, Motir / Motir AI verbatim",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "Motir Sandbox": {
+      "translation": "Motir 沙箱",
+      "source": "Product name, translated (Yue, 2026-10-09); descriptive words in Taiwan usage, Motir / Motir AI verbatim",
+      "note": "Not checked against a live Microsoft Taiwan / Atlassian zh-TW / GitHub zh-TW glossary: none was reachable from the run that wrote this file. Re-check when the catalogue is reviewed."
+    },
+    "vibe coding": {
+      "translation": "vibe coding",
+      "doNotTranslate": true,
+      "source": "Yue: kept in English (MOTIR-8937 \"Keep 'vibe coding' / 'Vibe the project' in English\")",
+      "note": "Never translated, in a headline, a call to action or quoted in a sentence."
+    },
+    "Vibe the project": {
+      "translation": "Vibe the project",
+      "doNotTranslate": true,
+      "source": "Yue, 2026-10-09: the slogan is kept in English, like \"vibe coding\"",
+      "note": "Never translated, in a headline, a call to action or quoted in a sentence."
+    },
+    "vibe the project": {
+      "translation": "vibe the project",
+      "doNotTranslate": true,
+      "source": "Yue, 2026-10-09: the slogan is kept in English, like \"vibe coding\"",
+      "note": "Never translated, in a headline, a call to action or quoted in a sentence."
+    },
+    "Vibe a project": {
+      "translation": "Vibe a project",
+      "doNotTranslate": true,
+      "source": "Yue, 2026-10-09: the slogan is kept in English, like \"vibe coding\"",
+      "note": "Never translated, in a headline, a call to action or quoted in a sentence."
+    }
+  }
+}
