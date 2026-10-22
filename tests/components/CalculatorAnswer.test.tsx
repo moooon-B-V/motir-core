@@ -6,7 +6,10 @@ import { renderWithIntl as render, enMessages } from '../helpers/renderWithIntl'
 import { BILLING_CATALOG } from '@/lib/billing/catalog';
 import type { BillingCadence } from '@/lib/billing/catalog';
 import type { BillingStatusDTO } from '@/lib/dto/billing';
-import { CalculatorView } from '@/app/(authed)/settings/organization/billing/_components/CalculatorView';
+import {
+  CATEGORY_MODEL_EXAMPLES,
+  CalculatorView,
+} from '@/app/(authed)/settings/organization/billing/_components/CalculatorView';
 import {
   PINNED_CALCULATOR_REQUEST,
   PINNED_CATEGORIES_ANSWER,
@@ -267,10 +270,11 @@ describe('the Calculator tab against the pinned vector', () => {
     expect(buttons.map((b) => (b.textContent ?? '').replace(/For example.*$/, ''))).toEqual(
       recorded.map((c) => labelOf(c.key)),
     );
-    // Each category lists all of its recorded models as example text in its own control…
+    // Each category names its first recorded models as example text in its own control,
+    // at most CATEGORY_MODEL_EXAMPLES of them…
     recorded.forEach((c, i) => {
-      const text = textOf(buttons[i]!);
-      for (const model of c.models) expect(text).toContain(model.id);
+      const examples = c.models.slice(0, CATEGORY_MODEL_EXAMPLES).map((x) => x.id);
+      expect(textOf(buttons[i]!).endsWith(`For example: ${examples.join(', ')}`)).toBe(true);
     });
     // …and no activatable control IS a model: each is a category, named by its label.
     const modelIds = new Set(recorded.flatMap((c) => c.models.map((x) => x.id)));
