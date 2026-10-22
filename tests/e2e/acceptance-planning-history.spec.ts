@@ -133,9 +133,11 @@ function historyRequests(page: Page): Request[] {
 
 // ── Seeding ──────────────────────────────────────────────────────────────────
 
-/** Fixed instants: the list's order is the seed's, never the clock's. */
-const BASE = Date.parse('2026-10-20T09:00:00.000Z');
-const at = (minutesBefore: number) => new Date(BASE - minutesBefore * 60_000);
+/** Seconds before one instant taken at load: the list's order is the seed's, never
+ *  the clock's. Recent on purpose: the lane's job worker runs the idle close every
+ *  5 minutes, and it ends any open session idle past the 30-minute lease. */
+const BASE = Date.now();
+const at = (secondsBefore: number) => new Date(BASE - secondsBefore * 1_000);
 
 interface Ctx {
   userId: string;
@@ -234,8 +236,8 @@ const ANCHORED_ANSWER = 'Three, with backoff, and a dead-letter after the last.'
 async function seedTwentyFive(ctx: Ctx): Promise<string[]> {
   const ids: string[] = [];
   for (let i = 0; i < 25; i++) {
-    const minutes = i < 10 ? i + 1 : i;
-    ids.push(await conversation(ctx, { ask: `Question number ${i + 1}`, when: at(minutes) }));
+    const seconds = i < 10 ? i + 1 : i;
+    ids.push(await conversation(ctx, { ask: `Question number ${i + 1}`, when: at(seconds) }));
   }
   return ids;
 }
@@ -352,7 +354,8 @@ test('History lists my own conversations, pages on scroll, opens a row in place 
     'Expanded, it lists my two conversations — not a colleague’s, not a guide',
     async () => {
       await expand(page);
-      expect(await rowIds(page)).toEqual([question, anchored]);
+      // The response lands before React renders it: poll the rows, never read once.
+      await expect.poll(() => rowIds(page)).toEqual([question, anchored]);
       await expect(rowOf(page, question)).toContainText(QUESTION);
       await expect(rowOf(page, anchored)).toContainText(ANCHORED);
       await expect(rowOf(page, anchored)).toHaveAttribute('data-ended', 'true');
@@ -418,7 +421,7 @@ test('History lists my own conversations, pages on scroll, opens a row in place 
     // The new conversation is fetched into the list's head and takes the marker.
     expect((await relisted).status()).toBe(200);
     await expect(rowOf(page, carried)).toBeVisible();
-    expect((await rowIds(page))[0]).toBe(carried);
+    await expect.poll(async () => (await rowIds(page))[0]).toBe(carried);
     await expectCurrent(page, carried);
     const copy = await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: carried } });
     expect(copy.copiedFromSessionId).toBe(anchored);
@@ -519,6 +522,8 @@ test('History lists my own conversations, pages on scroll, opens a row in place 
     await page.unroute(nextPageUrl);
     await beat();
 
+    // The sign-in helper reads the English form, and the cookie would serve it in zh.
+    await useLocale(page, 'en');
     await signIn(page, newcomer.email, PLANNING_ANCHOR_PASSWORD);
     await useLocale(page, 'zh');
     await openFromCard(page, seed.epicKey);
