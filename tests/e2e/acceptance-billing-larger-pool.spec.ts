@@ -428,7 +428,8 @@ test.describe('The larger credit pool, sold from the Calculator', () => {
         await openCalculator(page);
         engine.high = poolOf(SMALLEST) - 1;
         await ask(page, 'monthly');
-        await expect(offer(page)).toContainText(copy.calculator.result.upgradeNote);
+        // The note sits under the offer card, not inside it.
+        await expect(live(page).getByText(copy.calculator.result.upgradeNote)).toBeVisible();
         const previewed = postTo(page, seed, '/upgrade/preview');
         await offer(page)
           .getByRole('button', { name: format(copy.plans.ctaUpgrade, { plan: SMALLEST.name }) })
