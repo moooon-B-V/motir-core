@@ -182,8 +182,10 @@ describe('/plans?session=<id> lands on that conversation', () => {
     const tree = await render({ session: 's_2' });
     const list = find(tree, SessionsList)[0]!;
 
+    // The landing never pins a row the list would not show (MOTIR-9300).
     expect(getSessionRow).toHaveBeenCalledWith('p1', 's_2', expect.anything(), {
       view: 'project',
+      planOnly: true,
     });
     expect(list.props.highlightId).toBe('s_2');
     expect((list.props.initialViews as { id: string }[]).map((v) => v.id)).toEqual(['s_1', 's_2']);

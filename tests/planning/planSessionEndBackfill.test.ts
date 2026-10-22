@@ -205,12 +205,14 @@ describe('the list and the counts read ONE state derivation', () => {
         planChangeSessionRepository.countByLatestPlanState(scope.projectId, scope.workspaceId, tx),
       );
       const byState = Object.fromEntries(counts.map((c) => [c.state, c.count]));
-      expect(byState).toEqual({ closed: 2, approved: 1, none: 1 });
+      // The idle and the open session hold no plan, so neither is counted (MOTIR-9300).
+      expect(byState).toEqual({ closed: 1, approved: 1 });
 
       for (const state of PLAN_SESSION_STATE_VALUES) {
+        if (state === 'none') continue;
         const rows = await adminDb.$transaction((tx) =>
           planChangeSessionRepository.listPageByProject(
-            { ...scope, limit: 50, after: null, state },
+            { ...scope, limit: 50, after: null, state, planOnly: true },
             tx,
           ),
         );

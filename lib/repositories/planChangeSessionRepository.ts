@@ -900,8 +900,14 @@ export const planChangeSessionRepository = {
    * the last row's `(lastActivityAt, id)`, compared as a ROW so two sessions
    * sharing a timestamp are neither skipped nor repeated across a page boundary.
    *
-   * `state` filters on the LATEST plan: `none` = no plan at all, otherwise that
-   * plan's status. `sessionId` narrows to one row (the `?session=` landing).
+   * `state` filters on the session's state ({@link sessionStateSql}). `sessionId`
+   * narrows to one row (the `?session=` landing, and the overlay's by-id scope check).
+   *
+   * `planOnly` (MOTIR-9300) admits only a session that REACHED PLANNING —
+   * {@link planHoldingSql}. It is OFF unless asked for, because this one read serves two
+   * doors with opposite needs: the Plans room lists only conversations that reached
+   * planning, while the overlay's by-id read must still open a question-only one for its
+   * owner. A new caller says which it means.
    *
    * The SEED (MOTIR-6209) rides the same statement: `seed_gate_id → gate → work
    * item`, two plain joins, so a seeded row costs no query of its own.
@@ -931,6 +937,8 @@ export const planChangeSessionRepository = {
       after: { lastActivityAt: Date; id: string } | null;
       state: PlanSessionListState | null;
       sessionId?: string;
+      /** Only sessions holding a plan — the Plans room's rule. Absent = every session. */
+      planOnly?: boolean;
       /** The reader's OWN sessions only (`mine`), or null for every session. */
       mine?: PlanSessionMineScope | null;
       /** A Visitor's private-epic hidden set (MOTIR-6645) — see {@link sessionWithheldSql}. */
@@ -995,6 +1003,7 @@ export const planChangeSessionRepository = {
       WHERE s."project_id" = ${args.projectId} AND s."workspace_id" = ${args.workspaceId}
         AND s."origin" <> 'guide'
         ${stateFilter(args.state)} ${mineFilter(args.mine ?? null)} ${after} ${only}
+        ${args.planOnly ? planHoldingSql : Prisma.empty}
         ${sessionWithheldSql(args.hiddenIds)}
       ORDER BY s."last_activity_at" DESC, s."id" DESC
       LIMIT ${args.limit}
@@ -1074,6 +1083,10 @@ export const planChangeSessionRepository = {
    * counts — in ONE grouped statement over the same latest-plan join the list
    * uses, so a count and its filtered list can never disagree. Returns only the
    * states that have rows; the service zero-fills.
+   *
+   * Over sessions that REACHED PLANNING only ({@link planHoldingSql}, MOTIR-9300), always:
+   * its one caller is the Plans room's strip, whose list reads with `planOnly`, so the
+   * number above the strip and the rows beneath it count the same population.
    */
   async countByLatestPlanState(
     projectId: string,
@@ -1090,6 +1103,7 @@ export const planChangeSessionRepository = {
       ${waitingPlanJoin}
       WHERE s."project_id" = ${projectId} AND s."workspace_id" = ${workspaceId}
         AND s."origin" <> 'guide'
+        ${planHoldingSql}
         ${mineFilter(mine)}
         ${sessionWithheldSql(hiddenIds)}
       GROUP BY 1
@@ -1097,9 +1111,11 @@ export const planChangeSessionRepository = {
   },
 };
 
-/** A session state the list filters on — `none`, `closed` or a `PlanStatus`
- *  value (AMENDMENT 23 §1). */
-export type PlanSessionListState = 'none' | 'closed' | 'waiting' | PlanStatus;
+/** A session state the list filters on — `closed`, `waiting` or a `PlanStatus`
+ *  value (AMENDMENT 23 §1). `none` is not one (MOTIR-9300): the room lists only
+ *  sessions holding a plan, so no query it makes can answer for a session with none.
+ *  `none` stays a ROW state ({@link sessionStateSql}) for the unfiltered by-id door. */
+export type PlanSessionListState = 'closed' | 'waiting' | PlanStatus;
 
 /** One raw row of {@link planChangeSessionRepository.listPageByProject}. */
 export interface PlanSessionListRow {
@@ -1229,6 +1245,16 @@ const latestPlanJoin = Prisma.sql`
     WHERE p."session_id" = s."id"
     ORDER BY p."created_at" DESC, p."id" DESC LIMIT 1
   ) lp ON true`;
+
+/**
+ * The ONE definition of "this session REACHED PLANNING" for the Plans room (MOTIR-9300;
+ * amendment 5 clause 6): it holds at least one `plan` row, of any status. Read off
+ * {@link latestPlanJoin}'s `lp` — the lateral the row's plan columns and
+ * {@link sessionStateSql} already read — so "holds a plan", a non-zero plan count and a
+ * state chip that is not `none` are one fact. Applied to the ROW, not folded into the
+ * state expression: that reads `waiting` for a failed attempt that wrote no plan.
+ */
+const planHoldingSql = Prisma.sql`AND lp."id" IS NOT NULL`;
 
 /**
  * The plan that WAITS for the person on a session — its most recent `planned` / `stale` plan

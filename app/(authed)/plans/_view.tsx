@@ -147,7 +147,7 @@ export default async function PlansView({
     reads = await Promise.all([
       planSessionsService.listSessions(ctx.projectId, wsCtx, { planState, view }),
       planSessionsService.countSessionsByPlanState(ctx.projectId, wsCtx, { view }),
-      landingId ? readLandingRow(ctx.projectId, landingId, wsCtx, { view }) : null,
+      landingId ? readLandingRow(ctx.projectId, landingId, wsCtx, { view, planOnly: true }) : null,
     ]);
   } catch {
     return (
