@@ -36,19 +36,29 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-/** A `generating` plan carrying the two `modify` patches that close a cycle. */
+/**
+ * A `generating` plan carrying the two `modify` patches that close a cycle.
+ *
+ * Since MOTIR-9267 the append refuses the second edge itself, so the ring is
+ * written straight into the row — the shape a plan appended before that card
+ * still holds, and the one the close must go on refusing.
+ */
 async function planWithReciprocalEdges(fx: WorkItemFixture) {
   const a = await createTestWorkItem(fx, { kind: 'task', title: 'The run modal' });
   const b = await createTestWorkItem(fx, { kind: 'task', title: 'The runs index' });
   const plan = await plansService.createPlan(fx.projectId, { title: 'Reciprocal' }, fx.ctx);
-  await plansService.addProposals(
+  const appended = await plansService.addProposals(
     plan.id,
     [
       { op: 'modify', workItemId: a.id, patch: { blockedByAdd: [b.id] } },
-      { op: 'modify', workItemId: b.id, patch: { blockedByAdd: [a.id] } },
+      { op: 'modify', workItemId: b.id, patch: {} },
     ],
     fx.ctx,
   );
+  await adminDb.planItem.update({
+    where: { id: appended.items[1]!.id },
+    data: { patch: { blockedByAdd: [a.id] } },
+  });
   return { planId: plan.id, a, b };
 }
 
@@ -138,15 +148,139 @@ describe('the CLOSE refuses a cycle across two `modify` patches (2026-08-30)', (
     });
 
     const plan = await plansService.createPlan(fx.projectId, { title: 'Ring closer' }, fx.ctx);
-    await plansService.addProposals(
+    // Refused where it is written (MOTIR-9267), with the close's own error.
+    await expect(
+      plansService.addProposals(
+        plan.id,
+        [{ op: 'modify', workItemId: a.id, patch: { blockedByAdd: [b.id] } }],
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(PlanRefGraphError);
+    expect(await adminDb.planItem.count({ where: { planId: plan.id } })).toBe(0);
+  });
+});
+
+// MOTIR-9267 — a planner schedules its author sessions by a plan's `blocked_by`
+// edges while the plan is still `generating`, so a ring that waited for the close
+// was one the scheduler could only break by authoring a card as if one of its
+// edges were absent. Every door that WRITES an edge onto a generating plan now
+// refuses the one that closes a ring, with the error and the ring the close names.
+describe('a GENERATING plan refuses the edge that closes a cycle where it is written', () => {
+  /** A generating plan with two `add`s, B blocked_by A. */
+  async function twoCardChain(fx: WorkItemFixture) {
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Two cards' }, fx.ctx);
+    const first = await plansService.addProposals(
       plan.id,
-      [{ op: 'modify', workItemId: a.id, patch: { blockedByAdd: [b.id] } }],
+      [{ op: 'add', proposedFields: { title: 'The design', kind: 'task' } }],
+      fx.ctx,
+    );
+    const aId = first.appendedItemIds[0]!;
+    const second = await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'The build', kind: 'task' },
+          blockedByRefs: [`${TEMP_REF_PREFIX}${aId}`],
+        },
+      ],
+      fx.ctx,
+    );
+    return { planId: plan.id, aId, bId: second.appendedItemIds[0]! };
+  }
+
+  it('`update_plan_proposal` — a `blockedByRefs` correction closing a two-card ring is refused, and nothing is written', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, aId, bId } = await twoCardChain(fx);
+
+    const err = await plansService
+      .correctProposal(planId, aId, { blockedByRefs: [`${TEMP_REF_PREFIX}${bId}`] }, fx.ctx)
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PlanRefGraphError);
+    expect((err as PlanRefGraphError).reason).toBe('cycle');
+    // The ring the close would name, both cards by title.
+    expect((err as Error).message).toContain('closes a dependency CYCLE');
+    expect((err as Error).message).toContain('The design');
+    expect((err as Error).message).toContain('The build');
+
+    const row = await adminDb.planItem.findUniqueOrThrow({ where: { id: aId } });
+    expect(row.blockedByRefs).toEqual([]);
+    const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(plan.status).toBe('generating');
+  });
+
+  it('`update_plan_proposal` — a `patch.blockedByAdd` correction closing a ring is refused', async () => {
+    const fx = await makeWorkItemFixture();
+    const a = await createTestWorkItem(fx, { kind: 'task', title: 'Alpha' });
+    const b = await createTestWorkItem(fx, { kind: 'task', title: 'Beta' });
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Two edges' }, fx.ctx);
+    const appended = await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'modify', workItemId: a.id, patch: { blockedByAdd: [b.id] } },
+        { op: 'modify', workItemId: b.id, patch: {} },
+      ],
       fx.ctx,
     );
 
-    await expect(plansService.markPlanned(plan.id, fx.ctx)).rejects.toBeInstanceOf(
-      PlanRefGraphError,
+    await expect(
+      plansService.correctProposal(
+        plan.id,
+        appended.items[1]!.id,
+        { patch: { blockedByAdd: [a.id] } },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(PlanRefGraphError);
+  });
+
+  it('`add_plan_items` — a merged `blockedByAdd` closing a ring is refused, with or without `final`', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, aId } = await twoCardChain(fx);
+    const x = await createTestWorkItem(fx, { kind: 'task', title: 'Gamma' });
+    // A waits on the committed card X …
+    await plansService.correctProposal(planId, aId, { blockedByRefs: [x.id] }, fx.ctx);
+
+    // `final: true` is this same append followed by the close (`runAddPlanItems`),
+    // so the refusal lands before the close is reached either way.
+    for (const final of [false, true]) {
+      // … so X waiting on A closes X → A → X.
+      const err = await plansService
+        .addProposals(
+          planId,
+          [
+            {
+              op: 'modify',
+              workItemId: x.id,
+              patch: { blockedByAdd: [`${TEMP_REF_PREFIX}${aId}`] },
+            },
+          ],
+          fx.ctx,
+        )
+        .then(() => (final ? plansService.markPlanned(planId, fx.ctx) : undefined))
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(PlanRefGraphError);
+      expect((err as PlanRefGraphError).reason).toBe('cycle');
+    }
+    expect(await adminDb.planItem.count({ where: { planId, op: 'modify' } })).toBe(0);
+    const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(plan.status).toBe('generating');
+  });
+
+  it('still accepts an edge that closes no ring', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, bId } = await twoCardChain(fx);
+    const third = await plansService.addProposals(
+      planId,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'The gate', kind: 'task' },
+          blockedByRefs: [`${TEMP_REF_PREFIX}${bId}`],
+        },
+      ],
+      fx.ctx,
     );
+    expect(third.appendedItemIds).toHaveLength(1);
   });
 });
 

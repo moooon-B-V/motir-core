@@ -1438,7 +1438,10 @@ function refSuffix(ref: string, liveById: ValidatePlanProposalsInput['liveById']
 // The walk mirrors the trigger's recursive CTE exactly — follow `is_blocked_by`
 // from the new edge's far end and reject when the chain comes back — so the two
 // cannot disagree about what a cycle is. It runs at the CLOSE, where the plan is
-// still `generating` and the author can drop the edge.
+// still `generating` and the author can drop the edge — and, since MOTIR-9267,
+// at every door that WRITES an edge onto a `generating` plan (`addProposals`,
+// `correctProposal`), because a planner schedules its author sessions by these
+// edges before the close and a ring there has no order to schedule.
 
 /** The graph node an `add` proposal contributes (it has no work-item id yet). */
 function addNodeId(proposalId: string): string {
@@ -1538,7 +1541,7 @@ function describeNode(
  * is not this gate's business and cannot occur anyway: the trigger refused it at
  * the time it would have been created.
  */
-function assertBlockedByGraphAcyclic(
+export function assertBlockedByGraphAcyclic(
   items: readonly ProposalNode[],
   liveById: ValidatePlanProposalsInput['liveById'],
   existingBlockedByEdges: readonly BlockedByEdge[],
