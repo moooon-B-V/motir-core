@@ -6881,8 +6881,7 @@
       "hintDefault": "Een paar zinnen is genoeg. Motir vraagt naar de rest.",
       "hintCarried": "Voeg iets toe of verfijn het voordat je verdergaat — de verkenningschat neemt het vanaf hier over.",
       "importTitle": "Heb je al een project?",
-      "importDesc": "Motir leest je code, taken en geschiedenis voordat het iets verandert, en plant daarna wat er volgt. Jij beslist wat er live gaat.",
-      "importCta": "Dat kunnen we ook viben"
+      "importProject": "Project importeren"
     },
     "import": {
       "title": "Een bestaand project importeren",

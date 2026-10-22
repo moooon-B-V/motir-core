@@ -6875,8 +6875,7 @@
       "hintDefault": "几句话就够了，剩下的 Motir 会来问。",
       "hintCarried": "继续之前可以补充或完善任何内容——接下来交给发现对话。",
       "importTitle": "已经有项目了？",
-      "importDesc": "在改动任何东西之前，Motir 会先读懂你的代码、任务和历史，再规划下一步。发布什么由你决定。",
-      "importCta": "它同样可以 Vibe"
+      "importProject": "导入项目"
     },
     "import": {
       "title": "导入现有项目",

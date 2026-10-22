@@ -6881,8 +6881,7 @@
       "hintDefault": "Quelques phrases suffisent. Motir s’informe du reste.",
       "hintCarried": "Ajoutez ou précisez ce que vous voulez avant de continuer — le chat de découverte prend le relais.",
       "importTitle": "Vous avez déjà un projet ?",
-      "importDesc": "Motir lit votre code, vos tâches et votre historique avant de modifier quoi que ce soit, puis planifie la suite. C'est vous qui décidez de ce qui est livré.",
-      "importCta": "Celui-là aussi, nous pouvons le viber"
+      "importProject": "Importer un projet"
     },
     "import": {
       "title": "Importer un projet existant",
