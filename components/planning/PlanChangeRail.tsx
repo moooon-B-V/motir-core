@@ -1233,6 +1233,7 @@ export function PlanChangeRail({
                 here again on reopen, after the plan ends, and for a Visitor. It is
                 not a turn: no thread reader sees it. */}
             <PlanNarration
+              inset="rail"
               groups={narrationGroups}
               total={narration ? narration.earlierCount + narration.entries.length : 0}
               earlierCount={narrationEarlierCount(narrationEntries)}
