@@ -174,7 +174,7 @@ describe('theme.css font-set composition (MOTIR-7845)', () => {
 
   it('gives every CJK set one block setting all three script tokens to its defaults', () => {
     const cjk = FONT_SET_IDS.filter((id) => FONT_SET_REGISTRY[id].cjk);
-    expect(cjk.length).toBe(3);
+    expect(cjk.length).toBe(4);
     for (const id of cjk) {
       const set = FONT_SET_REGISTRY[id];
       const r = block(`[lang]:lang(${set.lang})`);
@@ -215,7 +215,26 @@ describe('theme.css font-set composition (MOTIR-7845)', () => {
         }
       }
     }
-    expect(overrides).toBe(3);
+    expect(overrides).toBe(4);
+  });
+
+  it('places each zh-TW block after its zh counterpart, which also matches zh-TW (MOTIR-9239)', () => {
+    const pairs = [
+      ['[lang]:lang(zh) {', '[lang]:lang(zh-TW) {'],
+      [
+        ":lang(zh)[data-font-set-serif='lxgw-wenkai-tc'] {",
+        ":lang(zh-TW)[data-font-set-serif='lxgw-wenkai-tc'] {",
+      ],
+    ] as const;
+    for (const [zh, zhTw] of pairs) {
+      expect(CSS.indexOf(zh), zh).toBeGreaterThan(-1);
+      expect(CSS.indexOf(zhTw), zhTw).toBeGreaterThan(CSS.indexOf(zh));
+    }
+    // Both zh-TW blocks follow BOTH zh blocks, so a zh by-name pick never
+    // outranks a zh-TW default on a zh-TW element.
+    expect(CSS.indexOf('[lang]:lang(zh-TW) {')).toBeGreaterThan(
+      CSS.indexOf(":lang(zh)[data-font-set-serif='lxgw-wenkai-tc'] {"),
+    );
   });
 
   it('sets nothing but --font-* custom properties in the font-set rules, and no colour', () => {

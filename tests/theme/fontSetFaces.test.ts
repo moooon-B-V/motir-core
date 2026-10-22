@@ -44,8 +44,9 @@ function registryFaces() {
 describe('app/fonts.ts declares every font-set face (MOTIR-7847)', () => {
   const faces = registryFaces();
 
-  it('finds the nine distinct faces the registry names', () => {
-    expect(faces).toHaveLength(9);
+  // Nine, plus the three zh-Hant faces (MOTIR-9239).
+  it('finds the twelve distinct faces the registry names', () => {
+    expect(faces).toHaveLength(12);
   });
 
   it.each(faces.map((f) => [f.variable, f] as const))(
