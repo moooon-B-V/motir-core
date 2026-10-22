@@ -87,7 +87,6 @@ const STORY_KEYFRAMES = [
   'canvas-cue-glow',
   'canvas-cue-settle',
   'canvas-cue-wash-out',
-  'canvas-cue-breathe',
 ];
 function keyframeBody(name: string): string {
   const at = css.indexOf(`@keyframes ${name} {`);
@@ -347,11 +346,11 @@ describe('reduced motion — the stylesheet half', () => {
 describe('planner parity — the structural half', () => {
   const PRODUCER = /authorSource|harness|sessionId|turnCount|planningSource/;
 
-  it('the mark takes exactly the snapshot and failing, and never reads the steps', () => {
+  it('the mark takes the snapshot, failing and the stream flag, and never reads the steps', () => {
     const src = code('components/planning/PlanAtWorkMark.tsx');
     const props = /export interface PlanAtWorkMarkProps \{([\s\S]*?)\n\}/.exec(src)![1]!;
     const names = [...props.matchAll(/^\s+(\w+)\??:/gm)].map((m) => m[1]);
-    expect(names).toEqual(['progress', 'failing']);
+    expect(names).toEqual(['progress', 'failing', 'turnStreaming']);
     expect(src).not.toMatch(/\.steps\b/);
     expect(src).not.toMatch(PRODUCER);
     expect(src).not.toMatch(/\.state\b/);
