@@ -38,7 +38,7 @@ export interface PlanHistoryRowProps {
   session: PlanSessionRowDto;
   /** The session the overlay shows now — the currently-open-row marker. */
   current: boolean;
-  onOpen: (sessionId: string) => void;
+  onOpen: (sessionId: string, targetKeys: readonly string[]) => void;
   /** The last row: focusing it asks for the next page, like reaching the bottom. */
   onFocusLast?: () => void;
 }
@@ -65,7 +65,7 @@ export function PlanHistoryRow({ session, current, onOpen, onFocusLast }: PlanHi
         aria-current={current ? 'true' : undefined}
         aria-label={t('rowAria', { title, status, when })}
         title={title}
-        onClick={() => onOpen(session.id)}
+        onClick={() => onOpen(session.id, session.targetKeys)}
         onFocus={onFocusLast}
         className={cn(
           'flex w-full min-w-0 flex-col gap-1 rounded-(--radius-control) px-(--spacing-control-x-8) py-(--spacing-control-y-8) text-left text-(--el-text)',

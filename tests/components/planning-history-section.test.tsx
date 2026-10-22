@@ -212,9 +212,7 @@ describe('paging', () => {
     await reachBottom();
     await reachBottom();
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[1]![0]).toBe(
-      '/api/ai/plan-change/sessions/history?cursor=cur%2F1',
-    );
+    expect(fetchMock.mock.calls[1]![0]).toBe('/api/ai/plan-change/sessions/history?cursor=cur%2F1');
     expect(screen.getByTestId('planning-history-loading-more')).toBeTruthy();
     expect(rowIds()).toEqual(['a', 'b']);
     await answer(1, page(['c'], null));
@@ -286,9 +284,7 @@ describe('a row', () => {
       row('b', { firstTurn: null }),
     ]);
     expect(first!.textContent).toContain('Question a');
-    expect(within(first!).getByTestId('planning-history-row-anchor').textContent).toBe(
-      'ACME-1 +1',
-    );
+    expect(within(first!).getByTestId('planning-history-row-anchor').textContent).toBe('ACME-1 +1');
     expect(first!.textContent).toContain('active 1 hour ago');
     expect(within(first!).getByTestId('planning-history-row-status').textContent).toBe('Open');
     expect(within(second!).getByTestId('planning-history-row-title').textContent).toBe(
@@ -321,7 +317,7 @@ describe('a row', () => {
     const [, b] = await shown([row('a'), row('b')]);
     fireEvent.click(b!);
     expect(onOpenSession).toHaveBeenCalledTimes(1);
-    expect(onOpenSession).toHaveBeenCalledWith('b');
+    expect(onOpenSession).toHaveBeenCalledWith('b', []);
   });
 });
 
@@ -334,9 +330,7 @@ describe('in Chinese', () => {
     const r = screen.getByTestId('planning-history-row');
     expect(within(r).getByTestId('planning-history-row-status').textContent).toBe('进行中');
     expect(screen.getByTestId('planning-history-end').textContent).toContain('没有更早的对话');
-    expect(screen.getByTestId('planning-history').textContent).not.toMatch(
-      /History|Open|No older/,
-    );
+    expect(screen.getByTestId('planning-history').textContent).not.toMatch(/History|Open|No older/);
   });
 });
 

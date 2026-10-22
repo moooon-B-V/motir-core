@@ -185,6 +185,12 @@ export interface PlanningWorkspaceHostProps {
    */
   closeGuardRef?: RefObject<(() => boolean) | null>;
   /**
+   * OPEN a past conversation from the rail's History (Story MOTIR-9218 · MOTIR-9308):
+   * the overlay re-addresses itself to it, through the same close guard. Absent →
+   * the rail draws no History.
+   */
+  onOpenSession?: (sessionId: string, targetKeys: readonly string[]) => void;
+  /**
    * *Keep planning* was chosen after a browser BACK — the one vector that has
    * already happened by the time the guard can ask, so the address no longer
    * says *open*. The overlay puts it back; the host cannot, because it does not
@@ -296,6 +302,7 @@ function PlanWorkspaceHost({
   anchorId = null,
   onClose,
   closeGuardRef,
+  onOpenSession,
   onKeepPlanningAfterBack,
   initialTarget = null,
   initialCanvasTrail,
@@ -1271,9 +1278,7 @@ function PlanWorkspaceHost({
           onResume={() => void resume()}
           canResume={state.reopened?.mine !== false || canManage}
           onShowEarlierNarration={() => void showEarlierNarration()}
-          // HISTORY (MOTIR-9307): the section is drawn; opening a row in the overlay
-          // is MOTIR-9308's, which replaces this handler.
-          onOpenSession={() => {}}
+          {...(onOpenSession ? { onOpenSession } : {})}
           gateView={gateView}
           declining={declineFrom === 'rail'}
           onRequestDecline={() => setDeclineFrom('rail')}

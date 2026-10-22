@@ -1,11 +1,20 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useTranslations } from 'next-intl';
 import { ChevronRight, CircleAlert, History, MessagesSquare } from 'lucide-react';
 
 import { Spinner } from '@/components/ui/Spinner';
-import { usePlanHistory } from '@/lib/hooks/usePlanHistory';
+import { usePlanHistory, type PlanHistory } from '@/lib/hooks/usePlanHistory';
 import { cn } from '@/lib/utils/cn';
 
 import { PlanHistoryRow } from '@/components/planning/PlanHistoryRow';
@@ -22,17 +31,51 @@ import { PlanHistoryRow } from '@/components/planning/PlanHistoryRow';
 
 const ROW_SKELETONS = 3;
 
+interface PlanHistoryState {
+  expanded: boolean;
+  setExpanded: (next: (open: boolean) => boolean) => void;
+  history: PlanHistory;
+}
+
+const PlanHistoryContext = createContext<PlanHistoryState | null>(null);
+
+/**
+ * THE SECTION'S STATE, held by the OVERLAY (MOTIR-9308). Opening a row anchored on
+ * a different work item remounts the workspace host — and the rail and this section
+ * with it — so the expanded flag and the loaded rows live above it, for as long as
+ * the overlay is open. Closing the overlay unmounts this, so every open starts
+ * collapsed. Without a provider the section holds its own state.
+ */
+export function PlanHistoryProvider({ children }: { children: ReactNode }) {
+  const [expanded, setExpanded] = useState(false);
+  const history = usePlanHistory(expanded);
+  const value = useMemo(() => ({ expanded, setExpanded, history }), [expanded, history]);
+  return <PlanHistoryContext.Provider value={value}>{children}</PlanHistoryContext.Provider>;
+}
+
 export interface PlanHistorySectionProps {
   /** The session the overlay shows now — its row carries the current marker. */
   currentSessionId: string | null;
-  onOpenSession: (sessionId: string) => void;
+  /** A row was opened: its id, and its anchor set (the host opens an anchored
+   *  session on its first key). */
+  onOpenSession: (sessionId: string, targetKeys: readonly string[]) => void;
 }
 
 export function PlanHistorySection({ currentSessionId, onOpenSession }: PlanHistorySectionProps) {
   const t = useTranslations('planningWorkspace.history');
   const ts = useTranslations('aiPlanning.sessions');
-  const [expanded, setExpanded] = useState(false);
-  const { rows, status, failedPage, loadMore, retry } = usePlanHistory(expanded);
+  const held = useContext(PlanHistoryContext);
+  const [ownExpanded, setOwnExpanded] = useState(false);
+  const own = usePlanHistory(held ? false : ownExpanded);
+  const expanded = held ? held.expanded : ownExpanded;
+  const setExpanded = held ? held.setExpanded : setOwnExpanded;
+  const { rows, status, failedPage, loadMore, retry, ensureListed } = held ? held.history : own;
+
+  // The marker follows the overlay: a conversation the list has not read yet (a
+  // new one carrying an ended one) is fetched in at the top.
+  useEffect(() => {
+    if (expanded && currentSessionId) ensureListed(currentSessionId);
+  }, [expanded, currentSessionId, ensureListed]);
   const regionId = useId();
   const listRef = useRef<HTMLUListElement>(null);
   const sentinelRef = useRef<HTMLLIElement>(null);

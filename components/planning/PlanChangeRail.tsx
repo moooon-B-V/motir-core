@@ -347,10 +347,12 @@ export interface PlanChangeRailProps {
   onShowEarlierNarration?: () => void;
   /**
    * OPEN one of the viewer's past conversations from the History section (Story
-   * MOTIR-9218 · MOTIR-9307; design MOTIR-9305). Optional: a host that offers no
-   * History draws no section. A Visitor never gets one, whatever the host passes.
+   * MOTIR-9218 · MOTIR-9307 / MOTIR-9308; design MOTIR-9305), with its anchor set.
+   * Optional: a host that offers no History draws no section. A Visitor never gets
+   * one, whatever the host passes. The row of the conversation already shown opens
+   * nothing.
    */
-  onOpenSession?: (sessionId: string) => void;
+  onOpenSession?: (sessionId: string, targetKeys: readonly string[]) => void;
 }
 
 export function PlanChangeRail({
@@ -872,7 +874,9 @@ export function PlanChangeRail({
       {onOpenSession && readerRoutes.identifier === null ? (
         <PlanHistorySection
           currentSessionId={state.session?.id ?? null}
-          onOpenSession={onOpenSession}
+          onOpenSession={(sessionId, targetKeys) => {
+            if (sessionId !== state.session?.id) onOpenSession(sessionId, targetKeys);
+          }}
         />
       ) : null}
 

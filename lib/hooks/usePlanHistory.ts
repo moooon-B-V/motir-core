@@ -36,6 +36,11 @@ export interface PlanHistory {
   loadMore: () => void;
   /** Re-send the request that failed. */
   retry: () => void;
+  /** The overlay now shows session `id`. If the list has not got it, re-read the
+   *  FIRST page once and put what is new at the top — a conversation started since
+   *  the list was read, such as an ended one carried into a new one (MOTIR-9308).
+   *  Asked once per id, so a session older than the first page costs one read. */
+  ensureListed: (id: string) => void;
 }
 
 export function mergeById(
@@ -58,18 +63,25 @@ export function usePlanHistory(enabled: boolean): PlanHistory {
   const startedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  const fetchPage = useCallback((which: 'first' | 'next') => {
+  const fetchPage = useCallback((which: 'first' | 'next' | 'head') => {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     const seq = ++seqRef.current;
     const abort = new AbortController();
     abortRef.current = abort;
     setFailedPage(null);
-    setStatus(which === 'first' ? 'loadingFirst' : 'loadingMore');
-    listOwnSessions(which === 'first' ? null : cursorRef.current, abort.signal).then(
+    // A head re-read keeps the list on screen as it is: no skeleton, no footer.
+    if (which !== 'head') setStatus(which === 'first' ? 'loadingFirst' : 'loadingMore');
+    listOwnSessions(which === 'next' ? cursorRef.current : null, abort.signal).then(
       (page) => {
         if (seq !== seqRef.current) return;
         inFlightRef.current = false;
+        if (which === 'head') {
+          // The rows below were read on the old cursor, which still points past
+          // them: only the head changes.
+          setRows((prev) => mergeById(page.sessions, prev));
+          return;
+        }
         cursorRef.current = page.nextCursor;
         setRows((prev) =>
           which === 'first' ? mergeById([], page.sessions) : mergeById(prev, page.sessions),
@@ -79,6 +91,8 @@ export function usePlanHistory(enabled: boolean): PlanHistory {
       () => {
         if (seq !== seqRef.current) return;
         inFlightRef.current = false;
+        // A failed head re-read loses nothing: the list it would have topped up stays.
+        if (which === 'head') return;
         setFailedPage(which);
         setStatus('error');
       },
@@ -110,5 +124,16 @@ export function usePlanHistory(enabled: boolean): PlanHistory {
     fetchPage(failedPage);
   }, [status, failedPage, fetchPage]);
 
-  return { rows, status, failedPage, loadMore, retry };
+  const askedForRef = useRef(new Set<string>());
+  const ensureListed = useCallback(
+    (id: string) => {
+      if (status !== 'ready' && status !== 'done') return;
+      if (rows.some((r) => r.id === id) || askedForRef.current.has(id)) return;
+      askedForRef.current.add(id);
+      fetchPage('head');
+    },
+    [status, rows, fetchPage],
+  );
+
+  return { rows, status, failedPage, loadMore, retry, ensureListed };
 }
