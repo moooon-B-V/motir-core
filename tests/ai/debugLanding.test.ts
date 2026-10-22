@@ -26,10 +26,12 @@ import {
 // the settle route → aiAskService → debugLandingService → the comment / update /
 // triage-intake authorities → the database run for real.
 //
-// Each case drives the WHOLE loop: an ask turn, its `ask_project` settle reading
-// `debug` (which dispatches `debug_bug`), then the settle of that debug job with a
-// `debugBug` result — and then reads the database to check that exactly the one
-// card A1.4 names changed, and nothing else did.
+// Since AMENDMENT 5 (MOTIR-9231) nothing in core dispatches a `debug_bug` job and
+// the ask settle no longer lands one, but `debugLandingService` stays for the
+// bug-offer story. So each case seeds a turn already recorded `debug` with its
+// debug job, then calls the KEPT landing service the way the retired settle arm
+// did — and reads the database to check that exactly the one card A1.4 names
+// changed, and nothing else did.
 
 const session = { current: null as { user: { id: string; email: string; name: string } } | null };
 const activeCtx = { current: null as ProjectContext | null };
@@ -58,8 +60,11 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 
 const { POST: ask } = await import('@/app/api/ai/ask/route');
 const { POST: settle } = await import('@/app/api/ai/ask/settle/route');
-const { DEBUG_DIAGNOSIS_DIVIDER, DEBUG_UNGROUNDED_REPLY } =
+const { DEBUG_DIAGNOSIS_DIVIDER, DEBUG_UNGROUNDED_REPLY, debugLandingService } =
   await import('@/lib/services/debugLandingService');
+const { planChangeSessionsService } = await import('@/lib/services/planChangeSessionsService');
+const { mapPlanChangeError } = await import('@/app/api/ai/plan-change/_errors');
+const { NextResponse } = await import('next/server');
 
 const BASE = 'http://localhost:3000';
 const post = (path: string, body: unknown) =>
@@ -130,29 +135,27 @@ const enrich = (workItemKey: string, anchorKey: string | null) => ({
 
 // ── The loop ──────────────────────────────────────────────────────────────────
 
-/** Send a turn, settle its `ask_project` job as a `debug` verdict, and return the
- *  `debug_bug` job the dispatch submitted — whose result is `debugBug`. */
+/** Send a turn and record it `debug`, bound to a fresh `debug_bug` job id whose
+ *  result is `debugBug` — the state the retired dispatch left a turn in. */
 async function debugTurn(debugBug: unknown, anchorKey?: string): Promise<string> {
   const askRes = await ask(
     post('/api/ai/ask', { body: 'Saving a comment drops the mention', anchorKey }),
   );
   expect(askRes.status).toBe(200);
-  const { jobId: askJobId } = (await askRes.json()) as { jobId: string };
-  jobs.set(askJobId, {
-    status: 'succeeded',
-    result: {
-      ask: { intent: 'debug', answer: null, citations: [], ...(anchorKey ? { anchorKey } : {}) },
-    },
-  });
-  const dispatched = (await (
-    await settle(post('/api/ai/ask/settle', { jobId: askJobId }))
-  ).json()) as {
-    outcome: string;
-    jobId: string;
+  const { turnId, session } = (await askRes.json()) as {
+    turnId: string;
+    session: PlanChangeSessionDto;
   };
-  expect(dispatched.outcome).toBe('debugging');
-  jobs.set(dispatched.jobId, { status: 'succeeded', result: { debugBug } });
-  return dispatched.jobId;
+  const debugJobId = `job-debug_bug-${turnId}`;
+  await planChangeSessionsService.recordTurnIntent(
+    turnId,
+    'debug',
+    activeCtx.current!,
+    { jobId: debugJobId },
+    { sessionId: session.id },
+  );
+  jobs.set(debugJobId, { status: 'succeeded', result: { debugBug } });
+  return debugJobId;
 }
 
 interface Debugged {
@@ -160,7 +163,33 @@ interface Debugged {
   landing: DebugLandingDto;
   session: PlanChangeSessionDto;
 }
-const settleDebug = (jobId: string) => settle(post('/api/ai/ask/settle', { jobId }));
+/** Land a debug job's result as the caller, exactly as the retired settle arm did,
+ *  answering with the route's own error mapping. */
+async function settleDebug(jobId: string): Promise<Response> {
+  const turn = await adminDb.planChangeTurn.findFirstOrThrow({
+    where: { jobId, role: 'user' },
+    select: { id: true, sessionId: true },
+  });
+  const ctx = activeCtx.current!;
+  try {
+    const job = (await getJobMock(jobId)) as { result: unknown };
+    const address = { sessionId: turn.sessionId };
+    const landed = await debugLandingService.land(
+      { jobId, turnId: turn.id, result: job.result },
+      ctx,
+      address,
+    );
+    if (!landed) {
+      const session = await planChangeSessionsService.getById(ctx, turn.sessionId);
+      return NextResponse.json({ outcome: 'silent', session });
+    }
+    return NextResponse.json({ outcome: 'debugged', ...landed });
+  } catch (err) {
+    const mapped = mapPlanChangeError(err);
+    if (mapped) return mapped;
+    throw err;
+  }
+}
 
 // ── Reading the database ──────────────────────────────────────────────────────
 

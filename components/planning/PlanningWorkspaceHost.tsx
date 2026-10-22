@@ -56,7 +56,6 @@ import type { PlanningLaunch } from '@/lib/planning/launcher';
 import type { PlanningSeedGuideDTO, PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { fetchPlanningAnchor } from '@/lib/planning/planningAnchorClient';
-import { useOptionalReport } from '@/app/(authed)/_components/ReportProvider';
 import {
   debugAutoSendKey,
   peekSurfaceSeed,
@@ -469,7 +468,6 @@ function PlanWorkspaceHost({
     setGuardOpen(false);
     closeBypassingGuard();
   }, [requestWorkbenchReread, closeBypassingGuard]);
-  const report = useOptionalReport();
   // PLAN SOMETHING NEW swapped the overlay onto a new session (MOTIR-7650): an
   // address that NAMED the old session now names the new one, so a reload opens
   // what is on screen. A REPLACE, not a push — Back should not return to a session
@@ -528,9 +526,6 @@ function PlanWorkspaceHost({
     seedGateId,
     seedGuideTurnId,
     onGuideOfferConfirmed,
-    // A debug turn that filed a bug into Triage (MOTIR-7049) bumps the inbox's
-    // refetch tick — the one surface a route refresh cannot reach.
-    onTriageChanged: report?.notifySubmissionsChanged,
     onRestarted,
   });
 

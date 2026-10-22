@@ -1113,19 +1113,6 @@ export function PlanChangeRail({
             {tc('handoff')}
           </p>
         ) : null}
-        {/* THE DEBUG HAND-OFF (MOTIR-7050; `debug-turn.mock.html` panel 1) — the
-            same marker slot, naming the other reading. It stays up for the whole
-            diagnosis rather than only while the hand-off is the live act: the
-            debug job narrates its own acts under it, and the marker is what says
-            what they are FOR. */}
-        {state.phase === 'streaming' && acts.some((act) => act.kind === 'redirectedDebug') ? (
-          <p
-            className="text-center text-xs text-(--el-text-secondary)"
-            data-testid="plan-change-handoff-debug"
-          >
-            {tc('handoffDebug')}
-          </p>
-        ) : null}
 
         {/* THE ACT RAIL (MOTIR-4069) — an accumulating record, not a replacing
             line. Three columns: glyph · mono act label · the line

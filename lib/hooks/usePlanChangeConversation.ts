@@ -42,7 +42,6 @@ import {
   resumePlanSession,
   stopPlanChangeRun,
   submitPlanChange,
-  type AskDebugResponse,
   type AskRedirectResponse,
   type AskSettleResponse,
   type AskSubmitResponse,
@@ -157,15 +156,6 @@ export type PlanChangeProgress =
    *  hand-off here rather than letting the user watch a spinner stop and a
    *  different one start. */
   | { kind: 'redirected' }
-  /** The ask job settled saying the turn REPORTED BROKEN BEHAVIOUR (MOTIR-7047),
-   *  and the run has attached to the `debug_bug` job — the debug turn's own
-   *  hand-off (MOTIR-7050; `design/ai-chat/debug-turn.mock.html` panel 1). */
-  | { kind: 'redirectedDebug' }
-  /** The debug job is checking whether a card already covers the report. */
-  | { kind: 'matching' }
-  /** The debug turn's ONE write is being made onto `key` (the anchored triage
-   *  bug). Drawn only when the key is known before the settle names it. */
-  | { kind: 'writing'; key: string }
   /** A level being laid, and one card being written. */
   | { kind: 'laying'; target: string | null }
   | { kind: 'authoring'; title: string | null }
@@ -750,41 +740,6 @@ export function applyPlanFrame(
   return { progress, acts: [...state.acts, progress] };
 }
 
-/**
- * Narrate one frame of a `debug_bug` job (MOTIR-7050; `debug-turn.mock.html`
- * panel 1) — the diagnosis's own acts, on top of the shipped narration.
- *
- * The job speaks in two voices. Its graph and plan LOOKUPS are `retrieval`
- * frames, which {@link narrateFrame} keeps quiet (MOTIR-8158: a lookup means
- * nothing to the person). Its PHASES are `status` frames — quiet for a plan run, where they are
- * bookkeeping — and two of them are exactly the acts the design adds:
- *
- *  · `searching` → `matching`: the duplicate check.
- *  · `diagnosed` → `writing`, ONLY when the card it will write is already known:
- *    a turn anchored on a triage bug (`anchorKey`), read as `diagnose`, and
- *    grounded in the code (`indexed`). An enrichment names its card only in the
- *    settle, and an ungrounded report writes nothing, so neither draws a line
- *    that would name the wrong card or promise a write that never happens.
- */
-export function narrateDebugFrame(
-  event: string,
-  data: unknown,
-  anchorKey: string | null,
-): PlanChangeProgress | null {
-  if (event !== 'status') return narrateFrame(event, data);
-  const d = (data ?? {}) as Record<string, unknown>;
-  if (d['phase'] === 'searching') return { kind: 'matching' };
-  if (
-    d['phase'] === 'diagnosed' &&
-    d['outcome'] === 'diagnose' &&
-    d['groundingReason'] === 'indexed' &&
-    anchorKey
-  ) {
-    return { kind: 'writing', key: anchorKey };
-  }
-  return null;
-}
-
 export interface UsePlanChangeConversationOptions {
   /**
    * An approve COMMITTED work items — the caller routes the page-state fan-out
@@ -846,14 +801,6 @@ export interface UsePlanChangeConversationOptions {
   seedGuideTurnId?: string | null;
   /** The offer was already confirmed: the session id to return to. */
   onGuideOfferConfirmed?: (sessionId: string) => void;
-  /**
-   * A debug turn FILED a new bug into Triage (MOTIR-7049 — the settle's
-   * `landing.createdInTriage`). The triage inbox is a client island that
-   * refetches only on `ReportProvider`'s `submissionsChangedAt` tick, which the
-   * server cannot bump, so the caller bumps it here (`motir-core/CLAUDE.md`'s
-   * page-state contract, case 3).
-   */
-  onTriageChanged?: () => void;
 }
 
 /**
@@ -1026,7 +973,6 @@ export function usePlanChangeConversation({
   seedGateId = null,
   seedGuideTurnId = null,
   onGuideOfferConfirmed,
-  onTriageChanged,
   onRestarted,
 }: UsePlanChangeConversationOptions = {}) {
   const [state, setState] = useState<PlanChangeConversationState>(INITIAL);
@@ -1096,8 +1042,6 @@ export function usePlanChangeConversation({
   const stateRef = useRef(state);
   // The latest `onApproved` without re-creating `approve` on every parent render.
   const approvedCbRef = useRef(onApproved);
-  // The latest `onTriageChanged`, for the same reason (MOTIR-7049).
-  const triageChangedRef = useRef(onTriageChanged);
   // Both mirrors are written in an EFFECT (never during render): the callbacks that
   // read them only run from a user event or after an await, by which point effects
   // have flushed.
@@ -1105,7 +1049,6 @@ export function usePlanChangeConversation({
     stateRef.current = state;
     approvedCbRef.current = onApproved;
     restartedCbRef.current = onRestarted;
-    triageChangedRef.current = onTriageChanged;
     guideConfirmedCbRef.current = onGuideOfferConfirmed;
     anchorRef.current = anchorId;
   });
@@ -2201,9 +2144,6 @@ export function usePlanChangeConversation({
    *  * `redirected` — the turn was a plan change. From here the run hands off to
    *    {@link finishPlanRun}, the SAME tail a plan-change submit uses, so the
    *    shipped diff + confirm chrome returns in the same thread.
-   *  * `debugging` — the turn REPORTED broken behaviour (MOTIR-7047). The run
-   *    follows the `debug_bug` job to its landing (MOTIR-7049), and the rail
-   *    names the one card it wrote (MOTIR-7050).
    *
    * ⚠️ THE WAITING STATE IS CONTINUOUS ACROSS THE HAND-OFF. `phase` stays
    * `streaming` and only `progress` changes, because a bubble that unmounts and
@@ -2211,9 +2151,7 @@ export function usePlanChangeConversation({
    */
   const runAsk = useCallback(
     async (
-      submitter: (
-        signal: AbortSignal,
-      ) => Promise<AskSubmitResponse | AskRedirectResponse | AskDebugResponse>,
+      submitter: (signal: AbortSignal) => Promise<AskSubmitResponse | AskRedirectResponse>,
       /** The work item this turn is anchored on (MOTIR-7050), or null. */
       anchorKey: string | null = null,
     ) => {
@@ -2231,61 +2169,6 @@ export function usePlanChangeConversation({
       // re-aim at an anchor an earlier plan-change run happened to use.
       lastAnchorRef.current = null;
       lastAskAnchorRef.current = anchorKey;
-
-      /**
-       * FOLLOW A DEBUG JOB to its landing (MOTIR-7047 dispatch · MOTIR-7049 landing
-       * · MOTIR-7050 narration): stream the `debug_bug` job exactly as the ask was
-       * streamed, narrating its acts, then settle IT — that settle lands the one
-       * card and appends the reply. Null when the stream failed (its state is
-       * already set) or the surface went away.
-       *
-       * One helper for BOTH ways a debug job starts: the ask's settle redirecting to
-       * it, and a RE-RUN the ask door hands straight back as `debugging`.
-       */
-      const followDebug = async (
-        jobId: string,
-        session: PlanChangeSessionDto,
-      ): Promise<AskSettleResponse | null> => {
-        let debugFailed = false;
-        await streamAskJob(
-          jobId,
-          controller.signal,
-          (code) => {
-            debugFailed = true;
-            if (!mountedRef.current) return;
-            const gated = code !== null && OUT_OF_CREDITS_CODES.has(code);
-            setState((s) => ({
-              ...s,
-              phase: s.review ? 'review' : 'idle',
-              progress: null,
-              acts: withoutReading(s.acts),
-              errorCode: gated ? null : (code ?? 'FAILED'),
-              outOfCredits: gated,
-            }));
-          },
-          () => {},
-          (event, data) => {
-            if (!mountedRef.current) return;
-            const act = narrateDebugFrame(event, data, anchorKey);
-            if (act) setState((s) => ({ ...s, progress: act, acts: [...s.acts, act] }));
-          },
-        );
-        if (debugFailed || !mountedRef.current) return null;
-        const landed = await settleAskJob(jobId, controller.signal, session.id);
-        if (!mountedRef.current) return null;
-        if (landed.outcome === 'debugged') {
-          // The OUTCOME LINE's source: the one card the turn wrote, keyed by the
-          // job the diagnosis turn carries.
-          setState((s) => ({
-            ...s,
-            debugLandings: { ...(s.debugLandings ?? {}), [jobId]: landed.landing },
-          }));
-          // A bug FILED into Triage (the orb path) must reach the inbox, a client
-          // island only its tick refreshes (`motir-core/CLAUDE.md`, case 3).
-          if (landed.landing.createdInTriage) triageChangedRef.current?.();
-        }
-        return landed;
-      };
 
       /** The run ENDED on a settle — answered, landed or silent. */
       const settleTo = (settled: AskSettleResponse) => {
@@ -2310,39 +2193,6 @@ export function usePlanChangeConversation({
       try {
         const submitted = await awaitSubmit(submitter(controller.signal));
         if (!mountedRef.current) return;
-
-        // A RE-RUN STRAIGHT BACK TO THE DIAGNOSIS (MOTIR-7050's retry gap). The
-        // turn already ran as `debug`, so the door re-submitted the `debug_bug`
-        // job without asking the classifier again. It is NOT the plan hand-off
-        // below: streamed as a plan edit, the debug job's frames and result would
-        // be read as a plan that never existed. The turn is the same one, so
-        // `lastAskTurnRef` keeps naming it for the next retry.
-        if ('outcome' in submitted && submitted.outcome === 'debugging') {
-          const debugAct: PlanChangeProgress = { kind: 'redirectedDebug' };
-          setState((s) => ({
-            ...s,
-            phase: 'streaming',
-            session: submitted.session,
-            jobId: submitted.jobId,
-            planId: null,
-            review: s.decided ? null : s.review,
-            decided: null,
-            progress: debugAct,
-            acts: [debugAct],
-            errorCode: null,
-            outOfCredits: false,
-            // A stop pressed during the submit waits on: a debug job is not one
-            // the stop door addresses (MOTIR-7924).
-            stopping: pendingStopRef.current,
-            stopped: false,
-            queued: [],
-          }));
-          unstoppableJobRef.current = submitted.jobId;
-          stoppingRef.current = pendingStopRef.current;
-          const landed = await followDebug(submitted.jobId, submitted.session);
-          if (landed) settleTo(landed);
-          return;
-        }
 
         // REDIRECTED AT THE DOOR — no ask job was opened at all. Two turns reach
         // this: a reply to the planner's pending question (the affordance
@@ -2458,29 +2308,8 @@ export function usePlanChangeConversation({
         if (!mountedRef.current) return;
 
         const settleSessionId = submitted.session?.id ?? stateRef.current.session?.id ?? null;
-        let settled = await settleAskJob(submitted.jobId, controller.signal, settleSessionId);
+        const settled = await settleAskJob(submitted.jobId, controller.signal, settleSessionId);
         if (!mountedRef.current) return;
-
-        // THE TURN WAS A REPORT (MOTIR-7047 dispatch · MOTIR-7049 landing): its
-        // `debug_bug` job is running now. The hand-off is an act like the plan
-        // one — it joins the record and replaces the live line — and the phase
-        // stays `streaming` across it, so the wait never reads as a restart.
-        if (settled.outcome === 'debugging') {
-          const debugJobId = settled.jobId;
-          const debugSession = settled.session;
-          const debugAct: PlanChangeProgress = { kind: 'redirectedDebug' };
-          unstoppableJobRef.current = debugJobId;
-          setState((s) => ({
-            ...s,
-            session: debugSession,
-            jobId: debugJobId,
-            progress: debugAct,
-            acts: [...s.acts, debugAct],
-          }));
-          const landed = await followDebug(debugJobId, debugSession);
-          if (!landed) return;
-          settled = landed;
-        }
 
         if (settled.outcome === 'redirected') {
           const redirect = settled;
@@ -3139,9 +2968,8 @@ export function usePlanChangeConversation({
     // pointed at what actually failed.
     if (!anchor && lastAskTurnRef.current) {
       const turnId = lastAskTurnRef.current;
-      // …and with the ANCHOR it was sent with (MOTIR-7050): a debug turn's retry
-      // comes back `debugging` and re-runs the same diagnosis, which must still
-      // be about the triage bug the report filed.
+      // …and with the ANCHOR it was sent with (MOTIR-7050), so the re-read is
+      // about the same work item the first one was.
       const anchorKey = lastAskAnchorRef.current;
       await runAsk(
         (signal) =>

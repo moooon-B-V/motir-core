@@ -4,14 +4,12 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   CornerDownRight,
-  FilePenLine,
   Hourglass,
   ListTree,
   MessageSquareText,
   PenLine,
   RotateCcw,
   ScanSearch,
-  SearchCheck,
   Send,
   ShieldCheck,
   Sparkles,
@@ -39,9 +37,6 @@ const ACT_GLYPH: Record<PlanChangeProgress['kind'], typeof Send> = {
   starting: Hourglass,
   reading: ScanSearch,
   redirected: CornerDownRight,
-  redirectedDebug: CornerDownRight,
-  matching: SearchCheck,
-  writing: FilePenLine,
   laying: ListTree,
   authoring: PenLine,
   note: MessageSquareText,
@@ -74,11 +69,6 @@ export function actLine(act: PlanChangeProgress, tc: Tc): string {
       return act.text;
     case 'proposed':
       return tc('progress.proposed', { count: act.count });
-    // The debug turn's two acts (MOTIR-7050; `debug-turn.mock.html` panel 1).
-    case 'matching':
-      return tc('act.matchingLine');
-    case 'writing':
-      return tc('act.writingLine', { key: act.key });
     default:
       return tc(`progress.${act.kind}`, { count: 0 });
   }

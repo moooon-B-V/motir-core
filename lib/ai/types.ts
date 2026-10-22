@@ -91,14 +91,6 @@ export const JOB_KINDS = [
   // `analyze_bug`, which classifies Motir's OWN defects. Mirror of the closed
   // motir-ai enum (the open-core boundary).
   'author_bug',
-  // `debug_bug` (Story MOTIR-7042 — MOTIR-7046 handler / MOTIR-7047 dispatch) —
-  // the conversation's THIRD intent (`docs/decisions/conversation-turn-intent.md`
-  // AMENDMENT 1): when `ask_project` hands a turn back as `intent: 'debug'`, core
-  // dispatches this for the SAME turn (`aiAskService.settle`) with the turn text as
-  // `context.prompt` and its anchor as `context.anchorKey`. It returns ONE
-  // diagnosis as the typed `debugBug` result and writes nothing; core lands the one
-  // card (MOTIR-7049). Mirror of the closed motir-ai enum (the open-core boundary).
-  'debug_bug',
   // `guide_work_item` (Story MOTIR-7459 — MOTIR-7463 handler / MOTIR-7464 dispatch)
   // — the conversation's FOURTH intent (`docs/decisions/conversation-turn-intent.md`
   // AMENDMENT 2), chosen by the Guide me through DOOR rather than a classifier: core

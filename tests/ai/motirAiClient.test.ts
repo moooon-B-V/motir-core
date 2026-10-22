@@ -307,7 +307,7 @@ describe('submitJob — a keyed submit rides out a waking machine (MOTIR-9255)',
     expect(turnSubmitKey('t1', 'ask_project', 'job_failed')).not.toBe(
       turnSubmitKey('t1', 'ask_project', null),
     );
-    expect(turnSubmitKey('t1', 'debug_bug', 'job_a')).not.toBe(
+    expect(turnSubmitKey('t1', 'guide_work_item', 'job_a')).not.toBe(
       turnSubmitKey('t1', 'ask_project', 'job_a'),
     );
   });

@@ -2363,51 +2363,6 @@ export const planChangeSessionsService = {
   },
 
   /**
-   * File a `new_session` turn (MOTIR-7649; ADR AMENDMENT 3, A3.1/A3.2): the ask
-   * settle's fourth arm. In ONE transaction under the session's row lock it moves
-   * the turn `ask → new_session` (a compare-and-set, so a replayed settle writes
-   * nothing) and appends the fixed confirm — unless one is already pending, or
-   * the session has ended meanwhile, when the intent is still recorded and no
-   * confirm is written. No job is dispatched. Returns the fresh session, or
-   * `null` when another settle already filed this turn.
-   */
-  async recordNewSessionTurn(
-    turnId: string,
-    pctx: ProjectContext,
-    address: PlanChangeSessionAddress,
-  ): Promise<PlanChangeSessionDto | null> {
-    const session = await requireSession(pctx, address);
-    return withWorkspaceContext(
-      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
-      async (tx) => {
-        const locked = await planChangeSessionRepository.lockById(session.id, tx);
-        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
-        const turn = await planChangeTurnRepository.findByIdInSession(
-          turnId,
-          session.id,
-          pctx.workspaceId,
-          tx,
-        );
-        if (!turn) throw new PlanChangeTurnNotFoundError(turnId);
-        if (turn.intent !== 'ask') return null;
-        await planChangeTurnRepository.updateIntent(turn.id, { intent: 'new_session' }, tx);
-        const fresh = await planChangeSessionRepository.findById(session.id, pctx.workspaceId, tx);
-        if (!fresh) throw new PlanChangeSessionNotFoundError(pctx.projectId);
-        if (fresh.endedAt || (await restartConfirmPendingWithin(fresh.id, pctx.workspaceId, tx))) {
-          const touched = await planChangeSessionRepository.update(
-            fresh.id,
-            { lastActivityAt: new Date() },
-            tx,
-          );
-          return toDto(touched, pctx, tx);
-        }
-        const row = await appendWithin(fresh.id, pctx, NEW_SESSION_CONFIRM_TURN, {}, tx);
-        return toDto(row, pctx, tx);
-      },
-    );
-  },
-
-  /**
    * THE CONTROL (MOTIR-7649; ADR AMENDMENT 3, A3.3) — Plan something new pressed:
    * append the SAME fixed confirm the words produce to the caller's own open
    * conversation session. Idempotent: a confirm already pending returns the
@@ -2544,53 +2499,9 @@ export const planChangeSessionsService = {
   },
 
   /**
-   * Move a `user` turn's intent from `from` to `to` ONLY if it still reads `from`
-   * — a compare-and-set under the session's row lock (MOTIR-7047).
-   *
-   * It exists for a dispatch that must happen AT MOST ONCE per turn but is
-   * reached from a replayable call: `aiAskService.settle`'s debug arm. Reading the
-   * turn's intent outside a lock and then recording it would let two concurrent
-   * settles of the same job both see `ask` and both submit a `debug_bug` job; the
-   * lock serialises them, so exactly one sees `from` and wins. Returns the fresh
-   * session when this call moved the turn, `null` when another call already had
-   * (or the turn never read `from`) — the loser's cue to submit nothing.
-   */
-  async claimTurnIntent(
-    turnId: string,
-    change: { from: PlanChangeTurnIntent; to: PlanChangeTurnIntent },
-    pctx: ProjectContext,
-    address: PlanChangeSessionAddress,
-  ): Promise<PlanChangeSessionDto | null> {
-    const session = await requireSession(pctx, address);
-    return withWorkspaceContext(
-      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
-      async (tx) => {
-        const locked = await planChangeSessionRepository.lockById(session.id, tx);
-        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
-        const turn = await planChangeTurnRepository.findByIdInSession(
-          turnId,
-          session.id,
-          pctx.workspaceId,
-          tx,
-        );
-        if (!turn) throw new PlanChangeTurnNotFoundError(turnId);
-        if (turn.intent !== change.from) return null;
-        await planChangeTurnRepository.updateIntent(turn.id, { intent: change.to }, tx);
-        const fresh = await planChangeSessionRepository.update(
-          session.id,
-          { lastActivityAt: new Date() },
-          tx,
-        );
-        return toDto(fresh, pctx, tx);
-      },
-    );
-  },
-
-  /**
    * CLAIM the ONE write a `debug` turn may make (MOTIR-7049; ADR AMENDMENT 1 ·
    * A1.4) — a compare-and-set of the turn's `debugLandingClaimedAt` under the
-   * session's row lock, the same serialisation {@link claimTurnIntent} gives the
-   * debug DISPATCH. Returns `true` when THIS call claimed it; `false` when an
+   * session's row lock, the serialisation every turn write takes. Returns `true` when THIS call claimed it; `false` when an
    * earlier or concurrent settle of the same job already had — the loser's cue to
    * write nothing. Only a `user` turn that ran as `debug` can be claimed.
    */
@@ -2746,52 +2657,6 @@ export const planChangeSessionsService = {
       },
     );
     return planChangeSessionsService.getById(pctx, session.id);
-  },
-
-  /**
-   * The `debug_bug` job a `debug` turn has ALREADY LANDED, or null (MOTIR-7065).
-   *
-   * A turn has landed when its claim (`debugLandingClaimedAt`) is taken — which
-   * also covers a landing that crashed after the claim, and A1.4 fails those
-   * CLOSED — or when its job already has its `assistant` reply on the thread (an
-   * ungrounded report replies without ever claiming). Either way a retry must not
-   * submit a second, paid diagnosis: the job named here is the one to replay.
-   *
-   * Read under the session's row lock, the serialisation {@link claimDebugLanding}
-   * takes the claim under, so a landing mid-flight is seen as committed or not at
-   * all. Null for a turn that is not a `debug` turn, has no job yet, or has not
-   * landed — the cue to re-run the diagnosis exactly as before.
-   */
-  async landedDebugJob(
-    turnId: string,
-    pctx: ProjectContext,
-    address: PlanChangeSessionAddress,
-  ): Promise<string | null> {
-    const session = await requireSession(pctx, address);
-    return withWorkspaceContext(
-      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
-      async (tx) => {
-        const locked = await planChangeSessionRepository.lockById(session.id, tx);
-        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
-        const turn = await planChangeTurnRepository.findByIdInSession(
-          turnId,
-          session.id,
-          pctx.workspaceId,
-          tx,
-        );
-        if (!turn || turn.role !== 'user') throw new PlanChangeTurnNotFoundError(turnId);
-        if (turn.intent !== 'debug' || !turn.jobId) return null;
-        if (turn.debugLandingClaimedAt !== null) return turn.jobId;
-        const reply = await planChangeTurnRepository.findByJobIdAndRole(
-          session.id,
-          turn.jobId,
-          'assistant',
-          pctx.workspaceId,
-          tx,
-        );
-        return reply ? turn.jobId : null;
-      },
-    );
   },
 
   /**

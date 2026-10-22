@@ -4,20 +4,17 @@ import { turnSubmitKey } from '@/lib/ai/turnSubmitKey';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { resolveTenantLanguages } from '@/lib/ai/tenantLanguages';
 import { resolvePlanningCodeContext } from '@/lib/ai/codeContext';
-import { isMotirAiConfigured } from '@/lib/ai/availability';
-import { MotirAiConfigError } from '@/lib/ai/errors';
 import { planRunContextService, type RunContext } from '@/lib/services/planRunContextService';
 import { planChangeMailboxService } from '@/lib/services/planChangeMailboxService';
 import { planChangeLateChangeService } from '@/lib/services/planChangeLateChangeService';
 import { plansService } from '@/lib/services/plansService';
 import type { MailboxDeliveryDto } from '@/lib/dto/planChangeMailbox';
-import type { JobContextBag, JobKind, JobStreamEvent } from '@/lib/ai/types';
+import type { JobContextBag, JobStreamEvent } from '@/lib/ai/types';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { readAskOutcome } from '@/lib/planning/askResult';
 import { readCodeUnreadable } from '@/lib/planning/codeUnreadable';
-import { debugLandingService } from '@/lib/services/debugLandingService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
@@ -31,11 +28,7 @@ import {
   TurnFilesGuideOnlyError,
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE, PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
-import type {
-  DebugLandingDto,
-  PlanChangeSessionDto,
-  PlanChangeTurnDto,
-} from '@/lib/dto/planChange';
+import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChange';
 import { pendingQuestion } from '@/lib/planning/planChangeThread';
 import { aiGuideService, type GuideTurnResult } from '@/lib/services/aiGuideService';
 import { guideLandingService, type GuideSettleResult } from '@/lib/services/guideLandingService';
@@ -47,11 +40,11 @@ import { guideLandingService, type GuideSettleResult } from '@/lib/services/guid
 // when it already knows. `docs/decisions/conversation-turn-intent.md` §1/§2
 // (decided by MOTIR-1816): the client posts the TEXT and never an intent, and
 // what the turn turns out to be is the JOB'S answer, not the caller's claim.
-// Every user turn is submitted as `ask_project`; motir-ai's handler classifies on
-// its first turn and either answers or hands the turn back as
-// `intent: 'plan_change'`, at which point {@link aiAskService.settle} dispatches
-// the SHIPPED plan-change submit for the same turn. That route, its service and
-// the `augment` contract are untouched — they gain a caller, not a behaviour.
+// Every user turn is submitted as `ask_project` and READ (AMENDMENT 5 · MOTIR-9216):
+// outside a planning run motir-ai answers every turn — no classifier, no redirect.
+// Inside one its router may still hand a turn back as `intent: 'plan_change'`, and
+// {@link aiAskService.settle} forwards it; a stored `plan_change` turn from before
+// the amendment still re-runs through the SHIPPED plan-change submit.
 //
 // ── WHY THE SETTLE IS A SEPARATE CALL ────────────────────────────────────────
 // Nothing in core observes a motir-ai job finishing: the run is watched by the
@@ -82,17 +75,15 @@ import { guideLandingService, type GuideSettleResult } from '@/lib/services/guid
 // A turn MAY name ONE work item it is about (`anchorKey`) — usually the triage
 // bug the person just reported. It does NOT move the turn off the project-wide
 // thread; it is DATA the job reads: the classifier is told the turn is anchored
-// there, and a `debug` verdict echoes it back so `debug_bug` gets it too. The key
-// is resolved through the KEYED read (`workItemsService.getWorkItemByIdentifier`,
-// which includes triage rows — only LIST reads exclude them) and browse-gated,
-// pinned to the active project, on the way IN and again at the debug dispatch,
-// because the echo is a claim from across the boundary, not a fact.
+// there and reads it first. The key is resolved through the KEYED read
+// (`workItemsService.getWorkItemByIdentifier`, which includes triage rows — only
+// LIST reads exclude them) and browse-gated, pinned to the active project.
 //
-// ── THE DEBUG ARM (MOTIR-7047 · AMENDMENT 1, A1.1 / A1.4) ────────────────────
-// A settled `ask_project` job that redirects with `intent: 'debug'` is dispatched
-// as ONE `debug_bug` job for the same turn. The turn's `jobId` is then rebound to
-// the debug job — the job that actually ran for it — so a reload finds the running
-// diagnosis on the thread, and the job that LANDS it (MOTIR-7049) can key on it.
+// ── NO DEBUG ARM, NO NEW-SESSION ARM (AMENDMENT 5 · MOTIR-9231) ──────────────
+// A defect report and "plan something else" are answered like any other turn, so
+// core submits no `debug_bug` job and writes no new-session confirm any more. The
+// turns stored under those intents stay readable, landings and confirms included;
+// a retry of one re-runs it as an ordinary ask.
 
 /** What a submitted ask turn tells the caller: the job to stream, and the turn
  *  the settle will key on. The session comes back too, so the rail renders the
@@ -110,10 +101,6 @@ export interface AskSubmitResult {
  *  * `answered` — an `assistant` turn is on the thread, with its citations.
  *  * `redirected` — the turn was a plan change; `jobId` / `planId` name the
  *    plan-edit job now running, and the shipped diff + confirm chrome takes over.
- *  * `debugging` — the turn reported broken behaviour (MOTIR-7047); `jobId`
- *    names the `debug_bug` job now running ({@link AskDebugResult}).
- *  * `debugged` — that `debug_bug` job's own settle (MOTIR-7049): the one card
- *    it wrote, and its reply on the thread ({@link AskDebuggedResult}).
  *  * `silent` — the job ran and said nothing at all. Core persists NOTHING for
  *    this: an assistant turn needs a body, and inventing one would mean motir-core
  *    writing the assistant's words. (An honest "I could not find that" is prose
@@ -132,34 +119,10 @@ export interface AskRedirectResult {
   session: PlanChangeSessionDto;
 }
 
-/** A turn Motir read as a REPORT OF BROKEN BEHAVIOUR (MOTIR-7047): `jobId` names
- *  the `debug_bug` job now diagnosing it, which the rail streams exactly as it
- *  streams an ask (`GET /api/ai/ask/[jobId]/stream`). Nothing is landed yet —
- *  that is the debug job's own settle (MOTIR-7049). */
-export interface AskDebugResult {
-  outcome: 'debugging';
-  jobId: string;
-  session: PlanChangeSessionDto;
-}
-
-/** A settled `debug_bug` job, LANDED (MOTIR-7049): the ONE card the turn
- *  touched — or, for an ungrounded report, none — and the thread with the reply
- *  appended. A replayed settle returns the same `landing` and writes nothing. */
-export interface AskDebuggedResult {
-  outcome: 'debugged';
-  landing: DebugLandingDto;
-  session: PlanChangeSessionDto;
-}
-
 export type AskSettleResult =
   | { outcome: 'answered'; session: PlanChangeSessionDto }
   | { outcome: 'redirected'; jobId: string; planId: string; session: PlanChangeSessionDto }
-  | AskDebugResult
-  | AskDebuggedResult
   | { outcome: 'silent'; session: PlanChangeSessionDto }
-  // A `new_session` turn (MOTIR-7649; AMENDMENT 3, A3.1/A3.2): the confirm is on
-  // the thread and NO job ran. The rail renders the confirm from `session`.
-  | { outcome: 'confirming'; session: PlanChangeSessionDto }
   // A MID-RUN turn (MOTIR-7996) the answering session read as a CHANGE: its words
   // went down the running job's mailbox, `delivery` being the mailbox as it stands.
   | { outcome: 'forwarded'; delivery: MailboxDeliveryDto; session: PlanChangeSessionDto }
@@ -209,13 +172,11 @@ function tenantFor(
   };
 }
 
-/** Submit ONE conversation job (`ask_project`, or `debug_bug` for a debug turn).
- *  The gate + tenant resolution are the shipped ones
+/** Submit ONE conversation job — always `ask_project` (MOTIR-9231). The gate + tenant resolution are the shipped ones
  *  (`aiChatService.submitDiscoveryTurn`'s shape); nothing about metering or
  *  availability is re-implemented here — an out-of-credits org surfaces as the
  *  client's typed `MotirAiOutOfCreditsError`. */
-async function submitConversationJob(
-  kind: Extract<JobKind, 'ask_project' | 'debug_bug'>,
+async function submitAsk(
   prompt: string,
   anchorKey: string | null,
   ctx: ProjectContext,
@@ -234,10 +195,9 @@ async function submitConversationJob(
     userId: ctx.userId,
   });
   // The CODE half (MOTIR-7922): the same planning producer the plan-edit submits
-  // use (`aiPlanEditsService`), on THIS one submit so it covers both `ask_project`
-  // and `debug_bug`. motir-ai offers its code-graph tools only when
-  // `context.code.repos[]` names a repository, so without it every question and
-  // every debug turn ran code-blind on a fully indexed project. `undefined` means
+  // use (`aiPlanEditsService`). motir-ai offers its code-graph tools only when
+  // `context.code.repos[]` names a repository, so without it every question ran
+  // code-blind on a fully indexed project. `undefined` means
   // "no connected repo", and the key is then OMITTED, never sent empty.
   const code = await resolvePlanningCodeContext({
     userId: ctx.userId,
@@ -251,11 +211,13 @@ async function submitConversationJob(
     ...(code ? { code } : {}),
   };
   return submitJob(
-    kind,
+    'ask_project',
     tenantFor(ctx, organizationId, isMeta, internalBilling, languages),
     context,
     { userId: ctx.userId },
-    keyedOn ? { idempotencyKey: turnSubmitKey(keyedOn.turnId, kind, keyedOn.attempt) } : {},
+    keyedOn
+      ? { idempotencyKey: turnSubmitKey(keyedOn.turnId, 'ask_project', keyedOn.attempt) }
+      : {},
   );
 }
 
@@ -268,16 +230,6 @@ interface TurnAttempt {
 
 function attemptOf(turn: PlanChangeTurnDto): TurnAttempt {
   return { turnId: turn.id, attempt: turn.jobId ?? null };
-}
-
-function submitAsk(
-  prompt: string,
-  anchorKey: string | null,
-  ctx: ProjectContext,
-  run?: RunContext,
-  keyedOn?: TurnAttempt,
-): Promise<{ jobId: string }> {
-  return submitConversationJob('ask_project', prompt, anchorKey, ctx, run, keyedOn);
 }
 
 /**
@@ -336,30 +288,6 @@ async function resolveAnchor(anchorKey: string, ctx: ProjectContext): Promise<st
   }
 }
 
-/**
- * The gates a DEBUG dispatch adds, all asserted BEFORE the turn's intent moves
- * and before any job is submitted, so a refusal leaves the thread exactly as it
- * stood and spends nothing.
- *
- *  * `ai:plan` — the key every conversation job spends credits under.
- *  * `work_item:edit` — a debug turn WRITES one card as the sender (A1.4), so the
- *    sender must be able to edit cards by hand. Asserted HERE, at the dispatch,
- *    and NOT at the ask door: the door cannot know a turn is a debug until the
- *    classifier has run, and a member who may ask but not edit must keep getting
- *    answers. A typed `PermissionDeniedError` → 403.
- *  * Motir AI configured — checked explicitly because the settle arm moves the
- *    turn's intent BEFORE it submits; the client's own config throw would come
- *    one write too late.
- */
-async function assertCanDebug(ctx: ProjectContext): Promise<void> {
-  const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-  await projectAccessService.assertPermission(ctx.projectId, actor, 'ai:plan');
-  await projectAccessService.assertPermission(ctx.projectId, actor, 'work_item:edit');
-  if (!isMotirAiConfigured()) {
-    throw new MotirAiConfigError('MOTIR_AI_URL / MOTIR_AI_SERVICE_TOKEN are not set');
-  }
-}
-
 /** The thread's turn with this id, from a session DTO. */
 function turnById(session: PlanChangeSessionDto, turnId: string): PlanChangeTurnDto | null {
   return session.turns.find((t) => t.id === turnId) ?? null;
@@ -389,7 +317,7 @@ async function requireAskSession(
 
 /**
  * The settle of a MID-RUN turn (MOTIR-7996). Entered only for a turn carrying
- * `runJobId`; `debug` and `new_session` verdicts keep today's arms.
+ * `runJobId` whose outcome is `plan_change` or `ask`.
  *
  *  * `plan_change` → a FORWARD. The body is chosen from CORE's own record and never
  *    from the echo: `forward.text` only selects WHICH of two texts core already
@@ -785,7 +713,7 @@ export const aiAskService = {
     turnId: string,
     ctx: ProjectContext,
     opts: { flip?: boolean; sessionId?: string; anchorKey?: string } = {},
-  ): Promise<AskSubmitResult | AskRedirectResult | AskDebugResult | GuideTurnResult> {
+  ): Promise<AskSubmitResult | AskRedirectResult | GuideTurnResult> {
     await projectAccessService.assertPermission(
       ctx.projectId,
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
@@ -802,49 +730,18 @@ export const aiAskService = {
     const turn = turnById(current, turnId);
     if (!turn || turn.role !== 'user') throw new PlanChangeTurnNotFoundError(turnId);
 
-    // The flip runs ONE WAY: a `plan_change` or `debug` turn flips to `ask`
-    // (A1.5: a debug mis-read is corrected by answering instead; its write, if
-    // any, stays). An ANSWERED turn does not flip at all — AMENDMENT 3 retired
-    // §3's "Propose changes instead", because whether a turn becomes a planning
-    // run is the planner's call, never a person's button. It is refused before
-    // anything is recorded or submitted. A flip INTO `debug` is not offered
-    // either: the classifier is the only thing that reads a turn as a report.
+    // The flip runs ONE WAY: a turn that did not run as `ask` flips to `ask`. An
+    // ANSWERED turn does not flip at all — AMENDMENT 3 retired §3's "Propose
+    // changes instead", because whether a turn becomes a planning run is the
+    // planner's call, never a person's button. It is refused before anything is
+    // recorded or submitted.
     const ran = turn.intent ?? 'ask';
     if (opts.flip && ran === 'ask') throw new PlanChangeFlipNotOfferedError(turnId);
-    const next = opts.flip ? 'ask' : ran;
+    // Every turn is READ now (AMENDMENT 5 · MOTIR-9231): a stored `debug` or
+    // `new_session` turn re-runs as an ordinary ask. Only an unflipped `plan_change`
+    // turn keeps its shipped retry.
+    const next = !opts.flip && ran === 'plan_change' ? 'plan_change' : 'ask';
     const anchor = opts.anchorKey ? await resolveAnchor(opts.anchorKey, ctx) : null;
-
-    if (next === 'debug') {
-      // The RETRY of a debug turn — its dispatch failed after the turn was
-      // recorded as `debug` (the settle arm moves the intent first). Re-run the
-      // SAME diagnosis; the classifier is not asked again.
-      //
-      // ⚠️ NOT A TURN THAT ALREADY LANDED (MOTIR-7065). Its landing claim is taken
-      // (or its reply is on the thread), so a second `debug_bug` job could only
-      // spend credits for a settle that writes nothing. Hand back the turn's OWN
-      // job instead: the rail follows it exactly as it follows a fresh one, and its
-      // settle REPLAYS the landing (`debugged`, the same card) — or, for a landing
-      // that crashed after its claim, answers `silent` (A1.4 fails closed).
-      const landedJobId = await planChangeSessionsService.landedDebugJob(turnId, ctx, address);
-      if (landedJobId) return { outcome: 'debugging', jobId: landedJobId, session: current };
-      await assertCanDebug(ctx);
-      const { jobId } = await submitConversationJob(
-        'debug_bug',
-        turn.body,
-        anchor,
-        ctx,
-        undefined,
-        attemptOf(turn),
-      );
-      const session = await planChangeSessionsService.recordTurnIntent(
-        turnId,
-        'debug',
-        ctx,
-        { jobId },
-        address,
-      );
-      return { outcome: 'debugging', jobId, session };
-    }
 
     if (next === 'plan_change') {
       // Hand it to the SHIPPED plan-change submit. Untouched: it accumulates the
@@ -892,15 +789,9 @@ export const aiAskService = {
    * arm is guarded by the turn's current intent, so a second settle of the same
    * job neither duplicates a bubble nor dispatches a second plan-edit job.
    *
-   * The DEBUG arm (MOTIR-7047) is guarded harder, because it is the arm that
-   * would otherwise write twice: the turn's intent moves `ask → debug` under the
-   * session's row lock (`claimTurnIntent`) BEFORE the `debug_bug` job is
-   * submitted, so of two concurrent settles exactly one submits. The gates
-   * ({@link assertCanDebug}) and the anchor's re-resolution run before that claim,
-   * so a refusal leaves the turn an `ask` and submits nothing. A submit that fails
-   * AFTER the claim leaves the turn `debug` with no debug job — the rail's error
-   * state, and `resubmit` re-runs the diagnosis without asking the classifier
-   * again.
+   * There is no debug or new-session arm (AMENDMENT 5 · MOTIR-9231). A result
+   * still carrying one of those outcomes — a job that finished across the deploy —
+   * has no answer, so it settles `silent` and writes nothing.
    */
   async settle(
     jobId: string,
@@ -921,22 +812,6 @@ export const aiAskService = {
     if (!turn) return { outcome: 'silent', session };
 
     const job = await getJob(jobId, ctx.projectId);
-
-    // THE DEBUG JOB'S OWN SETTLE (MOTIR-7049). After the dispatch above the
-    // turn's `jobId` names its `debug_bug` job, so settling THAT id lands here:
-    // the result is landed as the ONE write A1.4 allows and the handler's reply
-    // is appended. Keyed on the turn's intent AND the result's own unit, so an
-    // `ask_project` job of a turn that has since moved to `debug` never reaches
-    // the landing. Replayable — see `debugLandingService.land`.
-    if (turn.intent === 'debug' && job.result?.debugBug != null) {
-      const landed = await debugLandingService.land(
-        { jobId, turnId: turn.id, result: job.result },
-        ctx,
-        address,
-      );
-      if (!landed) return { outcome: 'silent', session };
-      return { outcome: 'debugged', landing: landed.landing, session: landed.session };
-    }
 
     const outcome = readAskOutcome(job.result);
     if (!outcome) return { outcome: 'silent', session };
@@ -960,50 +835,6 @@ export const aiAskService = {
         planId: submitted.planId,
         session: submitted.session,
       };
-    }
-
-    if (outcome.intent === 'debug') {
-      // Already dispatched by an earlier settle of this same job (the turn's
-      // `jobId` has usually moved to the debug job too, so a replay rarely even
-      // gets here) — never a second debug job for one turn.
-      if (turn.intent === 'debug') return { outcome: 'silent', session };
-      await assertCanDebug(ctx);
-      // The echo is a CLAIM from across the boundary; re-resolve it under THIS
-      // caller's access rather than forwarding whatever came back.
-      const anchor = outcome.anchorKey ? await resolveAnchor(outcome.anchorKey, ctx) : null;
-      const claimed = await planChangeSessionsService.claimTurnIntent(
-        turn.id,
-        { from: 'ask', to: 'debug' },
-        ctx,
-        address,
-      );
-      if (!claimed) return { outcome: 'silent', session };
-      const { jobId: debugJobId } = await submitConversationJob(
-        'debug_bug',
-        turn.body,
-        anchor,
-        ctx,
-        undefined,
-        attemptOf(turn),
-      );
-      const updated = await planChangeSessionsService.recordTurnIntent(
-        turn.id,
-        'debug',
-        ctx,
-        { jobId: debugJobId },
-        address,
-      );
-      return { outcome: 'debugging', jobId: debugJobId, session: updated };
-    }
-
-    if (outcome.intent === 'new_session') {
-      // The fourth arm (AMENDMENT 3, A3.1/A3.2): record the intent and write the
-      // fixed confirm, in one transaction guarded by the turn's intent, so a
-      // replayed settle writes nothing. No job — nothing closes until Confirm.
-      if (turn.intent === 'new_session') return { outcome: 'silent', session };
-      const filed = await planChangeSessionsService.recordNewSessionTurn(turn.id, ctx, address);
-      if (!filed) return { outcome: 'silent', session };
-      return { outcome: 'confirming', session: filed };
     }
 
     if (!outcome.answer) return { outcome: 'silent', session };

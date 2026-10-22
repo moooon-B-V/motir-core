@@ -14,9 +14,8 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // PLAN SOMETHING NEW (story MOTIR-7631 · MOTIR-7649) — against a REAL Postgres.
-// `docs/decisions/conversation-turn-intent.md` AMENDMENT 3: a `new_session` turn
-// gets a fixed confirm core writes (A3.1/A3.2), the control writes the same
-// confirm (A3.3), Keep planning closes nothing, and Confirm ends the session
+// `docs/decisions/conversation-turn-intent.md` AMENDMENT 3: the control writes the
+// fixed confirm (A3.3) — the words no longer do since AMENDMENT 5 (MOTIR-9231), Keep planning closes nothing, and Confirm ends the session
 // `restarted` and returns a new, empty session for the same scope (A3.3/A3.4).
 // The story's assembled gate (refusals, isolation, the ask door) is MOTIR-7652.
 
@@ -80,10 +79,6 @@ async function sessionOn(card: { key: string }) {
   return session.id;
 }
 
-async function turnsOf(sessionId: string) {
-  return adminDb.planChangeTurn.findMany({ where: { sessionId }, orderBy: { seq: 'asc' } });
-}
-
 describe('readAskOutcome — the new_session redirect', () => {
   it('reads it with no answer and no citations, whatever else the field carried', () => {
     expect(
@@ -93,31 +88,6 @@ describe('readAskOutcome — the new_session redirect', () => {
 });
 
 describe('the confirm', () => {
-  it(
-    'a new_session turn is recorded and gets ONE confirm; a replay writes nothing',
-    { timeout: DB_TEST_TIMEOUT_MS },
-    async () => {
-      const sessionId = await sessionOn(await seedCard());
-      const [userTurn] = await turnsOf(sessionId);
-
-      const filed = await planChangeSessionsService.recordNewSessionTurn(userTurn!.id, me(), {
-        sessionId,
-      });
-      expect(filed?.turns.map((t) => [t.role, t.intent, t.confirm, t.question])).toEqual([
-        ['user', 'new_session', null, null],
-        ['assistant', null, 'new_session', null],
-      ]);
-      expect(filed?.turns[1]!.body).toBe(NEW_SESSION_CONFIRM_BODY);
-      expect(filed?.lastJobId).toBeNull();
-
-      const replay = await planChangeSessionsService.recordNewSessionTurn(userTurn!.id, me(), {
-        sessionId,
-      });
-      expect(replay).toBeNull();
-      expect(await turnsOf(sessionId)).toHaveLength(2);
-    },
-  );
-
   it(
     'the control writes the SAME confirm, and pressing it again writes nothing',
     { timeout: DB_TEST_TIMEOUT_MS },

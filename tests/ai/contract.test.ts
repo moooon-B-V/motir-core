@@ -92,10 +92,6 @@ const CANONICAL_JOB_KINDS = [
   // sends it, closes the drift that card's envelope documented while this
   // consumer was unbuilt.
   'author_bug',
-  // `debug_bug` (Story MOTIR-7042 — MOTIR-7046 handler / MOTIR-7047 dispatch);
-  // already in motir-ai's canonical set. Adding it HERE, with the dispatch that
-  // sends it, closes the drift that card's envelope documented.
-  'debug_bug',
   // `guide_work_item` (Story MOTIR-7459 — MOTIR-7463 handler / MOTIR-7464 dispatch);
   // already in motir-ai's canonical set. Adding it HERE, with the guide door that
   // sends it, closes the drift that card's envelope documented.
