@@ -1,6 +1,7 @@
 import type { AttachmentDTO } from '@/lib/dto/attachments';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { GuideTurnRecord } from '@/lib/ai/guideWorkItem';
+import type { PlanOfferCannotStart, PlanOfferState } from '@/lib/planChange/planOffer';
 
 // DTO types for the plan-change CONVERSATION (Story 7.30 · MOTIR-1728) — the
 // shape that crosses the API boundary. No Prisma row leaks: the
@@ -548,6 +549,18 @@ export interface PlanAnswerOfferDto {
   confirmedById: string | null;
   /** The planning session the confirm started. */
   confirmedSessionId: string | null;
+  /**
+   * DERIVED on every read (MOTIR-9290), never stored: which of the four states the
+   * offer is in, from the thread's own shape (`planOfferStateOf`). Filled where the
+   * session DTO is built; absent only on a turn mapped outside it.
+   */
+  state?: PlanOfferState;
+  /**
+   * DERIVED on every read (MOTIR-9290): why the offer cannot start right now, as a
+   * reason CODE (the words are the copy's), or null when it can. Resolved from live
+   * reads, so a permission revoked or a target closed since the answer shows here.
+   */
+  cannotStart?: PlanOfferCannotStart | null;
 }
 
 /** What a writer passes to store an offer: what was offered, and no disposition —

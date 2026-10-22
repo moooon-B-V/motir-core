@@ -113,11 +113,13 @@ describe('the answer offer is stored with its turn', () => {
     const assistant = dto.turns.find((t) => t.role === 'assistant')!;
     expect(assistant.offer).toEqual({ ...offer, ...UNDECIDED });
     expect(assistant.forwardOffer).toBeNull();
-    // The service's own read agrees.
+    // The service's own read agrees, plus the two fields it derives (MOTIR-9290).
     const viaService = await planChangeSessionsService.getById(me(), sessionId);
     expect(viaService.turns.find((t) => t.role === 'assistant')!.offer).toEqual({
       ...offer,
       ...UNDECIDED,
+      state: 'undecided',
+      cannotStart: expect.toBeOneOf([null, 'planning_unavailable']),
     });
   });
 

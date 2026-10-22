@@ -316,6 +316,32 @@ export class GuideReplanOfferNotOpenError extends Error {
 }
 
 /**
+ * A turn that holds no plan offer (MOTIR-9290), or is not in the caller's own
+ * conversation. → 404 `PLAN_OFFER_NOT_FOUND`; one answer for every way it can be
+ * wrong, so another member's offer never reads apart from a missing one.
+ */
+export class PlanOfferNotFoundError extends Error {
+  readonly code = 'PLAN_OFFER_NOT_FOUND' as const;
+  constructor(turnId: string) {
+    super(`No plan offer on turn ${turnId}.`);
+    this.name = 'PlanOfferNotFoundError';
+  }
+}
+
+/**
+ * The plan offer exists but can no longer be decided: a later answer superseded it,
+ * or a planning session was started from it (MOTIR-9290). → 409
+ * `PLAN_OFFER_NOT_OPEN`.
+ */
+export class PlanOfferNotOpenError extends Error {
+  readonly code = 'PLAN_OFFER_NOT_OPEN' as const;
+  constructor(turnId: string) {
+    super(`The plan offer on turn ${turnId} is no longer open.`);
+    this.name = 'PlanOfferNotOpenError';
+  }
+}
+
+/**
  * A second Confirm of a guide re-plan offer that already started a planning
  * session (MOTIR-8691). Carries that session's id so the client can open it
  * instead of starting again. → 409 `GUIDE_REPLAN_OFFER_CONFIRMED`.

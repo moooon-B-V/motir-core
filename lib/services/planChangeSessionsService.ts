@@ -30,6 +30,7 @@ import {
 import { workflowsService } from '@/lib/services/workflowsService';
 import { CLEARED_FAILURE_COLUMNS, sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
+import { planOfferService } from '@/lib/services/planOfferService';
 import {
   clearWithin as clearPlanningSessionGate,
   raiseWithin as raisePlanningSessionGate,
@@ -300,7 +301,20 @@ async function toDto(
       ? await readAnswerEntry(tx)
       : await withWorkspaceServiceContext(pctx.workspaceId, readAnswerEntry)
     : undefined;
-  const base = toPlanChangeSessionDto(row, turns, workItemRefs, runPause, entryRead);
+  const mapped = toPlanChangeSessionDto(row, turns, workItemRefs, runPause, entryRead);
+  // Every offer's two DERIVED fields (MOTIR-9290), resolved where every turn DTO is
+  // built so no reader sees a stored offer without its state.
+  const offers = await planOfferService.resolveFor(row.id, turns, pctx, tx);
+  const base =
+    offers.size === 0
+      ? mapped
+      : {
+          ...mapped,
+          turns: mapped.turns.map((t) => {
+            const resolved = t.offer ? offers.get(t.id) : undefined;
+            return resolved ? { ...t, offer: { ...t.offer!, ...resolved } } : t;
+          }),
+        };
   // Whether a FAILED session holds a half-written walk that only Resume continues, or a plan
   // that waits for the person (situation 2) — the one fact the overlay needs to choose between
   // Resume + a held composer and the decide door + an open one (MOTIR-7918 / MOTIR-7941). The
