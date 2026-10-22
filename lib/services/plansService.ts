@@ -84,6 +84,7 @@ import {
 } from '@/lib/plans/refs';
 import {
   assertAddKindPlacementLegal,
+  assertBlockedByGraphAcyclic,
   assertBlockedByLevels,
   assertFolderPlacementsLegal,
   assertKindChangesLegal,
@@ -1724,6 +1725,58 @@ async function assertSupersedesAcyclicAtAppend(
       ]),
     );
     assertSupersedesGraphAcyclic(nodes, liveById, existing);
+  });
+}
+
+/**
+ * Refuse a `blocked_by` CYCLE where the edge is WRITTEN, on a `generating` plan
+ * (MOTIR-9267) — the close's own walk (`assertBlockedByGraphAcyclic`), so the
+ * error and the ring it names are the ones `markPlanned` returns.
+ *
+ * Here rather than left to the close because a planner schedules its author
+ * sessions by these edges WHILE the plan is still generating: a ring that waits
+ * for the close is one the scheduler can only break by authoring a card as if
+ * one of its edges were absent. Refused at the write, the session that drew the
+ * edge is the one told, and it chooses the order. A ring can never become legal
+ * later, so nothing is lost by refusing it early. Runs only when one of
+ * `subjectIds` — the proposals this write changes — draws a `blocked_by` edge;
+ * one closure read then, none otherwise.
+ */
+async function assertBlockedByAcyclicAtAppend(
+  nodes: readonly ProposalNode[],
+  subjectIds: ReadonlySet<string>,
+  ctx: ServiceContext,
+  planProjectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const drawsEdge = nodes.some(
+    (n) =>
+      subjectIds.has(n.id) &&
+      ((n.op === 'add' && n.blockedByRefs.length > 0) ||
+        (n.op === 'modify' && (n.patch?.blockedByAdd?.length ?? 0) > 0)),
+  );
+  if (!drawsEdge) return;
+  await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+    const existing = await resolveBlockedByClosure(nodes, ctx, tx);
+    const ids = collectReferencedWorkItemIds(nodes);
+    const rows =
+      ids.length === 0
+        ? []
+        : await workItemRepository.findByIdsInWorkspace(ids, ctx.workspaceId, tx);
+    const liveById = new Map<string, LiveWorkItemState>(
+      rows.map((r) => [
+        r.id,
+        {
+          id: r.id,
+          key: r.identifier,
+          title: r.title,
+          kind: r.kind,
+          status: r.status,
+          projectId: r.projectId,
+        },
+      ]),
+    );
+    assertBlockedByGraphAcyclic(nodes, liveById, existing);
   });
 }
 
@@ -5476,6 +5529,26 @@ export const plansService = {
             tx,
           );
 
+          // A `blocked_by` CYCLE on a GENERATING plan (MOTIR-9267) — refused here,
+          // where the edge is written, with the close's own error. A revision
+          // append already runs the close's whole gate below.
+          if (fresh.status === 'generating') {
+            await assertBlockedByAcyclicAtAppend(
+              effectiveNodes,
+              new Set([
+                ...fold.mergedExisting.keys(),
+                ...proposals.flatMap((_, index) =>
+                  fold.dispositions[index]!.kind === 'insert'
+                    ? [`${INCOMING_PROPOSAL_ID_PREFIX}${index}`]
+                    : [],
+                ),
+              ]),
+              ctx,
+              fresh.projectId,
+              tx,
+            );
+          }
+
           // A `supersedes` CYCLE (MOTIR-6630) — refused here, where the edge is
           // written: the database never refuses one, and a ring cannot become
           // legal later. One closure read, only when the plan draws such an edge.
@@ -6998,6 +7071,23 @@ export const plansService = {
         if (correctedNode.op === 'modify' && correctedNode.patch?.kind !== undefined) {
           await assertKindChangesLegalAtAppend(
             [...all.filter((i) => i.id !== item.id).map(toProposalNode), correctedNode],
+            ctx,
+            plan.projectId,
+            tx,
+          );
+        }
+
+        // A `blocked_by` CYCLE the correction closes on a GENERATING plan
+        // (MOTIR-9267) — refused where the edge is written, as the append does,
+        // and before the write. A `planned` plan is held by the before/after
+        // gate below.
+        if (
+          fresh.status === 'generating' &&
+          (input.blockedByRefs !== undefined || (input.patch?.blockedByAdd?.length ?? 0) > 0)
+        ) {
+          await assertBlockedByAcyclicAtAppend(
+            [...all.filter((i) => i.id !== item.id).map(toProposalNode), correctedNode],
+            new Set([correctedNode.id]),
             ctx,
             plan.projectId,
             tx,

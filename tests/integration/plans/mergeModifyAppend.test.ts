@@ -60,10 +60,10 @@ async function openPlan(fx: WorkItemFixture): Promise<string> {
 }
 
 describe('the gates judge the MERGED patch — the one row approve will apply', () => {
-  // A `blocked_by` cycle is judged against the committed edges too, so on a
-  // `generating` plan that arm runs at the CLOSE (`markPlanned`), and at the
-  // append only on a `revision: true` append — which runs the close's whole
-  // gate because no close is coming. Both moments see the merged row.
+  // A `blocked_by` cycle is judged against the committed edges too. On a
+  // `generating` plan it is refused at the append since MOTIR-9267, and a
+  // `revision: true` append runs the close's whole gate because no close is
+  // coming. Both see the merged row.
   async function cycleThroughMerge(fx: WorkItemFixture, planId: string, revision: boolean) {
     const epic = await seedItem(fx, 'The epic', 'epic');
     const x = await seedItem(fx, 'X', 'story', epic);
@@ -95,17 +95,17 @@ describe('the gates judge the MERGED patch — the one row approve will apply', 
       );
   }
 
-  it('a generating plan: the merged cycle is refused at the CLOSE', async () => {
+  it('a generating plan: the merged cycle is refused AT THE APPEND (MOTIR-9267), and the row is left as it was', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await openPlan(fx);
     const merge = await cycleThroughMerge(fx, planId, false);
-    await merge();
-    const rows = await adminDb.planItem.findMany({ where: { planId, op: 'modify' } });
-    expect(rows).toHaveLength(1);
 
-    const refusal = await plansService.markPlanned(planId, fx.ctx).catch((err: unknown) => err);
+    const refusal = await merge().catch((err: unknown) => err);
     expect(refusal).toBeInstanceOf(PlanRefGraphError);
     expect((refusal as PlanRefGraphError).reason).toBe('cycle');
+    const rows = await adminDb.planItem.findMany({ where: { planId, op: 'modify' } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.patch).toEqual({ title: 'X renamed' });
   });
 
   it('a revision append: the merged cycle is refused AT THE APPEND, and the row is left as it was', async () => {
