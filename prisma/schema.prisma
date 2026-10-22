@@ -9523,6 +9523,14 @@ model PlanChangeTurn {
   /// the NEXT mid-run turn reads it as `pendingOffer`, and a confirmation forwards
   /// THIS text, never the confirming turn's. Null on every other turn.
   forwardOffer          String?                @map("forward_offer") @db.Text
+  /// The ONE offer an `assistant` answer ended with (MOTIR-9219 · MOTIR-9288; ADR
+  /// conversation-turn-intent AMENDMENT 5 clause 1): `{ kind, requestMd, targetKey }`
+  /// plus the disposition core writes after the fact (`declinedAt` / `declinedById`,
+  /// `confirmedAt` / `confirmedById` / `confirmedSessionId`), the shape the guide's
+  /// `replanOffer` keeps. Undecided / superseded are DERIVED from the thread, never
+  /// stored. NOT `forwardOffer`, which is the mid-run forward offer. Null on every
+  /// other turn, including every turn written before the column.
+  answerOffer           Json?                  @map("answer_offer")
   /// The mailbox entry a mid-run `user` turn was FORWARDED as (MOTIR-7996), written
   /// in the same locked write that records the turn `plan_change`. An id, not an
   /// FK, for the reason `citations` gives: the mailbox is the pipe, this is the

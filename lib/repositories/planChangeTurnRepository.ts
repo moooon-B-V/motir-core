@@ -105,6 +105,19 @@ export const planChangeTurnRepository = {
     await tx.planChangeTurn.updateMany({ where: { id, workspaceId }, data: { guideTurn } });
   },
 
+  /** Rewrite ONE turn's `answer_offer` JSON (MOTIR-9288) — the one door an offer's
+   *  disposition is written through, shape for shape {@link setGuideTurn}. Only that
+   *  column changes. Repository only: the caller holds the session's row lock and
+   *  owns the rule. `workspaceId` scopes the write. Requires `tx`. */
+  async setAnswerOffer(
+    id: string,
+    workspaceId: string,
+    answerOffer: Prisma.InputJsonValue,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.planChangeTurn.updateMany({ where: { id, workspaceId }, data: { answerOffer } });
+  },
+
   /** CLAIM a `debug` turn's one write (MOTIR-7049): stamp `debugLandingClaimedAt`
    *  ONLY while it is still null — a compare-and-set in one statement. Returns
    *  whether THIS call claimed it. Called under the session's row lock, so two

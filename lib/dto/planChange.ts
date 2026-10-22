@@ -224,6 +224,15 @@ export interface PlanChangeTurnDto {
    */
   forwardOffer?: string | null;
   /**
+   * The ONE offer this `assistant` answer ended with (MOTIR-9288; AMENDMENT 5 clause
+   * 1) — mapped from the row's `answerOffer`. ⚠️ NOT {@link forwardOffer}: that is the
+   * mid-run offer to forward a turn to a running planner, a different offer on the
+   * same turn. Its state (undecided / superseded / declined / confirmed) is derived
+   * from the thread plus the disposition fields, never stored. Null on every other
+   * turn. Optional for the reason {@link anchorKey} is.
+   */
+  offer?: PlanAnswerOfferDto | null;
+  /**
    * Set on a mid-run `user` turn that was FORWARDED to the running planner: the
    * mailbox entry it went down as. The rail draws forwarded → queued → read from
    * it. Null on every other turn. Optional for the reason {@link anchorKey} is.
@@ -513,6 +522,40 @@ export interface CopyableSessionDto {
   /** The undecided plan the carry would MOVE into the new session, or `null` when
    *  only the conversation is carried. */
   waitingPlanId: string | null;
+}
+
+/**
+ * What an answer turn can OFFER (MOTIR-9288). A closed union: `'plan'` only today;
+ * the bug offer adds `'log_bug'` HERE, so the compiler finds every switch on it. A
+ * stored kind outside the union reads as no offer, never as a `plan` one.
+ */
+export type AnswerOfferKindDto = 'plan';
+
+/**
+ * The offer stored on an answer turn (MOTIR-9288) — the shape the guide's
+ * `GuideReplanOffer` keeps: what was offered, then the disposition core writes after
+ * the fact. Every disposition field is null on an undecided offer.
+ */
+export interface PlanAnswerOfferDto {
+  kind: AnswerOfferKindDto;
+  /** The request the answering session wrote — model output, never empty. */
+  requestMd: string;
+  /** The work item the offer would plan, or null when it carried none. */
+  targetKey: string | null;
+  declinedAt: string | null;
+  declinedById: string | null;
+  confirmedAt: string | null;
+  confirmedById: string | null;
+  /** The planning session the confirm started. */
+  confirmedSessionId: string | null;
+}
+
+/** What a writer passes to store an offer: what was offered, and no disposition —
+ *  the append writes every disposition field null. */
+export interface AnswerOfferInput {
+  kind: AnswerOfferKindDto;
+  requestMd: string;
+  targetKey: string | null;
 }
 
 /**

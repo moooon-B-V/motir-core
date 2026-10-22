@@ -51,6 +51,7 @@ import type { SubmittedRequirement } from '@/lib/ai/types';
 import { turnSubmitKey } from '@/lib/ai/turnSubmitKey';
 import { readGuideTurnRecord, type GuideTurnRecord } from '@/lib/ai/guideWorkItem';
 import type {
+  AnswerOfferInput,
   CopyableSessionDto,
   DebugLandingDto,
   PlanChangeSessionDto,
@@ -450,6 +451,8 @@ interface AppendTurn {
   runJobId?: string | null;
   /** The text an `assistant` answer offered to forward (MOTIR-7996). */
   forwardOffer?: string | null;
+  /** The ONE offer an `assistant` answer ended with (MOTIR-9288), stored undecided. */
+  answerOffer?: AnswerOfferInput | null;
 }
 
 async function appendLocked(
@@ -538,6 +541,23 @@ async function appendWithin(
                 workItemKey: turn.debugLanding.workItemKey,
                 title: turn.debugLanding.title,
                 createdInTriage: turn.debugLanding.createdInTriage,
+              },
+            }
+          : {}),
+        // The offer (MOTIR-9288): spelled field by field like `debugLanding`, with
+        // every disposition field written NULL, so the stored record is exactly the
+        // wire shape and an undecided offer never has an absent field.
+        ...(turn.answerOffer
+          ? {
+              answerOffer: {
+                kind: turn.answerOffer.kind,
+                requestMd: turn.answerOffer.requestMd,
+                targetKey: turn.answerOffer.targetKey,
+                declinedAt: null,
+                declinedById: null,
+                confirmedAt: null,
+                confirmedById: null,
+                confirmedSessionId: null,
               },
             }
           : {}),
@@ -2262,6 +2282,10 @@ export const planChangeSessionsService = {
       /** Set when the answer was given WITHOUT the code (MOTIR-8141): the stored
        *  face its notice is drawn from. */
       codeUnreadable?: PlanChangeTurnOutage | null;
+      /** The ONE offer this answer ended with (MOTIR-9288), persisted with the turn
+       *  in this append — undecided. No gate here: an offer that cannot start is a
+       *  state the rail renders, so the write refuses none. */
+      answerOffer?: AnswerOfferInput | null;
     },
     pctx: ProjectContext,
     address: PlanChangeSessionAddress,
@@ -2281,6 +2305,7 @@ export const planChangeSessionsService = {
         debugLanding: input.debugLanding ?? null,
         forwardOffer: input.forwardOffer ?? null,
         codeUnreadable: input.codeUnreadable ?? null,
+        answerOffer: input.answerOffer ?? null,
       },
       {},
       async (tx) =>
