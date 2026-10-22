@@ -39,6 +39,11 @@ const SAMPLES: Record<FontSetId, { text: string; code: string; script: string }>
     code: 'const 任务 = "已完成";',
     script: 'Han',
   },
+  'zh-Hant': {
+    text: '敏捷的棕色狐狸跳過了懶狗 · 直 骨',
+    code: 'const 工作 = "已完成";',
+    script: 'Han',
+  },
   ja: {
     text: 'いろはにほへと 素早い茶色の狐 · 直 骨',
     code: 'const 課題 = "完了";',
@@ -57,6 +62,7 @@ const REGION_GLYPHS = '直 骨';
 /** Notes the design attaches to one member (design-notes § 9.1). */
 const MEMBER_NOTES: Partial<Record<string, string>> = {
   'zh-Hans/serif/lxgw-wenkai-tc': 'Draws Traditional (inherited) forms, so never the default.',
+  'zh-Hant/serif/lxgw-wenkai-tc': 'A handwritten-style face, so a pick rather than the default.',
 };
 
 /** The apply-by-name panel's member (design-notes § 9.3). */
