@@ -347,6 +347,8 @@ interface EngineEstimateDto {
   profilesVersion: string;
   categoryRuleVersion: string;
   cadence: EngineCadence;
+  plannedPerMonth: { low: number; high: number };
+  runPerMonth: { low: number; high: number };
   credits: { low: number; high: number };
   perItemCredits: Record<EngineLane, number>;
   split: { count: number; categories: { key: string; weight: number; models: string[] }[] };
@@ -356,7 +358,7 @@ interface EngineEstimateDto {
     credits: number | null;
     exceeded: boolean;
     excessCredits: number;
-    outcome: 'within_ladder' | 'larger_pool' | 'top_ups_only';
+    outcome: 'within_ladder' | 'larger_pool' | 'largest_pool' | 'top_ups_only';
   };
 }
 interface EngineEmptyCategoryDto {
@@ -386,6 +388,8 @@ const ESTIMATE_CONTRACT: EngineEstimateDto = {
   profilesVersion: 'profiles-contract',
   categoryRuleVersion: 'rule-contract',
   cadence: 'annual',
+  plannedPerMonth: { low: 10, high: 40 },
+  runPerMonth: { low: 10, high: 40 },
   credits: { low: 300, high: 2400 },
   perItemCredits: { planning: 10, running: 20 },
   split: {
@@ -423,7 +427,8 @@ const CATEGORIES_CONTRACT: EngineCategoriesDto = {
 };
 
 const CALCULATOR_REQUEST = {
-  itemsPerMonth: { low: 10, high: 40 },
+  plannedPerMonth: { low: 10, high: 40 },
+  runPerMonth: { low: 10, high: 40 },
   categories: ['band-1', 'band-2'],
   cadence: 'annual' as const,
 };
@@ -473,7 +478,7 @@ describe('billing boundary contract — the public calculator through the real c
     );
   });
 
-  it('the request is the engine’s three keys and nothing else', async () => {
+  it('the request is the engine’s four keys and nothing else', async () => {
     const { organizationId, owner } = await makeOrg();
     answer(200, ESTIMATE_CONTRACT);
     await billingService.estimateCalculator({
@@ -482,7 +487,12 @@ describe('billing boundary contract — the public calculator through the real c
       body: CALCULATOR_REQUEST,
     });
     const sent = JSON.parse(String(fetchMock.mock.calls[0]![1]?.body)) as Record<string, unknown>;
-    expect(Object.keys(sent).sort()).toEqual(['cadence', 'categories', 'itemsPerMonth']);
+    expect(Object.keys(sent).sort()).toEqual([
+      'cadence',
+      'categories',
+      'plannedPerMonth',
+      'runPerMonth',
+    ]);
   });
 
   it('the strict-key refusal: an unknown key is refused by name and never sent', async () => {

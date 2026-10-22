@@ -421,7 +421,17 @@ export type CalculatorCadence = (typeof CALCULATOR_CADENCES)[number];
 
 export type CalculatorLane = 'planning' | 'running';
 
-export type CalculatorCeilingOutcome = 'within_ladder' | 'larger_pool' | 'top_ups_only';
+/**
+ * Where the high end lands (motir-ai docs/contract.md): inside the ladder, on a larger
+ * pool that covers it, on the LARGEST larger pool with top-ups for the rest
+ * (`largest_pool`, MOTIR-8988 approved 2026-10-22), or on top-ups alone when the
+ * cadence offers no larger pool.
+ */
+export type CalculatorCeilingOutcome =
+  | 'within_ladder'
+  | 'larger_pool'
+  | 'largest_pool'
+  | 'top_ups_only';
 
 const calculatorCount = z.number().int().min(0).max(CALCULATOR_REQUEST_LIMITS.maxItemsPerMonth);
 
@@ -436,23 +446,36 @@ const calculatorCategoriesSchema = z
  * `quantity`, a `seats`, an organization id) is refused by name rather than
  * forwarded or dropped. `cadence` defaults to the engine's own default.
  */
+const calculatorRange = (name: string) =>
+  z
+    .object({ low: calculatorCount, high: calculatorCount })
+    .strict()
+    .refine((r) => r.low <= r.high, {
+      message: `${name}.low must not exceed ${name}.high`,
+      path: ['low'],
+    });
+
+/**
+ * Items are counted per lane (MOTIR-9224): items PLANNED in Motir a month and items
+ * RUN on Motir's runner a month. Either range may be 0–0, never both; the old single
+ * `itemsPerMonth` is refused by name as an unknown key.
+ */
 export const calculatorEstimateRequestSchema = z
   .object({
-    itemsPerMonth: z
-      .object({ low: calculatorCount, high: calculatorCount })
-      .strict()
-      .refine((r) => r.low <= r.high, {
-        message: 'itemsPerMonth.low must not exceed itemsPerMonth.high',
-        path: ['low'],
-      }),
+    plannedPerMonth: calculatorRange('plannedPerMonth'),
+    runPerMonth: calculatorRange('runPerMonth'),
     categories: calculatorCategoriesSchema,
     cadence: z.enum(CALCULATOR_CADENCES).default('annual'),
   })
-  .strict();
+  .strict()
+  .refine((r) => r.plannedPerMonth.high > 0 || r.runPerMonth.high > 0, {
+    message: 'plannedPerMonth and runPerMonth must not both be 0',
+    path: ['plannedPerMonth'],
+  });
 
 /** What the browser may send (cadence optional). */
 export type CalculatorEstimateRequestInput = z.input<typeof calculatorEstimateRequestSchema>;
-/** What motir-core forwards to the engine — exactly these three keys. */
+/** What motir-core forwards to the engine — exactly these four keys. */
 export type CalculatorEstimateRequestDTO = z.output<typeof calculatorEstimateRequestSchema>;
 
 /** The categories the pickers offer — a band with an EMPTY `models` is listed on purpose. */
@@ -488,6 +511,9 @@ export interface CalculatorEstimateDTO {
   profilesVersion: string;
   categoryRuleVersion: string;
   cadence: CalculatorCadence;
+  /** The two ranges the engine priced, echoed so the answer states what it priced. */
+  plannedPerMonth: { low: number; high: number };
+  runPerMonth: { low: number; high: number };
   credits: { low: number; high: number };
   perItemCredits: Record<CalculatorLane, number>;
   split: CalculatorSplitDTO;
@@ -498,7 +524,6 @@ export interface CalculatorEstimateDTO {
     credits: number | null;
     exceeded: boolean;
     excessCredits: number;
-    /** Where the high end lands: inside the ladder, on a larger pool, or on top-ups alone. */
     outcome: CalculatorCeilingOutcome;
   };
 }

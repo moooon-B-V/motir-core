@@ -17,7 +17,11 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status });
 }
 
-const INPUT = { itemsPerMonth: { low: 10, high: 40 }, categories: ['a', 'b'] };
+const INPUT = {
+  plannedPerMonth: { low: 10, high: 40 },
+  runPerMonth: { low: 5, high: 20 },
+  categories: ['a', 'b'],
+};
 
 describe('fetchCalculatorEstimate', () => {
   it('POSTs the composed body to the estimate path with no-store, and returns the answer', async () => {
@@ -36,7 +40,12 @@ describe('fetchCalculatorEstimate', () => {
     const f = stub(json(200, { kind: 'estimate' }));
     await fetchCalculatorEstimate(ORG, { ...INPUT, cadence: 'monthly' }, f);
     const sent = JSON.parse(String(f.mock.calls[0]![1]?.body)) as Record<string, unknown>;
-    expect(Object.keys(sent).sort()).toEqual(['cadence', 'categories', 'itemsPerMonth']);
+    expect(Object.keys(sent).sort()).toEqual([
+      'cadence',
+      'categories',
+      'plannedPerMonth',
+      'runPerMonth',
+    ]);
   });
 
   it('an empty_category answer arrives inside `answer`', async () => {
