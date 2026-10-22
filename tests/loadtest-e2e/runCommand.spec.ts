@@ -200,6 +200,13 @@ interface ReportJson {
   };
   bottleneck: { candidates: { name: string; state: string; reason: string | null }[] };
   tables: {
+    mix: {
+      state: string;
+      value?: {
+        rows: { class: string; servedRps: number | string }[];
+        total: { servedRps: number };
+      };
+    };
     routes: { state: string; value?: { route: string }[] };
     statements: { state: string; reason?: string };
   };
@@ -455,6 +462,21 @@ describe('the one run command, end to end (MOTIR-8682)', () => {
       'database (Neon load)',
     ])
       expect(md).toContain(`- ${label}`);
+    // MOTIR-9152 — the served agent mix, one row per class, summing to the served rps.
+    expect(report.tables.mix.state).toBe('ok');
+    expect(md).toContain(
+      '## Agent mix (steady window)\n\n| class | offered VUs | served rps | share | ok | empty | error | limited | p95 ms | p99 ms |',
+    );
+    const mixRows = report.tables.mix.value!.rows;
+    expect(mixRows.map((r) => r.class).slice(0, 6)).toEqual([
+      'read',
+      'write',
+      'claim',
+      'burst',
+      'run',
+      'readers',
+    ]);
+    expect(report.tables.mix.value!.total.servedRps).toBeCloseTo(report.servedRps!, 6);
     expect(report.tables.routes.state).toBe('ok');
     expect(md).toContain('## Per route (steady window)\n\n| route | rps | p95 ms | p99 ms |');
     expect(md).toContain('## Top statements by total-time delta');
