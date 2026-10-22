@@ -48,6 +48,7 @@ import { readCodeUnreadable } from '@/lib/planning/codeUnreadable';
 import { readCodeUnsearchable, type CodeUnsearchableRepo } from '@/lib/planning/codeUnsearchable';
 import { getJob } from '@/lib/ai/motirAiClient';
 import type { SubmittedRequirement } from '@/lib/ai/types';
+import { turnSubmitKey } from '@/lib/ai/turnSubmitKey';
 import { readGuideTurnRecord, type GuideTurnRecord } from '@/lib/ai/guideWorkItem';
 import type {
   CopyableSessionDto,
@@ -1185,6 +1186,21 @@ export function latestTurnAfterSubmission<
     if (t.role === 'user' && t.body.trim().length > 0) return t;
   }
   return null;
+}
+
+/**
+ * The idempotency key of a conversation's planning submit (MOTIR-9258): its
+ * newest `user` turn and the job the session held before this submit. A re-send,
+ * a double press and a Try again of a submit that never came back all reuse it,
+ * so motir-ai answers them with ONE job. A submit after a job the session already
+ * holds — a new turn, or Plan it again — is a new key, and runs fresh.
+ */
+export function planningSubmitKey(
+  turns: ReadonlyArray<Pick<PlanChangeTurn, 'id' | 'role' | 'seq'>>,
+  lastJobId: string | null,
+): string | undefined {
+  const latest = [...turns].sort((a, b) => b.seq - a.seq).find((t) => t.role === 'user');
+  return latest ? turnSubmitKey(latest.id, 'plan', lastJobId) : undefined;
 }
 
 /**
@@ -3097,6 +3113,12 @@ export const planChangeSessionsService = {
     // failure therefore also yields NO plan: `submitPlanEditJob` opens the Plan
     // only AFTER the job is accepted, so there is no `planId` to report and no
     // orphan row to clean up.
+    //
+    // KEYED (MOTIR-9258): a submit that outlives a waking motir-ai is re-sent under
+    // one key, and a repeat that comes back with a job already planned into gets
+    // that job's plan back (`createPlan`), never a second one.
+    const idempotencyKey = planningSubmitKey(turns, session.lastJobId);
+    const submitOpts = { sessionId: session.id, ...(idempotencyKey ? { idempotencyKey } : {}) };
     let submitted: { jobId: string; planId: string };
     try {
       submitted =
@@ -3106,11 +3128,9 @@ export const planChangeSessionsService = {
               session.targetKeys,
               pctx,
               requirement,
-              { sessionId: session.id },
+              submitOpts,
             )
-          : await aiPlanEditsService.submitAugment(intent, pctx, requirement, {
-              sessionId: session.id,
-            });
+          : await aiPlanEditsService.submitAugment(intent, pctx, requirement, submitOpts);
     } catch (err) {
       // A Plan it again whose job never started gives its claim back, so the
       // owner can accept again (MOTIR-7945).
@@ -3130,6 +3150,16 @@ export const planChangeSessionsService = {
         // record in the same update (MOTIR-7938), as the revise bind does.
         ...(clearFailure ? CLEARED_FAILURE_COLUMNS : {}),
       },
+      // A repeat answered with the same job records no second marker: the thread
+      // already says which job its intent became.
+      async (tx) =>
+        (await planChangeTurnRepository.findByJobIdAndRole(
+          session.id,
+          jobId,
+          'system',
+          pctx.workspaceId,
+          tx,
+        )) !== null,
     );
     // HEARTBEAT (MOTIR-2787). Submitting is the thread proving it is alive, so it
     // pushes the target lease out by a fresh window. Without this a conversation
