@@ -18,6 +18,7 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { PlanTargetLockedError, type PlanTargetWaitingCause } from '@/lib/planChange/errors';
 import { sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 import { restingStatusFor } from '@/lib/plans/restingStatus';
+import { PLAN_STALLED_AFTER_MS } from '@/lib/plans/planProgress';
 import { holdsWhile, planHoldFor, sessionHoldFor } from '@/lib/plans/planHold';
 import { planHoldKey, type PlanHoldDTO } from '@/lib/dto/plans';
 import { classifyBlockerReadiness } from '@/lib/workItems/blockerReadiness';
@@ -146,13 +147,22 @@ export interface PlanTargetHandOff {
  *  plan parks nothing of its own. Reported rather than silently skipped, so the sweep's own
  *  output says why it walked past a row its read had selected.
  *
+ *  `plan_generating` is MOTIR-9260's: a SESSION-held lock is also spared while one of
+ *  the session's plans is `generating` and has written within `PLAN_STALLED_AFTER_MS`
+ *  — a hosted walk that is still writing is a live author, not a dead one.
+ *
  *  `session_waiting` is MOTIR-7912's: the lease's holder session (or the session of
  *  the plan holding it) is failed-waiting or awaiting its person, so the hold is
  *  spared however old the lease is — the same dead-author argument, since a person
  *  is coming back. */
 export interface PlanTargetLockSweepEntry {
   workItemId: string;
-  outcome: PlanTargetReleaseOutcome | 'unattributable' | 'plan_awaiting_review' | 'session_waiting';
+  outcome:
+    | PlanTargetReleaseOutcome
+    | 'unattributable'
+    | 'plan_awaiting_review'
+    | 'plan_generating'
+    | 'session_waiting';
 }
 
 /**
@@ -1234,14 +1244,33 @@ export const planTargetLockService = {
       // plan up. A session lease is refreshed only by a turn, and neither a hosted
       // walk nor the person's review makes one, so without this the card went back
       // to the ready set half an hour after the last submit while its plan was
-      // still in review. Any `planned` / `stale` plan of the session spares it; a
-      // session with only a `generating` plan is the dead-author case and expires.
+      // still in review. Any `planned` / `stale` plan of the session spares it.
+      //
+      // ⚠️ AND SO DOES A `generating` PLAN THAT IS STILL WRITING (MOTIR-9260). A
+      // hosted walk routinely outlives the session lease after the person's last
+      // turn, and its item writes refresh the PLAN, never the lease — so the card
+      // left Planning mid-walk and the finished plan landed in review with its
+      // target already claimable. A `generating` plan is judged by its SILENCE, the
+      // rule the abandoned-plan sweep and the rail already use: written within
+      // `PLAN_STALLED_AFTER_MS` is a live author and spares the lock; silent past it
+      // is the dead-author case, and the lock expires as before.
       if (lock.sessionId) {
         const awaiting = await withWorkspaceServiceContext(lock.workspaceId, (tx) =>
           planRepository.countAwaitingDecisionBySession(lock.sessionId!, null, tx),
         );
         if (awaiting > 0) {
           entries.push({ workItemId: lock.workItemId, outcome: 'plan_awaiting_review' });
+          continue;
+        }
+        const writing = await withWorkspaceServiceContext(lock.workspaceId, (tx) =>
+          planRepository.countWritingBySession(
+            lock.sessionId!,
+            new Date(now.getTime() - PLAN_STALLED_AFTER_MS),
+            tx,
+          ),
+        );
+        if (writing > 0) {
+          entries.push({ workItemId: lock.workItemId, outcome: 'plan_generating' });
           continue;
         }
       }
