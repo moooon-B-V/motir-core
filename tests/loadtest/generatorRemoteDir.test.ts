@@ -81,7 +81,7 @@ function sftpPut(args: readonly string[]): CommandResult {
 
 /** `fly ssh console -C "sh -c '…'"` run for real against the mapped tree. */
 function shell(command: string): CommandResult {
-  const script = /^sh -c '(.*)'$/s.exec(command)?.[1];
+  const script = /^sh -c '([\s\S]*)'$/.exec(command)?.[1];
   if (script === undefined) return refused(`not a shell script: ${command}`);
   const r = spawnSync('sh', ['-c', remap(script)], { encoding: 'utf8' });
   return { code: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
