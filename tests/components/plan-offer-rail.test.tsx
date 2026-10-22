@@ -224,6 +224,19 @@ describe('the undecided offer', () => {
     expect(onConfirmPlanOffer).not.toHaveBeenCalled();
   });
 
+  it('the pressed control carries its loading label while its answer is out', () => {
+    for (const [id, label] of [
+      ['plan-offer-confirm', en.confirming],
+      ['plan-offer-decline', en.declining],
+    ] as const) {
+      const { rerender } = renderRail();
+      fireEvent.click(screen.getByTestId(id));
+      rerender(rail({}, { answering: 't1' }));
+      expect(screen.getByTestId(id).textContent).toContain(label);
+      cleanup();
+    }
+  });
+
   it('draws the no-target line and keeps Confirm when the offer carries no target', () => {
     renderRail({ session: offered(offer({ targetKey: null })) });
     expect(screen.getByTestId('plan-offer-no-target').textContent).toContain(en.noTarget);
@@ -276,6 +289,18 @@ describe('the decided offers — read from the served state alone', () => {
     expect(screen.getByTestId('plan-offer').getAttribute('data-offer-state')).toBe('declined');
     expect(screen.getByTestId('plan-offer-declined').textContent).toContain(en.recorded);
     expect(screen.queryByTestId('plan-offer-confirm')).toBeNull();
+  });
+
+  it('a decided offer whose time is not on the record draws no by-line', () => {
+    renderRail({ session: offered(offer({ state: 'confirmed', confirmedSessionId: 's1' })) });
+    const confirmed = screen.getByTestId('plan-offer-confirmed').textContent ?? '';
+    expect(confirmed).toContain(en.startedHere);
+    expect(confirmed).not.toContain(en.startedBy.split('{')[0]!.trim());
+    cleanup();
+    renderRail({ session: offered(offer({ state: 'declined' })) });
+    const declined = screen.getByTestId('plan-offer-declined').textContent ?? '';
+    expect(declined).toContain(en.recorded);
+    expect(declined).not.toContain(en.declinedBy.split('{')[0]!.trim());
   });
 
   it('superseded: the one replaced line', () => {
