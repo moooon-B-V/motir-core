@@ -8464,6 +8464,21 @@
       "following": "Folgt dem Planer",
       "resume": "Dem Planer folgen",
       "resumedAnnouncement": "Folgt dem Planer wieder"
+    },
+    "history": {
+      "header": "Verlauf",
+      "regionAria": "Deine bisherigen Gespräche in diesem Projekt",
+      "status": {
+        "open": "Offen",
+        "ended": "Beendet"
+      },
+      "loading": "Deine Gespräche werden geladen…",
+      "loadingMore": "Weitere werden geladen…",
+      "end": "Keine älteren Gespräche",
+      "emptyTitle": "Noch keine Gespräche",
+      "emptyBody": "Fragen, die du stellst, und Pläne, die du in diesem Projekt beginnst, werden hier aufgeführt.",
+      "error": "Deine Gespräche konnten nicht geladen werden.",
+      "rowAria": "{title} · {status} · aktiv {when}"
     }
   },
   "codeHealth": {

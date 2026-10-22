@@ -116,6 +116,7 @@ import {
 } from '@/components/planning/SessionWaitingParts';
 import { workbenchTabHref } from '@/lib/workbench/tab';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
+import { PlanHistorySection } from '@/components/planning/PlanHistorySection';
 
 // The planning workspace's CHAT RAIL on an established project (Subtask
 // MOTIR-1730; design `plan-change-conversation.mock.html` panels 3 + 6). Changing
@@ -344,6 +345,12 @@ export interface PlanChangeRailProps {
   onAnswerRunPause?: (choice: 'start_over' | 'apply' | 'resume') => void;
   /** "N earlier notes" (MOTIR-8064): page earlier narration sentences in. */
   onShowEarlierNarration?: () => void;
+  /**
+   * OPEN one of the viewer's past conversations from the History section (Story
+   * MOTIR-9218 · MOTIR-9307; design MOTIR-9305). Optional: a host that offers no
+   * History draws no section. A Visitor never gets one, whatever the host passes.
+   */
+  onOpenSession?: (sessionId: string) => void;
 }
 
 export function PlanChangeRail({
@@ -387,8 +394,10 @@ export function PlanChangeRail({
   onSelectProposal,
   onAnswerRunPause,
   onShowEarlierNarration,
+  onOpenSession,
 }: PlanChangeRailProps) {
   const t = useTranslations('planningWorkspace');
+  const readerRoutes = useReaderRoutes();
   const tp = useTranslations('approvalGate.planApproval');
   const tRefusal = useTranslations('approvalGate.refusal.alreadyDecided');
   // An ASKED plan (MOTIR-6037): its gate is awaiting, so the review block is the gate's
@@ -856,6 +865,16 @@ export function PlanChangeRail({
           />
         ) : null}
       </div>
+
+      {/* HISTORY (MOTIR-9307; design MOTIR-9305 panel 1): the viewer's own past
+          conversations, collapsed, between the head and the thread. A member's
+          alone — a Visitor's reader routes carry the project identifier. */}
+      {onOpenSession && readerRoutes.identifier === null ? (
+        <PlanHistorySection
+          currentSessionId={state.session?.id ?? null}
+          onOpenSession={onOpenSession}
+        />
+      ) : null}
 
       <div
         ref={logRef}

@@ -1271,6 +1271,9 @@ function PlanWorkspaceHost({
           onResume={() => void resume()}
           canResume={state.reopened?.mine !== false || canManage}
           onShowEarlierNarration={() => void showEarlierNarration()}
+          // HISTORY (MOTIR-9307): the section is drawn; opening a row in the overlay
+          // is MOTIR-9308's, which replaces this handler.
+          onOpenSession={() => {}}
           gateView={gateView}
           declining={declineFrom === 'rail'}
           onRequestDecline={() => setDeclineFrom('rail')}
