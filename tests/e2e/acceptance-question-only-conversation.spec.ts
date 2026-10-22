@@ -284,8 +284,10 @@ test('a question-only conversation is never waiting on you, ends on the lease, a
 
   await chapter('Plans: nothing has reached planning yet', async () => {
     await page.goto('/plans');
-    await expect(page.getByText(sessions.emptyTitle)).toBeVisible({ timeout: FIRST_PAINT_MS });
-    await expect(page.getByText(sessions.emptyDescription)).toBeVisible();
+    await expect(page.getByRole('main').getByText(sessions.emptyTitle)).toBeVisible({
+      timeout: FIRST_PAINT_MS,
+    });
+    await expect(page.getByRole('main').getByText(sessions.emptyDescription)).toBeVisible();
     await expect(tabStrip(page)).toHaveCount(0);
     await expect(sessionRow(page, questionId)).toHaveCount(0);
     await beat();
