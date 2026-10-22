@@ -6881,8 +6881,7 @@
       "hintDefault": "Ein paar Sätze genügen. Nach dem Rest fragt Motir.",
       "hintCarried": "Ergänzen oder verfeinern Sie alles, bevor Sie fortfahren – der Discovery-Chat übernimmt ab hier.",
       "importTitle": "Sie haben schon ein Projekt?",
-      "importDesc": "Motir liest Ihren Code, Ihre Aufgaben und den bisherigen Verlauf, bevor es etwas ändert, und plant dann die nächsten Schritte. Was ausgeliefert wird, entscheiden Sie.",
-      "importCta": "Auch das können wir viben"
+      "importProject": "Projekt importieren"
     },
     "import": {
       "title": "Bestehendes Projekt importieren",

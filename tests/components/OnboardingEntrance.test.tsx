@@ -6,8 +6,9 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 // The onboarding ENTRANCE fork (Subtask 7.22.4 / MOTIR-1462), re-laid by
 // MOTIR-8253 onto the vibe layout (`design/onboarding-entrance/
 // onboarding-entrance--vibe-layout.mock.html`, design-notes.md § "2026-10-11"
-// and Revisions 1–2): a full-width hero whose control is the idea box, and ONE
-// import section band under it. This unit renders the two designed panels and
+// and Revisions 1–2; refined by MOTIR-8935 to `onboarding-entrance--refinements.mock.html`,
+// § "2026-10-21"): a full-width hero whose control is the idea box, with the
+// import door as the idea card's last row. This unit renders the two designed panels and
 // asserts the fork's shape + destinations; the routing itself (Start →
 // /onboarding/discovery, the import door → /onboarding/migrate) is proven end to
 // end in tests/e2e/onboarding-entrance.spec.ts.
@@ -44,7 +45,7 @@ function ideaBox(): HTMLTextAreaElement {
 }
 
 describe('OnboardingEntrance', () => {
-  it('renders the default panel: the hero, the idea box + Start, and the import section', () => {
+  it('renders the default panel: the hero, the idea box + Start, and the import row', () => {
     const { container } = renderWithIntl(<OnboardingEntrance carriedIdea={null} />);
 
     const h1 = screen.getByRole('heading', { level: 1, name: 'Vibe the project' });
@@ -81,15 +82,30 @@ describe('OnboardingEntrance', () => {
     expect(form.parentElement!.id).toBe(ONBOARDING_IDEA_CONTROL_ID);
     expect(form.closest('section[data-onboarding-hero]')).toBe(hero);
 
-    // The import door is ONE section band under the hero, with a link to the
-    // migrate wizard — not a row inside the hero.
-    const band = screen.getByRole('region', { name: 'Already have a project?' });
-    expect(band.hasAttribute('data-section-band')).toBe(true);
-    expect(hero.contains(band)).toBe(false);
-    screen.getByRole('heading', { level: 2, name: 'Already have a project?' });
-    const migrateLink = screen.getByRole('link', { name: /we can vibe it too/i });
-    expect(band.contains(migrateLink)).toBe(true);
-    expect(migrateLink.getAttribute('href')).toBe('/onboarding/migrate');
+    // The import door is the idea card's LAST row (MOTIR-8935): "Already have a
+    // project?" and an "Import project" link to the migrate wizard, after Start.
+    // The old section band below the hero, its heading and lede, are gone.
+    expect(container.querySelector('[data-section-band]')).toBeNull();
+    expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
+    expect(screen.queryByText(/reads your code, tasks and history/)).toBeNull();
+    expect(screen.queryByRole('link', { name: /we can vibe it too/i })).toBeNull();
+    const title = screen.getByText('Already have a project?');
+    const importLink = screen.getByRole('link', { name: /^import project$/i });
+    expect(importLink.getAttribute('href')).toBe('/onboarding/migrate');
+    expect(importLink.closest('form')).toBe(form);
+    expect(title.closest('form')).toBe(form);
+    expect(title.parentElement).toBe(importLink.parentElement);
+    expect(
+      start.compareDocumentPosition(importLink) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // motir.co's warm decision fill (design-notes.md § "2026-10-21", Change 1).
+    expect(importLink.className.split(/\s+/)).toEqual(
+      expect.arrayContaining([
+        'bg-(--el-showcase-decision)',
+        'text-(--el-showcase-decision-text)',
+        'border-transparent',
+      ]),
+    );
   });
 
   it('draws no eyebrow chip, no "OR" divider and no centred column (MOTIR-8250 F1/F2)', () => {
@@ -120,6 +136,17 @@ describe('OnboardingEntrance', () => {
     expect(document.activeElement).toBe(ideaBox());
   });
 
+  it('draws no highlight ring on the idea card; its focus cue is the stronger border (MOTIR-8935)', () => {
+    renderWithIntl(<OnboardingEntrance carriedIdea={null} />);
+    const classes = ideaBox().closest('form')!.className.split(/\s+/);
+    expect(classes.filter((c) => c.includes('ring'))).toEqual([]);
+    expect(classes.filter((c) => c.startsWith('focus-within:'))).toEqual([]);
+    expect(classes).toContain('border-(--el-border)');
+    expect(classes).toContain('has-[textarea:focus]:border-(--el-border-strong)');
+    // The textarea stays keyboard-focusable.
+    expect(ideaBox().tabIndex).toBe(0);
+  });
+
   it('⌘/Ctrl + Enter submits the idea to startPlanningAction; a bare Enter does not', async () => {
     renderWithIntl(<OnboardingEntrance carriedIdea={null} />);
     const box = ideaBox();
@@ -143,7 +170,7 @@ describe('OnboardingEntrance', () => {
     expect(startPlanningAction).toHaveBeenCalledTimes(2);
   });
 
-  it('renders the carried-over panel: pre-filled idea, Continue CTA, NO import section', () => {
+  it('renders the carried-over panel: pre-filled idea, Continue CTA, NO import row', () => {
     const idea = 'A leave-tracking app for a 20-person startup.';
     renderWithIntl(<OnboardingEntrance carriedIdea={idea} />);
 
@@ -161,9 +188,9 @@ describe('OnboardingEntrance', () => {
     // The CTA becomes "Continue with this idea".
     screen.getByRole('button', { name: /continue with this idea/i });
 
-    // Arriving with an idea in hand = starting fresh: the import section is dropped.
-    expect(screen.queryByRole('region', { name: 'Already have a project?' })).toBeNull();
-    expect(screen.queryByRole('link', { name: /we can vibe it too/i })).toBeNull();
+    // Arriving with an idea in hand = starting fresh: the import row is dropped.
+    expect(screen.queryByText('Already have a project?')).toBeNull();
+    expect(screen.queryByRole('link', { name: /import project/i })).toBeNull();
     expect(screen.queryByText('OR')).toBeNull();
   });
 });

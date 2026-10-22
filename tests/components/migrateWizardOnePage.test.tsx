@@ -168,6 +168,33 @@ describe('the bar', () => {
     const exit = screen.getByRole('link', { name: 'Save & exit' });
     expect(exit.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
+
+  it('colours "Start from an idea instead" in the accent ink, tinting on hover (MOTIR-8935)', () => {
+    fakeFetch(() => json({}, 404));
+    renderWithIntl(
+      <MigrateWizard initialRun={makeRun()} projectName="Quiet Harbor" userInitial="Y" />,
+    );
+    const back = screen.getByRole('link', { name: 'Start from an idea instead' });
+    expect(back.getAttribute('href')).toBe('/onboarding/discovery');
+    const classes = back.className.split(/\s+/);
+    // The design's colour (design-notes.md § "2026-10-21", Change 3) replaces
+    // the plain secondary ink, border and the bar's neutral hover.
+    expect(classes).toEqual(
+      expect.arrayContaining([
+        'text-(--el-accent-on-surface)',
+        'border-(--el-accent-on-surface)',
+        'hover:bg-(--el-tint-sky)',
+        'focus-visible:ring-(--focus-ring-color)',
+      ]),
+    );
+    expect(classes).not.toContain('text-(--el-text)');
+    expect(classes).not.toContain('border-(--el-button-border)');
+    expect(classes).not.toContain('hover:bg-(--el-page-bg)');
+    // Save & exit stays a plain ghost: the bar has one coloured control.
+    expect(screen.getByRole('link', { name: 'Save & exit' }).className).not.toContain(
+      '--el-accent-on-surface',
+    );
+  });
 });
 
 describe('Connect notices the connection by itself (Revision 1)', () => {

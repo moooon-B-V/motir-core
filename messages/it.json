@@ -6881,8 +6881,7 @@
       "hintDefault": "Bastano poche frasi. Per il resto, le domande le fa Motir.",
       "hintCarried": "Aggiungi o perfeziona qualsiasi cosa prima di continuare: da qui prosegue la chat di scoperta.",
       "importTitle": "Hai già un progetto?",
-      "importDesc": "Motir legge il tuo codice, le tue attività e la tua cronologia prima di cambiare qualsiasi cosa, poi pianifica i passi successivi. Sei tu a decidere cosa viene rilasciato.",
-      "importCta": "Anche quello si fa a vibe"
+      "importProject": "Importa progetto"
     },
     "import": {
       "title": "Importa un progetto esistente",
