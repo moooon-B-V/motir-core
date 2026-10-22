@@ -8,10 +8,11 @@ import {
   type PlanProgressStep,
 } from '@/lib/plans/planProgress';
 
-// MOTIR-8417 — the Motir mark AT WORK in the planning rail's header (Story
-// MOTIR-8413; `design/ai-chat/design-notes.md` § _Motir at work_ › _Where the mark
-// sits_). The view is total over `atWork`; the wrapper reads `readPlanAtWork`
-// through the one clock and never re-derives it; the mark is decorative.
+// MOTIR-8417 — the Motir mark AT WORK (Story MOTIR-8413), moved by MOTIR-9213 from
+// the rail header to the working turn's avatar, where it flows
+// (`design/ai-chat/design-notes.md` § _The Motir mark at work_). The view is total
+// over `atWork`; the wrapper reads `readPlanAtWork` through the one clock and never
+// re-derives it, ORed with any other job streaming; the mark is decorative.
 
 const T0 = Date.parse('2026-10-08T14:00:00.000Z');
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -75,12 +76,19 @@ describe('PlanAtWorkMarkView — total over atWork', () => {
     expect(off.container.textContent).toBe('');
   });
 
-  it('composes the shipped glyph as the direct child the at-work rule names', () => {
+  it('is the 28 px ink disc, clipping, around the inverted glyph at 17 px (MOTIR-9213)', () => {
     render(<PlanAtWorkMarkView atWork />);
-    const glyph = mark().firstElementChild!;
+    expect(mark().className).toContain('plan-at-work-mark');
+    for (const c of ['size-7', 'overflow-hidden', 'rounded-full', 'bg-(--el-accent)']) {
+      expect(mark().className).toContain(c);
+    }
+    const inverted = mark().firstElementChild!;
+    expect(inverted.className).toBe('brand-inv');
+    const glyph = inverted.firstElementChild!;
     expect(glyph.tagName.toLowerCase()).toBe('svg');
     expect(glyph.getAttribute('class')).toBe('brand-glyph');
-    expect(mark().className).toContain('plan-at-work-mark');
+    expect(glyph.getAttribute('width')).toBe('17');
+    expect(glyph.getAttribute('height')).toBe('17');
   });
 
   it('is decorative: aria-hidden, and no role, name, live region or tab stop in its subtree', () => {
@@ -131,6 +139,20 @@ describe('PlanAtWorkMark — off the one clock', () => {
     expect(atWork()).toBe('true');
     r.rerender(<PlanAtWorkMark progress={null} />);
     expect(atWork()).toBe('false');
+  });
+
+  it('any other Motir AI job streaming ⇒ at work, with no plan at all (MOTIR-9213)', () => {
+    const r = render(<PlanAtWorkMark progress={null} turnStreaming />);
+    expect(atWork()).toBe('true');
+    r.rerender(<PlanAtWorkMark progress={null} turnStreaming={false} />);
+    expect(atWork()).toBe('false');
+  });
+
+  it('a stalled plan with no other job streaming ⇒ still; a streaming turn keeps it moving', () => {
+    const r = render(<PlanAtWorkMark progress={snap()} failing />);
+    expect(atWork()).toBe('false');
+    r.rerender(<PlanAtWorkMark progress={snap()} failing turnStreaming />);
+    expect(atWork()).toBe('true');
   });
 
   it('several live steps still draw ONE mark', () => {

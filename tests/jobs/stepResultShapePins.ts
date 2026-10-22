@@ -494,8 +494,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     // run. And the replayed value is already safe at the boundary — the change
     // only ADDS a member, so every memo written under the old shape is a valid
     // value of the new one, and the handler returns it without reading it.
+    //
+    // `plan_generating` added by MOTIR-9260: a session-held lock whose session has a
+    // `generating` plan that wrote within `PLAN_STALLED_AFTER_MS` is a live walk, so
+    // it is spared. Id KEPT for the same reason — the change only ADDS a member.
     shape:
-      '{ entries: Array<{ outcome: "left_as_is" | "plan_awaiting_review" | "rested" | "restored" | "session_waiting" | "unattributable"; workItemId: string }>; released: number }',
+      '{ entries: Array<{ outcome: "left_as_is" | "plan_awaiting_review" | "plan_generating" | "rested" | "restored" | "session_waiting" | "unattributable"; workItemId: string }>; released: number }',
   },
   'resolve-target-v2': {
     file: 'lib/jobs/indexFleetSteps.ts',

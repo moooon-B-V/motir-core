@@ -313,19 +313,31 @@ export interface MockStateScan {
 
 export const LINE_ATTRIBUTE = 'data-mock-source-line';
 
+/** A tag name, read at a known offset — sticky, so it never scans past it. */
+const TAG_NAME_RE = /[a-zA-Z][-a-zA-Z0-9:]*/y;
+
 /** The same HTML with `data-mock-source-line="<n>"` on every opening tag. */
 export function stampSourceLines(html: string): string {
-  const elements = parseElements(html);
-  let out = html;
-  // Descending, so an earlier insertion never moves a later offset.
-  for (let i = elements.length - 1; i >= 0; i -= 1) {
-    const element = elements[i]!;
-    const name = out.slice(element.offset + 1).match(/^[a-zA-Z][-a-zA-Z0-9:]*/);
+  // ONE forward pass that collects the pieces and joins them once (MOTIR-9261).
+  // It used to splice each stamp into the whole string, last tag first, which
+  // copies the document once per tag: on a 2 MB compiled mock that was 21 of the
+  // 54 seconds its scan took, and it is what pushed this spec past the lane's
+  // ten-minute ceiling. The offsets are the source's own, so reading the tag
+  // name off `html` is what the splice read too — every insertion it had made by
+  // then sat after this tag.
+  const elements = [...parseElements(html)].sort((a, b) => a.offset - b.offset);
+  const parts: string[] = [];
+  let from = 0;
+  for (const element of elements) {
+    TAG_NAME_RE.lastIndex = element.offset + 1;
+    const name = TAG_NAME_RE.exec(html);
     if (!name) continue;
     const at = element.offset + 1 + name[0].length;
-    out = `${out.slice(0, at)} ${LINE_ATTRIBUTE}="${element.line}"${out.slice(at)}`;
+    parts.push(html.slice(from, at), ` ${LINE_ATTRIBUTE}="${element.line}"`);
+    from = at;
   }
-  return out;
+  parts.push(html.slice(from));
+  return parts.join('');
 }
 
 /* ──────────────────────────── colour resolution ──────────────────────────── */
@@ -717,15 +729,27 @@ function inScope(host: El, groups: Group[]): boolean {
 function resolveAt(window: Window, host: El, value: string): string | null {
   // `currentcolor` is substituted BEFORE the probe is planted, never by it —
   // see `substituteCurrentColour`'s header for why the probe cannot answer it.
-  const declared = substituteCurrentColour(window, host, value);
+  const wrapper = plantColourProbe(window, host, substituteCurrentColour(window, host, value));
+  const resolved = readColourProbe(window, wrapper);
+  wrapper.remove();
+  return resolved;
+}
+
+/** Plant `resolveAt`'s probe — a sentinel-painted wrapper holding it — and return the wrapper. */
+function plantColourProbe(window: Window, host: El, declared: string): El {
   const wrapper = window.document.createElement('span');
   wrapper.setAttribute('style', `color: ${SENTINEL}`);
   const probe = window.document.createElement('span');
   probe.setAttribute('style', `color: ${declared}`);
   wrapper.appendChild(probe);
   host.appendChild(wrapper);
+  return wrapper as unknown as El;
+}
+
+/** Read what `plantColourProbe`'s probe computed, or null where the sentinel shows through. */
+function readColourProbe(window: Window, wrapper: El): string | null {
+  const probe = wrapper.firstElementChild as El;
   const resolved = window.getComputedStyle(probe).getPropertyValue('color').trim();
-  wrapper.remove();
   // The sentinel showing through means the declaration was invalid at computed
   // value time — an undefined token — and NOT that the site paints magenta.
   return toHex(resolved) === SENTINEL ? null : resolved;
@@ -749,14 +773,181 @@ const CARRIER_PROPERTY = '--mock-state-ink-background';
  */
 function expandAt(window: Window, host: El, value: string): string | null {
   if (!value.includes('var(')) return value.trim();
+  const probe = plantExpandProbe(window, host, value);
+  const expanded = readExpandProbe(window, probe);
+  probe.remove();
+  return expanded;
+}
+
+/** Plant `expandAt`'s probe — a span declaring the custom property — and return it. */
+function plantExpandProbe(window: Window, host: El, value: string): El {
   const probe = window.document.createElement('span');
   probe.setAttribute('style', `${PROBE_PROPERTY}: ${value}`);
   host.appendChild(probe);
+  return probe as unknown as El;
+}
+
+/** Read what `plantExpandProbe`'s probe expanded to, or null where a token is undefined. */
+function readExpandProbe(window: Window, probe: El): string | null {
   const expanded = window.getComputedStyle(probe).getPropertyValue(PROBE_PROPERTY).trim();
-  probe.remove();
   // An undefined token makes the custom property guaranteed-invalid: it reads
   // back empty, or with the unresolved `var()` still in it.
   return expanded === '' || expanded.includes('var(') ? null : expanded;
+}
+
+/**
+ * Every probe read `resolveStateBackground` makes, MEMOISED per host and value,
+ * and filled IN BATCHES before the scan asks for any of them (MOTIR-9261).
+ *
+ * ⚠️ WHY A BATCH, AND NOT ONLY A MEMO. A probe is a mutation, and happy-dom
+ * drops EVERY cache it keeps on a mutation — the computed styles, every
+ * `matches()` answer and every `querySelectorAll()` result, including the
+ * `style,link` lookup it repeats over the whole document for each computed
+ * style it builds. Planted one at a time, each probe was computed against a
+ * cold engine: on a 2 MB compiled mock, 317 probes took 18 of the scan's 28
+ * seconds. Planted together and read together, the cache dropped once serves
+ * every read after the first, because their ancestors are the same elements.
+ *
+ * ⚠️ AND THE BATCH IS AN ANTICHAIN, which is what keeps every answer the one
+ * a lone probe gets. A probe is a child appended to its host, so a probe in a
+ * host ABOVE another host would sit beside that host's own ancestors and could
+ * change what a structural selector (`:last-child`, `:empty`, `~`) matches on
+ * them. Hosts are therefore grouped by how many OTHER hosts contain them: no
+ * host in a group contains another, so no probe in a group sits on another
+ * probe's ancestor chain. Most mocks need one group; nesting adds one per level.
+ *
+ * A context-free value — no `var()`, no `currentcolor`, no CSS-wide keyword —
+ * computes to the same colour wherever it is planted, so it is memoised once
+ * per document rather than once per host: those are the operands of a mix,
+ * which `resolveStateBackground` resolves one at a time after the batch.
+ */
+interface ProbeMemo {
+  colourAt(host: El, value: string): string | null;
+  expandAt(host: El, value: string): string | null;
+  /** Fill the memo for these state backgrounds at these hosts, in batches. */
+  prefill(requests: { host: El; value: string }[]): void;
+}
+
+const CONTEXT_DEPENDENT_RE = /var\(|currentcolor|\b(?:inherit|initial|unset|revert)\b/i;
+
+function createProbeMemo(window: Window): ProbeMemo {
+  const colours = new Map<El, Map<string, string | null>>();
+  const expansions = new Map<El, Map<string, string | null>>();
+  const literals = new Map<string, string | null>();
+  const memoOf = (store: Map<El, Map<string, string | null>>, host: El) => {
+    let byValue = store.get(host);
+    if (!byValue) store.set(host, (byValue = new Map()));
+    return byValue;
+  };
+  const memoSet = (store: Map<El, Set<string>>, host: El) => {
+    let values = store.get(host);
+    if (!values) store.set(host, (values = new Set()));
+    return values;
+  };
+
+  const colourAt = (host: El, value: string) => {
+    if (!CONTEXT_DEPENDENT_RE.test(value)) {
+      if (!literals.has(value)) literals.set(value, resolveAt(window, host, value));
+      return literals.get(value)!;
+    }
+    const memo = memoOf(colours, host);
+    if (!memo.has(value)) memo.set(value, resolveAt(window, host, value));
+    return memo.get(value)!;
+  };
+
+  const expandAtHost = (host: El, value: string) => {
+    if (!value.includes('var(')) return value.trim();
+    const memo = memoOf(expansions, host);
+    if (!memo.has(value)) memo.set(value, expandAt(window, host, value));
+    return memo.get(value)!;
+  };
+
+  /** Plant every probe in `pending`, one antichain of hosts at a time, then read and remove them. */
+  const batch = <R extends { host: El; value: string }>(
+    pending: R[],
+    plant: (request: R) => El,
+    read: (planted: El) => string | null,
+    store: Map<El, Map<string, string | null>>,
+  ) => {
+    for (const group of antichains(pending)) {
+      const planted = group.map((request) => ({ request, at: plant(request) }));
+      for (const { request, at } of planted)
+        memoOf(store, request.host).set(request.value, read(at));
+      for (const { at } of planted) at.remove();
+    }
+  };
+
+  /** The requests `wanted` keeps, once per host and value, that `store` has no answer for. */
+  const unseen = (
+    requests: { host: El; value: string }[],
+    wanted: (request: { host: El; value: string }) => boolean,
+    store: Map<El, Map<string, string | null>>,
+  ) => {
+    const seen = new Map<El, Set<string>>();
+    return requests.filter((request) => {
+      if (!wanted(request) || store.get(request.host)?.has(request.value)) return false;
+      const values = memoSet(seen, request.host);
+      if (values.has(request.value)) return false;
+      values.add(request.value);
+      return true;
+    });
+  };
+
+  const prefill = (requests: { host: El; value: string }[]) => {
+    // The engine first, as `resolveStateBackground` asks it: every value that
+    // names no mix. `currentcolor` is substituted for ALL of them before any
+    // probe is planted, so each reads its host's ink on an unprobed tree.
+    const colourRequests = unseen(
+      requests,
+      ({ value }) => !/color-mix\(/i.test(value) && CONTEXT_DEPENDENT_RE.test(value),
+      colours,
+    ).map((request) => ({
+      ...request,
+      declared: substituteCurrentColour(window, request.host, request.value),
+    }));
+    batch(
+      colourRequests,
+      ({ host, declared }) => plantColourProbe(window, host, declared),
+      (wrapper) => readColourProbe(window, wrapper),
+      colours,
+    );
+    // Then the expansion, for the values the engine could not compute: a mix,
+    // or a token whose probe read the sentinel back.
+    batch(
+      unseen(
+        requests,
+        ({ host, value }) =>
+          value.includes('var(') &&
+          (/color-mix\(/i.test(value) || colours.get(host)?.get(value) === null),
+        expansions,
+      ),
+      ({ host, value }) => plantExpandProbe(window, host, value),
+      (probe) => readExpandProbe(window, probe),
+      expansions,
+    );
+  };
+
+  return { colourAt, expandAt: expandAtHost, prefill };
+}
+
+/**
+ * Group the requests' hosts so that no host in a group contains another — by
+ * how many OTHER requested hosts are its ancestors. If A contains B, B counts
+ * at least one more than A, so the two never share a group.
+ */
+function antichains<T extends { host: El }>(requests: T[]): T[][] {
+  const hosts = new Set(requests.map((request) => request.host));
+  const level = new Map<El, number>();
+  for (const host of hosts) {
+    let count = 0;
+    for (let node = host.parentElement as El | null; node; node = node.parentElement as El | null) {
+      if (hosts.has(node)) count += 1;
+    }
+    level.set(host, count);
+  }
+  const groups: T[][] = [];
+  for (const request of requests) (groups[level.get(request.host)!] ??= []).push(request);
+  return groups.filter(Boolean);
 }
 
 /** `color-mix(<body>)` as the WHOLE value, or null. */
@@ -849,15 +1040,15 @@ type Resolved = { colour: string } | { undefinedToken: true } | { abstain: strin
  * to agree with a real engine, and a guess there is a number nobody can trust,
  * so it is named instead.
  */
-function resolveStateBackground(window: Window, host: El, value: string, depth = 0): Resolved {
+function resolveStateBackground(probes: ProbeMemo, host: El, value: string, depth = 0): Resolved {
   // The engine first, exactly as before: anything it can compute, it answers.
   // Only a value that NAMES a mix, or a token whose probe read the sentinel
   // back (which a token holding a mix does), is expanded and mixed here.
   if (!/color-mix\(/i.test(value)) {
-    const resolved = resolveAt(window, host, value);
+    const resolved = probes.colourAt(host, value);
     if (resolved !== null) return { colour: resolved };
   }
-  const expanded = expandAt(window, host, value);
+  const expanded = probes.expandAt(host, value);
   const body = expanded === null ? null : colourMixBody(expanded);
   if (body === null) return { undefinedToken: true };
   const head = `the state background ${JSON.stringify(value.trim())} is a color-mix() `;
@@ -879,7 +1070,7 @@ function resolveStateBackground(window: Window, host: El, value: string, depth =
     const match = /^(?:([\d.]+)%\s+)?([\s\S]+?)(?:\s+([\d.]+)%)?$/.exec(operand);
     const text = match?.[2]?.trim() ?? '';
     const percent = match?.[1] ?? match?.[3];
-    const inner = resolveStateBackground(window, host, text, depth + 1);
+    const inner = resolveStateBackground(probes, host, text, depth + 1);
     if ('undefinedToken' in inner || 'abstain' in inner) return inner;
     const colour = parseColour(inner.colour);
     if (colour === null) {
@@ -1076,6 +1267,31 @@ function ownsText(element: El): boolean {
   );
 }
 
+/**
+ * Every element that owns text or holds an element that does — the only
+ * elements the subtree walk can rule on, or has to read a style from.
+ *
+ * ⚠️ THIS IS THE LANE'S BUDGET, NOT A NEW BOUNDARY (MOTIR-9261). The walk reads
+ * an element's own background only to decide whether to descend past it, and an
+ * element's ink only where it `ownsText`. Below an element that holds no text,
+ * neither question can produce a finding, so skipping it changes no verdict —
+ * and those subtrees (an SVG's paths, an icon's spans, an empty spacer) are most
+ * of a compiled mock's elements. Each element the engine is asked about costs a
+ * match of every rule's selector, re-parsed per element: on a 670 KB mock the
+ * walk's `ownBackground` reads were 11 of its 20 seconds.
+ */
+function textBearers(document: Doc): Set<El> {
+  const bearers = new Set<El>();
+  for (const element of document.querySelectorAll('*') as unknown as Iterable<El>) {
+    if (!ownsText(element)) continue;
+    for (let node: El | null = element; node && !bearers.has(node); ) {
+      bearers.add(node);
+      node = node.parentElement as El | null;
+    }
+  }
+  return bearers;
+}
+
 /** One read of a selector: its top-level list, and every REAL state pseudo-class in it. */
 interface SelectorParts {
   /** The selector list's members, each with its state pseudo-classes removed. */
@@ -1265,7 +1481,7 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
     // cache, and only a FAILING pair's `inkSource` mutates again. Measured over
     // all 270 mocks it saved ~8%: the larger cost is selector parsing, which
     // `flattenMockCss`'s `paintOnly` addresses (see `prunePaint`).
-    const plans: { rule: PaintRule; states: string[]; hosts: El[]; tints: Resolved[] }[] = [];
+    const plans: { rule: PaintRule; states: string[]; hosts: El[] }[] = [];
     for (const rule of rules) {
       if (!rule.background.trim()) continue;
       if (ATTRIBUTE_SELECTOR_RE.test(rule.selectorText)) attributeBackgroundRules += 1;
@@ -1299,15 +1515,22 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
         continue;
       }
 
-      plans.push({
-        rule,
-        states,
-        hosts,
-        tints: hosts.map((host) => resolveStateBackground(window, host, rule.background)),
-      });
+      plans.push({ rule, states, hosts });
     }
 
-    for (const { rule, states, hosts, tints } of plans) {
+    // Every host's tint is probed in one batch, then read from the memo — see
+    // `createProbeMemo` for why the order is the lane's budget (MOTIR-9261).
+    const probes = createProbeMemo(window);
+    probes.prefill(
+      plans.flatMap(({ rule, hosts }) => hosts.map((host) => ({ host, value: rule.background }))),
+    );
+    const resolvedPlans = plans.map((plan) => ({
+      ...plan,
+      tints: plan.hosts.map((host) => resolveStateBackground(probes, host, plan.rule.background)),
+    }));
+
+    const bearsText = textBearers(document);
+    for (const { rule, states, hosts, tints } of resolvedPlans) {
       for (const [index, host] of hosts.entries()) {
         const tint = tints[index]!;
         if ('abstain' in tint) {
@@ -1348,6 +1571,9 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
         const stack: El[] = [host];
         while (stack.length) {
           const element = stack.pop()!;
+          // A subtree holding no text has nothing to rule on, so it is never
+          // asked for a style at all (MOTIR-9261) — see `textBearers`.
+          if (!bearsText.has(element)) continue;
           if (element !== host && ownBackground(window, element)) continue;
           for (const child of element.children) stack.push(child as El);
           if (!ownsText(element) || isExempt(element)) continue;
