@@ -653,10 +653,14 @@ test('F. in Chinese, the question case shows no English fallback and no raw key'
   });
   await setReaderLanguage(page, seed.email, 'zh');
 
-  await chapter('The question is read and answered in Chinese', async () => {
+  await chapter('A Chinese reader opens the project thread', async () => {
     await page.goto('/dashboard');
     await expect(page.locator('html')).toHaveAttribute('lang', 'zh', { timeout: FIRST_PAINT_MS });
     await openProjectThread(page, new RegExp(zh.shell.aiCallout.actions.ask.title));
+    await beat();
+  });
+
+  await chapter('The question is read and answered in Chinese', async () => {
     const { settled } = await askAndSeeItRead(
       page,
       `${seed.loginKey} 是关于什么的？`,
@@ -672,7 +676,10 @@ test('F. in Chinese, the question case shows no English fallback and no raw key'
     await expect(answer(page, ANSWER).getByTestId('plan-change-citation-count')).toContainText(
       '依据 1 个工作项作答',
     );
+    await beat();
+  });
 
+  await chapter('No English fallback and no raw key in the rail', async () => {
     // No English fallback for any of the chrome this story touches, and no raw key.
     const text = (await rail(page).textContent()) ?? '';
     for (const english of [
