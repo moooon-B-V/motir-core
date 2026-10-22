@@ -62,6 +62,7 @@ let agent: MockAgent;
 /** Every `POST /v1/jobs` body the seam received, in order. */
 const wire: {
   jobKind: string;
+  idempotencyKey?: string;
   context: { guideContext?: GuideContext; code?: { repos?: { repoRef: string }[] } };
 }[] = [];
 
@@ -480,6 +481,45 @@ describe('out of credits', () => {
     const retry = await guide(post('/api/ai/guide', { sessionId: stored.id, turnId: turn.id }));
     expect(retry.status).toBe(200);
     expect(guideJobs()).toHaveLength(1);
+  });
+});
+
+describe('a submit that outlives a waking machine (MOTIR-9255)', () => {
+  it('⚠️ a job motir-ai ran after the answer was lost is the one the re-send gets — ONE job, one charge', async () => {
+    const card = await manualCard();
+    declareGuide([{ submit: 'late', guideTurn: { messageMd: 'Step one.', actions: [] } }]);
+
+    const opened = await open(card.identifier);
+
+    // Two posts reached motir-ai under one key, and only one job exists.
+    expect(guideWire()).toHaveLength(2);
+    const [first, second] = guideWire();
+    expect(first!.idempotencyKey).toBeTruthy();
+    expect(second!.idempotencyKey).toBe(first!.idempotencyKey);
+    expect(guideJobs()).toHaveLength(1);
+    // The turn holds THAT job, so the person gets the answer already paid for.
+    expect(opened.jobId).toBe(guideJobs()[0]!.jobId);
+    const settled = await settle(opened);
+    expect(settled.outcome).not.toBe('failed');
+  });
+
+  it('Try again on a jobless turn re-sends the SAME key the failed submit used', async () => {
+    const card = await manualCard();
+    declareGuide([{ submit: 'out_of_credits' }, { submit: 'accepted' }]);
+    expect((await guide(post('/api/ai/guide', { itemKey: card.identifier }))).status).toBe(402);
+
+    const stored = await adminDb.planChangeSession.findFirstOrThrow({
+      where: { origin: 'guide' },
+      include: { turns: true },
+    });
+    const turn = stored.turns.find((t) => t.role === 'user')!;
+    const retry = await guide(post('/api/ai/guide', { sessionId: stored.id, turnId: turn.id }));
+    expect(retry.status).toBe(200);
+
+    const keys = guideWire().map((b) => b.idempotencyKey);
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).toBe(keys[0]);
+    expect(keys[0]).toContain(turn.id);
   });
 });
 

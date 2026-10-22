@@ -82,7 +82,7 @@ function words(lang: Lang) {
   return {
     connect: m.onboardingMigrate.connect as ConnectCopy,
     indexHeading: m.onboardingMigrate.index.heading,
-    importCta: m.onboarding.entrance.importCta,
+    importProject: m.onboarding.entrance.importProject,
   };
 }
 
@@ -276,7 +276,7 @@ for (const lang of LANGS) {
       await expectLanguage(page, lang);
       const read = page.waitForResponse((r) => isConnectRead(r.url()));
       const accounts = page.waitForResponse((r) => isAccountsRead(r.url(), r.request().method()));
-      await page.getByRole('link', { name: words(lang).importCta }).click();
+      await page.getByRole('link', { name: words(lang).importProject }).click();
       await page.waitForURL('**/onboarding/migrate');
       expect((await read).status()).toBe(200);
       const identity = await accounts;

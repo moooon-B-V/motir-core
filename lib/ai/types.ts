@@ -627,6 +627,12 @@ export interface RequestEnvelope {
    * Absent on every other submit, so the body is byte-identical to before.
    */
   resume?: { planId: string; fromJobId: string };
+  /**
+   * The submit's idempotency key (MOTIR-9255; motir-ai's `JobRequest.idempotencyKey`): a
+   * repeat in the same project answers the job the first submit created. Sent on a
+   * conversation turn's submit only; absent elsewhere, so those bodies are unchanged.
+   */
+  idempotencyKey?: string;
 }
 
 /**

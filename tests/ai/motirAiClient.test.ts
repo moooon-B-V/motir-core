@@ -10,9 +10,11 @@ import {
   mintCodeGraphRunCredential,
   streamJob,
   MOTIR_AI_REQUEST_TIMEOUT_MS,
+  MOTIR_AI_SUBMIT_BUDGET_MS,
   type RequestActor,
 } from '@/lib/ai/motirAiClient';
 import { verifyJobToken } from '@/lib/ai/jobToken';
+import { turnSubmitKey } from '@/lib/ai/turnSubmitKey';
 import {
   MotirAiConfigError,
   MotirAiBadRequestError,
@@ -197,6 +199,117 @@ describe('submitJob — resume (MOTIR-7916)', () => {
       'readBackToken',
     ]);
     expect(resumed.resume).toEqual({ planId: 'plan-1', fromJobId: 'job-1' });
+  });
+});
+
+describe('submitJob — a keyed submit rides out a waking machine (MOTIR-9255)', () => {
+  /** A fetch that hangs until the caller's own AbortSignal fires. */
+  const hang = (_url: string, init: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+    });
+
+  beforeEach(() => {
+    // Time still flows, so the org-flag read before the post meets a live clock;
+    // the test jumps it forward over the deadline and the pauses.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Let the org-flag read reach the first post before time is jumped. */
+  async function untilPosted(fetchMock: ReturnType<typeof vi.fn>, calls = 1): Promise<void> {
+    await vi.waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(calls));
+  }
+
+  it('⚠️ a first attempt that TIMES OUT is re-sent under the SAME key, and the job it returns is the answer', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(hang)
+      .mockResolvedValueOnce(jsonResponse({ jobId: 'job_late', status: 'succeeded' }, 202));
+    vi.stubGlobal('fetch', fetchMock);
+    const key = turnSubmitKey('turn_1', 'guide_work_item', null);
+
+    const pending = submitJob('guide_work_item', tenant, {}, actor, { idempotencyKey: key });
+    await untilPosted(fetchMock);
+    await vi.advanceTimersByTimeAsync(MOTIR_AI_REQUEST_TIMEOUT_MS + 5_000);
+
+    await expect(pending).resolves.toEqual({ jobId: 'job_late' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const bodies = fetchMock.mock.calls.map((c) =>
+      JSON.parse((c[1] as RequestInit).body as string),
+    );
+    expect(bodies.map((b) => b.idempotencyKey)).toEqual([key, key]);
+    // One envelope, sent twice — the read-back token is minted once per job.
+    expect(bodies[1]).toEqual(bodies[0]);
+  });
+
+  it('re-sends a transport failure and a 5xx from a proxy that could not wake the machine', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce(jsonResponse({ code: 'internal_error', status: 502, title: 'x' }, 502))
+      .mockResolvedValueOnce(jsonResponse({ jobId: 'job_1', status: 'queued' }, 202));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const pending = submitJob('ask_project', tenant, {}, actor, { idempotencyKey: 'k' });
+    await untilPosted(fetchMock);
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    await expect(pending).resolves.toEqual({ jobId: 'job_1' });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('gives up TYPED once the budget is spent', async () => {
+    const fetchMock = vi.fn().mockImplementation(hang);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const pending = submitJob('ask_project', tenant, {}, actor, { idempotencyKey: 'k' });
+    const assertion = expect(pending).rejects.toBeInstanceOf(MotirAiUnavailableError);
+    await untilPosted(fetchMock);
+    await vi.advanceTimersByTimeAsync(MOTIR_AI_SUBMIT_BUDGET_MS);
+    await assertion;
+    // 30 s + 2 s pause + 30 s + 2 s pause + the 26 s left — never past the budget.
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('never re-sends a refusal that is not about reaching motir-ai', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ code: 'validation_error', status: 400, title: 'bad', detail: 'bad' }, 400),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      submitJob('ask_project', tenant, {}, actor, { idempotencyKey: 'k' }),
+    ).rejects.toBeInstanceOf(MotirAiBadRequestError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a KEYLESS submit is one attempt, as it always was — a re-send could create a second job', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(submitJob('noop', tenant, {}, actor)).rejects.toBeInstanceOf(
+      MotirAiUnavailableError,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body as string)).not.toHaveProperty(
+      'idempotencyKey',
+    );
+  });
+
+  it('keys one ATTEMPT of a turn: a re-send reuses it, a retry after a failed job does not', () => {
+    expect(turnSubmitKey('t1', 'ask_project', null)).toBe(turnSubmitKey('t1', 'ask_project', null));
+    expect(turnSubmitKey('t1', 'ask_project', 'job_failed')).not.toBe(
+      turnSubmitKey('t1', 'ask_project', null),
+    );
+    expect(turnSubmitKey('t1', 'guide_work_item', 'job_a')).not.toBe(
+      turnSubmitKey('t1', 'ask_project', 'job_a'),
+    );
   });
 });
 

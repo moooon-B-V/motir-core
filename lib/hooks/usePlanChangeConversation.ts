@@ -61,6 +61,7 @@ import {
   type StalePlanFinishedCard,
 } from '@/lib/planning/planSessionClientErrors';
 import { FRAME_DISPOSITIONS, isKnownFrameKind } from '@/lib/planning/planChangeFrames';
+import { unavailableCodeOf, whileStartingUp } from '@/lib/planning/submitStartingUp';
 import { reopenedPlanJobId } from '@/lib/planning/planRunPhase';
 import {
   streamAskJob,
@@ -143,6 +144,10 @@ export interface QueuedTurn {
 /** A progress frame the run narrates while the job works. */
 export type PlanChangeProgress =
   | { kind: 'submitted' }
+  /** The submit has waited long on a waking Motir AI (MOTIR-9255): the server
+   *  re-sends it under one key meanwhile, so this is a wait, never an error. Taken
+   *  back down the moment the submit answers. */
+  | { kind: 'starting' }
   /** An ask turn is being READ — the first phase of the one door, before Motir
    *  knows whether it is answering or planning. */
   | { kind: 'reading' }
@@ -600,6 +605,26 @@ function firstAct(
  */
 function withoutReading(acts: PlanChangeProgress[]): PlanChangeProgress[] {
   return acts.filter((act) => act.kind !== 'reading');
+}
+
+const STARTING_ACT: PlanChangeProgress = { kind: 'starting' };
+
+/** The run with the starting-up act appended (MOTIR-9255), once. */
+function withStarting(s: PlanChangeConversationState): PlanChangeConversationState {
+  if (s.acts.some((act) => act.kind === 'starting')) return s;
+  return { ...s, progress: STARTING_ACT, acts: [...s.acts, STARTING_ACT] };
+}
+
+/** The run with the starting-up act taken back down: it says something is
+ *  HAPPENING, so it never outlives the submit that waited. */
+function withoutStarting(s: PlanChangeConversationState): PlanChangeConversationState {
+  if (!s.acts.some((act) => act.kind === 'starting')) return s;
+  const acts = s.acts.filter((act) => act.kind !== 'starting');
+  return {
+    ...s,
+    acts,
+    progress: s.progress?.kind === 'starting' ? (acts.at(-1) ?? null) : s.progress,
+  };
 }
 
 /** The statuses a planning job ENDS on — motir-ai's terminal set (MOTIR-7985). */
@@ -1565,6 +1590,22 @@ export function usePlanChangeConversation({
     [],
   );
 
+  /** Await a turn's submit, saying "starting up" while it waits long on a waking
+   *  Motir AI (MOTIR-9255). No error is drawn while the server's budget lasts. */
+  const awaitSubmit = useCallback(
+    <T>(pending: Promise<T>): Promise<T> =>
+      whileStartingUp(
+        pending,
+        () => {
+          if (mountedRef.current) setState(withStarting);
+        },
+        () => {
+          if (mountedRef.current) setState(withoutStarting);
+        },
+      ),
+    [],
+  );
+
   const refuseRun = useCallback(
     (err: unknown, controller: AbortController) => {
       // THE STALE OUTCOME and Plan it again's two refusals (MOTIR-7932) are answers
@@ -1636,7 +1677,10 @@ export function usePlanChangeConversation({
         errorCode:
           gated || held
             ? null
-            : ((guideSent ? guideOfferClosedCode(err) : null) ?? refusalCodeOf(err) ?? 'FAILED'),
+            : ((guideSent ? guideOfferClosedCode(err) : null) ??
+              refusalCodeOf(err) ??
+              unavailableCodeOf(err) ??
+              'FAILED'),
         outOfCredits: gated,
         ...(held ? { targetHeld: held } : {}),
       }));
@@ -2010,7 +2054,7 @@ export function usePlanChangeConversation({
           : (signal: AbortSignal) => submitPlanChange(stateRef.current.session?.id ?? '', signal));
 
       try {
-        const { jobId, planId, session } = await submit(controller.signal);
+        const { jobId, planId, session } = await awaitSubmit(submit(controller.signal));
         if (!mountedRef.current) return;
         const carried = takePendingStop();
         // The hosted run's plan is watched live from the moment it is known.
@@ -2077,6 +2121,7 @@ export function usePlanChangeConversation({
       resetLiveRun,
       endLive,
       refuseRun,
+      awaitSubmit,
       raiseStop,
       takePendingStop,
       releasePendingStop,
@@ -2146,7 +2191,7 @@ export function usePlanChangeConversation({
       };
 
       try {
-        const submitted = await submitter(controller.signal);
+        const submitted = await awaitSubmit(submitter(controller.signal));
         if (!mountedRef.current) return;
 
         // REDIRECTED AT THE DOOR — no ask job was opened at all. Two turns reach
@@ -2308,6 +2353,7 @@ export function usePlanChangeConversation({
       resetLiveRun,
       endLive,
       refuseRun,
+      awaitSubmit,
       settleEnd,
       raiseStop,
       takePendingStop,

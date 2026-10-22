@@ -1,5 +1,6 @@
 import type { ProjectContext } from '@/lib/projects';
 import { submitJob, streamJob, getJob } from '@/lib/ai/motirAiClient';
+import { turnSubmitKey } from '@/lib/ai/turnSubmitKey';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { resolveTenantLanguages } from '@/lib/ai/tenantLanguages';
 import { resolvePlanningCodeContext } from '@/lib/ai/codeContext';
@@ -181,6 +182,9 @@ async function submitAsk(
   ctx: ProjectContext,
   /** MID-RUN (MOTIR-7996): the run snapshot, `ask_project` only. */
   run?: RunContext,
+  /** The turn this job answers, and the job it held before (MOTIR-9255): the
+   *  submit is keyed on that attempt, so a re-send never runs it twice. */
+  keyedOn?: TurnAttempt,
 ): Promise<{ jobId: string }> {
   const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
     userId: ctx.userId,
@@ -211,7 +215,21 @@ async function submitAsk(
     tenantFor(ctx, organizationId, isMeta, internalBilling, languages),
     context,
     { userId: ctx.userId },
+    keyedOn
+      ? { idempotencyKey: turnSubmitKey(keyedOn.turnId, 'ask_project', keyedOn.attempt) }
+      : {},
   );
+}
+
+/** A turn's submit attempt (MOTIR-9255): the turn, and the job it held before
+ *  this submit — null for its first. */
+interface TurnAttempt {
+  turnId: string;
+  attempt: string | null;
+}
+
+function attemptOf(turn: PlanChangeTurnDto): TurnAttempt {
+  return { turnId: turn.id, attempt: turn.jobId ?? null };
 }
 
 /**
@@ -539,7 +557,7 @@ export const aiAskService = {
       const first = started.turns.at(-1);
       if (!first) throw new PlanChangeTurnNotFoundError('(the turn just appended)');
       // A fresh session has no pending question, so this is the ask branch.
-      const { jobId } = await submitAsk(trimmed, anchor, ctx);
+      const { jobId } = await submitAsk(trimmed, anchor, ctx, undefined, attemptOf(first));
       const session = await planChangeSessionsService.recordTurnIntent(
         first.id,
         'ask',
@@ -604,7 +622,7 @@ export const aiAskService = {
     const turn = appended.turns.at(-1);
     if (!turn) throw new PlanChangeTurnNotFoundError('(the turn just appended)');
 
-    const { jobId } = await submitAsk(trimmed, anchor, ctx);
+    const { jobId } = await submitAsk(trimmed, anchor, ctx, undefined, attemptOf(turn));
     const session = await planChangeSessionsService.recordTurnIntent(
       turn.id,
       'ask',
@@ -667,7 +685,7 @@ export const aiAskService = {
       ctx,
       pendingOffer,
     );
-    const { jobId } = await submitAsk(trimmed, null, ctx, run);
+    const { jobId } = await submitAsk(trimmed, null, ctx, run, attemptOf(turn));
     const session = await planChangeSessionsService.recordTurnIntent(
       turn.id,
       'ask',
@@ -745,7 +763,15 @@ export const aiAskService = {
       };
     }
 
-    const { jobId } = await submitAsk(turn.body, anchor, ctx);
+    // A RETRY re-sends the attempt that did not come back (MOTIR-9255); a flip is a
+    // new reading of the turn, so it runs fresh and unkeyed.
+    const { jobId } = await submitAsk(
+      turn.body,
+      anchor,
+      ctx,
+      undefined,
+      opts.flip ? undefined : attemptOf(turn),
+    );
     const session = await planChangeSessionsService.recordTurnIntent(
       turnId,
       'ask',

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   CornerDownRight,
+  Hourglass,
   ListTree,
   MessageSquareText,
   PenLine,
@@ -33,6 +34,7 @@ type Tc = ReturnType<typeof useTranslations>;
  *  frame dispositions use one layer down. */
 const ACT_GLYPH: Record<PlanChangeProgress['kind'], typeof Send> = {
   submitted: Send,
+  starting: Hourglass,
   reading: ScanSearch,
   redirected: CornerDownRight,
   laying: ListTree,
