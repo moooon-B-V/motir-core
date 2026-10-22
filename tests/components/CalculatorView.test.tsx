@@ -240,6 +240,25 @@ describe('opening the view', () => {
     expect(within(group).queryAllByRole('combobox')).toHaveLength(0);
   });
 
+  it('names at most three models per category, however many the engine serves', async () => {
+    client.fetchCalculatorCategories.mockResolvedValue(
+      answer(
+        categories({
+          categories: [
+            {
+              key: 'economy',
+              models: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6'].map((id) => ({ id, provider: 'p' })),
+            },
+          ],
+        }),
+      ),
+    );
+    renderView();
+    await ready();
+    const group = screen.getByRole('group', { name: m.inputs.runCategoriesLabel });
+    expect(within(group).getByRole('button').textContent).toBe('EconomyFor example: m1, m2, m3');
+  });
+
   it('shows a category with no live model as unavailable and keeps the others usable', async () => {
     client.fetchCalculatorCategories.mockResolvedValue(
       answer(

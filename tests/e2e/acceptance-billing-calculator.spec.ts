@@ -28,6 +28,10 @@ import {
   PINNED_ESTIMATE_ANSWER,
 } from '../fixtures/calculatorPinnedVector';
 
+// The picker names at most this many models per category (CalculatorView's
+// CATEGORY_MODEL_EXAMPLES).
+const CATEGORY_MODEL_EXAMPLES = 3;
+
 // THE CALCULATOR, AS A PERSON MEETS IT (Story MOTIR-8381 · MOTIR-8641) — the
 // story's acceptance receipt. An owner opens Billing & plans → Motir AI plans,
 // follows the link into the Calculator, enters a range, picks MODEL CATEGORIES
@@ -311,7 +315,10 @@ test.describe('The Calculator on Billing & plans', () => {
           const b = pickerButton(page, c.key);
           await expect(b).toContainText(
             t('calculator.inputs.categoryExamples', {
-              models: c.models.map((m) => m.id).join(', '),
+              models: c.models
+                .slice(0, CATEGORY_MODEL_EXAMPLES)
+                .map((m) => m.id)
+                .join(', '),
             }),
           );
         }

@@ -225,6 +225,8 @@ async function ask(page: Page, cadence: 'monthly' | 'annual', messages = en.bill
   await page.getByRole('button', { name: messages.calculator.inputs.submit }).click();
   await answered;
   await expect(live(page).getByTestId('calculator-credits')).toBeVisible();
+  // The answer runs below a 720p fold; bring it on screen so the clip shows it.
+  await live(page).getByTestId('calculator-result').scrollIntoViewIfNeeded();
 }
 
 /** Press the offer's Choose and answer the checkout body; the browser lands on Stripe. */

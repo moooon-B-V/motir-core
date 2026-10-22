@@ -113,6 +113,10 @@ function parseRange(range: Range): Parsed | RangeIssue {
   return lo > hi ? 'rangeOrder' : { low: lo, high: hi };
 }
 
+// A category names a few of its models as examples, never the whole list: the
+// engine can serve dozens, and listing them all ran the picker off the card.
+export const CATEGORY_MODEL_EXAMPLES = 3;
+
 // Presentational capitalisation at most: the engine's category rule owns the names,
 // and a key→label map here would go stale the day a band is added.
 function categoryLabel(key: string): string {
@@ -425,7 +429,7 @@ function CategoryGroup({
                 aria-pressed={on}
                 disabled={empty || full}
                 onClick={() => toggle(category.key)}
-                className="flex flex-col items-start gap-0.5 rounded-(--radius-control) border px-(--spacing-control-x-12) py-(--spacing-control-y-8) text-left disabled:cursor-not-allowed"
+                className="flex min-w-0 flex-col items-start gap-0.5 rounded-(--radius-control) border px-(--spacing-control-x-12) py-(--spacing-control-y-8) text-left disabled:cursor-not-allowed"
                 style={{
                   borderColor: on ? 'var(--el-accent)' : 'var(--el-border)',
                   backgroundColor: on ? 'var(--el-surface)' : 'transparent',
@@ -445,11 +449,14 @@ function CategoryGroup({
                     {t('calculator.inputs.categoryShare', { share })}
                   </span>
                 ) : null}
-                <span className="font-sans text-xs text-(--el-text-secondary)">
+                <span className="font-sans text-xs break-words text-(--el-text-secondary)">
                   {empty
                     ? t('calculator.categories.empty')
                     : t('calculator.inputs.categoryExamples', {
-                        models: category.models.map((m) => m.id).join(', '),
+                        models: category.models
+                          .slice(0, CATEGORY_MODEL_EXAMPLES)
+                          .map((m) => m.id)
+                          .join(', '),
                       })}
                 </span>
               </button>
