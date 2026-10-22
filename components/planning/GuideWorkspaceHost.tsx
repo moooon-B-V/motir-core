@@ -146,6 +146,7 @@ export function GuideWorkspaceHost({ projectName, card, onClose }: GuideWorkspac
           view={view}
           phase={state.phase}
           errorCode={state.errorCode}
+          startingUp={state.startingUp}
           outOfCredits={state.outOfCredits || offerBlocked}
           markers={state.markers}
           onSend={(text, attachmentIds) => void send(text, attachmentIds)}

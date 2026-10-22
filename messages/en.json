@@ -7907,7 +7907,8 @@
         "redirectedDebug": "Tracing the bug…",
         "laying": "Laying out a level…",
         "authoring": "Writing a work item…",
-        "note": "Thinking it through…"
+        "note": "Thinking it through…",
+        "starting": "Motir AI is starting up — this can take up to a minute."
       },
       "error": {
         "body": "That didn't go through. Your conversation is saved — try again, or rephrase the change.",
@@ -7922,7 +7923,8 @@
         "askSilent": "Nothing came back. Try asking that a different way.",
         "failedClosed": "That attempt didn't go through, so this session has closed. The work items it held are back where they were.",
         "revisionInFlight": "Motir AI is already revising this plan. Your message is kept — send it again once the new version lands.",
-        "awaitingResume": "This session is waiting to be resumed, so it can't take a message yet. Resume it first — your message is kept."
+        "awaitingResume": "This session is waiting to be resumed, so it can't take a message yet. Resume it first — your message is kept.",
+        "unavailable": "Motir AI didn't answer in time. Your conversation is saved, and you won't be charged twice. Try again."
       },
       "answeredFrom": "{count, plural, =0 {Answered without citing anything} one {Answered from # work item} other {Answered from # work items}}",
       "correctToAsk": "Answer this instead",
@@ -7991,6 +7993,7 @@
       },
       "act": {
         "submitted": "submit",
+        "starting": "start",
         "reading": "reading",
         "redirected": "hand-off",
         "redirectedDebug": "hand-off",
@@ -8305,11 +8308,13 @@
       "reload": "Reload the work item",
       "staleNotice": "{key} changed since this turn read it. Reload it, then ask again.",
       "failed": "That turn didn't finish, so nothing on the work item changed.",
+      "startingUp": "Motir AI is starting up — this can take up to a minute.",
       "errors": {
         "notManual": "Motir AI guides a person through manual work, and this work item is for an agent, so there is nothing to guide here.",
         "closed": "This work item is done or archived, so there is nothing left to guide.",
         "forbidden": "You need permission to edit this work item and to plan with Motir AI to be guided through it.",
-        "offerClosed": "This offer was already decided, so it can’t be changed. Reload the work item to see where it stands."
+        "offerClosed": "This offer was already decided, so it can’t be changed. Reload the work item to see where it stands.",
+        "unavailable": "Motir AI didn't answer in time. Nothing on the work item changed, and you won't be charged twice. Try again."
       },
       "youTicked": "You ticked step {n} on the list",
       "youUnticked": "You unticked step {n} on the list",

@@ -7907,7 +7907,8 @@
         "redirectedDebug": "Rastreando el error…",
         "laying": "Organizando un nivel…",
         "authoring": "Escribiendo un elemento de trabajo…",
-        "note": "Pensándolo bien…"
+        "note": "Pensándolo bien…",
+        "starting": "Motir AI se está iniciando; puede tardar hasta un minuto."
       },
       "error": {
         "body": "No se completó. Tu conversación está guardada: vuelve a intentarlo o formula el cambio de otra manera.",
@@ -7922,7 +7923,8 @@
         "askSilent": "No volvió nada. Intenta preguntarlo de otra manera.",
         "failedClosed": "Ese intento no se completó, así que esta sesión se cerró. Los elementos de trabajo que tenía volvieron a donde estaban.",
         "revisionInFlight": "Motir AI ya está revisando este plan. Tu mensaje se conserva: vuelve a enviarlo cuando llegue la nueva versión.",
-        "awaitingResume": "Esta sesión espera a ser reanudada y todavía no puede recibir mensajes. Reanúdala primero: tu mensaje se conserva."
+        "awaitingResume": "Esta sesión espera a ser reanudada y todavía no puede recibir mensajes. Reanúdala primero: tu mensaje se conserva.",
+        "unavailable": "Motir AI no respondió a tiempo. Tu conversación está guardada y no se te cobrará dos veces. Vuelve a intentarlo."
       },
       "answeredFrom": "{count, plural, =0 {Respondido sin citar nada} one {Respondido a partir de # elemento de trabajo} other {Respondido a partir de # elementos de trabajo}}",
       "correctToAsk": "Responder esto en su lugar",
@@ -7991,6 +7993,7 @@
       },
       "act": {
         "submitted": "enviar",
+        "starting": "inicio",
         "reading": "leyendo",
         "redirected": "traspaso",
         "redirectedDebug": "traspaso",
@@ -8305,11 +8308,13 @@
       "reload": "Recargar el elemento de trabajo",
       "staleNotice": "{key} cambió desde que este turno lo leyó. Recárgalo y vuelve a preguntar.",
       "failed": "Ese turno no terminó, así que no cambió nada en el elemento de trabajo.",
+      "startingUp": "Motir AI se está iniciando; puede tardar hasta un minuto.",
       "errors": {
         "notManual": "Motir AI guía a una persona en trabajo manual, y este elemento de trabajo es para un Agente, así que aquí no hay nada que guiar.",
         "closed": "Este elemento de trabajo está hecho o archivado, así que no queda nada que guiar.",
         "forbidden": "Necesitas permiso para editar este elemento de trabajo y para planificar con Motir AI para que se te guíe en él.",
-        "offerClosed": "Esta oferta ya se resolvió, así que no se puede cambiar. Recarga el elemento de trabajo para ver en qué punto está."
+        "offerClosed": "Esta oferta ya se resolvió, así que no se puede cambiar. Recarga el elemento de trabajo para ver en qué punto está.",
+        "unavailable": "Motir AI no respondió a tiempo. No cambió nada en el elemento de trabajo y no se te cobrará dos veces. Vuelve a intentarlo."
       },
       "youTicked": "Marcaste el paso {n} de la lista",
       "youUnticked": "Desmarcaste el paso {n} de la lista",
