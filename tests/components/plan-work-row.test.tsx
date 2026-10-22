@@ -181,4 +181,13 @@ describe('the working turn is one row with one avatar', () => {
     expect(row()).not.toBeNull();
     expect(marks()[0]!.getAttribute('data-at-work')).toBe('false');
   });
+
+  it('a plan handed over from writing holds the mark still while its run stream closes', () => {
+    // The plan left `generating`: the live review is gone and the proposal is on
+    // the canvas, but the run's stream has not closed yet.
+    const handedOver = { ...planReview([]), id: 'plan-1', status: 'proposed' as const };
+    renderRail({ ...BASE, planId: 'plan-1', acts: [], progress: null, review: handedOver });
+    expect(row()).not.toBeNull();
+    expect(marks()[0]!.getAttribute('data-at-work')).toBe('false');
+  });
 });

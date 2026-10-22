@@ -1202,9 +1202,13 @@ export function PlanChangeRail({
               failing={state.liveFailing}
               // A plan run in its planning phase, or any plan on screen, is read by
               // the plan's own progress, whatever stream is still open: a stalled,
-              // failing or finished plan holds the mark still.
+              // failing or finished plan holds the mark still. That includes the
+              // run's own plan once it has left `generating` and been handed over.
               turnStreaming={
-                state.phase === 'streaming' && runPhase !== 'planning' && !state.liveReview
+                state.phase === 'streaming' &&
+                runPhase !== 'planning' &&
+                !state.liveReview &&
+                !(state.planId !== null && state.review?.id === state.planId)
               }
             />
           ) : null}
