@@ -138,7 +138,7 @@ Publishing, no `NPM_TOKEN` secret.
 **dry run** checked to build + pack without publishing.
 
 > ✅ **Both bootstrap steps are DONE** (MOTIR-3802, 2026-08-28): `0.1.0` was
-> hand-published and the Trusted Publisher is configured — org `moooon-B-V`,
+> hand-published and the Trusted Publisher is configured — org `motir-co`,
 > repo `motir-core`, workflow `release-brand.yml`, **Environment name blank**
 > (the lane declares no `environment:`, so a value there would demand a claim
 > its token cannot produce) and **Allowed actions = `npm publish` only**. The
@@ -148,7 +148,7 @@ Publishing, no `NPM_TOKEN` secret.
 > Publishing cannot bootstrap a package that does not exist yet, because the
 > Trusted Publisher config lives on the package's own settings page on npmjs.com.
 > `@motir/design-system@0.1.0` was cut the same way. Configure the Trusted
-> Publisher (org `moooon-B-V` / repo `motir-core` / workflow
+> Publisher (org `motir-co` / repo `motir-core` / workflow
 > `release-brand.yml`) immediately after, and every release from `0.1.1` on flows
 > through the workflow token-free.
 
