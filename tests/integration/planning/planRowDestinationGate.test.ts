@@ -317,11 +317,13 @@ describe('GUARD: the no-session case, and what it is NOT', () => {
 
     // ⚠️ AND IT IS UNREACHABLE FROM THE PLANS PAGE (design § 21.3) — the structural
     // half of the settlement, asserted rather than asserted-about. The session survives
-    // the plan leaving it, and it is listed; what it no longer has is a latest plan, so
-    // the Plans page can never draw this state.
-    const row = await plansRow(sessionId);
-    expect(row, 'the session is still listed').toBeDefined();
-    expect(row!.latestPlan, 'but it owns no plan, so no destination is computed').toBeNull();
+    // the plan leaving it, but it no longer holds a plan, and the Plans list serves only
+    // sessions that reached planning (MOTIR-9300) — so the Plans page can never draw
+    // this state.
+    expect(await plansRow(sessionId), 'a session holding no plan is not listed').toBeUndefined();
+    const survivor = await planSessionsService.getSessionRow(fx().projectId, sessionId, ctx());
+    expect(survivor, 'the session survives the plan leaving it').not.toBeNull();
+    expect(survivor!.latestPlan, 'and it owns no plan, so no destination is computed').toBeNull();
   });
 });
 
