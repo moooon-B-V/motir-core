@@ -1301,7 +1301,23 @@ delta. When nothing failed and nothing saturated, it reads
 **`no resource saturated`**. Two caveats are printed with it: the database
 candidate reads the direct endpoint only (it cannot see pooler saturation), and
 each held stream costs one watermark read per second. The supporting tables
-follow: per route, wait and hold, top statements.
+follow: agent mix, per route, wait and hold, top statements.
+
+### The agent mix
+
+**`Agent mix (steady window)`** splits what was served by the class of load the
+profile offered it: `read`, `write`, `claim` and `burst` (the MCP `group` tag),
+`run` (`role=run`) and `readers` (`role=reader`), with `readers · tab` and
+`readers · browse` beneath when k6's `scenario` tag names them. Each row sets the
+VUs `profile.resolved.json` offered the class beside its served rps, its share of
+all served, its `ok` / `empty` / `error` / `limited` counts and the p95 / p99 of
+its `ok` latency (`loadtest/report/mix.ts`). Served is `ok` + `empty`, as the
+throughput line counts it; the held stream and the run recycle step are in no
+class, so the top-level rows sum to the served rps on the `total` row. A class
+with no points reads `unmeasured`, never 0. Read it before any threshold line: it
+says whether the served mix matched the offered one, and whether one class
+starved while another was fine. `report.json` carries it as `tables.mix`; an
+existing run directory gets it by re-running `pnpm loadtest:report <run dir>`.
 
 ### Where a FAIL goes
 

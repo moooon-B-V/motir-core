@@ -718,6 +718,7 @@ function Estimate({
           largest={arm === 'largest'}
           excess={Math.max(0, answer.credits.high - (offer.allotment?.credits ?? 0))}
           topUp={topUp.high}
+          poolCredits={recommendation.poolCredits}
           holdsPlan={holdsPlan}
           view={view}
           data={data}
@@ -813,6 +814,7 @@ function PoolOffer({
   largest,
   excess,
   topUp,
+  poolCredits,
   holdsPlan,
   view,
   data,
@@ -822,6 +824,8 @@ function PoolOffer({
   /** Credits a month past this pool's — top-ups cover them (`largest` only). */
   excess: number;
   topUp: CalculatorEstimateDTO['topUp']['high'];
+  /** The answer's own pool (MOTIR-9262); absent from an engine older than MOTIR-9189. */
+  poolCredits: number | undefined;
   holdsPlan: boolean;
   view: ViewContext;
   data: BillingStatusDTO;
@@ -878,8 +882,12 @@ function PoolOffer({
           })}
         </p>
         <OfferPrice plan={plan} cadence={cadence} locale={locale} />
-        <p className="font-sans text-sm font-semibold text-(--el-text-strong)">
-          {t('plans.creditsAllotment', { n: fmt(pool, locale) })}
+        {/* The pool's size is the answer's own when it sends one, else the catalog row's. */}
+        <p
+          className="font-sans text-sm font-semibold text-(--el-text-strong)"
+          data-testid="calculator-larger-pool"
+        >
+          {t('plans.creditsAllotment', { n: fmt(poolCredits || pool, locale) })}
         </p>
         {largest && topUp.units > 0 ? (
           <p

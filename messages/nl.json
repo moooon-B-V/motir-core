@@ -6915,8 +6915,7 @@
       "hintDefault": "Een paar zinnen is genoeg. Motir vraagt naar de rest.",
       "hintCarried": "Voeg iets toe of verfijn het voordat je verdergaat — de verkenningschat neemt het vanaf hier over.",
       "importTitle": "Heb je al een project?",
-      "importDesc": "Motir leest je code, taken en geschiedenis voordat het iets verandert, en plant daarna wat er volgt. Jij beslist wat er live gaat.",
-      "importCta": "Dat kunnen we ook viben"
+      "importProject": "Project importeren"
     },
     "import": {
       "title": "Een bestaand project importeren",
@@ -7941,7 +7940,8 @@
         "redirectedDebug": "De bug opsporen…",
         "laying": "Een niveau indelen…",
         "authoring": "Een werkitem schrijven…",
-        "note": "Erover nadenken…"
+        "note": "Erover nadenken…",
+        "starting": "Motir AI wordt opgestart — dit kan tot een minuut duren."
       },
       "error": {
         "body": "Dat is niet gelukt. Je gesprek is opgeslagen — probeer het opnieuw, of formuleer de wijziging anders.",
@@ -7956,7 +7956,8 @@
         "askSilent": "Er kwam niets terug. Probeer het op een andere manier te vragen.",
         "failedClosed": "Die poging is niet gelukt, dus deze sessie is gesloten. De werkitems die erin zaten, staan weer waar ze stonden.",
         "revisionInFlight": "Motir AI is dit plan al aan het herzien. Je bericht is bewaard — verstuur het opnieuw zodra de nieuwe versie er is.",
-        "awaitingResume": "Deze sessie wacht op hervatting en kan nog geen bericht aannemen. Hervat haar eerst — je bericht is bewaard."
+        "awaitingResume": "Deze sessie wacht op hervatting en kan nog geen bericht aannemen. Hervat haar eerst — je bericht is bewaard.",
+        "unavailable": "Motir AI heeft niet op tijd geantwoord. Je gesprek is opgeslagen en er wordt niets dubbel in rekening gebracht. Probeer het opnieuw."
       },
       "answeredFrom": "{count, plural, =0 {Beantwoord zonder iets aan te halen} one {Beantwoord op basis van # werkitem} other {Beantwoord op basis van # werkitems}}",
       "correctToAsk": "In plaats daarvan dit beantwoorden",
@@ -8025,6 +8026,7 @@
       },
       "act": {
         "submitted": "verzenden",
+        "starting": "opstarten",
         "reading": "lezen",
         "redirected": "overdracht",
         "redirectedDebug": "overdracht",
@@ -8339,11 +8341,13 @@
       "reload": "Het werkitem opnieuw laden",
       "staleNotice": "{key} is gewijzigd sinds deze beurt het las. Laad het opnieuw en vraag het dan nog eens.",
       "failed": "Die beurt is niet afgerond, dus er is niets aan het werkitem gewijzigd.",
+      "startingUp": "Motir AI wordt opgestart — dit kan tot een minuut duren.",
       "errors": {
         "notManual": "Motir AI begeleidt een persoon bij handmatig werk, en dit werkitem is voor een agent, dus hier valt niets te begeleiden.",
         "closed": "Dit werkitem is klaar of gearchiveerd, dus er valt niets meer te begeleiden.",
         "forbidden": "Je hebt toestemming nodig om dit werkitem te bewerken en om met Motir AI te plannen om erdoorheen begeleid te worden.",
-        "offerClosed": "Dit voorstel is al beslist, dus het kan niet meer worden gewijzigd. Laad het werkitem opnieuw om te zien hoe het ervoor staat."
+        "offerClosed": "Dit voorstel is al beslist, dus het kan niet meer worden gewijzigd. Laad het werkitem opnieuw om te zien hoe het ervoor staat.",
+        "unavailable": "Motir AI heeft niet op tijd geantwoord. Er is niets aan het werkitem gewijzigd en er wordt niets dubbel in rekening gebracht. Probeer het opnieuw."
       },
       "youTicked": "Je hebt stap {n} op de lijst afgevinkt",
       "youUnticked": "Je hebt stap {n} op de lijst weer opengezet",

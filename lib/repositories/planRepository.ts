@@ -167,6 +167,20 @@ export const planRepository = {
     });
   },
 
+  /** How many of a session's `generating` plans have WRITTEN at or after `activeSince` —
+   *  the lock sweep's live-walk guard (MOTIR-9260). The caller passes
+   *  `now - PLAN_STALLED_AFTER_MS`, so a plan counts exactly while the abandoned-plan
+   *  sweep's silence rule would keep it (equal is not stalled). */
+  async countWritingBySession(
+    sessionId: string,
+    activeSince: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.plan.count({
+      where: { sessionId, status: 'generating', lastActivityAt: { gte: activeSince } },
+    });
+  },
+
   /**
    * `planned` / `stale` plans — and `generating` ones, which a revision may have
    * RE-OPENED (Bug MOTIR-8208; the service tells the two apart from the trail) — whose

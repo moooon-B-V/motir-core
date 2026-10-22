@@ -517,7 +517,17 @@ export interface CalculatorEstimateDTO {
   credits: { low: number; high: number };
   perItemCredits: Record<CalculatorLane, number>;
   split: CalculatorSplitDTO;
-  recommendation: { planKey: string | null; planName: string | null; monthlyPriceUsd: number };
+  recommendation: {
+    planKey: string | null;
+    planName: string | null;
+    monthlyPriceUsd: number;
+    /**
+     * The recommended plan's own monthly credit pool, `0` for top-up alone
+     * (motir-ai MOTIR-9189). Optional until every motir-ai this core talks to
+     * sends it: an older engine's answer has no such field (MOTIR-9262).
+     */
+    poolCredits?: number;
+  };
   topUp: { low: CalculatorTopUpAmountDTO; high: CalculatorTopUpAmountDTO };
   /** The largest REGULAR pool on this cadence; `credits` null when none is offered. */
   ceiling: {

@@ -6915,8 +6915,7 @@
       "hintDefault": "Bastano poche frasi. Per il resto, le domande le fa Motir.",
       "hintCarried": "Aggiungi o perfeziona qualsiasi cosa prima di continuare: da qui prosegue la chat di scoperta.",
       "importTitle": "Hai già un progetto?",
-      "importDesc": "Motir legge il tuo codice, le tue attività e la tua cronologia prima di cambiare qualsiasi cosa, poi pianifica i passi successivi. Sei tu a decidere cosa viene rilasciato.",
-      "importCta": "Anche quello si fa a vibe"
+      "importProject": "Importa progetto"
     },
     "import": {
       "title": "Importa un progetto esistente",
@@ -7941,7 +7940,8 @@
         "redirectedDebug": "Ricerca della causa del Bug…",
         "laying": "Disposizione di un livello…",
         "authoring": "Scrittura di un elemento di lavoro…",
-        "note": "Ragionamento in corso…"
+        "note": "Ragionamento in corso…",
+        "starting": "Motir AI si sta avviando: può volerci fino a un minuto."
       },
       "error": {
         "body": "L’operazione non è andata a buon fine. La conversazione è salvata: riprova o riformula la modifica.",
@@ -7956,7 +7956,8 @@
         "askSilent": "Non è arrivata alcuna risposta. Prova a formulare la domanda in un altro modo.",
         "failedClosed": "Il tentativo non è andato a buon fine, quindi questa sessione è stata chiusa. Gli elementi di lavoro che conteneva sono tornati dov’erano.",
         "revisionInFlight": "Motir AI sta già rivedendo questo piano. Il tuo messaggio è conservato: invialo di nuovo quando arriva la nuova versione.",
-        "awaitingResume": "Questa sessione attende di essere ripresa e non può ancora ricevere messaggi. Riprendila prima: il tuo messaggio è conservato."
+        "awaitingResume": "Questa sessione attende di essere ripresa e non può ancora ricevere messaggi. Riprendila prima: il tuo messaggio è conservato.",
+        "unavailable": "Motir AI non ha risposto in tempo. La conversazione è salvata e non ti verrà addebitato due volte. Riprova."
       },
       "answeredFrom": "{count, plural, =0 {Risposta data senza citare nulla} one {Risposta basata su # elemento di lavoro} other {Risposta basata su # elementi di lavoro}}",
       "correctToAsk": "Rispondi invece a questo",
@@ -8025,6 +8026,7 @@
       },
       "act": {
         "submitted": "invio",
+        "starting": "avvio",
         "reading": "lettura",
         "redirected": "passaggio",
         "redirectedDebug": "passaggio",
@@ -8339,11 +8341,13 @@
       "reload": "Ricarica l’elemento di lavoro",
       "staleNotice": "{key} è cambiato da quando questo turno l’ha letto. Ricaricalo, poi chiedi di nuovo.",
       "failed": "Quel turno non è stato completato, quindi sull’elemento di lavoro non è cambiato nulla.",
+      "startingUp": "Motir AI si sta avviando: può volerci fino a un minuto.",
       "errors": {
         "notManual": "Motir AI guida una persona nel lavoro manuale, e questo elemento di lavoro è destinato a un agente, quindi qui non c’è nulla da guidare.",
         "closed": "Questo elemento di lavoro è completato o archiviato, quindi non resta nulla da guidare.",
         "forbidden": "Per essere guidato in questo elemento di lavoro ti serve l’autorizzazione a modificarlo e a pianificare con Motir AI.",
-        "offerClosed": "Questa offerta è già stata decisa, quindi non può essere modificata. Ricarica l’elemento di lavoro per vedere a che punto è."
+        "offerClosed": "Questa offerta è già stata decisa, quindi non può essere modificata. Ricarica l’elemento di lavoro per vedere a che punto è.",
+        "unavailable": "Motir AI non ha risposto in tempo. Sull’elemento di lavoro non è cambiato nulla e non ti verrà addebitato due volte. Riprova."
       },
       "youTicked": "Hai spuntato il passaggio {n} dell’elenco",
       "youUnticked": "Hai tolto la spunta al passaggio {n} dell’elenco",

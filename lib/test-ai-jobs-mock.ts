@@ -128,7 +128,13 @@ export interface DebugBugJobOutcome {
  * the fixture after it reads the card, since the file is re-read every request.
  */
 export interface GuideJobOutcome {
-  submit?: 'accepted' | 'out_of_credits';
+  /**
+   * `'late'` (MOTIR-9255) CREATES the job and then answers the submit with a 503,
+   * as a Fly proxy does when the conversation machine wakes after motir-core gave
+   * up: the job exists, motir-core never heard of it, and its re-send under the
+   * same `idempotencyKey` is answered with that job.
+   */
+  submit?: 'accepted' | 'out_of_credits' | 'late';
   /** Absent ⇒ a success with NO result, which the settle reports as failed. */
   guideTurn?: unknown;
 }
@@ -239,6 +245,8 @@ export interface SubmittedJob {
   refused?: boolean;
   /** The id this seam answered with — absent on a refused submit. */
   jobId?: string;
+  /** The submit's `idempotencyKey` (MOTIR-9255), when it carried one. */
+  idempotencyKey?: string;
   /**
    * The job token motir-core minted into the envelope (`readBackToken`), kept
    * for a `plan` submit (MOTIR-7809) so a spec can call a job-token route —
@@ -382,6 +390,7 @@ function recordSubmit(kind: string, rawBody: string, refused = false): number {
       ...(kind === 'plan' && snapshot.planId !== undefined ? { planId: snapshot.planId } : {}),
       ...(translate ? { translate } : {}),
       ...tenantLanguagesOf(rawBody),
+      ...(idempotencyKeyOf(rawBody) ? { idempotencyKey: idempotencyKeyOf(rawBody)! } : {}),
     };
     f.submitted = [...(f.submitted ?? []), entry];
     writeFixtureFileSync(p, JSON.stringify(f, null, 2));
@@ -396,6 +405,27 @@ function askOutcomeAt(n: number): AskJobOutcome {
   const queue = readFixture().ask ?? [];
   if (queue.length === 0) return { intent: 'ask', answer: 'No answer was declared.' };
   return queue[Math.min(n, queue.length - 1)]!;
+}
+
+/** The `idempotencyKey` a submit body carried (MOTIR-9255), or null. */
+function idempotencyKeyOf(rawBody: string): string | null {
+  try {
+    const key = (JSON.parse(rawBody) as { idempotencyKey?: unknown }).idempotencyKey;
+    return typeof key === 'string' && key !== '' ? key : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The job an earlier ACCEPTED submit created under `rawBody`'s key, or null —
+ *  motir-ai answers a repeated key with that job and creates none (MOTIR-9255). */
+function jobForRepeatedKey(rawBody: string): string | null {
+  const key = idempotencyKeyOf(rawBody);
+  if (!key) return null;
+  const earlier = (readFixture().submitted ?? []).find(
+    (s) => !s.refused && s.idempotencyKey === key && s.jobId,
+  );
+  return earlier?.jobId ?? null;
 }
 
 /** The job token the envelope carried (`readBackToken`), or null. */
@@ -700,6 +730,9 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
       const rawBody = String(req.body ?? '{}');
       const kind = kindOfSubmit(rawBody);
       notifySubmitObservers(rawBody);
+      // A repeated idempotency key answers the job it already created (MOTIR-9255).
+      const repeated = jobForRepeatedKey(rawBody);
+      if (repeated) return { statusCode: 202, data: { jobId: repeated }, responseOptions: json };
       // The ONE refusal this seam models at the submit (MOTIR-7051, and the guide's
       // MOTIR-7468): motir-ai's own `402 out_of_credits` problem, so the real
       // client maps it.
@@ -725,7 +758,11 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
           responseOptions: { headers: { 'content-type': 'application/problem+json' } },
         };
       }
+      const late =
+        kind === 'guide_work_item' && guideOutcomeAt(submitOrdinal(kind)).submit === 'late';
       const index = recordSubmit(kind, rawBody);
+      // The job exists; the answer is lost behind a machine that woke too late.
+      if (late) return { statusCode: 503, data: 'machine waking' };
       const accepted: Record<string, unknown> = { jobId: jobIdFor(kind, index) };
       return { statusCode: 202, data: accepted, responseOptions: json };
     })

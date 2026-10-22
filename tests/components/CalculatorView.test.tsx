@@ -618,6 +618,26 @@ describe('the larger-pool arm — sold from the answer', () => {
     expect(screen.queryByRole('button', { name: m.result.goToPlan })).toBeNull();
   });
 
+  it('prints the pool’s own credits from the answer, beside its price (MOTIR-9262)', async () => {
+    const pooled = larger();
+    pooled.recommendation = { ...pooled.recommendation, poolCredits: 120_000 };
+    client.fetchCalculatorEstimate.mockResolvedValue(answer(pooled));
+    renderView();
+    await ask();
+    const pool = await screen.findByTestId('calculator-larger-pool');
+    expect(pool.textContent).toBe('120,000 credits / mo');
+    expect(screen.getByTestId('calculator-larger').contains(pool)).toBe(true);
+  });
+
+  it('falls back to the catalog pool for an answer that sends no poolCredits', async () => {
+    client.fetchCalculatorEstimate.mockResolvedValue(answer(larger()));
+    renderView();
+    await ask();
+    expect((await screen.findByTestId('calculator-larger-pool')).textContent).toBe(
+      `${SMALLEST.allotment!.credits.toLocaleString('en-US')} credits / mo`,
+    );
+  });
+
   it.each(['annual', 'monthly'] as const)(
     'Choose starts Checkout for the pool’s %s price, here',
     async (cadence) => {

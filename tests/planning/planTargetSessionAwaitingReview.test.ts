@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { PLANNING_STATUS_KEY, PLAN_TARGET_LOCK_LEASE_MS } from '@/lib/planChange/targetLock';
+import { PLAN_STALLED_AFTER_MS } from '@/lib/plans/planProgress';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { PlanStatus } from '@/generated/prisma/client';
@@ -21,8 +22,13 @@ import { truncateAuthTables } from '../helpers/db';
 //
 // The lease is a dead-author detector. A session whose plan reached `planned` is
 // waiting for a PERSON, exactly as a plan-held lock is, so it is spared the same
-// way and reported with the same outcome. A session with only a `generating` plan
-// is still the dead-author case, and expires as before.
+// way and reported with the same outcome.
+//
+// A session whose plan is still `generating` is judged by its SILENCE (bug
+// MOTIR-9260): a hosted walk routinely outlives the session lease after the
+// person's last turn, and its writes refresh the PLAN, never the lease. A plan
+// that wrote within `PLAN_STALLED_AFTER_MS` is a live author and spares the lock
+// (`plan_generating`); one silent past it is the dead-author case, and expires.
 
 const T = { timeout: 30_000 };
 
@@ -69,9 +75,15 @@ async function openConversation(card: { key: string }): Promise<string> {
   return session.id;
 }
 
-async function planIn(sessionId: string, status: PlanStatus) {
+async function planIn(sessionId: string, status: PlanStatus, lastActivityAt?: Date) {
   return adminDb.plan.create({
-    data: { workspaceId: fx.workspaceId, projectId: fx.projectId, sessionId, status },
+    data: {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      sessionId,
+      status,
+      ...(lastActivityAt ? { lastActivityAt } : {}),
+    },
   });
 }
 
@@ -121,7 +133,7 @@ describe('a session-held lock whose session’s plan waits for a person', () => 
 });
 
 describe('a session-held lock with no plan waiting for a person still expires', () => {
-  it.each(['approved', 'declined', 'generating'] as const)(
+  it.each(['approved', 'declined'] as const)(
     'is released and the prior status restored when the session’s plan is %s',
     T,
     async (planStatus) => {
@@ -160,5 +172,87 @@ describe('a session-held lock with no plan waiting for a person still expires', 
 
     expect(out.entries).toEqual([]);
     expect(await locksOf(sessionId)).toBe(1);
+  });
+});
+
+describe('a session-held lock whose session’s plan is still generating (MOTIR-9260)', () => {
+  it(
+    'survives the sweep past the session lease while the plan wrote inside the silence window',
+    T,
+    async () => {
+      const card = await seedCard('blocked');
+      const sessionId = await openConversation(card);
+      const sweptAt = PAST_LEASE();
+      // The reported walk: its last turn opened the lease, then it kept writing.
+      await planIn(sessionId, 'generating', new Date(sweptAt.getTime() - 60_000));
+
+      const out = await planTargetLockService.releaseExpired(sweptAt);
+
+      expect(out.entries).toEqual([{ workItemId: card.id, outcome: 'plan_generating' }]);
+      expect(await locksOf(sessionId)).toBe(1);
+      expect(await statusOf(card.id)).toBe(PLANNING_STATUS_KEY);
+    },
+  );
+
+  it(
+    'is spared at exactly PLAN_STALLED_AFTER_MS of silence — equal is not stalled',
+    T,
+    async () => {
+      const card = await seedCard('todo');
+      const sessionId = await openConversation(card);
+      const sweptAt = PAST_LEASE();
+      await planIn(sessionId, 'generating', new Date(sweptAt.getTime() - PLAN_STALLED_AFTER_MS));
+
+      const out = await planTargetLockService.releaseExpired(sweptAt);
+
+      expect(out.entries).toEqual([{ workItemId: card.id, outcome: 'plan_generating' }]);
+      expect(await statusOf(card.id)).toBe(PLANNING_STATUS_KEY);
+    },
+  );
+
+  it(
+    'is released and the prior status restored once the plan is silent past the window',
+    T,
+    async () => {
+      const card = await seedCard('blocked');
+      const sessionId = await openConversation(card);
+      const sweptAt = PAST_LEASE();
+      await planIn(
+        sessionId,
+        'generating',
+        new Date(sweptAt.getTime() - PLAN_STALLED_AFTER_MS - 1),
+      );
+
+      const out = await planTargetLockService.releaseExpired(sweptAt);
+
+      expect(out.entries).toHaveLength(1);
+      expect(out.entries[0]!.outcome).not.toBe('plan_generating');
+      expect(out.released).toBe(1);
+      expect(await locksOf(sessionId)).toBe(0);
+      expect(await statusOf(card.id)).toBe('blocked');
+    },
+  );
+
+  it('is not spared by a live walk in ANOTHER session', T, async () => {
+    const card = await seedCard('todo');
+    const sessionId = await openConversation(card);
+    const sweptAt = PAST_LEASE();
+    const other = await adminDb.planChangeSession.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        createdById: fx.ctx.userId,
+        scopeKey: 'elsewhere',
+        targetKeys: [],
+        origin: 'conversation',
+      },
+    });
+    await planIn(other.id, 'generating', sweptAt);
+
+    const out = await planTargetLockService.releaseExpired(sweptAt);
+
+    expect(out.released).toBe(1);
+    expect(await locksOf(sessionId)).toBe(0);
+    expect(await statusOf(card.id)).toBe('todo');
   });
 });

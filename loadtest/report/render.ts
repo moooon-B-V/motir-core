@@ -9,6 +9,7 @@
 import type { Candidate, FirstBottleneck, StatementDelta, WaitHoldRow } from './bottleneck';
 import { CANDIDATE_LABELS } from './bottleneck';
 import type { Line, Measures } from './thresholds';
+import type { MixTable } from './mix';
 import type { P2028Reading } from './p2028';
 import type { ProxyShed } from './proxyShed';
 import type { Reading } from './inputs';
@@ -47,6 +48,7 @@ export interface Report {
   generator: GeneratorLoad;
   bottleneck: { first: FirstBottleneck; candidates: Candidate[]; caveats: string[] };
   tables: {
+    mix: Reading<MixTable>;
     routes: Reading<{ route: string; rps: number; p95: number | null; p99: number | null }[]>;
     waitHold: Reading<WaitHoldRow[]>;
     statements: StatementDelta;
@@ -160,7 +162,26 @@ export function renderMarkdown(r: Report): string {
   for (const c of r.bottleneck.caveats) out.push('', `> ${c}`);
   out.push('');
 
-  out.push('## Per route (steady window)', '');
+  out.push('## Agent mix (steady window)', '');
+  if (r.tables.mix.state === 'ok') {
+    const num = (v: number | string) => (typeof v === 'number' ? r2(v) : v);
+    const share = (v: number | string) => (typeof v === 'number' ? `${r2(v * 100)} %` : v);
+    out.push(
+      '| class | offered VUs | served rps | share | ok | empty | error | limited | p95 ms | p99 ms |',
+      '|---|---|---|---|---|---|---|---|---|---|',
+    );
+    for (const m of r.tables.mix.value.rows)
+      out.push(
+        `| ${m.label} | ${m.offeredVus} | ${num(m.servedRps)} | ${share(m.share)} | ${m.ok} | ${m.empty} | ${m.error} | ${m.limited} | ${num(m.p95Ms)} | ${num(m.p99Ms)} |`,
+      );
+    const t = r.tables.mix.value.total;
+    out.push(
+      `| total | ${t.offeredVus} | ${r2(t.servedRps)} | | | | | | | |`,
+      '',
+      `> ${r.tables.mix.value.note}`,
+    );
+  } else out.push(`unmeasured — ${r.tables.mix.reason}`);
+  out.push('', '## Per route (steady window)', '');
   if (r.tables.routes.state === 'ok') {
     out.push('| route | rps | p95 ms | p99 ms |', '|---|---|---|---|');
     for (const row of r.tables.routes.value)

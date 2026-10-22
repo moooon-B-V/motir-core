@@ -368,6 +368,24 @@ describe('POST …/calculator/estimate — the answers', () => {
     expect(await res.json()).toStrictEqual(larger);
   });
 
+  it('a recommendation carrying its pool’s credits crosses unchanged (MOTIR-9262)', async () => {
+    const { organizationId, owner } = await makeOrg();
+    signInAs(owner);
+    const pooled = {
+      ...ESTIMATE,
+      recommendation: {
+        planKey: 'pool_x',
+        planName: 'Pool X',
+        monthlyPriceUsd: 700,
+        poolCredits: 120_000,
+      },
+      ceiling: { ...ESTIMATE.ceiling, exceeded: true, excessCredits: 10, outcome: 'larger_pool' },
+    };
+    fetchMock.mockResolvedValueOnce(json(200, pooled));
+    const res = await postEstimate(organizationId, REQUEST);
+    expect(await res.json()).toStrictEqual(pooled);
+  });
+
   it('the engine’s empty_category answer is a 200, never a 4xx and never a number', async () => {
     const { organizationId, owner } = await makeOrg();
     signInAs(owner);
@@ -505,6 +523,14 @@ describe('POST …/calculator/estimate — the engine’s refusals, kept distinc
   it('a malformed 200 body → 502', async () => {
     const { credits: _dropped, ...noCredits } = ESTIMATE;
     const out = await ask(json(200, noCredits));
+    expect(out.status).toBe(502);
+    expect(out.body.code).toBe('MOTIR_AI_UNAVAILABLE');
+  });
+
+  it('a poolCredits that is not a number → 502', async () => {
+    const out = await ask(
+      json(200, { ...ESTIMATE, recommendation: { ...ESTIMATE.recommendation, poolCredits: '9' } }),
+    );
     expect(out.status).toBe(502);
     expect(out.body.code).toBe('MOTIR_AI_UNAVAILABLE');
   });

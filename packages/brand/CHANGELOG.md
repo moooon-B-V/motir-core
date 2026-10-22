@@ -1,5 +1,19 @@
 # @motir/brand
 
+## 0.4.8
+
+### Patch Changes
+
+- Updated dependencies [8c7aacf]
+  - @motir/design-system@0.17.0
+
+## 0.4.7
+
+### Patch Changes
+
+- Updated dependencies [853486a]
+  - @motir/design-system@0.16.0
+
 ## 0.4.6
 
 ### Patch Changes

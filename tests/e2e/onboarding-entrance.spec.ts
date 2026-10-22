@@ -58,12 +58,10 @@ test('the existing-project door routes to the migrate wizard', async ({ page }) 
   await createFirstProject(page, 'Invoicer');
 
   await page.goto('/onboarding');
-  // The import door is a section band under the hero (MOTIR-8253): its heading
-  // is "Already have a project?" and its control is the "We can vibe it too" link.
-  await expect(
-    page.getByRole('heading', { level: 2, name: /already have a project\?/i }),
-  ).toBeVisible();
-  await page.getByRole('link', { name: /we can vibe it too/i }).click();
+  // The import door is the idea card's last row (MOTIR-8935): "Already have a
+  // project?" and the "Import project" button.
+  await expect(page.getByRole('main').getByText('Already have a project?')).toBeVisible();
+  await page.getByRole('link', { name: /^import project$/i }).click();
 
   // The entrance's existing-project door routes to the migrate wizard
   // (MOTIR-934); its optional Import step reaches the importer (MOTIR-942) at

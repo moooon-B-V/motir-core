@@ -9,9 +9,11 @@ import {
   Noto_Sans_JP,
   Noto_Sans_KR,
   Noto_Sans_SC,
+  Noto_Sans_TC,
   Noto_Serif_JP,
   Noto_Serif_KR,
   Noto_Serif_SC,
+  Noto_Serif_TC,
   Source_Serif_4,
   Space_Grotesk,
 } from 'next/font/google';
@@ -93,7 +95,9 @@ const fraunces = Fraunces({
 // would otherwise download it on every page. No `subsets`: next/font fetches
 // every slice regardless and uses `subsets` only to choose what to preload.
 // Static faces declare dooooWeb's two weights, `400` and `700`
-// (`docs/typography/font-sets.md`).
+// (`docs/typography/font-sets.md`). The zh-Hant faces (MOTIR-9239) are named
+// only under `:lang(zh-TW)`, which no core page renders, so they fetch nothing
+// here; motir.co loads them for `/zh-tw`.
 
 const notoSansSC = Noto_Sans_SC({
   variable: '--font-set-zh-Hans-sans-noto-sans-sc',
@@ -110,6 +114,25 @@ const notoSerifSC = Noto_Serif_SC({
 const lxgwWenKaiTC = LXGW_WenKai_TC({
   weight: ['400', '700'],
   variable: '--font-set-zh-Hans-serif-lxgw-wenkai-tc',
+  display: 'swap',
+  preload: false,
+});
+
+const notoSansTC = Noto_Sans_TC({
+  variable: '--font-set-zh-Hant-sans-noto-sans-tc',
+  display: 'swap',
+  preload: false,
+});
+
+const notoSerifTC = Noto_Serif_TC({
+  variable: '--font-set-zh-Hant-serif-noto-serif-tc',
+  display: 'swap',
+  preload: false,
+});
+
+const lxgwWenKaiTCHant = LXGW_WenKai_TC({
+  weight: ['400', '700'],
+  variable: '--font-set-zh-Hant-serif-lxgw-wenkai-tc',
   display: 'swap',
   preload: false,
 });
@@ -171,6 +194,9 @@ export const fontVariables = [
   notoSansSC.variable,
   notoSerifSC.variable,
   lxgwWenKaiTC.variable,
+  notoSansTC.variable,
+  notoSerifTC.variable,
+  lxgwWenKaiTCHant.variable,
   notoSansJP.variable,
   mPlusRounded1c.variable,
   notoSerifJP.variable,
