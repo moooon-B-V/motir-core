@@ -6279,6 +6279,23 @@
   --font-script-serif: var(--font-set-zh-Hans-serif-lxgw-wenkai-tc, serif);
 }
 
+/* Traditional Chinese, Taiwan (zh-Hant · MOTIR-8937): each role's default
+   member. `:lang(zh)` also matches zh-TW, so these blocks come AFTER both zh
+   blocks above: the specificity is equal and source order hands zh-TW its own
+   faces, including over a zh by-name pick of the same attribute. */
+[lang]:lang(zh-TW) {
+  --font-script-sans: var(--font-set-zh-Hant-sans-noto-sans-tc, sans-serif);
+  --font-script-serif: var(--font-set-zh-Hant-serif-noto-serif-tc, serif);
+  --font-script-mono: var(--font-set-zh-Hant-sans-noto-sans-tc, monospace);
+}
+
+/* A member picked by name. Comes after the set's block, so on an element
+   carrying both a lang and the attribute this one wins the specificity tie.
+   An id the registry does not list matches nothing and keeps the default. */
+:lang(zh-TW)[data-font-set-serif='lxgw-wenkai-tc'] {
+  --font-script-serif: var(--font-set-zh-Hant-serif-lxgw-wenkai-tc, serif);
+}
+
 /* Japanese (ja): each role's default member. A CJK mono role
    draws its Han glyphs from the set's sans face (fontSets.ts sameFaceAs), so
    the block stays total over the three roles while loading no extra face. */
