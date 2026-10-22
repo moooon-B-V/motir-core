@@ -124,6 +124,13 @@ export interface PlanEditSubmitOptions {
    * expand, else `generation` (a one-shot augment has no conversation either).
    */
   sessionId?: string;
+  /**
+   * The submit's idempotency key (MOTIR-9258) — a conversation passes one per
+   * attempt (`turnSubmitKey`), so the submit is re-sent within
+   * `MOTIR_AI_SUBMIT_BUDGET_MS` and a repeat answers the job the first created.
+   * Absent ⇒ one attempt, as every other planning door still sends.
+   */
+  idempotencyKey?: string;
 }
 
 /**
@@ -251,6 +258,11 @@ async function sharpenedRequirementOf(
   return narrowSharpenedRequirement(stored ?? null);
 }
 
+/** The trailing `submitJob` options of a keyed submit, or none at all. */
+function keyedSubmit(idempotencyKey: string | undefined): [] | [{ idempotencyKey: string }] {
+  return idempotencyKey ? [{ idempotencyKey }] : [];
+}
+
 async function submitPlanEditJob(
   context: JobContextBag,
   ctx: ProjectContext,
@@ -273,6 +285,9 @@ async function submitPlanEditJob(
     tenant,
     { ...context, ...planningFields },
     { userId: ctx.userId },
+    // Keyed only when the caller keyed it (MOTIR-9258): a keyless door's call is
+    // exactly what it was, one attempt.
+    ...keyedSubmit(opts.idempotencyKey),
   );
   // WHO ASKED (MOTIR-2986) — and this is the ONE seam where the acting user is
   // not always the answer. `submitPlanJob` serves BOTH the request paths (expand

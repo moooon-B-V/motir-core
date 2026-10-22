@@ -4889,6 +4889,31 @@ async function recordSubmittedPlanFinding(
 }
 
 /**
+ * The plan a conversation's submit already opened for `sourceJobId`, if any
+ * (MOTIR-9258). A planning submit is keyed, and motir-ai answers every repeat of
+ * a key with the job the first one created, so two submits of one session (a
+ * double press, a second tab, a Try again after a lost answer) can come back
+ * with the SAME job. `Plan.sourceJobId` is not unique, and the proposal callbacks
+ * resolve the plan by job, so the second must reuse the first plan rather than
+ * open another. Read under the SESSION's row lock, so of two racing opens the
+ * second waits for the first to commit and then sees its plan.
+ *
+ * Only a conversation's open (`{ sessionId }` with a job) is deduplicated: every
+ * other door opens a session of its own, so it cannot meet a sibling's plan.
+ */
+async function planOpenedForJobWithin(
+  input: CreatePlanInput,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<Plan | null> {
+  const ref = input.session;
+  if (!input.sourceJobId || !ref || !('sessionId' in ref)) return null;
+  await planChangeSessionRepository.lockById(ref.sessionId, tx);
+  const existing = await planRepository.findBySourceJobId(input.sourceJobId, ctx.workspaceId, tx);
+  return existing && existing.sessionId === ref.sessionId ? existing : null;
+}
+
+/**
  * Resolve the session a NEW plan belongs to, inside the plan's own transaction
  * (AMENDMENT 17 §4–§5; MOTIR-6022). An explicit `{ sessionId }` — a
  * conversation's submit — must name a session of THIS project. Otherwise a new
@@ -5148,6 +5173,10 @@ export const plansService = {
     const row = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
       async (tx) => {
+        // A re-sent keyed submit answered with a job that already has its plan
+        // (MOTIR-9258) gets THAT plan back, and nothing is written.
+        const opened = await planOpenedForJobWithin(input, ctx, tx);
+        if (opened) return opened;
         // The plan's SESSION, in the SAME transaction as the plan (AMENDMENT 17
         // §5): no plan is ever observable without one.
         const sessionId = await attachPlanSessionWithin(
