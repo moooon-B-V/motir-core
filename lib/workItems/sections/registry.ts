@@ -31,7 +31,10 @@ export type SectionShape =
 
 /** The canonical order sections are emitted in: the unheaded `framing`, the
  *  per-type prose and typed extras, then the boundary, the criteria and the
- *  refs, with `otherSections` (every heading no section defines) last. */
+ *  refs, then a planner-recorded decision's brief, with `otherSections` (every
+ *  heading no section defines) last. The brief follows the refs because that is
+ *  where it stood while it travelled as `otherSections`, so a body written then
+ *  re-renders in the same order. */
 export const SECTION_ORDER = [
   'framing',
   'question',
@@ -57,6 +60,10 @@ export const SECTION_ORDER = [
   'scopeBoundary',
   'acceptanceCriteria',
   'contextRefs',
+  'decisionBrief',
+  'whatChanged',
+  'supersedes',
+  'resultingDirection',
   'otherSections',
 ] as const;
 
@@ -72,7 +79,10 @@ const str: SectionShape = { type: 'string' };
 const list: SectionShape = { type: 'stringList' };
 
 /** One entry per section. `options` (a decision's) and `choiceOptions` (a
- *  choice's) share the `## Options` heading because they never share a set. */
+ *  choice's) share the `## Options` heading because they never share a set.
+ *  `decisionBrief` · `whatChanged` · `supersedes` · `resultingDirection` are the
+ *  four headings a PLANNER-RECORDED decision carries (`motir-meta`
+ *  `plan-rules/type-decision.md`), MOTIR-9211. */
 export const SECTION_CATALOGUE: Record<SectionName, CatalogueEntry> = {
   framing: { heading: null, shape: str },
   question: { heading: 'Question', shape: str },
@@ -147,6 +157,10 @@ export const SECTION_CATALOGUE: Record<SectionName, CatalogueEntry> = {
     heading: 'Context refs',
     shape: { type: 'objectList', fields: { ref: { type: 'string' }, why: { type: 'string' } } },
   },
+  decisionBrief: { heading: 'Decision', shape: str },
+  whatChanged: { heading: 'What changed', shape: str },
+  supersedes: { heading: 'Supersedes', shape: str },
+  resultingDirection: { heading: 'Resulting direction', shape: str },
   otherSections: {
     heading: null,
     shape: {
@@ -172,7 +186,12 @@ const TYPE_EXTRAS: Record<WorkItemTypeDto, TypeExtras> = {
   research: { required: [], optional: ['approach'] },
   review: { required: [], optional: [] },
   verification: { required: [], optional: ['steps'] },
-  decision: { required: ['question', 'options', 'recommendation'], optional: [] },
+  // The RESEARCHED decision requires its question, options and recommendation;
+  // the PLANNER-RECORDED one's brief is optional, so neither shape is a finding.
+  decision: {
+    required: ['question', 'options', 'recommendation'],
+    optional: ['decisionBrief', 'whatChanged', 'supersedes', 'resultingDirection'],
+  },
   choice: { required: ['question', 'why', 'choiceOptions', 'gates'], optional: [] },
   deploy: { required: [], optional: ['steps', 'postDeployVerification', 'rollback'] },
   manual: { required: [], optional: [] },
@@ -217,6 +236,10 @@ export type WorkItemSections = Partial<{
   scopeBoundary: string;
   acceptanceCriteria: string[];
   contextRefs: { ref: string; why: string }[];
+  decisionBrief: string;
+  whatChanged: string;
+  supersedes: string;
+  resultingDirection: string;
   otherSections: { heading: string; body: string }[];
 }>;
 

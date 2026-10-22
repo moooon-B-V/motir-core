@@ -137,6 +137,50 @@ describe('parseSections — fixtures', () => {
     expect(parseSections(body, 'task', 'decision').missing).toContain('options');
   });
 
+  // MOTIR-9211: the planner-recorded decision's brief is four registry sections.
+  it.each(['task', 'subtask'] as const)(
+    'a %s decision body carrying the planner-recorded brief reads it as named sections',
+    (kind) => {
+      const sections = fixture(kind, 'decision');
+      const body = renderSections(kind, 'decision', sections);
+      const parsed = parseSections(body, kind, 'decision');
+      expect(parsed.sections.decisionBrief).toBe('No intent classifier.');
+      expect(parsed.sections.whatChanged).toBe('**Change:** workflow\nIt said X; it says Y.');
+      expect(parsed.sections.supersedes).toBe('MOTIR-1, MOTIR-2');
+      expect(parsed.sections.resultingDirection).toBe('The whole direction.');
+      expect(parsed.sections.otherSections).toBeUndefined();
+      expect(parsed.missing).toEqual([]);
+      expect(renderSections(kind, 'decision', parsed.sections)).toBe(body);
+    },
+  );
+
+  it('a planner-recorded decision body written as otherSections re-renders unchanged', () => {
+    const { decisionBrief, whatChanged, supersedes, resultingDirection, ...researched } = fixture(
+      'task',
+      'decision',
+    );
+    const asOthers = renderSections('task', 'decision', {
+      ...researched,
+      otherSections: [
+        { heading: 'Decision', body: decisionBrief as string },
+        { heading: 'What changed', body: whatChanged as string },
+        { heading: 'Supersedes', body: supersedes as string },
+        { heading: 'Resulting direction', body: resultingDirection as string },
+      ],
+    });
+    const parsed = parseSections(asOthers, 'task', 'decision');
+    expect(parsed.sections.otherSections).toBeUndefined();
+    expect(renderSections('task', 'decision', parsed.sections)).toBe(asOthers);
+  });
+
+  it('a decision body without the brief still names its missing researched sections', () => {
+    const parsed = parseSections('Frame.\n\n## Scope BOUNDARY\n\nWall.', 'task', 'decision');
+    expect(parsed.missing).toEqual(
+      expect.arrayContaining(['question', 'options', 'recommendation']),
+    );
+    expect(parsed.missing).not.toContain('decisionBrief');
+  });
+
   it('a test body whose cases lack an arrow is invalid and keeps its text', () => {
     const parsed = parseSections('## Cases\n\n- no arrow here', 'task', 'test');
     expect(parsed.invalid.map((i) => i.section)).toContain('cases');
