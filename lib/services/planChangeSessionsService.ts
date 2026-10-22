@@ -1541,8 +1541,11 @@ export const planChangeSessionsService = {
   /**
    * The RESUME read plus what a FRESH start points to (AMENDMENT 17 §3;
    * MOTIR-6024): the caller's resumable conversation for the scope — or, when
-   * there is none, the scope's most recent OTHER conversation (any member's),
-   * which the overlay's notice links to on the Plans page. Writes nothing.
+   * there is none, the scope's most recent OTHER conversation (any member's)
+   * that has REACHED PLANNING, which the overlay's notice links to on the Plans
+   * page (MOTIR-9304). The read owns that rule; this service deliberately neither
+   * re-applies nor second-guesses it. The `copyable` half is NOT narrowed: the
+   * caller's own ended conversation is copyable whatever it holds. Writes nothing.
    */
   async findResumableWithEarlier(
     pctx: ProjectContext,

@@ -320,7 +320,8 @@ export const contextualPlanningService = {
       : await planChangeSessionsService.findResumable(pctx, scope.scopeKey);
     if (!session) {
       // Nothing resumed — say where the scope's earlier conversation is, when
-      // there is one (MOTIR-6024's notice). Never for a NAMED session.
+      // there is one and it has reached planning (MOTIR-6024's notice,
+      // MOTIR-9304). Never for a NAMED session.
       if (req.sessionId) return { session, planId: null };
       const [{ earlier, copyable }, held] = await Promise.all([
         planChangeSessionsService.findResumableWithEarlier(pctx, scope.scopeKey),

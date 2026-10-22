@@ -375,6 +375,16 @@ describe('plan_change_session RLS — the session list and the by-id read (MOTIR
         workspaceId: a.workspaceId,
       }),
     ).rejects.toThrow();
+    // The list shows a session once it reaches planning (MOTIR-9300).
+    await adminDb.plan.create({
+      data: {
+        workspaceId: a.workspaceId,
+        projectId: a.projectId,
+        sessionId: sessionA.id,
+        status: 'generating',
+        createdById: a.ownerId,
+      },
+    });
     const mine = await planSessionsService.listSessions(a.projectId, {
       userId: a.ownerId,
       workspaceId: a.workspaceId,

@@ -7,7 +7,8 @@
 // empty session in place — the overlay never closes. On the project thread the
 // person's WORDS are ANSWERED like any turn (AMENDMENT 5 · MOTIR-9231) and write no
 // confirm; the control there raises it, and Confirm opens another new session.
-// Plans then reads both earlier sessions as Closed, with the line that says why.
+// Neither earlier session reached planning, so Plans lists neither (MOTIR-9217:
+// a conversation that never proposed a plan is a question that was answered).
 //
 // Runs under playwright.acceptance.config.ts (MOTIR_CLOUD + video: 'on'), where
 // the motir-ai JOBS boundary is mocked UNDER the routes (`lib/test-ai-jobs-mock.ts`).
@@ -44,7 +45,6 @@ const confirmButton = (page: Page) => rail(page).getByTestId('planning-restart-c
 const keepButton = (page: Page) => rail(page).getByTestId('planning-restart-keep');
 const kept = (page: Page) => rail(page).getByTestId('planning-restart-kept');
 const earlier = (page: Page) => rail(page).getByTestId('planning-restart-earlier');
-const sessionsList = (page: Page) => page.getByRole('list', { name: 'Planning conversations' });
 
 const overlayOpen = (url: URL) => url.searchParams.has('plan');
 const overlayClosed = (url: URL) => !url.searchParams.has('plan');
@@ -115,6 +115,10 @@ async function sessionRow(id: string) {
 
 async function turnCount(sessionId: string): Promise<number> {
   return adminDb.planChangeTurn.count({ where: { sessionId } });
+}
+
+async function planCount(sessionId: string): Promise<number> {
+  return adminDb.plan.count({ where: { sessionId } });
 }
 
 // ── Steps ────────────────────────────────────────────────────────────────────
@@ -320,14 +324,23 @@ test('Plan something new closes the session, gives the card back, and opens a ne
     },
   );
 
-  await chapter('Plans: both earlier sessions read Closed, and why', async () => {
-    await page.goto('/plans');
-    await expect(sessionsList(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
-    for (const id of [cardSessionId, projectSessionId]) {
-      const row = page.locator(`[data-session-row="${id}"]`);
-      await expect(row).toContainText(en.aiPlanning.sessions.planState.closed);
-      await expect(row.getByTestId('plan-session-end')).toContainText('you started something new');
-    }
-    await beat();
-  });
+  await chapter(
+    'Plans: neither earlier session reached planning, so neither is listed',
+    async () => {
+      // Both sessions ended `restarted` holding no plan — the card's was a turn the
+      // planner had not yet answered with a plan, the project thread's only questions —
+      // and the Plans list serves only sessions that reached planning (MOTIR-9217).
+      for (const id of [cardSessionId, projectSessionId]) {
+        expect(await planCount(id)).toBe(0);
+      }
+      await page.goto('/plans');
+      await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toBeVisible({
+        timeout: FIRST_PAINT_MS,
+      });
+      for (const id of [cardSessionId, projectSessionId]) {
+        await expect(page.locator(`[data-session-row="${id}"]`)).toHaveCount(0);
+      }
+      await beat();
+    },
+  );
 });

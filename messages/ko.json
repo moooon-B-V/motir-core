@@ -7771,8 +7771,8 @@
     "viaMotir": "Motir AI 경유",
     "sessions": {
       "subtitle": "{project}의 모든 계획 대화(최근 활동순)",
-      "emptyTitle": "아직 계획 대화가 없습니다",
-      "emptyDescription": "Motir AI와 대화를 시작하세요. 계획이 있든 없든 모든 대화가 여기에 표시되며, 대화를 열면 이어서 진행합니다.",
+      "emptyTitle": "아직 계획 단계에 이른 대화가 없습니다",
+      "emptyDescription": "대화가 계획 단계에 이르면 여기에 표시됩니다.",
       "listAria": "계획 대화",
       "filterAria": "계획 상태별로 대화 필터링",
       "filter": {
@@ -7809,9 +7809,9 @@
       "loadMoreRetry": "다시 시도",
       "viewAria": "내 대화 또는 프로젝트 전체 대화 표시",
       "subtitleMine": "{project}에서 내가 시작한 계획 대화와 결정을 요청받은 계획",
-      "emptyMineTitle": "아직 내 계획 대화가 없습니다",
-      "emptyMineDescription": "Motir AI와 시작한 대화와 결정을 요청받은 계획이 여기에 표시됩니다.",
-      "emptyDescriptionRead": "이 프로젝트의 누군가가 Motir AI와 계획 대화를 시작하면, 계획이 있든 없든 여기에 표시됩니다.",
+      "emptyMineTitle": "아직 계획 단계에 이른 내 대화가 없습니다",
+      "emptyMineDescription": "내가 시작한 대화가 계획 단계에 이르면 여기에 표시됩니다.",
+      "emptyDescriptionRead": "대화가 계획 단계에 이르면 여기에 표시됩니다.",
       "filteredEmptyDescriptionMine": "다른 내 대화는 전체에 있습니다.",
       "readFailedTitle": "대화를 불러올 수 없습니다",
       "readFailedBody": "다시 시도하려면 새로 고침하세요.",

@@ -7777,8 +7777,8 @@
     "viaMotir": "przez Motir AI",
     "sessions": {
       "subtitle": "Wszystkie rozmowy planistyczne w {project}, od najnowszej aktywności",
-      "emptyTitle": "Brak rozmów planistycznych",
-      "emptyDescription": "Rozpocznij rozmowę z Motir AI. Każda rozmowa jest tu wymieniona — z planem lub jeszcze bez niego — a otwarcie jej pozwala ją kontynuować.",
+      "emptyTitle": "Żadna rozmowa nie dotarła jeszcze do planowania",
+      "emptyDescription": "Rozmowa pojawi się tutaj, gdy dotrze do planowania.",
       "listAria": "Rozmowy planistyczne",
       "filterAria": "Filtruj rozmowy według stanu planu",
       "filter": {
@@ -7815,9 +7815,9 @@
       "loadMoreRetry": "Ponów",
       "viewAria": "Pokaż Twoje rozmowy lub rozmowy całego projektu",
       "subtitleMine": "Rozmowy planistyczne rozpoczęte przez Ciebie w {project} oraz plany, o których masz zdecydować",
-      "emptyMineTitle": "Nie masz jeszcze rozmów planistycznych",
-      "emptyMineDescription": "Tu znajdziesz rozmowy rozpoczęte przez Ciebie z Motir AI oraz plany, o których masz zdecydować.",
-      "emptyDescriptionRead": "Gdy ktoś w tym projekcie rozpocznie rozmowę planistyczną z Motir AI, pojawi się ona tutaj — z planem lub jeszcze bez niego.",
+      "emptyMineTitle": "Żadna z Twoich rozmów nie dotarła jeszcze do planowania",
+      "emptyMineDescription": "Rozmowa, którą rozpoczniesz, pojawi się tutaj, gdy dotrze do planowania.",
+      "emptyDescriptionRead": "Rozmowa pojawi się tutaj, gdy dotrze do planowania.",
       "filteredEmptyDescriptionMine": "Pozostałe Twoje rozmowy są w widoku Wszystkie.",
       "readFailedTitle": "Nie udało się wczytać tych rozmów",
       "readFailedBody": "Odśwież stronę, aby spróbować ponownie.",

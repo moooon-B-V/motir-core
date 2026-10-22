@@ -7774,8 +7774,8 @@
     "viaMotir": "Motir AI 経由",
     "sessions": {
       "subtitle": "{project} のすべての計画の会話(最近のアクティビティ順)",
-      "emptyTitle": "計画の会話はまだありません",
-      "emptyDescription": "Motir AI との会話を始めましょう。計画の有無にかかわらず、すべての会話がここに表示され、開くと続きから再開できます。",
+      "emptyTitle": "計画に進んだ会話はまだありません",
+      "emptyDescription": "会話は計画に進むとここに表示されます。",
       "listAria": "計画の会話",
       "filterAria": "計画の状態で会話を絞り込む",
       "filter": {
@@ -7812,9 +7812,9 @@
       "loadMoreRetry": "再試行",
       "viewAria": "自分の会話とプロジェクト全体の会話を切り替える",
       "subtitleMine": "{project} であなたが始めた計画の会話と、判断を求められた計画",
-      "emptyMineTitle": "あなたの計画の会話はまだありません",
-      "emptyMineDescription": "Motir AI と始めた会話と、判断を求められた計画がここに表示されます。",
-      "emptyDescriptionRead": "このプロジェクトの誰かが Motir AI と計画の会話を始めると、計画の有無にかかわらずここに表示されます。",
+      "emptyMineTitle": "計画に進んだあなたの会話はまだありません",
+      "emptyMineDescription": "あなたが始めた会話は、計画に進むとここに表示されます。",
+      "emptyDescriptionRead": "会話は計画に進むとここに表示されます。",
       "filteredEmptyDescriptionMine": "あなたのほかの会話は「すべて」にあります。",
       "readFailedTitle": "これらの会話を読み込めませんでした",
       "readFailedBody": "再読み込みしてもう一度お試しください。",

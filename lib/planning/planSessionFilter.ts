@@ -1,4 +1,4 @@
-import { PLAN_SESSION_STATE_VALUES, type PlanSessionStateDto } from '@/lib/dto/planSessions';
+import { PLAN_SESSION_FILTER_VALUES, type PlanSessionFilterDto } from '@/lib/dto/planSessions';
 
 // WHICH PLAN STATE the Plans list is filtered to — the query parameter and its
 // parser (MOTIR-6025, `design/ai-planning/design-notes.md` Part XIX §19.1).
@@ -21,15 +21,17 @@ export const PLAN_SESSION_LANDING_PARAM = 'session';
 /**
  * The filter a URL selects — a plan state, or `null` for ALL, the default.
  *
- * All is the default, not a state (§19.1): the story's first promise is that a
- * conversation that never proposed anything is findable, and the only default
- * that shows it without a click is All. It writes a CLEAN url.
+ * All is the default, not a state (§19.1): it writes a CLEAN url, and it opens on
+ * everything the page can show. (The sessions spec's other reason — that a
+ * conversation that never proposed anything is findable — was retired with
+ * MOTIR-9217: such a conversation is no longer listed, which is why `none` left the
+ * FILTER vocabulary while staying a row state.)
  *
  * Unknown / absent / malformed → All, never an error: the value comes from a
- * URL a person can type.
+ * URL a person can type. `?planState=none` is one of those now (MOTIR-9301).
  */
-export function planStateFromParam(raw: string | null | undefined): PlanSessionStateDto | null {
-  return (PLAN_SESSION_STATE_VALUES as readonly string[]).includes(raw ?? '')
-    ? (raw as PlanSessionStateDto)
+export function planStateFromParam(raw: string | null | undefined): PlanSessionFilterDto | null {
+  return (PLAN_SESSION_FILTER_VALUES as readonly string[]).includes(raw ?? '')
+    ? (raw as PlanSessionFilterDto)
     : null;
 }

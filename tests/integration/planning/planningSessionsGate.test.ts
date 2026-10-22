@@ -287,6 +287,16 @@ describe('SEAM: the resume window is ONE rule across every door', () => {
     // ONCE IT HAS ENDED: the browser's read finds nothing resumable, and names
     // the earlier conversation instead; the public doors START a new session.
     await endIt(sessionId);
+    // The notice names only a conversation that reached planning (MOTIR-9304).
+    await adminDb.plan.create({
+      data: {
+        workspaceId: caller.fixture.workspaceId,
+        projectId: caller.fixture.projectId,
+        sessionId,
+        status: 'declined',
+        createdById: caller.fixture.ownerId,
+      },
+    });
     const later = (await (await readSessionRoute(new Request(`${APP}?scope=`))).json()) as {
       session: unknown;
       earlier: { id: string } | null;

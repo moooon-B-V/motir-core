@@ -463,6 +463,18 @@ describe('the end and the scope notice, read by id (AMENDMENT 23 §1; MOTIR-6024
       PROJECT_SCOPE,
       'Second conversation.',
     );
+    // Both reached planning, so only the exclusion decides (MOTIR-9304).
+    for (const sessionId of [older.id, newer.id]) {
+      await adminDb.plan.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          sessionId,
+          status: 'declined',
+          createdById: fx.ownerId,
+        },
+      });
+    }
 
     const latest = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       planChangeSessionRepository.findLatestConversationInScope(

@@ -4,6 +4,7 @@ import type { ProjectContext } from '@/lib/projects';
 import { buildScope, PROJECT_SCOPE } from '@/lib/planChange/scope';
 import { InvalidPlanSessionCursorError } from '@/lib/planChange/errors';
 import { plansService } from '@/lib/services/plansService';
+import { homeService } from '@/lib/services/homeService';
 import { usersService } from '@/lib/services/usersService';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { PLAN_SESSION_STATE_VALUES } from '@/lib/dto/planSessions';
@@ -86,6 +87,31 @@ async function freshSession(body: string): Promise<string> {
   return s.id;
 }
 
+/** A plan written straight onto a session, in the status the case needs. */
+let planTick = 0;
+async function holdPlan(
+  sessionId: string,
+  status: 'generating' | 'planned' | 'stale' | 'approved' | 'declined' = 'generating',
+) {
+  return adminDb.plan.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      sessionId,
+      status,
+      createdById: fx.ownerId,
+      createdAt: new Date(Date.UTC(2026, 7, 1, 0, 0, ++planTick)),
+    },
+  });
+}
+
+/** A conversation that REACHED planning — the only kind the list shows (MOTIR-9300). */
+async function plannedSession(body: string): Promise<string> {
+  const id = await freshSession(body);
+  await holdPlan(id);
+  return id;
+}
+
 beforeEach(async () => {
   await truncateAuthTables();
   fx = await makeWorkItemFixture();
@@ -97,7 +123,7 @@ afterAll(async () => {
 });
 
 describe('every session of the project is listed, newest activity first', () => {
-  it('a plan-less conversation, an MCP plan’s session and a backfilled one — each titled right', async () => {
+  it('an MCP plan’s session, a backfilled one and a conversation once it holds a plan — each titled right', async () => {
     const convo = await planChangeSessionsService.startWithFirstTurn(
       pctx(),
       buildScope(['ACME-1']),
@@ -128,6 +154,12 @@ describe('every session of the project is listed, newest activity first', () => 
       fx.ctx,
     );
 
+    // The conversation has not reached planning yet, so it is not a row (MOTIR-9300).
+    const before = await planSessionsService.listSessions(fx.projectId, fx.ctx);
+    expect(before.sessions.map((s) => s.id)).toEqual([agentSession, legacy.id]);
+
+    await holdPlan(convo.id);
+    await activeAt(convo.id, minutesAgo(1));
     const page = await planSessionsService.listSessions(fx.projectId, fx.ctx);
 
     expect(page.nextCursor).toBeNull();
@@ -137,8 +169,8 @@ describe('every session of the project is listed, newest activity first', () => 
       origin: 'conversation',
       firstTurn: 'Split invoicing out of billing',
       targetKeys: ['ACME-1'],
-      latestPlan: null,
-      planCount: 0,
+      latestPlan: { status: 'generating' },
+      planCount: 1,
       startedBy: { id: fx.ownerId },
     });
     expect(a).toMatchObject({
@@ -180,13 +212,13 @@ describe('every session of the project is listed, newest activity first', () => 
   });
 
   it('an ENDED session carries its end, and a COPY names the one it continues (MOTIR-7642)', async () => {
-    const source = await freshSession('the old attempt');
+    const source = await plannedSession('the old attempt');
     const endedAt = minutesAgo(30);
     await adminDb.planChangeSession.update({
       where: { id: source },
       data: { endedAt, endReason: 'failed' },
     });
-    const copy = await freshSession('the old attempt');
+    const copy = await plannedSession('the old attempt');
     await adminDb.planChangeSession.update({
       where: { id: copy },
       data: { copiedFromSessionId: source, lastActivityAt: minutesAgo(1) },
@@ -268,8 +300,9 @@ describe('the plan-state filter', () => {
     await make('approved', 1);
 
     const counts = await planSessionsService.countSessionsByPlanState(fx.projectId, fx.ctx);
+    // The three plan-less conversations are neither counted nor listed (MOTIR-9300).
     expect(counts).toEqual({
-      none: 3,
+      none: 0,
       generating: 0,
       waiting: 0,
       planned: 2,
@@ -279,10 +312,67 @@ describe('the plan-state filter', () => {
       closed: 0,
     });
     for (const planState of PLAN_SESSION_STATE_VALUES) {
+      if (planState === 'none') continue;
       const page = await planSessionsService.listSessions(fx.projectId, fx.ctx, { planState });
       expect({ planState, n: page.sessions.length }).toEqual({ planState, n: counts[planState] });
-      for (const s of page.sessions) expect(s.latestPlan?.status ?? 'none').toBe(planState);
+      for (const s of page.sessions) expect(s.latestPlan?.status).toBe(planState);
     }
+    // `?planState=none` no longer names a segment: it reads as All.
+    const all = await planSessionsService.listSessions(fx.projectId, fx.ctx);
+    const none = await planSessionsService.listSessions(fx.projectId, fx.ctx, {
+      planState: 'none',
+    });
+    expect(none.sessions.map((s) => s.id)).toEqual(all.sessions.map((s) => s.id));
+    expect(all.sessions).toHaveLength(3);
+    expect(Object.values(counts).reduce((a, b) => a + b, 0)).toBe(all.sessions.length);
+  });
+
+  it('walks EVERY page of the list without one plan-less row, and the counts agree', async () => {
+    for (let i = 0; i < 3; i += 1) await freshSession(`plan-less ${i}`);
+    const held: string[] = [];
+    for (let i = 0; i < 5; i += 1) held.push(await plannedSession(`planned ${i}`));
+
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    for (let guard = 0; guard < 10; guard += 1) {
+      const page = await planSessionsService.listSessions(fx.projectId, fx.ctx, {
+        cursor,
+        limit: 2,
+      });
+      seen.push(...page.sessions.map((s) => s.id));
+      for (const s of page.sessions) expect(s.latestPlan).not.toBeNull();
+      cursor = page.nextCursor;
+      if (cursor === null) break;
+    }
+    expect(new Set(seen)).toEqual(new Set(held));
+    const counts = await planSessionsService.countSessionsByPlanState(fx.projectId, fx.ctx);
+    expect(counts.none).toBe(0);
+    expect(counts.generating).toBe(5);
+    const mine = await planSessionsService.countSessionsByPlanState(fx.projectId, fx.ctx, {
+      view: 'mine',
+    });
+    expect(mine).toEqual(counts);
+    const minePage = await planSessionsService.listSessions(fx.projectId, fx.ctx, {
+      view: 'mine',
+    });
+    expect(new Set(minePage.sessions.map((s) => s.id))).toEqual(new Set(held));
+  });
+
+  it('the unfiltered repository door still reads a plan-less session as `none`', async () => {
+    const id = await freshSession('x');
+    const rows = await adminDb.$transaction((tx) =>
+      planChangeSessionRepository.listPageByProject(
+        {
+          projectId: fx.projectId,
+          workspaceId: fx.workspaceId,
+          limit: 10,
+          after: null,
+          state: null,
+        },
+        tx,
+      ),
+    );
+    expect(rows.map((r) => [r.id, r.state])).toEqual([[id, 'none']]);
   });
 });
 
@@ -332,10 +422,18 @@ describe('a session whose attempt FAILED (Story MOTIR-7905 · MOTIR-7921 / MOTIR
     expect(filtered.sessions.map((s) => s.id)).toEqual([id]);
   });
 
-  it('an open failed session with NO plan yet is waiting too', async () => {
+  it('an open failed session with NO plan is not on the list or the counts — it is on To resume (MOTIR-9300)', async () => {
     const id = await freshSession('x');
     await adminDb.planChangeSession.update({ where: { id }, data: FAILED });
-    expect((await rowOf(id)).state).toBe('waiting');
+    expect((await rowOf(id)) ?? null).toBeNull();
+    const counts = await planSessionsService.countSessionsByPlanState(fx.projectId, fx.ctx);
+    expect(Object.values(counts).every((n) => n === 0)).toBe(true);
+    const resume = await homeService.listToResume({ ...fx.ctx, projectId: fx.projectId });
+    expect(resume.planningSessions?.map((s) => s.sessionId)).toEqual([id]);
+    // The landing door still finds it by id, so its own link keeps working.
+    expect((await planSessionsService.getSessionRow(fx.projectId, id, fx.ctx))?.state).toBe(
+      'waiting',
+    );
   });
 
   it('a failure BESIDE a waiting plan reads the PLAN’s state — never Closed, not waiting — with the failure on the row', async () => {
@@ -398,7 +496,7 @@ describe('paging', () => {
     const same = minutesAgo(5);
     const ids: string[] = [];
     for (let i = 0; i < 5; i += 1) {
-      const id = await freshSession(`t${i}`);
+      const id = await plannedSession(`t${i}`);
       ids.push(id);
     }
     for (const id of ids) {
@@ -424,7 +522,8 @@ describe('paging', () => {
   });
 
   it('clamps an absurd limit, and refuses a cursor it did not mint', async () => {
-    await planChangeSessionsService.startWithFirstTurn(pctx(), PROJECT_SCOPE, 'x');
+    const convo = await planChangeSessionsService.startWithFirstTurn(pctx(), PROJECT_SCOPE, 'x');
+    await holdPlan(convo.id);
     expect(
       (await planSessionsService.listSessions(fx.projectId, fx.ctx, { limit: 0 })).sessions,
     ).toHaveLength(1);
@@ -457,11 +556,38 @@ describe('one row by id — the `?session=` landing', () => {
     );
     expect(await planSessionsService.getSessionRow(fx.projectId, theirs.id, fx.ctx)).toBeNull();
   });
+
+  it('`planOnly` returns no row for a plan-less session, and the row once it holds a plan (MOTIR-9300)', async () => {
+    const convo = await planChangeSessionsService.startWithFirstTurn(pctx(), PROJECT_SCOPE, 'x');
+    const only = { planOnly: true };
+    expect(
+      await planSessionsService.getSessionRow(fx.projectId, convo.id, fx.ctx, only),
+    ).toBeNull();
+    // The reader-scope door is not narrowed: the conversation still opens by id.
+    expect((await planChangeSessionsService.getByIdForReader(pctx(), convo.id)).id).toBe(convo.id);
+    expect(await planSessionsService.isSessionInReaderScope(fx.projectId, convo.id, fx.ctx)).toBe(
+      true,
+    );
+
+    await holdPlan(convo.id, 'declined');
+    expect(
+      (await planSessionsService.getSessionRow(fx.projectId, convo.id, fx.ctx, only))?.state,
+    ).toBe('declined');
+    const generating = await plannedSession('y');
+    expect(
+      (await planSessionsService.getSessionRow(fx.projectId, generating, fx.ctx, only))?.state,
+    ).toBe('generating');
+  });
 });
 
 describe('browse is the permission', () => {
   it('a browse-only member sees every session, someone else’s included', async () => {
-    await planChangeSessionsService.startWithFirstTurn(pctx(), PROJECT_SCOPE, 'owner’s');
+    const owners = await planChangeSessionsService.startWithFirstTurn(
+      pctx(),
+      PROJECT_SCOPE,
+      'owner’s',
+    );
+    await holdPlan(owners.id);
     const viewer = await usersService.createUser({
       email: 'viewer-6025@example.com',
       password: 'correct-horse-battery-staple-9',
@@ -492,7 +618,7 @@ describe('browse is the permission', () => {
 
 describe('the repository reads the overlay leans on (MOTIR-6024)', () => {
   it('the latest conversation of a scope with nothing excluded, and a starter-less session', async () => {
-    const id = await freshSession('only one');
+    const id = await plannedSession('only one');
     const orphan = await adminDb.planChangeSession.create({
       data: { workspaceId: fx.workspaceId, projectId: fx.projectId, origin: 'legacy' },
     });

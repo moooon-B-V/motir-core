@@ -61,7 +61,10 @@ export interface PlanSessionEndActor {
   now?: Date;
   /** The IDLE CLOSE's guard, checked under the session's lock: end only if the
    *  session's last activity is still older than this AND it holds no undecided
-   *  plan. A turn that landed after the sweep's discovery read wins. */
+   *  plan. A turn that landed after the sweep's discovery read wins. A session
+   *  awaiting its person is not idle — unless it holds NO plan and no failure
+   *  (MOTIR-9299): a legacy mark on a conversation that never reached planning does
+   *  not protect it, while a mark on a session holding a plan still does. */
   onlyIfIdleBefore?: Date;
 }
 
@@ -124,8 +127,13 @@ export async function endSessionWithin(
   if (by.onlyIfIdleBefore) {
     // A session that is WAITING (failed, or awaiting its person) is never idle: a
     // mark that landed between the discovery read and this lock wins (MOTIR-7912).
+    // EXCEPT a mark on a session holding NO plan and no failure (MOTIR-9299): a
+    // conversation that never reached planning is not waiting on anyone, so a mark left
+    // under the old rule is released by this end. Phrased off the same `latestPlanId`
+    // read as the release below, so discovery (`listIdleOpen`) and this re-check agree.
+    const planlessUnfailed = ownsRelease && latestPlanId === null && fresh.failedAt === null;
     const stillIdle =
-      sessionWaitingState(fresh) === 'open' &&
+      (sessionWaitingState(fresh) === 'open' || planlessUnfailed) &&
       fresh.lastActivityAt < by.onlyIfIdleBefore &&
       (await planRepository.countUndecidedBySession(sessionId, tx)) === 0;
     if (!stillIdle) return { ended: false, session: fresh };

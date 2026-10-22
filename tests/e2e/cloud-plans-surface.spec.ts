@@ -1,4 +1,4 @@
-import { PLAN_SESSION_STATE_VALUES } from '@/lib/dto/planSessions';
+import { PLAN_SESSION_FILTER_VALUES } from '@/lib/dto/planSessions';
 
 import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
@@ -237,11 +237,13 @@ test('Plans: the filter, ten at a time, who started a decided plan, and the list
 
     // ⚠️ ONE OPTION PER PLAN STATE PLUS `All`, DERIVED — never a literal count
     // (MOTIR-3622's lesson: a hardcoded number goes red the day the vocabulary
-    // grows). The strip maps `PLAN_SESSION_STATE_VALUES`.
+    // grows). The strip maps `PLAN_SESSION_FILTER_VALUES` — every row state but
+    // `none`, which no listed conversation can hold (MOTIR-9301).
     await expect(tabStrip(page)).toBeVisible();
     await expect(tabStrip(page).getByRole('button')).toHaveCount(
-      PLAN_SESSION_STATE_VALUES.length + 1,
+      PLAN_SESSION_FILTER_VALUES.length + 1,
     );
+    await expect(tabStrip(page).getByRole('button', { name: /^No plan yet/ })).toHaveCount(0);
     await expect(tab(page, 'All')).toHaveAttribute('aria-pressed', 'true');
     for (const other of [
       'Writing',

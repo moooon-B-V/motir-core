@@ -36,6 +36,8 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | **A plan being written: progress and cues**     | **`plan-review--live-progress.mock.html`**                | MOTIR-7821           | Part XXVI   |
 | **A plan resumed after a lost machine**         | **`plan-review--live-progress--resuming.mock.html`**      | MOTIR-8306           | Part XXVII  |
 | **Following the planner, and fields typing in** | **`plan-review--follow-the-planner.mock.html`**           | MOTIR-8591           | Part XXVIII |
+| **The Plans page lists CONVERSATIONS**          | `plans-sessions--list.mock.html` (on the design result)   | MOTIR-6019           | by title    |
+| **The list shows only what reached planning**   | **`plans-sessions--reached-planning.mock.html`**          | MOTIR-9298           | § at end    |
 
 **A Part number is an address in THIS file.** Before taking the next number, check the area's
 published design results too (`list_designs` with `pathPrefix: design/ai-planning/`): a result that
@@ -8556,3 +8558,105 @@ A planning session started by **Confirm** on the guide's re-plan offer (the deci
 | `plans.seed.guide` | From the guide on {KEY} | 来自对 {KEY} 的引导 | session memory card |
 
 Owned by the session memory card ([MOTIR-8697](motir:cmv9rgb6z0018hvoimygo28if) for the row; [MOTIR-8691](motir:cmv9rgayp000whvoiaxsj1gr3) for the data it reads).
+
+## ⭐ The Plans list shows only conversations that reached planning (MOTIR-9298, 2026-10-22)
+
+**Design system, checked first.** `package.json` depends on `@motir/design-system`
+(`workspace:*`, installed 0.17.0) and `app/globals.css` imports
+`@motir/design-system/theme.css`, so motir-core is ON Motir Design. The project's own axes come
+from `app/layout.tsx` (`data-style` / `data-palette` / `data-type` from the applied theme); the
+asset is drawn at the defaults the lifted sheet carries. Every part used ships today —
+`Segmented`, `EmptyState` (both from the package), `PlanWithAILauncher` (product-local) and the
+session row (product-local, reproduced) — so nothing is proposed as an addition.
+
+**Story MOTIR-9217; decision MOTIR-9215, amendment 5 clause 6. A DELTA** on
+[MOTIR-6019](motir:cmud0ajoc009ihwtxdqihxm75)'s published `plans-sessions--list.mock.html` (the
+spec this file cites by title, _"The Plans page lists CONVERSATIONS"_, because the index gives
+Part XIX to MOTIR-6053; that published asset is not on disk). The mock is
+**`design/ai-planning/plans-sessions--reached-planning.mock.html`**. It draws only the two pieces
+of chrome that change and edits no other asset. The stylesheet is lifted verbatim from
+`plans-sessions--seeded.mock.html`; the strip, the empty states and the launcher are the shipped
+components' markup emitted through `renderWithIntl`; the two rows in panel 1 are reproduced
+unchanged from `plans-sessions--seeded.mock.html` only to place the strip.
+
+### What changed underneath, and why the chrome follows
+
+The list, its counts and the `?session=` landing admit only a conversation holding at least one
+`plan` row, of any status (MOTIR-9300). No listed row can be in the no-plan state, so:
+
+- **`total === 0` now means nothing in this view has reached planning.** It used to mean the
+  project held no conversation at all (`_view.tsx`: _"a fact about the COUNTS — no conversation at
+  all"_). The project may hold a conversation that asked a question and was answered; it is
+  deliberately not listed, and the empty state does not mention it.
+- **The strip's no-plan segment filters for nothing that can be shown,** so it retires from the
+  drawn option set.
+
+### The strip — eight segments
+
+All, then `generating`, `waiting`, `planned`, `stale`, `approved`, `declined`, `closed`, in the
+order `PLAN_SESSION_STATE_VALUES` gives them with `none` left out. No panel draws a `none`
+segment or a `none` row chip. Everything else is the shipped strip: counts in the `trailing` slot
+(`hidden sm:inline`), the `overflow-x-auto whitespace-nowrap` scroller, the selected segment
+scrolled into view on mount, a segment whose count is 0 still drawn, the shipped hover and
+focus-visible treatment, no disabled or pending state. In every panel the seven state counts sum
+to the All count.
+
+**A `?planState=none` address draws the All panel (panel 1)** and owes no state of its own: the
+parser serves a value the vocabulary does not hold as All (and until the parser narrows, the
+service does — MOTIR-9300). Whether `none` leaves `PLAN_SESSION_STATE_VALUES` itself is the
+reads' and the strings' work, not this asset's.
+
+| Element              | Primitive                         | Colour                                                                                           | Shape                                                           |
+| -------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| Strip track          | `Segmented` group                 | `--el-tabnav-track`, `--el-border`                                                               | `--radius-btn`                                                  |
+| Selected segment     | `Segmented` button                | `--el-page-bg`, `--el-text-strong`, count `--el-tabnav-active`, `--shadow-subtle`                | `--height-control`, `--spacing-control-x`, `--radius-btn` − 2px |
+| Other segment        | `Segmented` button                | `--el-text-secondary`, hover `--el-text`, count `--el-text-secondary`                            | as above                                                        |
+| Project / Mine empty | `EmptyState` + Sparkles icon      | `--el-card`, `--el-border`, icon `--el-icon-muted`, title `--el-text`, body `--el-text-subtitle` | `--radius-card`, `--spacing-card-padding`                       |
+| Fresh-start launcher | `PlanWithAILauncher` (pill)       | accent hero fill, `--el-accent-text`                                                             | `--radius-badge`, `--height-btn-md`, `--spacing-btn-x`          |
+| Filtered empty       | `EmptyState` (shipped, unchanged) | as shipped                                                                                       | as shipped                                                      |
+
+### The settled words (en; the zh twin ships with the strip-and-strings card, MOTIR-9301)
+
+| Key                                                                 | en                                                              |
+| ------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `aiPlanning.sessions.emptyTitle` (Project)                          | Nothing has reached planning yet                                |
+| `aiPlanning.sessions.emptyDescription` (Project, can author)        | A conversation appears here once it reaches planning.           |
+| `aiPlanning.sessions.emptyDescriptionRead` (Project, cannot author) | A conversation appears here once it reaches planning.           |
+| `aiPlanning.sessions.emptyMineTitle` (Mine)                         | No conversation of yours has reached planning yet               |
+| `aiPlanning.sessions.emptyMineDescription` (Mine)                   | A conversation you start appears here once it reaches planning. |
+
+No project-level variant says the project holds no conversations, or that the reader has not
+talked to the assistant. "Of yours" rather than "you started", because the Mine read also covers
+plans the reader decided or was routed. The filtered-empty keys are untouched; that state is
+reproduced unchanged in panel 5 so the two emptinesses still read differently (Part VII §6): only
+the project-level one offers a fresh start, and only the filtered one keeps the strip.
+
+### Panels
+
+1. The strip, wide, All selected, over two reproduced rows (counts illustrative, summing to 18).
+2. The strip, narrow (375px), counts hidden, Approved selected and scrolled into view.
+3. Project-empty, a reader who can author: no strip, the title and sentence, the launcher.
+4. Project-empty, Mine view with the launcher; and the Project view for a reader who cannot
+   author, with no action.
+5. Filtered-empty, unchanged: strip present (Stale selected, count 0), shipped copy, no CTA.
+
+### Supersedes
+
+**The sessions spec's reason for All-as-default is retired; the default is not.** Two files carry
+the same sentence, `lib/planning/planSessionFilter.ts` and
+`app/(authed)/plans/_components/PlanStatusTabs.tsx`:
+
+> the story's first promise is that a conversation that never proposed anything is findable, and
+> the only default that shows it without a click is All.
+
+Such a conversation is no longer listed, so that reason is false from now on. All stays the
+default for the reason that survives: a clean URL, and a list that opens on everything it can
+show. The strip-and-strings card (MOTIR-9301) corrects both comments when it drops the segment.
+
+### What this delta does NOT draw or decide
+
+The reads (MOTIR-9300), the gate and the lease (MOTIR-9299), the fresh-start notice's pointer
+(MOTIR-9304), the strings and the parser (MOTIR-9301), the coverage and the receipt (MOTIR-9302,
+MOTIR-9303); the rows, the Mine/Project switch, the read-failed state, the paging sentinel, the
+`?session=` highlight and the overlay — all shipped and unchanged. No PNG is exported: a new asset
+is a mock alone (`docs/decisions/design-result.md` AMENDMENT 4).

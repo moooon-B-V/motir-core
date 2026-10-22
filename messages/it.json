@@ -7777,8 +7777,8 @@
     "viaMotir": "tramite Motir AI",
     "sessions": {
       "subtitle": "Tutte le conversazioni di pianificazione in {project}, dalla più recente",
-      "emptyTitle": "Ancora nessuna conversazione di pianificazione",
-      "emptyDescription": "Avvia una conversazione con Motir AI. Ogni conversazione è elencata qui, con o senza piano, e aprirne una la riprende.",
+      "emptyTitle": "Nessuna conversazione è ancora arrivata alla pianificazione",
+      "emptyDescription": "Una conversazione compare qui non appena arriva alla pianificazione.",
       "listAria": "Conversazioni di pianificazione",
       "filterAria": "Filtra le conversazioni per stato del piano",
       "filter": {
@@ -7815,9 +7815,9 @@
       "loadMoreRetry": "Riprova",
       "viewAria": "Mostra le tue conversazioni o quelle dell’intero progetto",
       "subtitleMine": "Le conversazioni di pianificazione che hai avviato in {project} e i piani su cui ti è stato chiesto di decidere",
-      "emptyMineTitle": "Ancora nessuna tua conversazione di pianificazione",
-      "emptyMineDescription": "Qui sono elencate le conversazioni che avvii con Motir AI e i piani su cui ti viene chiesto di decidere.",
-      "emptyDescriptionRead": "Quando qualcuno in questo progetto avvia una conversazione di pianificazione con Motir AI, viene elencata qui, con o senza piano.",
+      "emptyMineTitle": "Nessuna tua conversazione è ancora arrivata alla pianificazione",
+      "emptyMineDescription": "Una conversazione che avvii compare qui non appena arriva alla pianificazione.",
+      "emptyDescriptionRead": "Una conversazione compare qui non appena arriva alla pianificazione.",
       "filteredEmptyDescriptionMine": "Le tue altre conversazioni si trovano in Tutte.",
       "readFailedTitle": "Non siamo riusciti a caricare queste conversazioni",
       "readFailedBody": "Ricarica per riprovare.",

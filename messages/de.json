@@ -7777,8 +7777,8 @@
     "viaMotir": "über Motir AI",
     "sessions": {
       "subtitle": "Alle Planungsgespräche in {project}, neueste Aktivität zuerst",
-      "emptyTitle": "Noch keine Planungsgespräche",
-      "emptyDescription": "Beginnen Sie ein Gespräch mit Motir AI. Jedes Gespräch wird hier aufgeführt – mit oder noch ohne Plan –, und wenn Sie eines öffnen, wird es fortgesetzt.",
+      "emptyTitle": "Noch kein Gespräch hat die Planung erreicht",
+      "emptyDescription": "Ein Gespräch erscheint hier, sobald es die Planung erreicht.",
       "listAria": "Planungsgespräche",
       "filterAria": "Gespräche nach Planstatus filtern",
       "filter": {
@@ -7815,9 +7815,9 @@
       "loadMoreRetry": "Erneut versuchen",
       "viewAria": "Ihre Gespräche oder die des gesamten Projekts anzeigen",
       "subtitleMine": "Planungsgespräche, die Sie in {project} begonnen haben, und Pläne, über die Sie entscheiden sollen",
-      "emptyMineTitle": "Noch keine eigenen Planungsgespräche",
-      "emptyMineDescription": "Gespräche, die Sie mit Motir AI beginnen, und Pläne, über die Sie entscheiden sollen, werden hier aufgeführt.",
-      "emptyDescriptionRead": "Wenn jemand in diesem Projekt ein Planungsgespräch mit Motir AI beginnt, wird es hier aufgeführt – mit oder noch ohne Plan.",
+      "emptyMineTitle": "Noch keines Ihrer Gespräche hat die Planung erreicht",
+      "emptyMineDescription": "Ein Gespräch, das Sie beginnen, erscheint hier, sobald es die Planung erreicht.",
+      "emptyDescriptionRead": "Ein Gespräch erscheint hier, sobald es die Planung erreicht.",
       "filteredEmptyDescriptionMine": "Ihre anderen Gespräche finden Sie unter „Alle“.",
       "readFailedTitle": "Diese Gespräche konnten nicht geladen werden",
       "readFailedBody": "Laden Sie die Seite neu, um es erneut zu versuchen.",

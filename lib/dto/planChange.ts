@@ -489,7 +489,8 @@ export interface ContextualSessionResumeDto {
 /**
  * The scope's most recent OTHER conversation — any member's — that a FRESH
  * start points to (AMENDMENT 17 §3; MOTIR-6024's notice, design §19.8). A read:
- * nothing about it is recorded.
+ * nothing about it is recorded. It holds at least one `plan` row, of any status
+ * (MOTIR-9304), so the id the notice renders is one the Plans room can list.
  */
 export interface EarlierSessionDto {
   id: string;

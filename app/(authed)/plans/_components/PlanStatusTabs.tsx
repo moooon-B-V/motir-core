@@ -6,9 +6,9 @@ import { useTranslations } from 'next-intl';
 
 import { Segmented, type SegmentedOption } from '@/components/ui/Segmented';
 import {
-  PLAN_SESSION_STATE_VALUES,
+  PLAN_SESSION_FILTER_VALUES,
+  type PlanSessionFilterDto,
   type PlanSessionStateCountsDto,
-  type PlanSessionStateDto,
 } from '@/lib/dto/planSessions';
 import { PLAN_SESSION_LANDING_PARAM, PLAN_STATE_PARAM } from '@/lib/planning/planSessionFilter';
 
@@ -16,11 +16,13 @@ import { PLAN_SESSION_LANDING_PARAM, PLAN_STATE_PARAM } from '@/lib/planning/pla
 // `design/ai-planning/design-notes.md` Part XIX §19.1 and
 // `plans-sessions--list.mock.html`). It was the plan-STATUS tab strip
 // (MOTIR-3241); the list now holds CONVERSATIONS, and a conversation is filtered
-// by the state of its latest plan — or by having none.
+// by the state of its latest plan. Only a session holding a plan is listed
+// (MOTIR-9300), so the strip offers the FILTER vocabulary — no `none` segment
+// (MOTIR-9301, `plans-sessions--reached-planning.mock.html`).
 //
-// **All** is the DEFAULT and writes a clean URL (§19.1): the story's first
-// promise is that a conversation that never proposed anything is findable, and
-// the only default that shows it without a click is All.
+// **All** is the DEFAULT and writes a clean URL (§19.1): a clean address, and a
+// list that opens on everything it can show. (The older reason, that a
+// conversation that never proposed anything is findable, retired with MOTIR-9217.)
 //
 // THE URL IS THE SINGLE SOURCE OF TRUTH: the page derives the filter from
 // `searchParams` on every render, so a deep link, a reload and Back/forward all
@@ -33,12 +35,12 @@ import { PLAN_SESSION_LANDING_PARAM, PLAN_STATE_PARAM } from '@/lib/planning/pla
 // the CLIENT reads is written with `shallowPush`*). The parameter's name and
 // parser live in the PURE `lib/planning/planSessionFilter.ts` (MOTIR-3243).
 
-type FilterValue = PlanSessionStateDto | 'all';
+type FilterValue = PlanSessionFilterDto | 'all';
 
 export interface PlanStatusTabsProps {
   /** The filter in view, already resolved from the URL — null = All. */
-  value: PlanSessionStateDto | null;
-  /** How many sessions each state holds — total over the vocabulary. */
+  value: PlanSessionFilterDto | null;
+  /** How many sessions each state holds — total over the ROW vocabulary. */
   counts: PlanSessionStateCountsDto;
 }
 
@@ -48,13 +50,15 @@ export function PlanStatusTabs({ value, counts }: PlanStatusTabsProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const total = PLAN_SESSION_STATE_VALUES.reduce((sum, state) => sum + counts[state], 0);
+  // All counts the segments it DRAWS, so the number adds up to the segments under
+  // it whatever the counts map carries for a state the strip does not offer.
+  const total = PLAN_SESSION_FILTER_VALUES.reduce((sum, state) => sum + counts[state], 0);
   // The count rides the primitive's `trailing` slot, hidden below `sm`
   // (Part VII §4, unchanged by §19.1).
   const trailing = (n: number) => <span className="hidden sm:inline">{n}</span>;
   const options: SegmentedOption<FilterValue>[] = [
     { value: 'all', label: t('filter.all'), trailing: trailing(total) },
-    ...PLAN_SESSION_STATE_VALUES.map((state) => ({
+    ...PLAN_SESSION_FILTER_VALUES.map((state) => ({
       value: state,
       label: t(`planState.${state}`),
       trailing: trailing(counts[state]),
