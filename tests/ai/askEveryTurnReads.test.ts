@@ -197,7 +197,7 @@ describe('a defect report or "plan something else" is answered, never dispatched
 
 describe('the retry of a stored turn', () => {
   it.each(['debug', 'new_session'] as const)(
-    'a stored `%s` turn re-runs as an ASK — never `debug_bug`, no second user turn',
+    'a stored `%s` turn re-runs as an ASK — never the retired debug job, no second user turn',
     async (intent) => {
       await ask(askReq({ body: 'Saving a comment drops the mention' }));
       const turn = await storeAs(intent);
