@@ -4,6 +4,7 @@ import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { parsePlanningLaunch } from '@/lib/planning/launcher';
+import { planReview } from '../helpers/planReview';
 import { indexPlanReview } from '@/lib/planning/planChangeDiff';
 import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChange';
 import type {
@@ -165,5 +166,19 @@ describe('the working turn is one row with one avatar', () => {
     renderRail({ ...BASE, acts: [], progress: null });
     expect(row()).not.toBeNull();
     expect(marks()[0]!.getAttribute('data-at-work')).toBe('true');
+  });
+
+  it('a plan on screen is read by its own progress, whatever stream is still open', () => {
+    // A stream left open (a plan run's conversation job not yet settled) over a
+    // plan that has nothing moving: the plan decides, so the mark holds still.
+    renderRail({
+      ...BASE,
+      planId: 'plan-1',
+      acts: [],
+      progress: null,
+      liveReview: { ...planReview([]), progress: null },
+    });
+    expect(row()).not.toBeNull();
+    expect(marks()[0]!.getAttribute('data-at-work')).toBe('false');
   });
 });

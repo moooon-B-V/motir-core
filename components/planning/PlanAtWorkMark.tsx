@@ -47,8 +47,9 @@ export interface PlanAtWorkMarkProps {
   /**
    * Any OTHER job of this session streaming to this viewer: an ask turn being
    * read, a look-up, a debug turn, a plan run still in its conversation phase.
-   * The rail passes `false` while a plan run is in its planning phase, so a
-   * stream still open over a stalled plan does not keep the mark moving.
+   * The rail passes `false` while a plan run is in its planning phase or a plan
+   * is on screen, so a stream still open over a stalled, failing or finished
+   * plan does not keep the mark moving.
    */
   turnStreaming?: boolean;
 }

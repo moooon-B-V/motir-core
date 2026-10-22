@@ -73,8 +73,11 @@ class FlowEngine {
 
   private frame = (now: number) => {
     this.raf = 0;
-    this.e = easedEnergy(this.from, this.to, now - this.easeAt);
-    if (this.e <= 0) {
+    // A frame's timestamp is when the frame began, which can be a moment BEFORE
+    // the `target()` that queued it: never read that as time running backwards.
+    this.e = easedEnergy(this.from, this.to, Math.max(0, now - this.easeAt));
+    // Rest only once easing TO rest; a flow starting from zero is not over.
+    if (this.e <= 0 && this.to <= 0) {
       this.e = 0;
       this.paint(null);
       return;

@@ -1200,7 +1200,12 @@ export function PlanChangeRail({
             <PlanAtWorkMark
               progress={state.liveReview?.progress ?? null}
               failing={state.liveFailing}
-              turnStreaming={state.phase === 'streaming' && runPhase !== 'planning'}
+              // A plan run in its planning phase, or any plan on screen, is read by
+              // the plan's own progress, whatever stream is still open: a stalled,
+              // failing or finished plan holds the mark still.
+              turnStreaming={
+                state.phase === 'streaming' && runPhase !== 'planning' && !state.liveReview
+              }
             />
           ) : null}
           <div className="flex min-w-0 flex-1 flex-col gap-3">

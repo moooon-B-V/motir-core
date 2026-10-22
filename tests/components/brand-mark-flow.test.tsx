@@ -125,6 +125,35 @@ describe('flowing', () => {
     expect(queue.size).toBe(0);
   });
 
+  it('flows again after it has eased all the way back to rest', () => {
+    const r = render(<BrandMarkFlow flowing size={17} />);
+    frame();
+    frame(200);
+    r.rerender(<BrandMarkFlow flowing={false} size={17} />);
+    frame(FLOW_EASE_MS + 1);
+    expect(path().getAttribute('d')).toBe(WAVE_BAND_PATH);
+    expect(queue.size).toBe(0);
+    r.rerender(<BrandMarkFlow flowing size={17} />);
+    expect(queue.size).toBe(1);
+    frame();
+    frame(200);
+    const a = path().getAttribute('d');
+    frame(100);
+    expect(a).not.toBe(WAVE_BAND_PATH);
+    expect(path().getAttribute('d')).not.toBe(a);
+    expect(path().getAttribute('fill')).toMatch(/^url\(#mark-flow-/);
+  });
+
+  it('a first frame stamped before the flow began does not end it', () => {
+    // rAF hands each callback the time its frame BEGAN, which can precede the
+    // effect that queued it.
+    render(<BrandMarkFlow flowing size={17} />);
+    frame(-5);
+    expect(queue.size).toBe(1);
+    frame(200);
+    expect(path().getAttribute('d')).not.toBe(WAVE_BAND_PATH);
+  });
+
   it('keeps the same path node from rest to flow and back', () => {
     const r = render(<BrandMarkFlow flowing={false} size={17} />);
     const node = path();
