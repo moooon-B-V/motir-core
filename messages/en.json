@@ -6538,6 +6538,13 @@
       "saveBadge": "Save ~33%",
       "chooseTitle": "Choose your plan",
       "chooseSub": "An org-level monthly credit pool, billed separately from seats. Any org can buy it — a paid Motir seat plan is not required. Pro is the recommended anchor.",
+      "yourPlanTitle": "Your plan",
+      "needMore": {
+        "title": "Need more credits?",
+        "body": "If your organization uses more than {plan}'s {credits} credits a month, estimate your usage and the Calculator offers a larger credit pool sized to it.",
+        "bodyHeld": "If your organization outgrows its {credits} credits a month, estimate your usage and the Calculator offers a larger pool sized to it.",
+        "action": "Open the Calculator"
+      },
       "current": "Current",
       "recommended": "Recommended",
       "creditsAllotment": "{n} credits / mo",
@@ -6663,10 +6670,12 @@
         "bought": "Your {plan} plan is being set up. {credits} credits a month will be added to your balance once the payment settles.",
         "refused": {
           "atOrBelowCeiling": "A larger pool only exists above our largest regular plan. At this estimate, a regular plan or a top-up is the answer. Nothing was charged.",
-          "offerExpired": "The pool and price you were shown no longer match your estimate. Nothing was charged, and the old offer wasn't re-priced. Go back to the calculator and price it again.",
+          "offerExpired": "The pool and price you were shown no longer match your estimate. Nothing was charged, and the old offer wasn't re-priced. Price it again.",
           "quantity": "This plan is one pool bought once. A larger pool can't be stacked. Nothing was charged.",
           "notForSale": "This pool can't be bought right now. Nothing was charged, and the regular plans still work."
-        }
+        },
+        "showRegular": "See all regular plans",
+        "hideRegular": "Hide regular plans"
       }
     },
     "topup": {
@@ -6689,12 +6698,15 @@
       "open": "Estimate your usage",
       "marked": "Matches your estimate",
       "inputs": {
-        "rangeLabel": "Work items finished a month",
+        "plannedLabel": "Items planned in Motir a month",
+        "runLabel": "Items run on Motir's runner a month",
+        "runHelp": "Items you run on your own agent — Claude Code, Codex — through Motir's MCP or CLI use no credits here. Count only the items Motir's runner builds; 0 is fine.",
         "rangeHelp": "A range is fine — the low and high ends of a normal month.",
         "lowLabel": "Low",
         "highLabel": "High",
-        "categoriesLabel": "Model categories your organization uses",
-        "categoriesHelp": "Pick one to three. The estimate is split evenly across whatever you pick, and you never choose a model — each category lists the models it serves as examples.",
+        "runCategoriesLabel": "Models the runner uses",
+        "runCategoriesHelp": "Pick one to three. The run is split evenly across what you pick: one takes 100%, two take 50% each, all three take 33% each. You never choose a model — each category lists the models it serves as examples.",
+        "categoryShare": "{share} of the run",
         "categoryExamples": "For example: {models}",
         "submit": "Estimate credits"
       },
@@ -6703,11 +6715,12 @@
         "empty": "No model in this category right now, so it can't be picked."
       },
       "split": {
-        "one": "One category, so the whole estimate sits on {category}.",
-        "even": "Split evenly across {categories} — {shares} each."
+        "one": "One category, so the whole run sits on {category}.",
+        "even": "The run is split evenly across {categories} — {shares} each."
       },
       "result": {
         "idle": "Nothing is estimated until you ask: enter the range, pick one to three categories, then choose Estimate credits.",
+        "priced": "Priced for {plannedLow}–{plannedHigh} planned in Motir and {runLow}–{runHigh} run on Motir's runner a month.",
         "loading": "Working out your credits…",
         "creditsLabel": "Credits a month",
         "estimateCaveat": "This is an estimate for the range you entered: the credits come back as a range, never one exact figure.",
@@ -6718,8 +6731,11 @@
         "largerPoolLabel": "Larger credit pool",
         "largerPlan": "Your estimate is above our largest regular plan, so the answer is a larger credit pool sized to it: {plan}.",
         "largerPlanEstimate": "The pool and its price are worked out from your estimate, so both are an estimate — the exact amounts are confirmed before anything is charged.",
+        "largestPoolLabel": "Largest credit pool",
+        "largestPool": "Your estimate is above our largest pool, so the answer is that pool — {plan} — with top-ups for the rest.",
+        "largestPoolTopUp": "The other {excess} credits or so a month are covered by top-ups: {units} × {unitCredits} credits, about ${price} a month.",
         "aboveTopRung": "That is more than the largest regular plan's {ceiling} credits a month, and no larger pool is available right now, so the excess is met with credit top-ups.",
-        "upgradeNote": "Upgrading mid-period is priced for the days left in your period. The plans view shows the amount before anything is charged.",
+        "upgradeNote": "Upgrading mid-period is priced for the days left in your period. The amount is shown before anything is charged.",
         "goToPlan": "Go to this plan"
       },
       "seat": {
@@ -6732,6 +6748,7 @@
         "rangeEmpty": "Enter how many work items your organization finishes a month.",
         "rangeInvalid": "Enter whole numbers of items — decimals and negative numbers aren't accepted.",
         "rangeOrder": "The low end has to be at or below the high end.",
+        "rangeBothZero": "Enter at least one item a month — with both ranges at 0 there is nothing to price.",
         "categoryMissing": "Pick at least one model category.",
         "tooManyCategories": "Pick no more than three model categories.",
         "unavailable": "We can't estimate right now. Nothing was calculated — try again.",

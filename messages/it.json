@@ -6538,6 +6538,13 @@
       "saveBadge": "Risparmia ~33%",
       "chooseTitle": "Scegli il tuo piano",
       "chooseSub": "Un pool mensile di crediti a livello di organizzazione, fatturato separatamente dalle postazioni. Qualsiasi organizzazione può acquistarlo: non serve un piano Motir a postazioni a pagamento. Pro è il riferimento consigliato.",
+      "yourPlanTitle": "Il tuo piano",
+      "needMore": {
+        "title": "Ti servono più crediti?",
+        "body": "Se la tua organizzazione usa più dei {credits} crediti al mese di {plan}, stima il tuo utilizzo e il calcolatore ti offrirà un pool di crediti più grande, dimensionato su misura.",
+        "bodyHeld": "Se la tua organizzazione supera i suoi {credits} crediti al mese, stima il tuo utilizzo e il calcolatore ti offrirà un pool più grande, dimensionato su misura.",
+        "action": "Apri il calcolatore"
+      },
       "current": "Attuale",
       "recommended": "Consigliato",
       "creditsAllotment": "{n} crediti / mese",
@@ -6663,10 +6670,12 @@
         "bought": "Il tuo piano {plan} è in fase di attivazione. {credits} crediti al mese verranno aggiunti al tuo saldo appena il pagamento sarà completato.",
         "refused": {
           "atOrBelowCeiling": "Un pool più grande esiste solo oltre il nostro piano standard più grande. Per questa stima basta un piano standard o una ricarica. Non è stato addebitato nulla.",
-          "offerExpired": "Il pool e il prezzo mostrati non corrispondono più alla tua stima. Non è stato addebitato nulla e la vecchia offerta non è stata ricalcolata. Torna al calcolatore e ricalcola.",
+          "offerExpired": "Il pool e il prezzo mostrati non corrispondono più alla tua stima. Non è stato addebitato nulla e la vecchia offerta non è stata ricalcolata. Ricalcola.",
           "quantity": "Questo piano è un solo pool, acquistato una volta. Un pool più grande non si può cumulare. Non è stato addebitato nulla.",
           "notForSale": "Questo pool non si può acquistare al momento. Non è stato addebitato nulla e i piani standard funzionano ancora."
-        }
+        },
+        "showRegular": "Vedi tutti i piani standard",
+        "hideRegular": "Nascondi i piani standard"
       }
     },
     "topup": {
@@ -6689,12 +6698,15 @@
       "open": "Stima il tuo utilizzo",
       "marked": "Corrisponde alla tua stima",
       "inputs": {
-        "rangeLabel": "Elementi di lavoro completati al mese",
+        "plannedLabel": "Elementi di lavoro pianificati in Motir al mese",
+        "runLabel": "Elementi di lavoro eseguiti sul runner di Motir al mese",
+        "runHelp": "Gli elementi di lavoro che esegui con il tuo agente — Claude Code, Codex — tramite l'MCP o la CLI di Motir non consumano crediti qui. Conta solo ciò che costruisce il runner di Motir; 0 va bene.",
         "rangeHelp": "Va bene anche un intervallo: il minimo e il massimo di un mese normale.",
         "lowLabel": "Minimo",
         "highLabel": "Massimo",
-        "categoriesLabel": "Categorie di modelli usate dalla tua organizzazione",
-        "categoriesHelp": "Scegline da una a tre. La stima viene divisa in parti uguali tra quelle che scegli e non scegli mai un modello: ogni categoria elenca come esempio i modelli che offre.",
+        "runCategoriesLabel": "Modelli usati dal runner",
+        "runCategoriesHelp": "Scegline da una a tre. L'esecuzione viene divisa in parti uguali tra quelle che scegli: una prende il 100%, due il 50% ciascuna, tutte e tre il 33% ciascuna. Non scegli mai un modello: ogni categoria elenca come esempio i modelli che offre.",
+        "categoryShare": "{share} dell'esecuzione",
         "categoryExamples": "Ad esempio: {models}",
         "submit": "Stima i crediti"
       },
@@ -6703,11 +6715,12 @@
         "empty": "Al momento questa categoria non ha alcun modello, quindi non può essere scelta."
       },
       "split": {
-        "one": "Una sola categoria, quindi tutta la stima ricade su {category}.",
-        "even": "Divisa in parti uguali tra {categories}: {shares} ciascuna."
+        "one": "Una sola categoria, quindi tutta l'esecuzione ricade su {category}.",
+        "even": "L'esecuzione è divisa in parti uguali tra {categories}: {shares} ciascuna."
       },
       "result": {
         "idle": "Non viene stimato nulla finché non lo chiedi: inserisci l'intervallo, scegli da una a tre categorie, poi seleziona «Stima i crediti».",
+        "priced": "Calcolato per {plannedLow}–{plannedHigh} elementi pianificati in Motir e {runLow}–{runHigh} eseguiti sul runner di Motir al mese.",
         "loading": "Calcolo dei tuoi crediti…",
         "creditsLabel": "Crediti al mese",
         "estimateCaveat": "Questa è una stima per l'intervallo inserito: i crediti arrivano come intervallo, mai come una cifra esatta.",
@@ -6718,8 +6731,11 @@
         "largerPoolLabel": "Pool di crediti più grande",
         "largerPlan": "La tua stima supera il nostro piano standard più grande, quindi la risposta è un pool di crediti più grande, dimensionato su misura: {plan}.",
         "largerPlanEstimate": "Il pool e il suo prezzo sono calcolati dalla tua stima, quindi entrambi sono una stima: gli importi esatti vengono confermati prima di addebitare qualsiasi cosa.",
+        "largestPoolLabel": "Pool di crediti più grande disponibile",
+        "largestPool": "La tua stima supera il nostro pool più grande, quindi la risposta è quel pool — {plan} — con ricariche per il resto.",
+        "largestPoolTopUp": "Gli altri {excess} crediti circa al mese sono coperti da ricariche: {units} × {unitCredits} crediti, circa {price} $ al mese.",
         "aboveTopRung": "Supera i {ceiling} crediti al mese del piano standard più grande e al momento non è disponibile un pool più grande, quindi l'eccedenza viene coperta con ricariche di crediti.",
-        "upgradeNote": "Il passaggio a un piano superiore a metà periodo viene calcolato sui giorni rimanenti. La vista dei piani mostra l'importo prima di addebitare qualsiasi cosa.",
+        "upgradeNote": "Il passaggio a un piano superiore a metà periodo viene calcolato sui giorni rimanenti. L'importo viene mostrato prima di addebitare qualsiasi cosa.",
         "goToPlan": "Vai a questo piano"
       },
       "seat": {
@@ -6732,6 +6748,7 @@
         "rangeEmpty": "Inserisci quanti elementi di lavoro completa la tua organizzazione al mese.",
         "rangeInvalid": "Inserisci numeri interi: decimali e numeri negativi non sono accettati.",
         "rangeOrder": "Il minimo deve essere uguale o inferiore al massimo.",
+        "rangeBothZero": "Inserisci almeno un elemento di lavoro al mese: con entrambi gli intervalli a 0 non c'è nulla da calcolare.",
         "categoryMissing": "Scegli almeno una categoria di modelli.",
         "tooManyCategories": "Scegli al massimo tre categorie di modelli.",
         "unavailable": "Al momento non possiamo fare una stima. Non è stato calcolato nulla: riprova.",

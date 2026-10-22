@@ -6538,6 +6538,13 @@
       "saveBadge": "Oszczędź ok. 33%",
       "chooseTitle": "Wybierz plan",
       "chooseSub": "Miesięczna pula kredytów na poziomie organizacji, rozliczana osobno od stanowisk. Każda organizacja może ją kupić — płatny plan stanowisk Motir nie jest wymagany. Zalecanym punktem odniesienia jest Pro.",
+      "yourPlanTitle": "Twój plan",
+      "needMore": {
+        "title": "Potrzebujesz więcej kredytów?",
+        "body": "Jeśli Twoja organizacja zużywa więcej niż {credits} kredytów miesięcznie z planu {plan}, oszacuj swoje zużycie, a kalkulator zaproponuje większą pulę kredytów dopasowaną do niego.",
+        "bodyHeld": "Jeśli Twoja organizacja wyrasta ze swoich {credits} kredytów miesięcznie, oszacuj swoje zużycie, a kalkulator zaproponuje większą pulę dopasowaną do niego.",
+        "action": "Otwórz kalkulator"
+      },
       "current": "Bieżący",
       "recommended": "Zalecany",
       "creditsAllotment": "{n} kredytów / mies.",
@@ -6663,10 +6670,12 @@
         "bought": "Plan {plan} jest konfigurowany. Gdy płatność zostanie rozliczona, do salda będzie dodawane {credits} kredytów miesięcznie.",
         "refused": {
           "atOrBelowCeiling": "Większa pula istnieje tylko powyżej naszego największego zwykłego planu. Przy tym szacunku wystarczy zwykły plan lub doładowanie. Nic nie zostało pobrane.",
-          "offerExpired": "Pokazana pula i cena nie pasują już do Twojego szacunku. Nic nie zostało pobrane, a dawna oferta nie została przeliczona. Wróć do kalkulatora i przelicz ją ponownie.",
+          "offerExpired": "Pokazana pula i cena nie pasują już do Twojego szacunku. Nic nie zostało pobrane, a dawna oferta nie została przeliczona. Przelicz ją ponownie.",
           "quantity": "Ten plan to jedna pula kupowana raz. Większej puli nie można łączyć. Nic nie zostało pobrane.",
           "notForSale": "Tej puli nie można teraz kupić. Nic nie zostało pobrane, a zwykłe plany nadal działają."
-        }
+        },
+        "showRegular": "Pokaż wszystkie zwykłe plany",
+        "hideRegular": "Ukryj zwykłe plany"
       }
     },
     "topup": {
@@ -6689,12 +6698,15 @@
       "open": "Oszacuj swoje zużycie",
       "marked": "Pasuje do Twojego szacunku",
       "inputs": {
-        "rangeLabel": "Elementy robocze kończone w miesiącu",
+        "plannedLabel": "Elementy robocze planowane w Motir w miesiącu",
+        "runLabel": "Elementy robocze uruchamiane w runnerze Motir w miesiącu",
+        "runHelp": "Elementy robocze, które uruchamiasz własnym agentem — Claude Code, Codex — przez MCP lub CLI Motir, nie zużywają tu kredytów. Licz tylko to, co buduje runner Motir; 0 jest w porządku.",
         "rangeHelp": "Wystarczy przedział — dolna i górna granica zwykłego miesiąca.",
         "lowLabel": "Dolna",
         "highLabel": "Górna",
-        "categoriesLabel": "Kategorie modeli używane przez Twoją organizację",
-        "categoriesHelp": "Wybierz od jednej do trzech. Szacunek jest dzielony po równo między wybrane kategorie, a modelu nigdy nie wybierasz — każda kategoria pokazuje obsługiwane modele jako przykłady.",
+        "runCategoriesLabel": "Modele, których używa runner",
+        "runCategoriesHelp": "Wybierz od jednej do trzech. Uruchomienia są dzielone po równo między wybrane kategorie: jedna dostaje 100%, dwie po 50%, wszystkie trzy po 33%. Modelu nigdy nie wybierasz — każda kategoria pokazuje obsługiwane modele jako przykłady.",
+        "categoryShare": "{share} uruchomień",
         "categoryExamples": "Na przykład: {models}",
         "submit": "Oszacuj kredyty"
       },
@@ -6703,11 +6715,12 @@
         "empty": "W tej kategorii nie ma teraz żadnego modelu, więc nie można jej wybrać."
       },
       "split": {
-        "one": "Jedna kategoria, więc cały szacunek przypada na {category}.",
-        "even": "Podzielone po równo między {categories} — po {shares}."
+        "one": "Jedna kategoria, więc wszystkie uruchomienia przypadają na {category}.",
+        "even": "Uruchomienia są podzielone po równo między {categories} — po {shares}."
       },
       "result": {
         "idle": "Nic nie jest szacowane, dopóki o to nie poprosisz: wpisz przedział, wybierz od jednej do trzech kategorii, a potem wybierz „Oszacuj kredyty”.",
+        "priced": "Wyceniono dla {plannedLow}–{plannedHigh} elementów planowanych w Motir i {runLow}–{runHigh} uruchamianych w runnerze Motir w miesiącu.",
         "loading": "Obliczanie Twoich kredytów…",
         "creditsLabel": "Kredyty miesięcznie",
         "estimateCaveat": "To szacunek dla wpisanego przedziału: kredyty wracają jako przedział, nigdy jako jedna dokładna liczba.",
@@ -6718,8 +6731,11 @@
         "largerPoolLabel": "Większa pula kredytów",
         "largerPlan": "Twój szacunek przekracza nasz największy zwykły plan, więc odpowiedzią jest większa pula kredytów dopasowana do niego: {plan}.",
         "largerPlanEstimate": "Pula i jej cena są obliczane z Twojego szacunku, więc obie są szacunkiem — dokładne kwoty są potwierdzane, zanim cokolwiek zostanie pobrane.",
+        "largestPoolLabel": "Największa pula kredytów",
+        "largestPool": "Twój szacunek przekracza naszą największą pulę, więc odpowiedzią jest ta pula — {plan} — z doładowaniami na resztę.",
+        "largestPoolTopUp": "Pozostałe około {excess} kredytów miesięcznie pokrywają doładowania: {units} × {unitCredits} kredytów, około {price} $ miesięcznie.",
         "aboveTopRung": "To więcej niż {ceiling} kredytów miesięcznie w największym zwykłym planie, a większa pula nie jest teraz dostępna, więc nadwyżkę pokrywają doładowania kredytów.",
-        "upgradeNote": "Zmiana na wyższy plan w trakcie okresu jest wyceniana za pozostałe dni. Widok planów pokazuje kwotę, zanim cokolwiek zostanie pobrane.",
+        "upgradeNote": "Zmiana na wyższy plan w trakcie okresu jest wyceniana za pozostałe dni. Kwota jest pokazywana, zanim cokolwiek zostanie pobrane.",
         "goToPlan": "Przejdź do tego planu"
       },
       "seat": {
@@ -6732,6 +6748,7 @@
         "rangeEmpty": "Wpisz, ile elementów roboczych Twoja organizacja kończy w miesiącu.",
         "rangeInvalid": "Wpisz liczby całkowite — ułamki i liczby ujemne nie są akceptowane.",
         "rangeOrder": "Dolna granica musi być równa górnej lub niższa od niej.",
+        "rangeBothZero": "Wpisz co najmniej jeden element roboczy w miesiącu — gdy oba zakresy wynoszą 0, nie ma czego wyceniać.",
         "categoryMissing": "Wybierz co najmniej jedną kategorię modeli.",
         "tooManyCategories": "Wybierz najwyżej trzy kategorie modeli.",
         "unavailable": "Teraz nie możemy oszacować. Nic nie zostało obliczone — spróbuj ponownie.",

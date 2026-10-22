@@ -6538,6 +6538,13 @@
       "saveBadge": "Bespaar ~33%",
       "chooseTitle": "Kies je abonnement",
       "chooseSub": "Een maandelijkse tegoedpool op organisatieniveau, los van plekken gefactureerd. Elke organisatie kan het kopen — een betaald Motir-plekkenabonnement is niet vereist. Pro is het aanbevolen uitgangspunt.",
+      "yourPlanTitle": "Je abonnement",
+      "needMore": {
+        "title": "Meer credits nodig?",
+        "body": "Gebruikt je organisatie meer dan de {credits} credits per maand van {plan}? Schat je gebruik en de rekenhulp biedt je een grotere creditpool op maat aan.",
+        "bodyHeld": "Groeit je organisatie boven haar {credits} credits per maand uit? Schat je gebruik en de rekenhulp biedt je een grotere pool op maat aan.",
+        "action": "Rekenhulp openen"
+      },
       "current": "Huidig",
       "recommended": "Aanbevolen",
       "creditsAllotment": "{n} credits per maand",
@@ -6663,10 +6670,12 @@
         "bought": "Je plan {plan} wordt ingesteld. Zodra de betaling is verwerkt, worden er {credits} credits per maand aan je saldo toegevoegd.",
         "refused": {
           "atOrBelowCeiling": "Een grotere pool bestaat alleen boven ons grootste reguliere plan. Bij deze schatting volstaat een regulier plan of opwaarderen. Er is niets in rekening gebracht.",
-          "offerExpired": "De pool en prijs die je zag, passen niet meer bij je schatting. Er is niets in rekening gebracht en het oude aanbod is niet opnieuw geprijsd. Ga terug naar de rekenhulp en bereken het opnieuw.",
+          "offerExpired": "De pool en prijs die je zag, passen niet meer bij je schatting. Er is niets in rekening gebracht en het oude aanbod is niet opnieuw geprijsd. Bereken het opnieuw.",
           "quantity": "Dit plan is één pool, één keer gekocht. Een grotere pool kan niet worden gestapeld. Er is niets in rekening gebracht.",
           "notForSale": "Deze pool kan op dit moment niet worden gekocht. Er is niets in rekening gebracht en de reguliere plannen werken nog steeds."
-        }
+        },
+        "showRegular": "Alle gewone abonnementen tonen",
+        "hideRegular": "Gewone abonnementen verbergen"
       }
     },
     "topup": {
@@ -6689,12 +6698,15 @@
       "open": "Schat je gebruik",
       "marked": "Past bij je schatting",
       "inputs": {
-        "rangeLabel": "Afgeronde werkitems per maand",
+        "plannedLabel": "Werkitems die je per maand in Motir plant",
+        "runLabel": "Werkitems die je per maand op de runner van Motir uitvoert",
+        "runHelp": "Werkitems die je met je eigen agent — Claude Code, Codex — via de MCP of CLI van Motir uitvoert, kosten hier geen credits. Tel alleen wat de runner van Motir bouwt; 0 mag.",
         "rangeHelp": "Een bereik is prima — de onder- en bovengrens van een normale maand.",
         "lowLabel": "Laag",
         "highLabel": "Hoog",
-        "categoriesLabel": "Modelcategorieën die je organisatie gebruikt",
-        "categoriesHelp": "Kies er één tot drie. De schatting wordt gelijk verdeeld over wat je kiest en je kiest nooit een model — elke categorie toont de modellen die erbij horen als voorbeeld.",
+        "runCategoriesLabel": "Modellen die de runner gebruikt",
+        "runCategoriesHelp": "Kies er één tot drie. De uitvoering wordt gelijk verdeeld over wat je kiest: één krijgt 100%, twee elk 50%, alle drie elk 33%. Je kiest nooit een model — elke categorie toont de modellen die erbij horen als voorbeeld.",
+        "categoryShare": "{share} van de uitvoering",
         "categoryExamples": "Bijvoorbeeld: {models}",
         "submit": "Credits schatten"
       },
@@ -6703,11 +6715,12 @@
         "empty": "Op dit moment is er geen model in deze categorie, dus je kunt hem niet kiezen."
       },
       "split": {
-        "one": "Eén categorie, dus de hele schatting valt op {category}.",
-        "even": "Gelijk verdeeld over {categories} — {shares} per categorie."
+        "one": "Eén categorie, dus de hele uitvoering valt op {category}.",
+        "even": "De uitvoering is gelijk verdeeld over {categories} — {shares} per categorie."
       },
       "result": {
         "idle": "Er wordt niets geschat totdat je erom vraagt: vul het bereik in, kies één tot drie categorieën en kies dan Credits schatten.",
+        "priced": "Berekend voor {plannedLow}–{plannedHigh} werkitems gepland in Motir en {runLow}–{runHigh} uitgevoerd op de runner van Motir per maand.",
         "loading": "Je credits worden berekend…",
         "creditsLabel": "Credits per maand",
         "estimateCaveat": "Dit is een schatting voor het bereik dat je invulde: de credits komen terug als bereik, nooit als één exact getal.",
@@ -6718,8 +6731,11 @@
         "largerPoolLabel": "Grotere creditpool",
         "largerPlan": "Je schatting ligt boven ons grootste gewone abonnement, dus het antwoord is een grotere creditpool op maat: {plan}.",
         "largerPlanEstimate": "De pool en de prijs worden berekend uit je schatting, dus beide zijn een schatting — de exacte bedragen worden bevestigd voordat er iets in rekening wordt gebracht.",
+        "largestPoolLabel": "Grootste creditpool",
+        "largestPool": "Je schatting ligt boven onze grootste pool, dus het antwoord is die pool — {plan} — met bijkopen voor de rest.",
+        "largestPoolTopUp": "De overige ongeveer {excess} credits per maand dek je met bijkopen: {units} × {unitCredits} credits, ongeveer ${price} per maand.",
         "aboveTopRung": "Dat is meer dan de {ceiling} credits per maand van het grootste gewone abonnement en er is nu geen grotere pool beschikbaar, dus het teveel wordt gedekt met bijgekochte credits.",
-        "upgradeNote": "Halverwege de periode upgraden wordt berekend over de resterende dagen. De abonnementenweergave toont het bedrag voordat er iets in rekening wordt gebracht.",
+        "upgradeNote": "Halverwege de periode upgraden wordt berekend over de resterende dagen. Het bedrag wordt getoond voordat er iets in rekening wordt gebracht.",
         "goToPlan": "Naar dit abonnement"
       },
       "seat": {
@@ -6732,6 +6748,7 @@
         "rangeEmpty": "Vul in hoeveel werkitems je organisatie per maand afrondt.",
         "rangeInvalid": "Vul hele getallen in — decimalen en negatieve getallen worden niet geaccepteerd.",
         "rangeOrder": "De ondergrens moet gelijk zijn aan of lager zijn dan de bovengrens.",
+        "rangeBothZero": "Vul minstens één werkitem per maand in — met beide bereiken op 0 valt er niets te berekenen.",
         "categoryMissing": "Kies minstens één modelcategorie.",
         "tooManyCategories": "Kies maximaal drie modelcategorieën.",
         "unavailable": "We kunnen nu niets schatten. Er is niets berekend — probeer het opnieuw.",

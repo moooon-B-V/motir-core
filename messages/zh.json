@@ -6538,6 +6538,13 @@
       "saveBadge": "约省 33%",
       "chooseTitle": "选择你的套餐",
       "chooseSub": "按组织的每月额度池，与席位分开计费。任何组织都可购买 —— 无需付费的 Motir 席位套餐。Pro 是推荐的锚定套餐。",
+      "yourPlanTitle": "你的套餐",
+      "needMore": {
+        "title": "需要更多积分？",
+        "body": "如果你的组织每月用量超过 {plan} 的 {credits} 积分，请估算用量，计算器会给出按估算定制的更大积分池。",
+        "bodyHeld": "如果你的组织每月用量超出现有的 {credits} 积分，请估算用量，计算器会给出按估算定制的更大积分池。",
+        "action": "打开计算器"
+      },
       "current": "当前",
       "recommended": "推荐",
       "creditsAllotment": "{n} 额度 / 月",
@@ -6657,10 +6664,12 @@
         "bought": "你的 {plan} 计划正在开通。付款完成后，每月 {credits} 积分将计入你的余额。",
         "refused": {
           "atOrBelowCeiling": "更大的额度只在我们最大的常规计划之上提供。按这个预估，常规计划或充值即可满足。未产生任何扣费。",
-          "offerExpired": "你看到的额度和价格已与你的预估不符。未产生任何扣费，原报价也没有被改价。请回到计算器重新计算。",
+          "offerExpired": "你看到的额度和价格已与你的预估不符。未产生任何扣费，原报价也没有被改价。请重新计算。",
           "quantity": "这个计划是一次购买的一个额度，更大的额度不能叠加购买。未产生任何扣费。",
           "notForSale": "这个额度目前无法购买。未产生任何扣费，常规计划仍可正常使用。"
-        }
+        },
+        "showRegular": "查看所有常规套餐",
+        "hideRegular": "收起常规套餐"
       }
     },
     "topup": {
@@ -6683,12 +6692,15 @@
       "open": "估算用量",
       "marked": "与你的估算相符",
       "inputs": {
-        "rangeLabel": "每月完成的工作项",
+        "plannedLabel": "每月在 Motir 中规划的工作项",
+        "runLabel": "每月在 Motir 运行器上运行的工作项",
+        "runHelp": "通过 Motir 的 MCP 或 CLI、用你自己的智能体（Claude Code、Codex）运行的工作项，在这里不消耗积分。只计算 Motir 运行器构建的工作项；填 0 也可以。",
         "rangeHelp": "填一个区间即可 —— 平常月份的下限与上限。",
         "lowLabel": "下限",
         "highLabel": "上限",
-        "categoriesLabel": "你的组织使用的模型类别",
-        "categoriesHelp": "选择一到三类。估算会在你选中的类别之间平均分摊；无需选择模型 —— 每个类别下列出的是它所服务的示例模型。",
+        "runCategoriesLabel": "运行器使用的模型",
+        "runCategoriesHelp": "选择一到三类。运行部分在你选中的类别之间平均分摊：选一类占 100%，两类各占 50%，三类各占 33%。无需选择模型 —— 每个类别下列出的是它所服务的示例模型。",
+        "categoryShare": "运行部分的 {share}",
         "categoryExamples": "例如：{models}",
         "submit": "估算积分"
       },
@@ -6697,11 +6709,12 @@
         "empty": "该类目前没有可用模型，无法选择。"
       },
       "split": {
-        "one": "只选了一类，全部估算都落在 {category} 上。",
-        "even": "在 {categories} 之间平均分摊 —— 各占 {shares}。"
+        "one": "只选了一类，全部运行都落在 {category} 上。",
+        "even": "运行部分在 {categories} 之间平均分摊 —— 各占 {shares}。"
       },
       "result": {
         "idle": "在你发起估算之前不会计算任何内容：填写区间、选择一到三个类别，然后选择「估算积分」。",
+        "priced": "按每月在 Motir 中规划 {plannedLow}–{plannedHigh} 个、在 Motir 运行器上运行 {runLow}–{runHigh} 个工作项计算。",
         "loading": "正在计算积分…",
         "creditsLabel": "每月积分",
         "estimateCaveat": "这是按你填写的区间得出的估算：积分以区间给出，而不是一个精确数字。",
@@ -6712,8 +6725,11 @@
         "largerPoolLabel": "更大的积分池",
         "largerPlan": "你的估算超过了最大的常规套餐，因此给出的方案是按估算定制的更大积分池：{plan}。",
         "largerPlanEstimate": "积分池和价格都由你的估算算出，因此两者都是估算 —— 具体金额在扣费前会再次确认。",
+        "largestPoolLabel": "最大的积分池",
+        "largestPool": "你的估算超过了我们最大的积分池，因此给出的方案是这个积分池 ——{plan}—— 其余部分用加购额度补足。",
+        "largestPoolTopUp": "每月其余约 {excess} 积分由加购额度补足：{units} × {unitCredits} 积分，每月约 ${price}。",
         "aboveTopRung": "这超过了最大常规套餐每月 {ceiling} 积分，而目前没有更大的积分池，超出部分通过加购额度补足。",
-        "upgradeNote": "期中升级按本周期剩余天数计价。扣费之前，套餐页面会显示具体金额。",
+        "upgradeNote": "期中升级按本周期剩余天数计价。扣费之前会显示具体金额。",
         "goToPlan": "前往该套餐"
       },
       "seat": {
@@ -6726,6 +6742,7 @@
         "rangeEmpty": "请填写你的组织每月完成的工作项数量。",
         "rangeInvalid": "请填写整数的工作项数量 —— 不接受小数或负数。",
         "rangeOrder": "下限不能高于上限。",
+        "rangeBothZero": "请至少填写每月一个工作项 —— 两个范围都为 0 时没有可计价的内容。",
         "categoryMissing": "请至少选择一类模型。",
         "tooManyCategories": "最多选择三类模型。",
         "unavailable": "目前无法估算。没有产生任何结果 —— 请重试。",

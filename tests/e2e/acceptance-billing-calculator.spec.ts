@@ -46,10 +46,14 @@ import {
 // motir.co/price give the same answer for the same input — neither repository can
 // produce the other's expected figures.
 //
+// ── TWO RANGES, AND THE POOL SOLD FROM THE ANSWER (MOTIR-9224 · MOTIR-8997) ────
+// The tab asks items PLANNED and items RUN, the run range following the planned one
+// until it is typed into; the picked categories price the run. The plans view opens
+// the tab from its "Need more credits?" entry, and a larger pool is offered — and
+// bought — on the answer itself, from the catalog's own entry. The purchase walk
+// is `acceptance-billing-larger-pool.spec.ts` (MOTIR-9000).
+//
 // ── KNOWN GAPS, RECORDED RATHER THAN HIDDEN ───────────────────────────────────
-//  - The larger-pool answer carries no pool size, so the tab prints the larger plan's
-//    name and monthly price and an estimate caveat, but not a credit amount
-//    (MOTIR-9189, a contract gap in the engine's answer).
 //  - The tab carries its own Annual / Monthly control, bound to the plans view's
 //    value (one cadence, two places to change it), as the approved design draws it.
 //
@@ -72,11 +76,13 @@ const t = (key: string, args: Record<string, string> = {}, locale = L) =>
 
 // ── derived data ────────────────────────────────────────────────────────────
 
+// The regular ladder: the larger pools (MOTIR-8990) sit above it and are never in the row.
 const PAID: AiPlanCatalogEntry[] = BILLING_CATALOG.aiPlans
-  .filter((p) => p.prices && p.allotment?.cadence === 'monthly')
+  .filter((p) => p.band === 'ladder' && p.prices && p.allotment?.cadence === 'monthly')
   .sort((a, b) => a.allotment!.credits - b.allotment!.credits);
 const SMALLEST = PAID[0]!;
 const TOP = PAID[PAID.length - 1]!;
+const POOL = BILLING_CATALOG.aiPlans.find((p) => p.band === 'larger_pool')!;
 const catalogAmount = (p: AiPlanCatalogEntry, cadence: 'annual' | 'monthly') =>
   p.prices![cadence].amountUsd;
 
@@ -111,17 +117,23 @@ function format(message: string, values: Record<string, string | number>): strin
 type Wire = { status: number; body: unknown };
 const ok = (body: unknown): Wire => ({ status: 200, body });
 
+type Range = { low: number; high: number };
+const ECHO: Range = { low: 10, high: 30 };
+
 /** An estimate over the picked categories, split evenly, recommending `plan`. */
 function estimateFor(
   picked: string[],
   cadence: 'annual' | 'monthly',
   over: Partial<CalculatorEstimateDTO> = {},
   plan: AiPlanCatalogEntry = TOP,
+  ranges: { planned: Range; run: Range } = { planned: ECHO, run: ECHO },
 ): CalculatorEstimateDTO {
   const base = structuredClone(PINNED_ESTIMATE_ANSWER) as unknown as CalculatorEstimateDTO;
   return {
     ...base,
     cadence,
+    plannedPerMonth: ranges.planned,
+    runPerMonth: ranges.run,
     credits: { low: 4_000 * picked.length, high: 9_000 * picked.length },
     split: {
       count: picked.length,
@@ -177,7 +189,12 @@ async function armStub(page: Page): Promise<Stub> {
     stub.estimates.push({ url: route.request().url(), body });
     const w = stub.estimate(body);
     if (w === 'abort') return route.abort('failed');
-    await route.fulfill({ status: w.status, json: w.body });
+    // An estimate echoes the two ranges it was asked, as the server's answer does.
+    const echo =
+      w.status === 200 && (w.body as { kind?: string }).kind === 'estimate'
+        ? { plannedPerMonth: body['plannedPerMonth'], runPerMonth: body['runPerMonth'] }
+        : {};
+    await route.fulfill({ status: w.status, json: { ...(w.body as object), ...echo } });
   });
   return stub;
 }
@@ -206,20 +223,24 @@ const estimateResponse = (page: Page) =>
   );
 
 async function openTab(page: Page, locale = L) {
-  await page.getByRole('button', { name: t('calculator.open', {}, locale) }).click();
+  await page.getByRole('button', { name: t('plans.needMore.action', {}, locale) }).click();
   await expect(
     page.getByRole('heading', { name: t('calculator.title', {}, locale), level: 1 }),
   ).toBeVisible();
   await expect(pickerButton(page, KEYS[0]!)).toBeVisible();
 }
 
-async function fillRange(page: Page, low: string, high: string, locale = L) {
-  await live(page)
-    .getByLabel(t('calculator.inputs.lowLabel', {}, locale))
-    .fill(low);
-  await live(page)
-    .getByLabel(t('calculator.inputs.highLabel', {}, locale))
-    .fill(high);
+/** Type one range; the planned one unless `lane` says the run. */
+async function fillRange(
+  page: Page,
+  low: string,
+  high: string,
+  locale = L,
+  lane: 'planned' | 'run' = 'planned',
+) {
+  const field = live(page).getByTestId(`calculator-${lane}`);
+  await field.getByLabel(t('calculator.inputs.lowLabel', {}, locale)).fill(low);
+  await field.getByLabel(t('calculator.inputs.highLabel', {}, locale)).fill(high);
 }
 
 /** Set exactly these categories (deselecting any other already on). */
@@ -262,10 +283,11 @@ test.describe('The Calculator on Billing & plans', () => {
     const [first, second, third] = KEYS;
 
     await chapter(
-      'The plans view links to the Calculator, which estimates nothing until asked',
+      'Need more credits? opens the Calculator, which estimates nothing until asked',
       async () => {
         await openPlans(page, seed, t('ai.choosePlan'));
-        await expect(page.getByRole('button', { name: t('calculator.open') })).toHaveCount(1);
+        await expect(page.getByTestId('plans-need-more')).toContainText(t('plans.needMore.title'));
+        await expect(page.getByRole('button', { name: t('plans.needMore.action') })).toHaveCount(1);
         await openTab(page);
         expect(page.url()).toContain(billingPath);
         await expect(page.getByTestId('calculator-credits')).toHaveCount(0);
@@ -279,7 +301,9 @@ test.describe('The Calculator on Billing & plans', () => {
     await chapter(
       'Categories only: each lists its models as examples, none can be picked',
       async () => {
-        const group = page.getByRole('group', { name: t('calculator.inputs.categoriesLabel') });
+        const group = page.getByRole('group', {
+          name: t('calculator.inputs.runCategoriesLabel'),
+        });
         await expect(group.getByRole('button')).toHaveCount(KEYS.length);
         for (const c of CATEGORIES.categories) {
           const b = pickerButton(page, c.key);
@@ -302,11 +326,21 @@ test.describe('The Calculator on Billing & plans', () => {
       expect(res.status()).toBe(200);
       const sent = stub.estimates.at(-1)!.body;
       expect(calculatorEstimateRequestSchema.safeParse(sent).success).toBe(true);
+      // The run range followed the planned one, so both ranges went.
       expect(sent).toStrictEqual({
-        itemsPerMonth: { low: 10, high: 30 },
+        plannedPerMonth: { low: 10, high: 30 },
+        runPerMonth: { low: 10, high: 30 },
         categories: [first],
         cadence: 'annual',
       });
+      await expect(live(page).getByTestId('calculator-priced')).toHaveText(
+        t('calculator.result.priced', {
+          plannedLow: '10',
+          plannedHigh: '30',
+          runLow: '10',
+          runHigh: '30',
+        }),
+      );
       await expect(
         result(page).getByText(t('calculator.split.one', { category: label(first!) })),
       ).toBeVisible();
@@ -402,9 +436,9 @@ test.describe('The Calculator on Billing & plans', () => {
                 outcome: 'larger_pool',
               },
               recommendation: {
-                planKey: 'pool_larger',
-                planName: 'Larger pool',
-                monthlyPriceUsd: 555,
+                planKey: POOL.key,
+                planName: POOL.name,
+                monthlyPriceUsd: catalogAmount(POOL, 'annual') / 12,
               },
             }),
           );
@@ -412,7 +446,13 @@ test.describe('The Calculator on Billing & plans', () => {
         const larger = live(page).getByTestId('calculator-larger');
         await expect(larger).toContainText(t('calculator.result.largerPoolLabel'));
         await expect(larger).toContainText(t('calculator.result.largerPlanEstimate'));
-        await expect(larger).toContainText('Larger pool');
+        await expect(larger).toContainText(t('calculator.result.largerPlan', { plan: POOL.name }));
+        await expect(larger.getByTestId('calculator-larger-price')).toContainText(
+          catalogAmount(POOL, 'annual').toLocaleString('en-US'),
+        );
+        await expect(
+          larger.getByRole('button', { name: t('plans.ctaChoose', { plan: POOL.name }) }),
+        ).toBeEnabled();
         await expect(result(page)).not.toContainText(/top-ups?\b.*plus|plus.*top-ups?/i);
         await expect(page.getByTestId('calculator-plan')).toHaveCount(0);
       },
@@ -459,18 +499,22 @@ test.describe('The Calculator on Billing & plans', () => {
       // blank
       await fillRange(page, '', '');
       await submit.click();
-      await expect(live(page).getByText(t('calculator.errors.rangeEmpty'))).toBeVisible();
+      await expect(live(page).getByText(t('calculator.errors.rangeEmpty'))).toHaveCount(2);
       // decimal, then negative
       await fillRange(page, '1.5', '4');
       await submit.click();
-      await expect(live(page).getByText(t('calculator.errors.rangeInvalid'))).toBeVisible();
+      await expect(live(page).getByText(t('calculator.errors.rangeInvalid'))).toHaveCount(2);
       await fillRange(page, '-2', '4');
       await submit.click();
-      await expect(live(page).getByText(t('calculator.errors.rangeInvalid'))).toBeVisible();
+      await expect(live(page).getByText(t('calculator.errors.rangeInvalid'))).toHaveCount(2);
       // low above high
       await fillRange(page, '9', '4');
       await submit.click();
-      await expect(live(page).getByText(t('calculator.errors.rangeOrder'))).toBeVisible();
+      await expect(live(page).getByText(t('calculator.errors.rangeOrder'))).toHaveCount(2);
+      // both ranges 0–0: one sentence under them
+      await fillRange(page, '0', '0');
+      await submit.click();
+      await expect(live(page).getByText(t('calculator.errors.rangeBothZero'))).toBeVisible();
       // no category
       await fillRange(page, '1', '4');
       await pickOnly(page, []);
@@ -669,7 +713,7 @@ test.describe('The Calculator on Billing & plans', () => {
     await page.goto(billingPath);
     expect((await read).status()).toBe(403);
     await expect(page.getByRole('heading', { name: t('member.gateTitle') })).toBeVisible();
-    await expect(page.getByRole('button', { name: t('calculator.open') })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: t('plans.needMore.action') })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: t('calculator.title') })).toHaveCount(0);
     expect(stub.categoryReads).toBe(0);
     expect(stub.estimates).toHaveLength(0);

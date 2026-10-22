@@ -10,7 +10,9 @@ import {
   Bot,
   Calculator,
   Check,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Clock,
   Coins,
   CreditCard,
@@ -175,9 +177,15 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
   }, []);
 
   // Start a Stripe session over the boundary, then redirect the browser to the
-  // hosted URL. A failure surfaces a toast (the session/credits are untouched).
+  // hosted URL. A failure surfaces a toast (the session/credits are untouched),
+  // unless `onRefused` reads the failed body and handles it — the Calculator's pool
+  // offer shows its refusal as a notice beside the offer instead (MOTIR-8997).
   const startSession = useCallback(
-    async (path: 'checkout' | 'portal', body?: Record<string, string | number>) => {
+    async (
+      path: 'checkout' | 'portal',
+      body?: Record<string, string | number>,
+      onRefused?: (payload: unknown) => boolean,
+    ) => {
       setRedirecting(true);
       try {
         const res = await fetch(`/api/organizations/${orgId}/billing/${path}`, {
@@ -187,6 +195,8 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
         });
         if (!res.ok) {
           setRedirecting(false);
+          const payload: unknown = await res.json().catch(() => null);
+          if (onRefused?.(payload)) return;
           toast({ variant: 'error', title: t('states.errorTitle') });
           return;
         }
@@ -352,6 +362,12 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
             setMarkedPlan(planKey);
             setView('plans');
           }}
+          checkout={(priceLookupKey, onRefused) =>
+            void startSession('checkout', { priceLookupKey }, onRefused)
+          }
+          portal={portal}
+          reload={load}
+          redirecting={redirecting}
         />
       ) : null}
       {view === 'seats' ? <SeatsView {...shared} back={() => setView('home')} /> : null}
@@ -1572,9 +1588,47 @@ function PlansView({
   // The cards are the PAID plans (MOTIR-7598): Free is not a plan to choose but
   // the one-time trial grant, said in the strip above the row, and a price-less
   // plan has no card (Enterprise is gone — MOTIR-7592).
-  // The standing rungs only: a larger pool is offered from an estimate, never in the
-  // row (MOTIR-8990; MOTIR-8997 replaces this with the estimate-conditional filter).
+  // The standing rungs only: a larger pool is offered and sold from the Calculator's
+  // answer, never in this row (MOTIR-8997, design/billing § "Amendment 2026-10-21 —
+  // the larger credit pool plan", approved 2026-10-22).
   const paidPlans = aiPlans.filter((p) => p.key !== 'free' && p.prices && p.band !== 'larger_pool');
+  // An org that HOLDS a larger pool sees that one plan, with the regular plans folded
+  // behind a toggle (design panels 9–10).
+  const heldPool =
+    (holdsPlan && aiPlans.find((p) => p.key === tier?.key && p.band === 'larger_pool')) || null;
+  const [showRegular, setShowRegular] = useState(false);
+  const regularId = useId();
+  const topRung = paidPlans.reduce<AiPlanCatalogEntry | null>(
+    (top, p) => ((p.allotment?.credits ?? 0) > (top?.allotment?.credits ?? 0) ? p : top),
+    null,
+  );
+  const renderCard = (
+    plan: AiPlanCatalogEntry,
+    previous: AiPlanCatalogEntry | null,
+    solo: boolean,
+  ) => (
+    <PlanCard
+      key={plan.key}
+      plan={plan}
+      previous={previous}
+      cadence={cadence}
+      currentKey={tier?.key ?? null}
+      status={subscription.status}
+      holdsPlan={holdsPlan}
+      canManage={canManage}
+      redirecting={redirecting}
+      checkout={checkout}
+      currentPool={currentPool}
+      pendingDowngrade={pendingDowngrade}
+      planNames={planNames}
+      marked={markedPlan === plan.key}
+      solo={solo}
+      describedBy={planChangeLocked ? reasonId : undefined}
+      openChange={(kind) => setChange({ kind, planKey: plan.key })}
+      t={t}
+    />
+  );
+
   // The org is on the one-time trial: its tier is the catalog's `free` grant and
   // it holds no paid plan. The strip reads the same balance and grant the home
   // line's meter reads.
@@ -1636,21 +1690,13 @@ function PlansView({
 
       <div className="flex flex-col gap-2">
         <h2 className="font-sans text-lg font-semibold text-(--el-text)">
-          {t('plans.chooseTitle')}
+          {heldPool ? t('plans.yourPlanTitle') : t('plans.chooseTitle')}
         </h2>
-        <p className="max-w-prose font-sans text-sm text-(--el-text-muted)">
-          {t('plans.chooseSub')}
-        </p>
-        <div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={openCalculator}
-            leftIcon={<Calculator className="h-4 w-4" />}
-          >
-            {t('calculator.open')}
-          </Button>
-        </div>
+        {heldPool ? null : (
+          <p className="max-w-prose font-sans text-sm text-(--el-text-muted)">
+            {t('plans.chooseSub')}
+          </p>
+        )}
       </div>
 
       <div className="flex items-center gap-3">
@@ -1685,29 +1731,45 @@ function PlansView({
       {/* Tall, equal-height cards in ONE row (the SaaS storefront pattern); below
           the row's natural width the container scrolls horizontally (scroll-snap)
           rather than wrapping — the tiers stay one comparable ladder (design 8.1.21). */}
-      <div className="flex snap-x snap-proximity items-stretch gap-3 overflow-x-auto pb-1.5">
-        {paidPlans.map((plan, i) => (
-          <PlanCard
-            key={plan.key}
-            plan={plan}
-            previous={paidPlans[i - 1] ?? null}
-            cadence={cadence}
-            currentKey={tier?.key ?? null}
-            status={subscription.status}
-            holdsPlan={holdsPlan}
-            canManage={canManage}
-            redirecting={redirecting}
-            checkout={checkout}
-            currentPool={currentPool}
-            pendingDowngrade={pendingDowngrade}
-            planNames={planNames}
-            marked={markedPlan === plan.key}
-            describedBy={planChangeLocked ? reasonId : undefined}
-            openChange={(kind) => setChange({ kind, planKey: plan.key })}
-            t={t}
-          />
-        ))}
-      </div>
+      {heldPool ? (
+        <>
+          <div className="flex snap-x snap-proximity items-stretch gap-3 overflow-x-auto pb-1.5">
+            {renderCard(heldPool, null, true)}
+          </div>
+          <div>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={showRegular}
+              aria-controls={regularId}
+              onClick={() => setShowRegular((open) => !open)}
+              rightIcon={
+                showRegular ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )
+              }
+            >
+              {showRegular ? t('plans.larger.hideRegular') : t('plans.larger.showRegular')}
+            </Button>
+          </div>
+          {showRegular ? (
+            <div
+              id={regularId}
+              className="flex snap-x snap-proximity items-stretch gap-3 overflow-x-auto pb-1.5"
+            >
+              {paidPlans.map((plan, i) => renderCard(plan, paidPlans[i - 1] ?? null, false))}
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <div className="flex snap-x snap-proximity items-stretch gap-3 overflow-x-auto pb-1.5">
+          {paidPlans.map((plan, i) => renderCard(plan, paidPlans[i - 1] ?? null, false))}
+        </div>
+      )}
+
+      <NeedMoreCredits held={heldPool} topRung={topRung} openCalculator={openCalculator} t={t} />
 
       {change?.kind === 'upgrade' ? (
         <UpgradeDialog
@@ -1761,6 +1823,7 @@ function PlanCard({
   marked,
   describedBy,
   openChange,
+  solo = false,
   t,
 }: {
   plan: AiPlanCatalogEntry;
@@ -1784,9 +1847,14 @@ function PlanCard({
   /** The visible reason the plan-change controls are disabled (a non-manager). */
   describedBy: string | undefined;
   openChange: (kind: 'upgrade' | 'downgrade') => void;
+  /** The one card a pool holder's row shows: its natural width, not a share of the row. */
+  solo?: boolean;
   t: T;
 }) {
   const locale = useLocale();
+  // A larger pool has no per-tier copy (no use case, features or ladder line): its
+  // name, price and pool are the catalog entry's (MOTIR-8997).
+  const pool = plan.band === 'larger_pool';
   const isCurrent = currentKey === plan.key && status !== null && status !== 'canceled';
   const isRecommended = plan.recommended;
   const accent = isCurrent || isRecommended || marked;
@@ -1908,18 +1976,18 @@ function PlanCard({
   // Per-tier copy (keyed by plan.key in messages; arrays via t.raw). The cumulative
   // "Everything in {prev}, plus" lead shows only on tiers that name a `prev`.
   const tierBase = `plans.tiers.${plan.key}`;
-  const features = (t.raw(`${tierBase}.features`) as string[] | undefined) ?? [];
+  const features = pool ? [] : ((t.raw(`${tierBase}.features`) as string[] | undefined) ?? []);
   const hasPrev = plan.key === 'pro' || plan.key === 'max' || plan.key === 'max_x2';
   // The bundled Motir seat (8.1.22): every paid plan includes its catalog count of
   // tracker seats at no charge (MOTIR-8394 reads it, never a typed 1).
   const seatIncluded = plan.includedTrackerSeats > 0;
-  const ladder = ladderLine(plan, previous, t);
+  const ladder = pool ? null : ladderLine(plan, previous, t);
 
   return (
     <div
       data-marked={marked || undefined}
       aria-current={marked ? 'true' : undefined}
-      className="flex grow shrink-0 basis-0 snap-start flex-col gap-2 rounded-(--radius-card) border bg-(--el-surface) p-(--spacing-card-padding) shadow-(--shadow-card)"
+      className={`flex ${solo ? 'w-full max-w-[22rem]' : 'grow basis-0'} shrink-0 snap-start flex-col gap-2 rounded-(--radius-card) border bg-(--el-surface) p-(--spacing-card-padding) shadow-(--shadow-card)`}
       style={{
         minWidth: '10rem',
         borderColor: accent ? 'var(--el-accent)' : 'var(--el-border-soft)',
@@ -1959,9 +2027,11 @@ function PlanCard({
         </Pill>
       ) : null}
       {/* per-tier use-case — min-height keeps the price rows aligned across cards */}
-      <p className="min-h-[2.75rem] font-sans text-xs text-(--el-text-secondary)">
-        {t(`${tierBase}.useCase`)}
-      </p>
+      {pool ? null : (
+        <p className="min-h-[2.75rem] font-sans text-xs text-(--el-text-secondary)">
+          {t(`${tierBase}.useCase`)}
+        </p>
+      )}
       {priceBlock}
       {plan.allotment ? (
         <p className="font-sans text-sm font-semibold text-(--el-text-strong)">
@@ -2006,6 +2076,51 @@ function PlanCard({
       </ul>
       {cta ? <div className="mt-auto pt-1">{cta}</div> : null}
     </div>
+  );
+}
+
+// "Need more credits?" (MOTIR-8997; design/billing § "Amendment 2026-10-21 — the
+// larger credit pool plan", panels 1 and 9): the plans view's ONE way into the
+// Calculator, which offers and sells a larger pool sized to the estimate. A pool
+// holder reads it worded for the pool they hold.
+function NeedMoreCredits({
+  held,
+  topRung,
+  openCalculator,
+  t,
+}: {
+  held: AiPlanCatalogEntry | null;
+  topRung: AiPlanCatalogEntry | null;
+  openCalculator: () => void;
+  t: T;
+}) {
+  const locale = useLocale();
+  return (
+    <Card tint="sky" data-testid="plans-need-more">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex max-w-prose flex-col gap-1">
+          <p className="font-sans text-sm font-semibold text-(--el-text-strong)">
+            {t('plans.needMore.title')}
+          </p>
+          <p className="font-sans text-sm text-(--el-text-strong)">
+            {held
+              ? t('plans.needMore.bodyHeld', { credits: fmt(held.allotment?.credits ?? 0, locale) })
+              : t('plans.needMore.body', {
+                  plan: topRung?.name ?? '',
+                  credits: fmt(topRung?.allotment?.credits ?? 0, locale),
+                })}
+          </p>
+        </div>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={openCalculator}
+          leftIcon={<Calculator className="h-4 w-4" />}
+        >
+          {t('plans.needMore.action')}
+        </Button>
+      </div>
+    </Card>
   );
 }
 

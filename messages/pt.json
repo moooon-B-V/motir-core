@@ -6538,6 +6538,13 @@
       "saveBadge": "Economize ~33%",
       "chooseTitle": "Escolha seu plano",
       "chooseSub": "Um conjunto mensal de créditos da organização, cobrado separadamente das licenças. Qualquer organização pode comprá-lo — não é necessário um plano pago de licenças do Motir. O Pro é a opção recomendada.",
+      "yourPlanTitle": "Seu plano",
+      "needMore": {
+        "title": "Precisa de mais créditos?",
+        "body": "Se sua organização usa mais do que os {credits} créditos por mês do {plan}, estime seu uso e a calculadora oferece um pool de créditos maior, dimensionado para ele.",
+        "bodyHeld": "Se sua organização ultrapassar seus {credits} créditos por mês, estime seu uso e a calculadora oferece um pool maior, dimensionado para ele.",
+        "action": "Abrir a calculadora"
+      },
       "current": "Atual",
       "recommended": "Recomendado",
       "creditsAllotment": "{n} créditos / mês",
@@ -6663,10 +6670,12 @@
         "bought": "Seu plano {plan} está sendo configurado. {credits} créditos por mês serão adicionados ao seu saldo assim que o pagamento for concluído.",
         "refused": {
           "atOrBelowCeiling": "Um pool maior só existe acima do nosso maior plano padrão. Nesta estimativa, um plano padrão ou uma recarga resolve. Nada foi cobrado.",
-          "offerExpired": "O pool e o preço exibidos não correspondem mais à sua estimativa. Nada foi cobrado, e a oferta antiga não foi recalculada. Volte à calculadora e calcule de novo.",
+          "offerExpired": "O pool e o preço exibidos não correspondem mais à sua estimativa. Nada foi cobrado, e a oferta antiga não foi recalculada. Calcule de novo.",
           "quantity": "Este plano é um único pool, comprado uma vez. Um pool maior não pode ser acumulado. Nada foi cobrado.",
           "notForSale": "Este pool não pode ser comprado agora. Nada foi cobrado, e os planos padrão continuam funcionando."
-        }
+        },
+        "showRegular": "Ver todos os planos regulares",
+        "hideRegular": "Ocultar os planos regulares"
       }
     },
     "topup": {
@@ -6689,12 +6698,15 @@
       "open": "Estime seu uso",
       "marked": "Combina com sua estimativa",
       "inputs": {
-        "rangeLabel": "Itens de trabalho concluídos por mês",
+        "plannedLabel": "Itens de trabalho planejados no Motir por mês",
+        "runLabel": "Itens de trabalho executados no runner do Motir por mês",
+        "runHelp": "Itens de trabalho que você executa com seu próprio agente — Claude Code, Codex — pelo MCP ou pela CLI do Motir não usam créditos aqui. Conte só o que o runner do Motir constrói; 0 é válido.",
         "rangeHelp": "Um intervalo basta — o mínimo e o máximo de um mês normal.",
         "lowLabel": "Mínimo",
         "highLabel": "Máximo",
-        "categoriesLabel": "Categorias de modelos que sua organização usa",
-        "categoriesHelp": "Escolha de uma a três. A estimativa é dividida igualmente entre as que você escolher, e você nunca escolhe um modelo — cada categoria mostra, como exemplo, os modelos que oferece.",
+        "runCategoriesLabel": "Modelos que o runner usa",
+        "runCategoriesHelp": "Escolha de uma a três. A execução é dividida igualmente entre as que você escolher: uma fica com 100%, duas com 50% cada, as três com 33% cada. Você nunca escolhe um modelo — cada categoria mostra, como exemplo, os modelos que oferece.",
+        "categoryShare": "{share} da execução",
         "categoryExamples": "Por exemplo: {models}",
         "submit": "Estimar créditos"
       },
@@ -6703,11 +6715,12 @@
         "empty": "Esta categoria não tem nenhum modelo no momento, então não pode ser escolhida."
       },
       "split": {
-        "one": "Uma categoria só, então toda a estimativa fica em {category}.",
-        "even": "Dividida igualmente entre {categories} — {shares} cada."
+        "one": "Uma categoria só, então toda a execução fica em {category}.",
+        "even": "A execução é dividida igualmente entre {categories} — {shares} cada."
       },
       "result": {
         "idle": "Nada é estimado até você pedir: informe o intervalo, escolha de uma a três categorias e depois selecione «Estimar créditos».",
+        "priced": "Calculado para {plannedLow}–{plannedHigh} itens planejados no Motir e {runLow}–{runHigh} executados no runner do Motir por mês.",
         "loading": "Calculando seus créditos…",
         "creditsLabel": "Créditos por mês",
         "estimateCaveat": "Esta é uma estimativa para o intervalo informado: os créditos voltam como um intervalo, nunca como um número exato.",
@@ -6718,8 +6731,11 @@
         "largerPoolLabel": "Pool de créditos maior",
         "largerPlan": "Sua estimativa passa do nosso maior plano regular, então a resposta é um pool de créditos maior, dimensionado para ela: {plan}.",
         "largerPlanEstimate": "O pool e o preço são calculados a partir da sua estimativa, então ambos são uma estimativa — os valores exatos são confirmados antes de qualquer cobrança.",
+        "largestPoolLabel": "Maior pool de créditos",
+        "largestPool": "Sua estimativa passa do nosso maior pool, então a resposta é esse pool — {plan} — com recargas para o restante.",
+        "largestPoolTopUp": "Os outros {excess} créditos, mais ou menos, por mês são cobertos por recargas: {units} × {unitCredits} créditos, cerca de US$ {price} por mês.",
         "aboveTopRung": "Isso passa dos {ceiling} créditos por mês do maior plano regular, e não há um pool maior disponível no momento, então o excedente é coberto com recargas de créditos.",
-        "upgradeNote": "Fazer upgrade no meio do período é cobrado pelos dias restantes. A tela de planos mostra o valor antes de qualquer cobrança.",
+        "upgradeNote": "Fazer upgrade no meio do período é cobrado pelos dias restantes. O valor aparece antes de qualquer cobrança.",
         "goToPlan": "Ir para este plano"
       },
       "seat": {
@@ -6732,6 +6748,7 @@
         "rangeEmpty": "Informe quantos itens de trabalho sua organização conclui por mês.",
         "rangeInvalid": "Informe números inteiros — decimais e números negativos não são aceitos.",
         "rangeOrder": "O mínimo precisa ser menor ou igual ao máximo.",
+        "rangeBothZero": "Informe pelo menos um item de trabalho por mês — com as duas faixas em 0 não há nada para calcular.",
         "categoryMissing": "Escolha pelo menos uma categoria de modelos.",
         "tooManyCategories": "Escolha no máximo três categorias de modelos.",
         "unavailable": "Não conseguimos estimar agora. Nada foi calculado — tente de novo.",

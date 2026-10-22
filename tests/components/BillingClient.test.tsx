@@ -1183,10 +1183,10 @@ describe('BillingClient — the Agents line', () => {
     expect(order).toEqual(['Motir CI', 'Motir', 'Motir AI', 'Agents', 'Motir Search']);
   });
 
-  // ── The Calculator view (MOTIR-8639) ───────────────────────────────────────
-  // The fourth view: ONE control on the plans view opens it, the page's cadence is one
-  // value across the two, and the recommendation's next step returns to the plans view
-  // with that plan distinguished. The calculator routes are stubbed at the same fetch
+  // ── The Calculator view (MOTIR-8639 · MOTIR-8997) ──────────────────────────
+  // The fourth view: ONE control on the plans view — the "Need more credits?" entry —
+  // opens it, the page's cadence is one value across the two, and the recommendation's
+  // next step returns to the plans view with that plan distinguished. The calculator routes are stubbed at the same fetch
   // boundary as the billing read.
   describe('the Calculator view', () => {
     const calcCategories = {
@@ -1203,6 +1203,8 @@ describe('BillingClient — the Agents line', () => {
       profilesVersion: 'profiles-1',
       categoryRuleVersion: 'rule-1',
       cadence: 'annual',
+      plannedPerMonth: { low: 5, high: 9 },
+      runPerMonth: { low: 5, high: 9 },
       credits: { low: 1000, high: 4000 },
       perItemCredits: { planning: 1, running: 1 },
       split: { count: 1, categories: [{ key: 'balanced', weight: 1, models: ['model-b'] }] },
@@ -1239,8 +1241,9 @@ describe('BillingClient — the Agents line', () => {
       renderClient();
       await openPlans();
 
-      expect(screen.getAllByRole('button', { name: 'Estimate your usage' })).toHaveLength(1);
-      fireEvent.click(screen.getByRole('button', { name: 'Estimate your usage' }));
+      expect(screen.getAllByRole('button', { name: 'Open the Calculator' })).toHaveLength(1);
+      expect(screen.queryByRole('button', { name: 'Estimate your usage' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Open the Calculator' }));
 
       await waitFor(() =>
         expect(screen.getByRole('heading', { name: 'Estimate your usage', level: 1 })).toBeTruthy(),
@@ -1260,7 +1263,7 @@ describe('BillingClient — the Agents line', () => {
       );
 
       fireEvent.click(screen.getByRole('button', { name: 'Monthly' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Estimate your usage' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Open the Calculator' }));
       await screen.findByRole('button', { name: /Balanced/ });
       expect(screen.getByRole('button', { name: 'Monthly' }).getAttribute('aria-pressed')).toBe(
         'true',
@@ -1279,16 +1282,18 @@ describe('BillingClient — the Agents line', () => {
       renderClient();
       await openPlans();
       fireEvent.click(screen.getByRole('button', { name: 'Monthly' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Estimate your usage' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Open the Calculator' }));
       await screen.findByRole('button', { name: /Balanced/ });
-      fireEvent.change(screen.getByLabelText('Low'), { target: { value: '5' } });
-      fireEvent.change(screen.getByLabelText('High'), { target: { value: '9' } });
+      const planned = screen.getByTestId('calculator-planned');
+      fireEvent.change(within(planned).getByLabelText('Low'), { target: { value: '5' } });
+      fireEvent.change(within(planned).getByLabelText('High'), { target: { value: '9' } });
       fireEvent.click(screen.getByRole('button', { name: /Balanced/ }));
       fireEvent.click(screen.getByRole('button', { name: 'Estimate credits' }));
       await screen.findByTestId('calculator-credits');
       const post = fetchMock.mock.calls.find(([u]) => u.endsWith('/calculator/estimate'));
       expect(JSON.parse((post![1] as unknown as RequestInit).body as string)).toEqual({
-        itemsPerMonth: { low: 5, high: 9 },
+        plannedPerMonth: { low: 5, high: 9 },
+        runPerMonth: { low: 5, high: 9 },
         categories: ['balanced'],
         cadence: 'monthly',
       });
@@ -1298,10 +1303,11 @@ describe('BillingClient — the Agents line', () => {
       const fetchMock = stubCalculator();
       renderClient();
       await openPlans();
-      fireEvent.click(screen.getByRole('button', { name: 'Estimate your usage' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Open the Calculator' }));
       await screen.findByRole('button', { name: /Balanced/ });
-      fireEvent.change(screen.getByLabelText('Low'), { target: { value: '5' } });
-      fireEvent.change(screen.getByLabelText('High'), { target: { value: '9' } });
+      const planned = screen.getByTestId('calculator-planned');
+      fireEvent.change(within(planned).getByLabelText('Low'), { target: { value: '5' } });
+      fireEvent.change(within(planned).getByLabelText('High'), { target: { value: '9' } });
       fireEvent.click(screen.getByRole('button', { name: /Balanced/ }));
       fireEvent.click(screen.getByRole('button', { name: 'Estimate credits' }));
       fireEvent.click(await screen.findByRole('button', { name: 'Go to this plan' }));
@@ -1318,6 +1324,67 @@ describe('BillingClient — the Agents line', () => {
           ([, init]) => (init as RequestInit | undefined)?.method === 'POST',
         ).length,
       ).toBe(1);
+    });
+  });
+  // ── The larger pool on the plans view (MOTIR-8997) ─────────────────────────
+  // The four regular plans stay the row; the pools are never in it. An org that HOLDS a
+  // pool sees that one plan, with the regular row folded behind a toggle.
+  describe('the larger pool on the plans view', () => {
+    const pool = BILLING_CATALOG.aiPlans.find((p) => p.band === 'larger_pool')!;
+    function poolOrg(): BillingStatusDTO {
+      const base = activeStandard();
+      const tier = { key: pool.key, name: pool.name, monthlyCreditAllotment: 80_000 };
+      return {
+        ...base,
+        motirAi: {
+          ...base.motirAi,
+          tier,
+          subscription: {
+            ...base.motirAi.subscription,
+            priceId: pool.prices!.annual.priceLookupKey,
+            planTier: tier,
+          },
+        },
+      };
+    }
+    async function openPlans() {
+      await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+      fireEvent.click(screen.getByRole('button', { name: 'Change plan' }));
+      await waitFor(() => expect(screen.getByText('Motir AI — plans & subscription')).toBeTruthy());
+    }
+
+    it('keeps the pools out of the regular row and offers the Calculator from Need more credits', async () => {
+      renderWithBody(activeStandard());
+      await openPlans();
+      expect(screen.getByRole('heading', { name: 'Choose your plan', level: 2 })).toBeTruthy();
+      for (const p of BILLING_CATALOG.aiPlans.filter((x) => x.band === 'larger_pool')) {
+        expect(screen.queryByText(p.name)).toBeNull();
+      }
+      const entry = screen.getByTestId('plans-need-more');
+      expect(entry.textContent).toContain('Need more credits?');
+      expect(within(entry).getByRole('button', { name: 'Open the Calculator' })).toBeTruthy();
+    });
+
+    it('shows a held pool as the one plan, with the regular plans behind a toggle', async () => {
+      renderWithBody(poolOrg());
+      await openPlans();
+      expect(screen.getByRole('heading', { name: 'Your plan', level: 2 })).toBeTruthy();
+      expect(screen.getAllByText(pool.name).length).toBeGreaterThan(0);
+      const toggle = screen.getByRole('button', { name: 'See all regular plans' });
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      expect(screen.queryByText('Max ×2')).toBeNull();
+
+      fireEvent.click(toggle);
+      const hide = screen.getByRole('button', { name: 'Hide regular plans' });
+      expect(hide.getAttribute('aria-expanded')).toBe('true');
+      const region = document.getElementById(hide.getAttribute('aria-controls')!);
+      expect(region?.textContent).toContain('Max ×2');
+
+      fireEvent.click(hide);
+      expect(screen.queryByText('Max ×2')).toBeNull();
+      expect(screen.getByTestId('plans-need-more').textContent).toContain(
+        'If your organization outgrows its 80,000 credits a month',
+      );
     });
   });
 });
