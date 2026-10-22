@@ -4204,7 +4204,8 @@
         (<span class="ref">guide-replan-offer.mock.html</span>, shipped as
         <code>components/planning/GuideReplanOffer.tsx</code>) — same chrome, same tokens, same
         measurements — and adds what a plan offer has and a guide offer does not: an offer with no
-        target, four cannot-start reasons and the mid-planning variant. Every panel is derived from
+        target, three cannot-start reasons, the mid-planning variant, and the line Motir AI says
+        instead of an offer when the target is being planned right now. Every panel is derived from
         the stored offer alone. The spec is <code>design/ai-chat/design-notes.md</code> §
         <i>The plan offer on an answer turn</i>.
       </p>
@@ -4639,12 +4640,13 @@
           <p>
             Confirm is <b>absent, not disabled</b>. One locked line states the reason in words (the
             lock glyph is <code>aria-hidden</code>); Decline stays so the person can close the
-            offer. The four reasons are the four codes the offer DTO serves as
+            offer. The three reasons are the three codes the offer DTO serves as
             <code>cannotStart</code>: <code>planning_unavailable</code>, <code>target_closed</code>,
-            <code>target_held</code>, <code>out_of_credits</code>. A value outside the four draws
-            the generic line. A done target is <code>target_closed</code> — the stored offer keeps
-            only the target it was offered on, so there is nothing to resolve forward from. No line
-            names another person.
+            <code>out_of_credits</code>. A value outside the three draws the generic line. A done
+            target is <code>target_closed</code> — the stored offer keeps only the target it was
+            offered on, so there is nothing to resolve forward from. A target that is
+            <b>being planned right now</b> is not a cannot-start line: it draws no panel at all
+            (sheet 4).
           </p>
         </div>
       </div>
@@ -4843,109 +4845,6 @@
                       <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
                       <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
                     ><span>This work item is done or cancelled, so it can’t be planned.</span>
-                  </p>
-                  <div class="po-actions">
-                    <button
-                      type="button"
-                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 border border-(--el-border) bg-(--el-surface) text-(--el-text) hover:bg-(--el-surface-soft) h-(--height-btn-sm) px-3 text-xs shrink-0"
-                      data-testid="plan-offer-decline"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                  <p class="po-help">Decline plans nothing, and the conversation carries on.</p>
-                </section>
-                <p class="po-meta">Answered from 3 work items</p>
-              </div>
-            </div>
-          </div>
-          <div class="po-cell">
-            <span class="shotcap">en · light · cannot start · target_held</span>
-            <div class="anatbox railbox po-rail" style="display: flex; flex-direction: column">
-              <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
-                <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
-                ><span
-                  class="font-mono text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase"
-                  >Motir AI</span
-                >
-              </div>
-              <div class="railscroll" role="log" style="flex: 1; min-height: 0">
-                <div class="flex items-start gap-2 flex-row-reverse">
-                  <span
-                    aria-hidden="true"
-                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
-                    >·</span
-                  >
-                  <div
-                    class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text) wrap-anywhere"
-                  >
-                    Actually I want to plan a fix for that.
-                  </div>
-                </div>
-                <div class="flex items-start gap-2">
-                  <span
-                    aria-hidden="true"
-                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
-                    ><span class="brand-inv"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        width="13"
-                        height="13"
-                        class="brand-glyph"
-                        aria-hidden="true"
-                        focusable="false"
-                      >
-                        <path
-                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
-                          fill="currentColor"
-                        ></path></svg></span
-                  ></span>
-                  <div
-                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
-                  >
-                    I can plan that: a fix to the export service so every custom field becomes a
-                    column, with tests for the cases the read found. Confirm below and I’ll start.
-                  </div>
-                </div>
-                <section
-                  class="po-panel"
-                  aria-label="Offer to plan"
-                  data-testid="plan-offer"
-                  data-offer-state="undecided"
-                >
-                  <p class="po-label">Offer to plan</p>
-                  <div class="po-request" data-testid="plan-offer-request">
-                    <p>
-                      Plan a fix for the CSV export dropping custom fields: add the missing fields
-                      to the export service and cover them in its tests.
-                    </p>
-                  </div>
-                  <p class="po-target" data-testid="plan-offer-target">
-                    <span>Target</span
-                    ><span class="po-chip" data-testid="plan-offer-target-chip"
-                      ><span class="po-key">ACME-42</span
-                      ><span class="po-chip-title">CSV export drops custom fields</span></span
-                    >
-                  </p>
-                  <p
-                    class="po-rule"
-                    data-testid="plan-offer-cannot-start"
-                    data-reason="target_held"
-                  >
-                    <svg
-                      class="po-glyph"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
-                      focusable="false"
-                    >
-                      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
-                    ><span>Someone else is planning ACME-42 right now, so this can’t start.</span>
                   </p>
                   <div class="po-actions">
                     <button
@@ -5177,6 +5076,9 @@
             <i>Offer to plan something else</i>, and one line above the actions says what Confirm
             does to the current plan: it ends it and starts this one, the way the Plan something new
             control does. It does not offer to add the request to the plan being written.
+            <b>When the target is being planned right now</b> — by this conversation or by another
+            planning session — there is <b>no offer panel</b>: Motir AI tells the person directly,
+            as one more line of its answer turn, with nothing to press.
           </p>
         </div>
       </div>
@@ -5369,6 +5271,138 @@
                     carries on.
                   </p>
                 </section>
+                <p class="po-meta">Answered from 3 work items</p>
+              </div>
+            </div>
+          </div>
+          <div class="po-cell">
+            <span class="shotcap"
+              >en · light · target being planned elsewhere — no offer, Motir AI says so</span
+            >
+            <div class="anatbox railbox po-rail" style="display: flex; flex-direction: column">
+              <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
+                <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
+                ><span
+                  class="font-mono text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                  >Motir AI</span
+                >
+              </div>
+              <div class="railscroll" role="log" style="flex: 1; min-height: 0">
+                <div class="flex items-start gap-2 flex-row-reverse">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                    >·</span
+                  >
+                  <div
+                    class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text) wrap-anywhere"
+                  >
+                    Can you plan a fix for ACME-42?
+                  </div>
+                </div>
+                <div class="flex items-start gap-2">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                    ><span class="brand-inv"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        class="brand-glyph"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        ></path></svg></span
+                  ></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <b>ACME-42 is the bug where the CSV export leaves out custom fields.</b> The
+                    export service only lists the built-in columns, so a project’s own fields never
+                    reach the file.
+                  </div>
+                </div>
+                <div class="flex items-start gap-2" data-testid="plan-offer-being-planned">
+                  <span aria-hidden="true" class="size-7 shrink-0"></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <p>
+                      ACME-42 is being planned right now, so I haven’t offered to plan it again. You
+                      can follow that planning, or ask me about something else.
+                    </p>
+                  </div>
+                </div>
+                <p class="po-meta">Answered from 3 work items</p>
+              </div>
+            </div>
+          </div>
+          <div class="po-cell">
+            <span class="shotcap"
+              >en · light · target being planned in this conversation — no offer</span
+            >
+            <div class="anatbox railbox po-rail" style="display: flex; flex-direction: column">
+              <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
+                <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
+                ><span
+                  class="font-mono text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                  >Motir AI</span
+                >
+              </div>
+              <div class="railscroll" role="log" style="flex: 1; min-height: 0">
+                <div class="flex items-start gap-2 flex-row-reverse">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                    >·</span
+                  >
+                  <div
+                    class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text) wrap-anywhere"
+                  >
+                    Plan ACME-42.
+                  </div>
+                </div>
+                <div class="flex items-start gap-2">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                    ><span class="brand-inv"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        class="brand-glyph"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        ></path></svg></span
+                  ></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <b>ACME-42 is the bug where the CSV export leaves out custom fields.</b> The
+                    export service only lists the built-in columns, so a project’s own fields never
+                    reach the file.
+                  </div>
+                </div>
+                <div class="flex items-start gap-2" data-testid="plan-offer-being-planned">
+                  <span aria-hidden="true" class="size-7 shrink-0"></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <p>
+                      ACME-42 is already being planned here, in this conversation — the plan below
+                      is it.
+                    </p>
+                  </div>
+                </div>
                 <p class="po-meta">Answered from 3 work items</p>
               </div>
             </div>
@@ -5716,11 +5750,12 @@
           <h2>Confirmed, declined and superseded — each rendered from the stored offer alone</h2>
           <p>
             <b>Confirmed</b>: the request and target stay readable; the actions are replaced by the
-            mint pill, the confirmed-at time and <i>Open the planning session</i>. <b>Declined</b>:
-            the declined chip, the declined-at time and the recorded line. <b>Superseded</b>: a
-            newer answer carries a newer offer, so the older panel collapses to one line — position
-            in the thread decides it, with no extra write. The last panel is one conversation after
-            a reload: a superseded offer, then the latest one, undecided.
+            mint pill, the confirmed-at time and one line saying planning runs here. There is no
+            session to open: after Confirm the planning happens in this same overlay, below the
+            turn. <b>Declined</b>: the declined chip, the declined-at time and the recorded line.
+            <b>Superseded</b>: a newer answer carries a newer offer, so the older panel collapses to
+            one line — position in the thread decides it, with no extra write. The last panel is one
+            conversation after a reload: a superseded offer, then the latest one, undecided.
           </p>
         </div>
       </div>
@@ -5812,13 +5847,7 @@
                       >Planning started</span
                     >
                     <p class="po-note">Confirmed · Oct 22, 2026, 7:14 PM</p>
-                    <button
-                      type="button"
-                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 border border-(--el-border) bg-(--el-surface) text-(--el-text) hover:bg-(--el-surface-soft) h-(--height-btn-sm) px-3 text-xs shrink-0 w-fit"
-                      data-testid="plan-offer-open"
-                    >
-                      Open the planning session
-                    </button>
+                    <p class="po-note">Planning runs here, in this conversation.</p>
                   </div>
                 </section>
                 <p class="po-meta">Answered from 3 work items</p>
@@ -6607,8 +6636,9 @@
         <div>
           <h2>Dark</h2>
           <p>
-            The same panels on <code>data-theme='dark'</code>: undecided, cannot start, confirmed
-            and declined. Every ink is <code>--el-text</code>, <code>--el-text-strong</code> or
+            The same panels on <code>data-theme='dark'</code>: undecided, cannot start, confirmed,
+            declined, and the being-planned line that replaces a panel. Every ink is
+            <code>--el-text</code>, <code>--el-text-strong</code> or
             <code>--el-text-secondary</code>, so it clears AA on every surface in both themes.
           </p>
         </div>
@@ -6710,7 +6740,7 @@
             </div>
           </div>
           <div class="po-cell" data-theme="dark" data-appearance-scope>
-            <span class="shotcap">en · dark · cannot start · target_held</span>
+            <span class="shotcap">en · dark · cannot start · out_of_credits</span>
             <div class="anatbox railbox po-rail" style="display: flex; flex-direction: column">
               <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
                 <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
@@ -6780,7 +6810,7 @@
                   <p
                     class="po-rule"
                     data-testid="plan-offer-cannot-start"
-                    data-reason="target_held"
+                    data-reason="out_of_credits"
                   >
                     <svg
                       class="po-glyph"
@@ -6795,7 +6825,7 @@
                     >
                       <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
                       <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
-                    ><span>Someone else is planning ACME-42 right now, so this can’t start.</span>
+                    ><span>Your organization is out of AI credits, so planning can’t start.</span>
                   </p>
                   <div class="po-actions">
                     <button
@@ -6808,6 +6838,70 @@
                   </div>
                   <p class="po-help">Decline plans nothing, and the conversation carries on.</p>
                 </section>
+                <p class="po-meta">Answered from 3 work items</p>
+              </div>
+            </div>
+          </div>
+          <div class="po-cell" data-theme="dark" data-appearance-scope>
+            <span class="shotcap">en · dark · target being planned — no offer</span>
+            <div class="anatbox railbox po-rail" style="display: flex; flex-direction: column">
+              <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
+                <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
+                ><span
+                  class="font-mono text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                  >Motir AI</span
+                >
+              </div>
+              <div class="railscroll" role="log" style="flex: 1; min-height: 0">
+                <div class="flex items-start gap-2 flex-row-reverse">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                    >·</span
+                  >
+                  <div
+                    class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text) wrap-anywhere"
+                  >
+                    Can you plan a fix for ACME-42?
+                  </div>
+                </div>
+                <div class="flex items-start gap-2">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                    ><span class="brand-inv"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        class="brand-glyph"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        ></path></svg></span
+                  ></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <b>ACME-42 is the bug where the CSV export leaves out custom fields.</b> The
+                    export service only lists the built-in columns, so a project’s own fields never
+                    reach the file.
+                  </div>
+                </div>
+                <div class="flex items-start gap-2" data-testid="plan-offer-being-planned">
+                  <span aria-hidden="true" class="size-7 shrink-0"></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <p>
+                      ACME-42 is being planned right now, so I haven’t offered to plan it again. You
+                      can follow that planning, or ask me about something else.
+                    </p>
+                  </div>
+                </div>
                 <p class="po-meta">Answered from 3 work items</p>
               </div>
             </div>
@@ -6898,13 +6992,7 @@
                       >Planning started</span
                     >
                     <p class="po-note">Confirmed · Oct 22, 2026, 7:14 PM</p>
-                    <button
-                      type="button"
-                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 border border-(--el-border) bg-(--el-surface) text-(--el-text) hover:bg-(--el-surface-soft) h-(--height-btn-sm) px-3 text-xs shrink-0 w-fit"
-                      data-testid="plan-offer-open"
-                    >
-                      Open the planning session
-                    </button>
+                    <p class="po-note">Planning runs here, in this conversation.</p>
                   </div>
                 </section>
                 <p class="po-meta">Answered from 3 work items</p>
