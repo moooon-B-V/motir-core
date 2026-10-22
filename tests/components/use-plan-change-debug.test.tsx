@@ -3,11 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 
-// MOTIR-7050 — the DEBUG arm of the conversation loop, as the hook drives it:
-// the widget's anchored send, the hand-off to the `debug_bug` job and its
-// narrated acts, the landing the rail's outcome line reads, the Triage tick —
-// and the RETRY gap this card closes: a re-run the ask door hands straight back
-// as `debugging` used to be streamed as a plan edit.
+// A REPORT OF BROKEN BEHAVIOUR is an ordinary ask turn (ADR conversation-turn-intent
+// AMENDMENT 5 · MOTIR-9232): the widget's anchored send goes through the ask door,
+// the first act the rail draws is `reading`, nothing names a classifying step or a
+// debug hand-off, and a retry keeps the anchor the turn was sent with. A settle
+// result the server no longer produces (`debugging`, `debugged`, `confirming`) from
+// a stale deploy is ignored rather than drawn as an error.
 //
 // The door and the streams are mocked at the client module, the way
 // `use-plan-change-ask.test.tsx` mocks them.
@@ -47,10 +48,7 @@ vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
   };
 });
 
-import {
-  narrateDebugFrame,
-  usePlanChangeConversation,
-} from '@/lib/hooks/usePlanChangeConversation';
+import { usePlanChangeConversation } from '@/lib/hooks/usePlanChangeConversation';
 
 const REPORT = 'Board drag drops the card one column short\n\nIt lands one column left.';
 
@@ -74,7 +72,7 @@ function session(bodies: string[], jobId: string | null = null): PlanChangeSessi
       jobId,
       question: null,
       isAnswer: false,
-      intent: 'debug' as const,
+      intent: 'ask' as const,
       intentCorrected: false,
       citations: [],
       authorId: 'u1',
@@ -84,44 +82,27 @@ function session(bodies: string[], jobId: string | null = null): PlanChangeSessi
   };
 }
 
-const LANDED = {
-  outcome: 'debugged' as const,
-  landing: {
-    outcome: 'diagnose' as const,
-    workItemKey: 'PROD-412',
-    title: 'Board drag drops the card one column short',
-    createdInTriage: false,
-  },
-  session: session([REPORT], 'debug-1'),
-};
-
 type OnFrame = (event: string, data: unknown) => void;
 type OnError = (code: string | null) => void;
 
+/** What the ask stream emits before it settles — `null` streams nothing. */
+let frames: Array<[string, unknown]> = [];
+
 beforeEach(() => {
+  frames = [];
   open.mockResolvedValue(session([]));
   submitAsk.mockImplementation(async (body: string) => ({
     jobId: 'ask-1',
     turnId: 't0',
     session: session([body], 'ask-1'),
   }));
-  // The ask job settles as a REPORT; the debug job's own settle lands it.
-  settleAsk.mockImplementation(async (jobId: string) =>
-    jobId === 'ask-1'
-      ? { outcome: 'debugging', jobId: 'debug-1', session: session([REPORT], 'debug-1') }
-      : LANDED,
-  );
+  settleAsk.mockImplementation(async () => ({
+    outcome: 'answered',
+    session: session([REPORT], 'ask-1'),
+  }));
   streamAsk.mockImplementation(
-    async (jobId: string, _signal: AbortSignal, _onError: OnError, _onDone, onFrame?: OnFrame) => {
-      if (jobId === 'ask-1') return;
-      onFrame?.('retrieval', { family: 'code_graph' });
-      onFrame?.('status', { phase: 'grounding' });
-      onFrame?.('status', { phase: 'searching', groundingReason: 'indexed' });
-      onFrame?.('status', {
-        phase: 'diagnosed',
-        outcome: 'diagnose',
-        groundingReason: 'indexed',
-      });
+    async (_jobId: string, _signal: AbortSignal, _onError: OnError, _onDone, onFrame?: OnFrame) => {
+      for (const [event, data] of frames) onFrame?.(event, data);
     },
   );
   streamAugment.mockImplementation(async () => {});
@@ -132,10 +113,8 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-async function mounted(onTriageChanged?: () => void) {
-  const hook = renderHook(() =>
-    usePlanChangeConversation(onTriageChanged ? { onTriageChanged } : {}),
-  );
+async function mounted() {
+  const hook = renderHook(() => usePlanChangeConversation());
   await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
   return hook;
 }
@@ -165,71 +144,77 @@ describe('the widget’s anchored send', () => {
   });
 });
 
-describe('the debug run', () => {
-  it('hands off to the debug job, narrates its acts, and records what it LANDED', async () => {
-    const { result } = await mounted();
-
-    await act(async () => {
-      await result.current.send(REPORT, [], { anchorKey: 'PROD-412' });
-    });
-
-    // The debug job streamed through the ASK stream — never the plan-edit one.
-    expect(streamAsk.mock.calls.map((c) => c[0])).toEqual(['ask-1', 'debug-1']);
-    expect(streamAugment).not.toHaveBeenCalled();
-    expect(settleAsk).toHaveBeenLastCalledWith('debug-1', expect.anything(), 's1');
-
-    // The record survives the landing — except the opening `reading` act, whose
-    // "Reading your request…" would read as still working (bug MOTIR-7924).
-    expect(result.current.state.acts).toEqual([
-      { kind: 'redirectedDebug' },
-      { kind: 'matching' },
-      { kind: 'writing', key: 'PROD-412' },
-    ]);
-    expect(result.current.state.debugLandings).toEqual({ 'debug-1': LANDED.landing });
-    expect(result.current.state.phase).toBe('idle');
-    expect(result.current.state.errorCode).toBeNull();
-    expect(result.current.state.session).toEqual(LANDED.session);
-  });
-
-  it('bumps the Triage tick only when the landing FILED a bug', async () => {
-    const onTriageChanged = vi.fn();
-    settleAsk.mockImplementation(async (jobId: string) =>
-      jobId === 'ask-1'
-        ? { outcome: 'debugging', jobId: 'debug-1', session: session([REPORT], 'debug-1') }
-        : {
-            ...LANDED,
-            landing: { ...LANDED.landing, workItemKey: 'PROD-414', createdInTriage: true },
-          },
+describe('a report is READ: the rail goes straight to reading (MOTIR-9232)', () => {
+  it('the first act after submit is `reading`, and no frame adds a classifying or debug act', async () => {
+    // Frames a stale motir-ai, or the debug job this story retired, could still send.
+    frames = [
+      ['status', { phase: 'classifying' }],
+      ['status', { phase: 'searching', groundingReason: 'indexed' }],
+      ['status', { phase: 'diagnosed', outcome: 'diagnose', groundingReason: 'indexed' }],
+      ['retrieval', { family: 'code_graph' }],
+    ];
+    const seen: string[][] = [];
+    let release: () => void = () => {};
+    settleAsk.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ outcome: 'answered', session: session([REPORT], 'ask-1') });
+        }),
     );
-    const { result } = await mounted(onTriageChanged);
-
-    await act(async () => {
-      await result.current.send('the board drops cards one column short');
-    });
-
-    expect(onTriageChanged).toHaveBeenCalledTimes(1);
-  });
-
-  it('an out-of-credits debug job is the paywall state, not an error', async () => {
-    streamAsk.mockImplementation(async (jobId: string, _s: AbortSignal, onError: OnError) => {
-      if (jobId === 'debug-1') onError('MOTIR_AI_OUT_OF_CREDITS');
-    });
     const { result } = await mounted();
 
-    await act(async () => {
-      await result.current.send(REPORT, [], { anchorKey: 'PROD-412' });
+    let sent: Promise<void> = Promise.resolve();
+    act(() => {
+      sent = result.current.send(REPORT, [], { anchorKey: 'PROD-412' });
     });
+    await waitFor(() => expect(settleAsk).toHaveBeenCalled());
+    seen.push(result.current.state.acts.map((a) => a.kind));
 
-    expect(result.current.state.outOfCredits).toBe(true);
+    expect(seen[0]).toEqual(['reading']);
+    expect(result.current.state.progress).toEqual({ kind: 'reading' });
     expect(result.current.state.errorCode).toBeNull();
+
+    await act(async () => {
+      release();
+      await sent;
+    });
     expect(result.current.state.phase).toBe('idle');
+    expect(result.current.state.errorCode).toBeNull();
+    expect(streamAugment).not.toHaveBeenCalled();
   });
+
+  it.each(['debugging', 'debugged', 'confirming'])(
+    'a stale `%s` settle result is ignored: no error state, no plan run, no debug stream',
+    async (outcome) => {
+      settleAsk.mockImplementationOnce(async () => ({
+        outcome,
+        jobId: 'debug-1',
+        landing: {
+          outcome: 'diagnose',
+          workItemKey: 'PROD-412',
+          title: 'x',
+          createdInTriage: false,
+        },
+        session: session([REPORT], 'ask-1'),
+      }));
+      const { result } = await mounted();
+
+      await act(async () => {
+        await result.current.send(REPORT);
+      });
+
+      expect(result.current.state.phase).toBe('idle');
+      expect(result.current.state.errorCode).toBeNull();
+      expect(result.current.state.planId).toBeNull();
+      expect(streamAsk.mock.calls.map((c) => c[0])).toEqual(['ask-1']);
+      expect(streamAugment).not.toHaveBeenCalled();
+      expect(result.current.state.debugLandings).toEqual({});
+    },
+  );
 });
 
-describe('the RETRY path — a re-run that comes back `debugging`', () => {
-  async function failedDebugRun() {
-    // The debug job's stream fails once, leaving a retryable error.
-    streamAsk.mockImplementationOnce(async () => {}); // the ask job
+describe('the RETRY path keeps the turn and its anchor', () => {
+  async function failedRun() {
     streamAsk.mockImplementationOnce(async (_j: string, _s: AbortSignal, onError: OnError) => {
       onError(null);
     });
@@ -241,45 +226,28 @@ describe('the RETRY path — a re-run that comes back `debugging`', () => {
     return hook;
   }
 
-  it('follows the debug job — the ask stream and the debug settle — not the plan-edit tail', async () => {
-    const { result } = await failedDebugRun();
-    rerunAsk.mockResolvedValueOnce({
-      outcome: 'debugging',
-      jobId: 'debug-2',
-      session: session([REPORT], 'debug-2'),
-    });
-    settleAsk.mockResolvedValueOnce({ ...LANDED, session: session([REPORT], 'debug-2') });
+  it('re-runs the same turn with the same anchor, as an ask', async () => {
+    const { result } = await failedRun();
+    rerunAsk.mockResolvedValueOnce({ jobId: 'ask-2', turnId: 't0', session: session([REPORT]) });
     streamAsk.mockClear();
 
     await act(async () => {
       await result.current.retry();
     });
 
-    // It re-ran the SAME turn, and carried the SAME anchor, so the diagnosis is
-    // still about the triage bug the report filed — not a second bug.
     expect(rerunAsk).toHaveBeenCalledTimes(1);
     expect(rerunAsk.mock.calls[0]?.[0]).toBe('t0');
     expect(rerunAsk.mock.calls[0]?.[1]).toMatchObject({ anchorKey: 'PROD-412' });
     expect(rerunAsk.mock.calls[0]?.[1]).not.toHaveProperty('flip');
-
-    expect(streamAsk.mock.calls.map((c) => c[0])).toEqual(['debug-2']);
-    expect(streamAugment).not.toHaveBeenCalled();
-    expect(settleAsk).toHaveBeenLastCalledWith('debug-2', expect.anything(), 's1');
-
-    expect(result.current.state.planId).toBeNull();
-    expect(result.current.state.acts[0]).toEqual({ kind: 'redirectedDebug' });
-    expect(result.current.state.debugLandings?.['debug-2']).toEqual(LANDED.landing);
-    expect(result.current.state.phase).toBe('idle');
+    expect(streamAsk.mock.calls.map((c) => c[0])).toEqual(['ask-2']);
+    expect(settleAsk).toHaveBeenLastCalledWith('ask-2', expect.anything(), 's1');
+    expect(result.current.state.acts.map((a) => a.kind)).not.toContain('redirected');
     expect(result.current.state.errorCode).toBeNull();
   });
 
   it('a second retry still names the same turn and anchor', async () => {
-    const { result } = await failedDebugRun();
-    rerunAsk.mockResolvedValue({
-      outcome: 'debugging',
-      jobId: 'debug-2',
-      session: session([REPORT], 'debug-2'),
-    });
+    const { result } = await failedRun();
+    rerunAsk.mockResolvedValue({ jobId: 'ask-2', turnId: 't0', session: session([REPORT]) });
     streamAsk.mockImplementationOnce(async (_j: string, _s: AbortSignal, onError: OnError) => {
       onError(null);
     });
@@ -310,39 +278,5 @@ describe('the RETRY path — a re-run that comes back `debugging`', () => {
     });
 
     expect(rerunAsk.mock.calls[0]?.[1]).toMatchObject({ flip: true, anchorKey: 'PROD-412' });
-  });
-});
-
-describe('narrateDebugFrame', () => {
-  it('reads the phases as the design’s two acts, and nothing else as one', () => {
-    expect(narrateDebugFrame('status', { phase: 'searching' }, null)).toEqual({ kind: 'matching' });
-    expect(narrateDebugFrame('status', { phase: 'grounding' }, 'PROD-412')).toBeNull();
-    expect(narrateDebugFrame('status', { phase: 'authoring' }, 'PROD-412')).toBeNull();
-  });
-
-  it('names the write only when the card is certain: anchored, diagnose, grounded', () => {
-    const diagnosed = { phase: 'diagnosed', outcome: 'diagnose', groundingReason: 'indexed' };
-    expect(narrateDebugFrame('status', diagnosed, 'PROD-412')).toEqual({
-      kind: 'writing',
-      key: 'PROD-412',
-    });
-    // The orb path: the bug is filed by the settle, so its key is not known yet.
-    expect(narrateDebugFrame('status', diagnosed, null)).toBeNull();
-    // An enrichment writes to a card only the settle names.
-    expect(
-      narrateDebugFrame('status', { ...diagnosed, outcome: 'enrich_existing' }, 'PROD-412'),
-    ).toBeNull();
-    // An ungrounded report writes nothing.
-    expect(
-      narrateDebugFrame('status', { ...diagnosed, groundingReason: 'no_match' }, 'PROD-412'),
-    ).toBeNull();
-  });
-
-  it('passes every other frame to the shipped narration — a lookup draws nothing', () => {
-    expect(narrateDebugFrame('retrieval', { family: 'plan_tree' }, null)).toBeNull();
-    expect(narrateDebugFrame('pass', { proposed: 2 }, null)).toEqual({
-      kind: 'proposed',
-      count: 2,
-    });
   });
 });

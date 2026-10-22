@@ -9,7 +9,6 @@ import {
 export type { StalePlanFinishedCard } from '@/lib/planning/planSessionClientErrors';
 import type {
   CopyableSessionDto,
-  DebugLandingDto,
   PlanChangeRunPauseDto,
   EarlierSessionDto,
   PlanChangeSessionDto,
@@ -433,13 +432,6 @@ export interface AskSubmitResponse {
 export type AskSettleResponse =
   | { outcome: 'answered'; session: PlanChangeSessionDto }
   | { outcome: 'redirected'; jobId: string; planId: string; session: PlanChangeSessionDto }
-  // The turn reported broken behaviour (MOTIR-7047): `jobId` is the `debug_bug`
-  // job now diagnosing it, streamed and settled like an ask.
-  | { outcome: 'debugging'; jobId: string; session: PlanChangeSessionDto }
-  // That debug job's own settle (MOTIR-7049): the ONE card it wrote, if any.
-  | { outcome: 'debugged'; landing: DebugLandingDto; session: PlanChangeSessionDto }
-  // A `new_session` turn (MOTIR-7649): the confirm is on the thread, no job ran.
-  | { outcome: 'confirming'; session: PlanChangeSessionDto }
   // A MID-RUN turn (MOTIR-7996) read as a change: forwarded to the running job.
   | { outcome: 'forwarded'; delivery: MailboxDeliveryResponse; session: PlanChangeSessionDto }
   // …but the run had ended. Nothing was written; `text` goes back to the composer.
@@ -474,19 +466,6 @@ export interface AskRedirectResponse {
   outcome: 'redirected';
   jobId: string;
   planId: string;
-  session: PlanChangeSessionDto;
-}
-
-/**
- * A RE-RUN that went straight back to diagnosing (MOTIR-7047's resubmit): the turn
- * already ran as `debug`, so the retry re-runs the SAME diagnosis without asking
- * the classifier again, and `jobId` names the `debug_bug` job now running. Only
- * {@link rerunAskTurn} can produce it — and a caller that treats it as the plan
- * hand-off streams a debug job as a plan edit (the MOTIR-7050 retry gap).
- */
-export interface AskDebugResponse {
-  outcome: 'debugging';
-  jobId: string;
   session: PlanChangeSessionDto;
 }
 
@@ -624,14 +603,12 @@ export async function submitMidRunAskTurn(
  */
 export async function rerunAskTurn(
   turnId: string,
-  /** `anchorKey` is the anchor the turn was FIRST sent with (MOTIR-7050): the
-   *  re-run of a debug turn re-runs the SAME diagnosis, and without it a report
-   *  anchored on its triage bug would be diagnosed as if it had none — and file
-   *  a second bug for it. */
+  /** `anchorKey` is the anchor the turn was FIRST sent with (MOTIR-7050), so the
+   *  re-read is about the same work item the first one was. */
   options: { flip?: boolean; sessionId?: string | null; anchorKey?: string | null } = {},
   signal?: AbortSignal,
-): Promise<AskSubmitResponse | AskRedirectResponse | AskDebugResponse> {
-  return post<AskSubmitResponse | AskRedirectResponse | AskDebugResponse>(
+): Promise<AskSubmitResponse | AskRedirectResponse> {
+  return post<AskSubmitResponse | AskRedirectResponse>(
     '/api/ai/ask',
     {
       turnId,

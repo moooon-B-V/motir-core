@@ -193,60 +193,22 @@ describe('the debug turn, RUNNING (panel 1)', () => {
     expect(screen.queryByText('Targeting 1 item')).toBeNull();
   });
 
-  it('names the debug hand-off and narrates the new acts, the live one with the running bar', () => {
+  it('a report is READ: the record shows the reading act, and no debug hand-off (MOTIR-9232)', () => {
     renderRail({
       phase: 'streaming',
       session: session([user()]),
-      progress: { kind: 'matching' },
-      acts: [{ kind: 'reading' }, { kind: 'redirectedDebug' }, { kind: 'matching' }],
+      progress: { kind: 'reading' },
+      acts: [{ kind: 'reading' }],
     });
-
-    expect(screen.getByTestId('plan-change-handoff-debug').textContent).toBe(
-      'Reading it as a bug — tracing the likely cause',
-    );
-    // The plan-change hand-off is NOT drawn: this turn is not a plan change.
-    expect(screen.queryByTestId('plan-change-handoff')).toBeNull();
 
     const acts = screen.getByTestId('plan-change-acts');
-    const handoff = within(acts).getByTestId('plan-change-act-redirectedDebug');
-    expect(handoff.textContent).toContain('hand-off');
-    expect(handoff.textContent).toContain('Tracing the bug…');
-    const match = within(acts).getByTestId('plan-change-act-matching');
-    expect(match.textContent).toContain('match');
-    expect(match.textContent).toContain('Checking whether a work item already covers it');
-    // The live act is the one row in `--el-text`; settled rows are secondary.
-    expect(match.className).toContain('text-(--el-text)');
-    expect(handoff.className).toContain('text-(--el-text-secondary)');
-
-    // The running bar repeats the live line beside Stop, and the composer stays
-    // live. The third copy is the polite region's announcer (MOTIR-7979).
-    expect(screen.getAllByText('Checking whether a work item already covers it')).toHaveLength(3);
-    expect(screen.getByTestId('plan-change-announcer').textContent).toBe(
-      'Checking whether a work item already covers it',
-    );
-    expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
-  });
-
-  it('names the write when the card is known before the settle', () => {
-    renderRail({
-      phase: 'streaming',
-      session: session([user()]),
-      progress: { kind: 'writing', key: 'PROD-412' },
-      acts: [{ kind: 'redirectedDebug' }, { kind: 'writing', key: 'PROD-412' }],
-    });
-
-    const write = screen.getByTestId('plan-change-act-writing');
-    expect(write.textContent).toContain('write');
-    expect(write.textContent).toContain('Writing the diagnosis onto PROD-412');
-  });
-
-  it('takes the hand-off marker down once the run has settled', () => {
-    renderRail({
-      phase: 'idle',
-      session: session([user()]),
-      acts: [{ kind: 'redirectedDebug' }],
-    });
+    expect(within(acts).getByTestId('plan-change-act-reading')).toBeTruthy();
     expect(screen.queryByTestId('plan-change-handoff-debug')).toBeNull();
+    expect(screen.queryByTestId('plan-change-handoff')).toBeNull();
+    expect(screen.queryByText(/classif/i)).toBeNull();
+    expect(
+      screen.queryByText(/Tracing the bug|Checking whether a work item already covers it/),
+    ).toBeNull();
   });
 });
 
@@ -515,6 +477,35 @@ describe('the debug turn after a RELOAD — drawn from the turn DTOs alone', () 
       ),
     );
     expect(screen.getByText('Targeting 1 item')).toBeTruthy();
+  });
+
+  it('a stored debug turn and a stored new-session confirm still render after the debug arm retired (MOTIR-9232)', () => {
+    const landing: DebugLandingDto = {
+      outcome: 'diagnose',
+      workItemKey: 'PROD-412',
+      title: 'Board drag drops the card one column short',
+      createdInTriage: false,
+    };
+    const { session: thread } = reloadedThread(landing, 'PROD-412');
+    const restartUser = turn('user', 'Forget this, plan the mobile app instead.', {
+      intent: 'new_session',
+    });
+    const confirm = turn('assistant', 'stored body that should never show', {
+      confirm: 'new_session',
+    });
+    renderRail(
+      { session: { ...thread, turns: [...thread.turns, restartUser, confirm] } },
+      { onRequestRestart: vi.fn(), onAnswerRestart: vi.fn() },
+    );
+
+    const line = screen.getByTestId('plan-change-debug-outcome');
+    expect(line.getAttribute('data-outcome')).toBe('diagnose');
+    expect(line.textContent).toBe(
+      'Wrote the diagnosis onto PROD-412Board drag drops the card one column short. It stays in Triage, and nothing else changed.',
+    );
+    const confirmTurn = screen.getByTestId('planning-restart-confirm-turn');
+    expect(confirmTurn.textContent).toContain('Start something new?');
+    expect(confirmTurn.textContent).not.toContain('stored body');
   });
 
   it('an ordinary ask thread (no anchor, no landing) renders exactly as before', () => {

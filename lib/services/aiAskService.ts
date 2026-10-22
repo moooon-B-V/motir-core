@@ -27,11 +27,7 @@ import {
   TurnFilesGuideOnlyError,
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE, PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
-import type {
-  DebugLandingDto,
-  PlanChangeSessionDto,
-  PlanChangeTurnDto,
-} from '@/lib/dto/planChange';
+import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChange';
 import { pendingQuestion } from '@/lib/planning/planChangeThread';
 import { aiGuideService, type GuideTurnResult } from '@/lib/services/aiGuideService';
 import { guideLandingService, type GuideSettleResult } from '@/lib/services/guideLandingService';
@@ -104,8 +100,6 @@ export interface AskSubmitResult {
  *  * `answered` — an `assistant` turn is on the thread, with its citations.
  *  * `redirected` — the turn was a plan change; `jobId` / `planId` name the
  *    plan-edit job now running, and the shipped diff + confirm chrome takes over.
- *  * `debugging` / `debugged` / `confirming` — declared for the rail, which still
- *    switches on them; no server path produces them since MOTIR-9231.
  *  * `silent` — the job ran and said nothing at all. Core persists NOTHING for
  *    this: an assistant turn needs a body, and inventing one would mean motir-core
  *    writing the assistant's words. (An honest "I could not find that" is prose
@@ -124,36 +118,10 @@ export interface AskRedirectResult {
   session: PlanChangeSessionDto;
 }
 
-/** A turn Motir read as a REPORT OF BROKEN BEHAVIOUR (MOTIR-7047): `jobId` names
- *  the `debug_bug` job now diagnosing it, which the rail streams exactly as it
- *  streams an ask (`GET /api/ai/ask/[jobId]/stream`). Nothing is landed yet —
- *  that is the debug job's own settle (MOTIR-7049). */
-// No server path produces this since MOTIR-9231; kept for the rail (MOTIR-9232 removes it).
-export interface AskDebugResult {
-  outcome: 'debugging';
-  jobId: string;
-  session: PlanChangeSessionDto;
-}
-
-/** A settled `debug_bug` job, LANDED (MOTIR-7049): the ONE card the turn
- *  touched — or, for an ungrounded report, none — and the thread with the reply
- *  appended. A replayed settle returns the same `landing` and writes nothing. */
-// No server path produces this since MOTIR-9231; kept for the rail (MOTIR-9232 removes it).
-export interface AskDebuggedResult {
-  outcome: 'debugged';
-  landing: DebugLandingDto;
-  session: PlanChangeSessionDto;
-}
-
 export type AskSettleResult =
   | { outcome: 'answered'; session: PlanChangeSessionDto }
   | { outcome: 'redirected'; jobId: string; planId: string; session: PlanChangeSessionDto }
-  | AskDebugResult
-  | AskDebuggedResult
   | { outcome: 'silent'; session: PlanChangeSessionDto }
-  // A `new_session` turn (MOTIR-7649; AMENDMENT 3, A3.1/A3.2): the confirm is on
-  // the thread and NO job ran. No server path produces this since MOTIR-9231.
-  | { outcome: 'confirming'; session: PlanChangeSessionDto }
   // A MID-RUN turn (MOTIR-7996) the answering session read as a CHANGE: its words
   // went down the running job's mailbox, `delivery` being the mailbox as it stands.
   | { outcome: 'forwarded'; delivery: MailboxDeliveryDto; session: PlanChangeSessionDto }
@@ -727,7 +695,7 @@ export const aiAskService = {
     turnId: string,
     ctx: ProjectContext,
     opts: { flip?: boolean; sessionId?: string; anchorKey?: string } = {},
-  ): Promise<AskSubmitResult | AskRedirectResult | AskDebugResult | GuideTurnResult> {
+  ): Promise<AskSubmitResult | AskRedirectResult | GuideTurnResult> {
     await projectAccessService.assertPermission(
       ctx.projectId,
       { userId: ctx.userId, workspaceId: ctx.workspaceId },

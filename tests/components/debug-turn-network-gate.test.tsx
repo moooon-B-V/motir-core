@@ -16,7 +16,7 @@ import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChan
 // requests leaving the browser:
 //
 //  · the widget's accept → exactly ONE `POST /api/ai/ask`, carrying the report
-//    and its triage-bug anchor, driven through the debug job to its landing — and
+//    and its triage-bug anchor, read and answered as any turn is — and
 //    a reopen on the same page sends no second one;
 //  · the orb's "Debug with Motir AI" row → the composer holds the template, and
 //    NO request other than the mount's own session READ leaves the page.
@@ -99,15 +99,14 @@ const sseDone = () =>
   new Response('event: done\ndata: {}\n\n', { headers: { 'content-type': 'text/event-stream' } });
 
 /** The server this page talks to: a project thread with no conversation yet,
- *  an ask the classifier reads as `debug`, and a debug job that lands on the
- *  anchored triage bug. Anything else is a 404 — and recorded all the same. */
+ *  and an ask that is answered. Anything else is a 404 — and recorded all the same. */
 async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = new URL(String(input), 'http://localhost');
   const method = (init?.method ?? 'GET').toUpperCase();
   const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : null;
   sent.push({ method, path: url.pathname, body });
 
-  const user = turn(0, { intent: 'debug', jobId: 'debug-1' });
+  const user = turn(0, { jobId: 'ask-1', anchorKey: 'PROD-412' } as Partial<PlanChangeTurnDto>);
   if (method === 'GET' && url.pathname === '/api/ai/plan-change/session') {
     return json({ session: null, earlier: null });
   }
@@ -116,24 +115,16 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   }
   if (method === 'GET' && /^\/api\/ai\/ask\/[^/]+\/stream$/.test(url.pathname)) return sseDone();
   if (method === 'POST' && url.pathname === '/api/ai/ask/settle') {
-    const { jobId } = body as { jobId: string };
-    if (jobId === 'ask-1') {
-      return json({ outcome: 'debugging', jobId: 'debug-1', session: thread([user]) });
-    }
+    // Every turn is READ (AMENDMENT 5 · MOTIR-9232): the report's ask job settles
+    // as an answer, with no debug job behind it.
     return json({
-      outcome: 'debugged',
-      landing: {
-        outcome: 'diagnose',
-        workItemKey: 'PROD-412',
-        title: 'Board drag drops the card one column short',
-        createdInTriage: false,
-      },
+      outcome: 'answered',
       session: thread([
         user,
         turn(1, {
           role: 'assistant',
           body: REPLY,
-          jobId: 'debug-1',
+          jobId: 'ask-1',
           intent: null,
           citations: ['PROD-412'],
         } as Partial<PlanChangeTurnDto>),
@@ -170,11 +161,11 @@ afterEach(() => {
 });
 
 describe('the widget’s accept, counted on the wire', () => {
-  it('sends ONE `POST /api/ai/ask` — the report, anchored — and follows it to the landing', async () => {
+  it('sends ONE `POST /api/ai/ask` — the report, anchored — and follows it to the answer', async () => {
     handSurfaceSeed({ kind: 'send', body: REPORT, anchorKey: 'PROD-412' });
     renderWithIntl(host());
 
-    // The authoritative end of the run: the landing's reply is on the thread.
+    // The authoritative end of the run: the answer is on the thread.
     expect(await screen.findByText(REPLY)).toBeTruthy();
 
     expect(posted('/api/ai/ask')).toEqual([
@@ -184,10 +175,9 @@ describe('the widget’s accept, counted on the wire', () => {
         body: { body: REPORT, isAnswer: false, anchorKey: 'PROD-412' },
       },
     ]);
-    // The ask job, then the debug job it handed off to — each settled once.
+    // The ask job alone, settled once: no debug job follows it.
     expect(posted('/api/ai/ask/settle').map((r) => r.body)).toEqual([
       { jobId: 'ask-1', sessionId: 's1' },
-      { jobId: 'debug-1', sessionId: 's1' },
     ]);
   });
 
