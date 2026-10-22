@@ -459,6 +459,25 @@ describe('the larger-pool arm', () => {
     expect(handles.goToPlan).toHaveBeenCalledWith('pool_x');
   });
 
+  it('prints the pool’s own credits from the answer, beside its price (MOTIR-9262)', async () => {
+    const pooled = larger();
+    pooled.recommendation = { ...pooled.recommendation, poolCredits: 120_000 };
+    client.fetchCalculatorEstimate.mockResolvedValue(answer(pooled));
+    renderView();
+    await ask();
+    const pool = await screen.findByTestId('calculator-larger-pool');
+    expect(pool.textContent).toBe('120,000 credits / mo');
+    expect(screen.getByTestId('calculator-larger').contains(pool)).toBe(true);
+  });
+
+  it('prints no pool line for an answer from an engine that does not send poolCredits', async () => {
+    client.fetchCalculatorEstimate.mockResolvedValue(answer(larger()));
+    renderView();
+    await ask();
+    await screen.findByTestId('calculator-larger');
+    expect(screen.queryByTestId('calculator-larger-pool')).toBeNull();
+  });
+
   it('counts the included seat from the catalog constant', async () => {
     client.fetchCalculatorEstimate.mockResolvedValue(answer(larger()));
     renderView();

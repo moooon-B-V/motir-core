@@ -1012,6 +1012,8 @@ function isCalculatorEstimate(v: unknown): v is CalculatorEstimateDTO {
     (rec['planKey'] === null || isStr(rec['planKey'])) &&
     (rec['planName'] === null || isStr(rec['planName'])) &&
     isNum(rec['monthlyPriceUsd']) &&
+    // Absent from an engine older than MOTIR-9189; a number whenever it is sent.
+    (rec['poolCredits'] === undefined || isNum(rec['poolCredits'])) &&
     isObj(topUp) &&
     isTopUpAmount(topUp['low']) &&
     isTopUpAmount(topUp['high']) &&
