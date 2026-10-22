@@ -15,7 +15,10 @@ import type {
 // bundle through this file.
 
 export interface CalculatorEstimateInput {
-  itemsPerMonth: { low: number; high: number };
+  /** Items planned in Motir a month (MOTIR-9224). */
+  plannedPerMonth: { low: number; high: number };
+  /** Items run on Motir's runner a month; 0–0 for an org that runs on its own agent. */
+  runPerMonth: { low: number; high: number };
   /** One to three category keys — no model is ever chosen. */
   categories: string[];
   cadence?: CalculatorCadence;
@@ -75,7 +78,8 @@ export function fetchCalculatorEstimate(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        itemsPerMonth: input.itemsPerMonth,
+        plannedPerMonth: input.plannedPerMonth,
+        runPerMonth: input.runPerMonth,
         categories: input.categories,
         ...(input.cadence ? { cadence: input.cadence } : {}),
       }),

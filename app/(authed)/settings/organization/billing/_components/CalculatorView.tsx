@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowLeft, ArrowRight, Calculator, Info, Users } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Calculator, Check, Coins, Info, Users } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
 import { Button } from '@/components/ui/Button';
@@ -15,29 +15,46 @@ import type {
   CalculatorEstimateDTO,
 } from '@/lib/dto/billing';
 import { CALCULATOR_REQUEST_LIMITS } from '@/lib/dto/billing';
-import { INCLUDED_TRACKER_SEATS_PER_AI_PLAN, type BillingCadence } from '@/lib/billing/catalog';
+import {
+  INCLUDED_TRACKER_SEATS_PER_AI_PLAN,
+  type AiPlanCatalogEntry,
+  type BillingCadence,
+} from '@/lib/billing/catalog';
 import {
   fetchCalculatorCategories,
   fetchCalculatorEstimate,
   type CalculatorOutcome,
 } from '@/lib/billing/calculatorClient';
+import { largerPoolRefusalFor, type LargerPoolRefusal } from '@/lib/billing/largerPoolRefusal';
+import { UpgradeDialog, type PlanNames } from './PlanChangeDialog';
 import { fmt } from './billingFormat';
 
-// The Calculator view on Billing & plans (Story MOTIR-8381 · MOTIR-8639) — the
-// fourth view of the page. It computes nothing: the categories, the split, the
-// credit range, the top-up and the plan key are the answer's; the price and pool
-// of a plan the catalog lists are the catalog's; every sentence is a
-// `billing.calculator.*` key. It asks nothing about a MODEL — a category lists the
-// models it serves as text, and the request carries category keys only.
+// The Calculator view on Billing & plans (Story MOTIR-8381 · MOTIR-8639 · MOTIR-9224 ·
+// MOTIR-8997) — the fourth view of the page. It computes nothing: the categories, the
+// split, the credit range, the top-up and the plan key are the answer's; the price and
+// pool of a plan the catalog lists are the catalog's; every sentence is a
+// `billing.calculator.*` or `billing.plans.*` key. It asks nothing about a MODEL — a
+// category lists the models it serves as text, and the request carries category keys.
+//
+// Two ranges (MOTIR-9224): items PLANNED in Motir and items RUN on Motir's runner. The
+// picked categories are the RUNNER's models; the planning lane is the engine's own.
+//
+// The answer sells the larger pool itself (design/billing § "Amendment 2026-10-21 — the
+// larger credit pool plan", approved 2026-10-22): Choose starts Checkout here, and an
+// org on a smaller live plan gets the shipped change-of-plan dialog instead.
 //
 // ⚠️ The recommendation ARM is read, never derived. `ceiling.outcome` is the engine's
 // own statement of which situation the high end is in, so nothing below compares a
 // credit figure against a ceiling, a pool or a constant to decide it.
 
-type Arm = 'regular' | 'larger' | 'above' | 'topup_only';
+type Arm = 'regular' | 'larger' | 'largest' | 'above' | 'topup_only';
 
 type RangeIssue = 'rangeEmpty' | 'rangeInvalid' | 'rangeOrder';
+type FormIssue = RangeIssue | 'rangeBothZero';
 type CategoryIssue = 'categoryMissing' | 'tooManyCategories';
+type Lane = 'planned' | 'run';
+type Range = { low: string; high: string };
+type Parsed = { low: number; high: number };
 
 type CategoriesState =
   | { kind: 'loading' }
@@ -52,6 +69,12 @@ type ResultState =
   | { kind: 'unavailable' }
   | { kind: 'failed' };
 
+/** Start Checkout for one price; `onRefused` gets the failed body and says if it handled it. */
+export type CalculatorCheckout = (
+  priceLookupKey: string,
+  onRefused: (payload: unknown) => boolean,
+) => void;
+
 export interface CalculatorViewProps {
   orgId: string;
   orgName: string;
@@ -63,6 +86,13 @@ export interface CalculatorViewProps {
   back: () => void;
   /** Open the plans view with this plan distinguished (null when it names no plan). */
   goToPlan: (planKey: string | null) => void;
+  /** Buy the offered pool (no live plan): the page's shipped checkout. */
+  checkout: CalculatorCheckout;
+  /** The shipped Stripe portal (the upgrade dialog's payment-method fallback). */
+  portal: () => void;
+  /** Re-read the billing status after a change of plan. */
+  reload: () => Promise<void>;
+  redirecting: boolean;
 }
 
 // A whole, non-negative count typed as text. Letters, decimals, signs and blanks are
@@ -75,29 +105,36 @@ function parseCount(text: string): number | 'empty' | 'invalid' {
   return Number.isSafeInteger(n) ? n : 'invalid';
 }
 
+function parseRange(range: Range): Parsed | RangeIssue {
+  const lo = parseCount(range.low);
+  const hi = parseCount(range.high);
+  if (lo === 'empty' || hi === 'empty') return 'rangeEmpty';
+  if (lo === 'invalid' || hi === 'invalid') return 'rangeInvalid';
+  return lo > hi ? 'rangeOrder' : { low: lo, high: hi };
+}
+
+// A category names a few of its models as examples, never the whole list: the
+// engine can serve dozens, and listing them all ran the picker off the card.
+export const CATEGORY_MODEL_EXAMPLES = 3;
+
 // Presentational capitalisation at most: the engine's category rule owns the names,
 // and a key→label map here would go stale the day a band is added.
 function categoryLabel(key: string): string {
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
-export function CalculatorView({
-  orgId,
-  orgName,
-  data,
-  cadence,
-  onCadence,
-  back,
-  goToPlan,
-}: CalculatorViewProps) {
+export function CalculatorView(props: CalculatorViewProps) {
+  const { orgId, orgName, data, cadence, onCadence, back } = props;
   const t = useTranslations('billing');
   const locale = useLocale();
-  const rangeId = useId();
   const [categories, setCategories] = useState<CategoriesState>({ kind: 'loading' });
-  const [low, setLow] = useState('');
-  const [high, setHigh] = useState('');
+  const [planned, setPlanned] = useState<Range>({ low: '', high: '' });
+  const [run, setRun] = useState<Range>({ low: '', high: '' });
+  // The run range follows the planned one until the owner types into it, so an org
+  // that runs everything on Motir gets the single-range estimate without retyping.
+  const runTouched = useRef(false);
   const [picked, setPicked] = useState<string[]>([]);
-  const [rangeIssue, setRangeIssue] = useState<RangeIssue | null>(null);
+  const [issues, setIssues] = useState<Partial<Record<Lane, FormIssue>>>({});
   const [categoryIssue, setCategoryIssue] = useState<CategoryIssue | null>(null);
   const [result, setResult] = useState<ResultState>({ kind: 'idle' });
   // Stamped on every ask and bumped on every edit: an older answer never lands under
@@ -106,7 +143,7 @@ export function CalculatorView({
   const readSeq = useRef(0);
 
   // The state starts as `loading`, so the first read sets nothing before it answers;
-  // a retry sets it itself (`retryCategories`).
+  // a retry sets it itself.
   const loadCategories = useCallback(async () => {
     const mine = ++readSeq.current;
     const out = await fetchCalculatorCategories(orgId);
@@ -126,29 +163,47 @@ export function CalculatorView({
   const clear = useCallback(() => {
     seq.current += 1;
     setResult({ kind: 'idle' });
-    setRangeIssue(null);
+    setIssues({});
     setCategoryIssue(null);
   }, []);
 
   const ask = useCallback(async () => {
-    const lo = parseCount(low);
-    const hi = parseCount(high);
-    if (lo === 'empty' || hi === 'empty') return void setRangeIssue('rangeEmpty');
-    if (lo === 'invalid' || hi === 'invalid') return void setRangeIssue('rangeInvalid');
-    if (lo > hi) return void setRangeIssue('rangeOrder');
+    const p = parseRange(planned);
+    const r = parseRange(run);
+    if (typeof p === 'string' || typeof r === 'string') {
+      return void setIssues({
+        ...(typeof p === 'string' ? { planned: p } : {}),
+        ...(typeof r === 'string' ? { run: r } : {}),
+      });
+    }
+    if (p.high === 0 && r.high === 0) {
+      return void setIssues({ planned: 'rangeBothZero', run: 'rangeBothZero' });
+    }
     if (picked.length === 0) return void setCategoryIssue('categoryMissing');
-    setRangeIssue(null);
+    setIssues({});
     setCategoryIssue(null);
     const mine = ++seq.current;
     setResult({ kind: 'loading' });
     const out = await fetchCalculatorEstimate(orgId, {
-      itemsPerMonth: { low: lo, high: hi },
+      plannedPerMonth: p,
+      runPerMonth: r,
       categories: picked,
       cadence,
     });
     if (mine !== seq.current) return;
-    applyOutcome(out, { lo, hi }, setResult, setRangeIssue, setCategoryIssue);
-  }, [low, high, picked, orgId, cadence]);
+    applyOutcome(out, { planned: p, run: r }, setResult, setIssues, setCategoryIssue);
+  }, [planned, run, picked, orgId, cadence]);
+
+  const editPlanned = (field: keyof Range, value: string) => {
+    clear();
+    setPlanned((current) => ({ ...current, [field]: value }));
+    if (!runTouched.current) setRun((current) => ({ ...current, [field]: value }));
+  };
+  const editRun = (field: keyof Range, value: string) => {
+    clear();
+    runTouched.current = true;
+    setRun((current) => ({ ...current, [field]: value }));
+  };
 
   const togglePicked = (key: string) => {
     clear();
@@ -158,7 +213,7 @@ export function CalculatorView({
   };
 
   const asking = result.kind === 'loading';
-  const ready = categories.kind === 'ready' ? categories.value : null;
+  const bothZero = issues.planned === 'rangeBothZero';
 
   return (
     <>
@@ -195,151 +250,229 @@ export function CalculatorView({
         ]}
       />
 
-      <Card>
-        <form
-          className="flex flex-col gap-4"
-          noValidate
-          onSubmit={(event) => {
-            event.preventDefault();
-            void ask();
-          }}
-        >
-          <fieldset className="flex flex-col gap-2" aria-describedby={`${rangeId}-help`}>
-            <legend className="font-sans text-sm font-medium text-(--el-text)">
-              {t('calculator.inputs.rangeLabel')}
-            </legend>
-            <div className="flex flex-wrap items-start gap-3">
-              <Input
-                label={t('calculator.inputs.lowLabel')}
-                inputMode="numeric"
-                autoComplete="off"
-                value={low}
-                aria-invalid={rangeIssue !== null}
-                onChange={(event) => {
-                  clear();
-                  setLow(event.target.value);
-                }}
-              />
-              <Input
-                label={t('calculator.inputs.highLabel')}
-                inputMode="numeric"
-                autoComplete="off"
-                value={high}
-                aria-invalid={rangeIssue !== null}
-                onChange={(event) => {
-                  clear();
-                  setHigh(event.target.value);
-                }}
-              />
-            </div>
-            <p id={`${rangeId}-help`} className="font-sans text-xs text-(--el-text-secondary)">
-              {t('calculator.inputs.rangeHelp')}
-            </p>
-            {rangeIssue ? (
+      {/* The form on the left and the answer on the right at desktop width; one
+          column below it (design panel 11). */}
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <Card>
+          <form
+            className="flex flex-col gap-4"
+            noValidate
+            onSubmit={(event) => {
+              event.preventDefault();
+              void ask();
+            }}
+          >
+            <RangeField
+              legend={t('calculator.inputs.plannedLabel')}
+              help={t('calculator.inputs.rangeHelp')}
+              value={planned}
+              issue={bothZero ? 'invalid' : issues.planned}
+              onEdit={editPlanned}
+              testId="calculator-planned"
+            />
+            <RangeField
+              legend={t('calculator.inputs.runLabel')}
+              help={t('calculator.inputs.runHelp')}
+              value={run}
+              issue={bothZero ? 'invalid' : issues.run}
+              onEdit={editRun}
+              testId="calculator-run"
+            />
+            {bothZero ? (
               <p role="alert" className="font-sans text-xs text-(--el-danger-on-surface)">
-                {t(`calculator.errors.${rangeIssue}`)}
+                {t('calculator.errors.rangeBothZero')}
               </p>
             ) : null}
-          </fieldset>
 
-          <div className="flex flex-col gap-2">
-            <span className="font-sans text-sm font-medium text-(--el-text)">
-              {t('calculator.inputs.categoriesLabel')}
-            </span>
-            {categories.kind === 'loading' ? (
-              <p role="status" className="font-sans text-sm text-(--el-text-secondary)">
-                {t('states.loading')}
-              </p>
-            ) : null}
-            {categories.kind === 'failed' ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <p className="font-sans text-sm text-(--el-text-secondary)">
-                  {t('calculator.categories.failed')}
-                </p>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    setCategories({ kind: 'loading' });
-                    void loadCategories();
-                  }}
-                >
-                  {t('states.retry')}
-                </Button>
-              </div>
-            ) : null}
-            {ready ? (
-              <div
-                className="grid gap-2 sm:grid-cols-3"
-                role="group"
-                aria-label={t('calculator.inputs.categoriesLabel')}
+            <CategoryGroup
+              categories={categories}
+              picked={picked}
+              toggle={togglePicked}
+              retry={() => {
+                setCategories({ kind: 'loading' });
+                void loadCategories();
+              }}
+              issue={categoryIssue}
+              locale={locale}
+            />
+
+            <div>
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                loading={asking}
+                disabled={categories.kind !== 'ready'}
+                leftIcon={<Calculator className="h-4 w-4" />}
               >
-                {ready.categories.map((category) => {
-                  const on = picked.includes(category.key);
-                  const empty = category.models.length === 0;
-                  const full = !on && picked.length >= CALCULATOR_REQUEST_LIMITS.maxCategories;
-                  return (
-                    <button
-                      key={category.key}
-                      type="button"
-                      aria-pressed={on}
-                      disabled={empty || full}
-                      onClick={() => togglePicked(category.key)}
-                      className="flex flex-col items-start gap-0.5 rounded-(--radius-control) border px-(--spacing-control-x-12) py-(--spacing-control-y-8) text-left disabled:cursor-not-allowed"
-                      style={{
-                        borderColor: on ? 'var(--el-accent)' : 'var(--el-border)',
-                        backgroundColor: on ? 'var(--el-surface)' : 'transparent',
-                      }}
-                    >
-                      <span className="font-sans text-sm font-medium text-(--el-text)">
-                        {categoryLabel(category.key)}
-                      </span>
-                      <span className="font-sans text-xs text-(--el-text-secondary)">
-                        {empty
-                          ? t('calculator.categories.empty')
-                          : t('calculator.inputs.categoryExamples', {
-                              models: category.models.map((m) => m.id).join(', '),
-                            })}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-            <p className="font-sans text-xs text-(--el-text-secondary)">
-              {t('calculator.inputs.categoriesHelp')}
-            </p>
-            {categoryIssue ? (
-              <p role="alert" className="font-sans text-xs text-(--el-danger-on-surface)">
-                {t(`calculator.errors.${categoryIssue}`)}
-              </p>
-            ) : null}
-          </div>
+                {t('calculator.inputs.submit')}
+              </Button>
+            </div>
+          </form>
+        </Card>
 
-          <div>
-            <Button
-              type="submit"
-              variant="primary"
-              size="md"
-              loading={asking}
-              disabled={categories.kind !== 'ready'}
-              leftIcon={<Calculator className="h-4 w-4" />}
-            >
-              {t('calculator.inputs.submit')}
-            </Button>
-          </div>
-        </form>
-      </Card>
-
-      <ResultBlock
-        result={result}
-        data={data}
-        cadence={cadence}
-        locale={locale}
-        retry={() => void ask()}
-        goToPlan={goToPlan}
-      />
+        <ResultBlock
+          result={result}
+          retry={() => void ask()}
+          view={{ ...props, locale }}
+          data={data}
+        />
+      </div>
     </>
+  );
+}
+
+function RangeField({
+  legend,
+  help,
+  value,
+  issue,
+  onEdit,
+  testId,
+}: {
+  legend: string;
+  help: string;
+  value: Range;
+  /** A range sentence to show under it, or `invalid` to mark it with no sentence of its own. */
+  issue: FormIssue | 'invalid' | undefined;
+  onEdit: (field: keyof Range, value: string) => void;
+  testId: string;
+}) {
+  const t = useTranslations('billing');
+  const id = useId();
+  const sentence = issue && issue !== 'invalid' && issue !== 'rangeBothZero' ? issue : null;
+  return (
+    <fieldset className="flex flex-col gap-2" aria-describedby={`${id}-help`} data-testid={testId}>
+      <legend className="font-sans text-sm font-medium text-(--el-text)">{legend}</legend>
+      <div className="grid grid-cols-2 items-start gap-3">
+        {(['low', 'high'] as const).map((field) => (
+          <Input
+            key={field}
+            label={t(
+              field === 'low' ? 'calculator.inputs.lowLabel' : 'calculator.inputs.highLabel',
+            )}
+            inputMode="numeric"
+            autoComplete="off"
+            value={value[field]}
+            aria-invalid={issue !== undefined}
+            onChange={(event) => onEdit(field, event.target.value)}
+          />
+        ))}
+      </div>
+      <p id={`${id}-help`} className="font-sans text-xs text-(--el-text-secondary)">
+        {help}
+      </p>
+      {sentence ? (
+        <p role="alert" className="font-sans text-xs text-(--el-danger-on-surface)">
+          {t(`calculator.errors.${sentence}`)}
+        </p>
+      ) : null}
+    </fieldset>
+  );
+}
+
+function CategoryGroup({
+  categories,
+  picked,
+  toggle,
+  retry,
+  issue,
+  locale,
+}: {
+  categories: CategoriesState;
+  picked: string[];
+  toggle: (key: string) => void;
+  retry: () => void;
+  issue: CategoryIssue | null;
+  locale: string;
+}) {
+  const t = useTranslations('billing');
+  const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 });
+  // The share each picked category would carry — the engine's equal split, shown before
+  // anyone asks; the answer then states the split it actually used.
+  const share = picked.length > 0 ? percent.format(1 / picked.length) : null;
+  const ready = categories.kind === 'ready' ? categories.value : null;
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="font-sans text-sm font-medium text-(--el-text)">
+        {t('calculator.inputs.runCategoriesLabel')}
+      </span>
+      {categories.kind === 'loading' ? (
+        <p role="status" className="font-sans text-sm text-(--el-text-secondary)">
+          {t('states.loading')}
+        </p>
+      ) : null}
+      {categories.kind === 'failed' ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="font-sans text-sm text-(--el-text-secondary)">
+            {t('calculator.categories.failed')}
+          </p>
+          <Button variant="secondary" size="sm" onClick={retry}>
+            {t('states.retry')}
+          </Button>
+        </div>
+      ) : null}
+      {ready ? (
+        <div
+          className="grid gap-2 sm:grid-cols-3"
+          role="group"
+          aria-label={t('calculator.inputs.runCategoriesLabel')}
+        >
+          {ready.categories.map((category) => {
+            const on = picked.includes(category.key);
+            const empty = category.models.length === 0;
+            const full = !on && picked.length >= CALCULATOR_REQUEST_LIMITS.maxCategories;
+            return (
+              <button
+                key={category.key}
+                type="button"
+                aria-pressed={on}
+                disabled={empty || full}
+                onClick={() => toggle(category.key)}
+                className="flex min-w-0 flex-col items-start gap-0.5 rounded-(--radius-control) border px-(--spacing-control-x-12) py-(--spacing-control-y-8) text-left disabled:cursor-not-allowed"
+                style={{
+                  borderColor: on ? 'var(--el-accent)' : 'var(--el-border)',
+                  backgroundColor: on ? 'var(--el-surface)' : 'transparent',
+                }}
+              >
+                <span className="flex items-center gap-1 font-sans text-sm font-medium text-(--el-text)">
+                  {on ? (
+                    <Check className="h-3.5 w-3.5 text-(--el-accent-on-surface)" aria-hidden />
+                  ) : null}
+                  {categoryLabel(category.key)}
+                </span>
+                {on && share ? (
+                  <span
+                    data-testid="calculator-category-share"
+                    className="font-sans text-xs font-medium text-(--el-text-strong)"
+                  >
+                    {t('calculator.inputs.categoryShare', { share })}
+                  </span>
+                ) : null}
+                <span className="font-sans text-xs break-words text-(--el-text-secondary)">
+                  {empty
+                    ? t('calculator.categories.empty')
+                    : t('calculator.inputs.categoryExamples', {
+                        models: category.models
+                          .slice(0, CATEGORY_MODEL_EXAMPLES)
+                          .map((m) => m.id)
+                          .join(', '),
+                      })}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      <p className="font-sans text-xs text-(--el-text-secondary)">
+        {t('calculator.inputs.runCategoriesHelp')}
+      </p>
+      {issue ? (
+        <p role="alert" className="font-sans text-xs text-(--el-danger-on-surface)">
+          {t(`calculator.errors.${issue}`)}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -348,9 +481,9 @@ export function CalculatorView({
 // as the failed state, so a validation drift surfaces rather than posing as an outage.
 function applyOutcome(
   out: CalculatorOutcome<CalculatorEstimateDTO | CalculatorEmptyCategoryDTO>,
-  range: { lo: number; hi: number },
+  ranges: Record<Lane, Parsed>,
   setResult: (next: ResultState) => void,
-  setRangeIssue: (next: RangeIssue | null) => void,
+  setIssues: (next: Partial<Record<Lane, FormIssue>>) => void,
   setCategoryIssue: (next: CategoryIssue | null) => void,
 ) {
   if (out.kind === 'answer') {
@@ -366,28 +499,32 @@ function applyOutcome(
       setResult({ kind: 'idle' });
       return setCategoryIssue('tooManyCategories');
     }
-    if (out.field.startsWith('itemsPerMonth')) {
+    const lane: Lane | null = out.field.startsWith('plannedPerMonth')
+      ? 'planned'
+      : out.field.startsWith('runPerMonth')
+        ? 'run'
+        : null;
+    if (lane) {
       setResult({ kind: 'idle' });
-      return setRangeIssue(range.lo > range.hi ? 'rangeOrder' : 'rangeInvalid');
+      const range = ranges[lane];
+      return setIssues({ [lane]: range.low > range.high ? 'rangeOrder' : 'rangeInvalid' });
     }
   }
   return setResult({ kind: 'failed' });
 }
 
+type ViewContext = CalculatorViewProps & { locale: string };
+
 function ResultBlock({
   result,
-  data,
-  cadence,
-  locale,
   retry,
-  goToPlan,
+  view,
+  data,
 }: {
   result: ResultState;
-  data: BillingStatusDTO;
-  cadence: BillingCadence;
-  locale: string;
   retry: () => void;
-  goToPlan: (planKey: string | null) => void;
+  view: ViewContext;
+  data: BillingStatusDTO;
 }) {
   const t = useTranslations('billing');
   let body: React.ReactNode;
@@ -426,13 +563,13 @@ function ResultBlock({
       );
       break;
     case 'estimate':
+      // Keyed by the answer, so an offer's refusal never outlives the estimate it was for.
       body = (
         <Estimate
+          key={JSON.stringify(result.value.credits)}
           answer={result.value}
+          view={view}
           data={data}
-          cadence={cadence}
-          locale={locale}
-          goToPlan={goToPlan}
         />
       );
       break;
@@ -459,6 +596,8 @@ function armOf(answer: CalculatorEstimateDTO): Arm {
   switch (answer.ceiling.outcome) {
     case 'larger_pool':
       return 'larger';
+    case 'largest_pool':
+      return 'largest';
     case 'top_ups_only':
       return 'above';
     case 'within_ladder':
@@ -466,31 +605,38 @@ function armOf(answer: CalculatorEstimateDTO): Arm {
   }
 }
 
+/** The org holds a live paid AI plan: a buy is then a change of plan, never a checkout. */
+function holdsLivePlan(data: BillingStatusDTO): boolean {
+  const { tier, subscription } = data.motirAi;
+  return (
+    !!tier &&
+    tier.key !== 'free' &&
+    (subscription.status === 'active' ||
+      subscription.status === 'trialing' ||
+      subscription.status === 'past_due')
+  );
+}
+
 function Estimate({
   answer,
+  view,
   data,
-  cadence,
-  locale,
-  goToPlan,
 }: {
   answer: CalculatorEstimateDTO;
+  view: ViewContext;
   data: BillingStatusDTO;
-  cadence: BillingCadence;
-  locale: string;
-  goToPlan: (planKey: string | null) => void;
 }) {
   const t = useTranslations('billing');
+  const { cadence, locale, goToPlan } = view;
   const arm = armOf(answer);
   const { recommendation, topUp, ceiling, split } = answer;
   const { aiPlans, seatPlan } = data.catalog;
-  const { tier, subscription } = data.motirAi;
 
-  // The regular arm prices from the CATALOG: `recommendation.monthlyPriceUsd` is the
-  // monthly equivalent (annual = yearly / 12), which would understate an annual plan.
-  // The key is an open string, so the lookup may miss — and a miss keeps the answer's
-  // own name rather than borrowing another entry's.
-  const entry =
-    arm === 'larger' ? null : (aiPlans.find((p) => p.key === recommendation.planKey) ?? null);
+  // Every plan figure is the CATALOG's: `recommendation.monthlyPriceUsd` is the monthly
+  // equivalent (annual = yearly / 12), which would understate an annual plan. The key
+  // is an open string, so the lookup may miss — and a miss keeps the answer's own name
+  // rather than borrowing another entry's.
+  const entry = aiPlans.find((p) => p.key === recommendation.planKey) ?? null;
   const planName = entry?.name ?? recommendation.planName;
   const includedSeats =
     arm === 'topup_only'
@@ -498,39 +644,61 @@ function Estimate({
       : (entry?.includedTrackerSeats ?? INCLUDED_TRACKER_SEATS_PER_AI_PLAN);
   const seatFee = seatPlan.prices[cadence].amountUsd;
 
-  const holdsPlan =
-    !!tier &&
-    tier.key !== 'free' &&
-    (subscription.status === 'active' ||
-      subscription.status === 'trialing' ||
-      subscription.status === 'past_due');
-  const currentPool = aiPlans.find((p) => p.key === tier?.key)?.allotment?.credits ?? null;
+  const holdsPlan = holdsLivePlan(data);
+  const currentPool =
+    aiPlans.find((p) => p.key === data.motirAi.tier?.key)?.allotment?.credits ?? null;
   const entryPool = entry?.allotment?.credits ?? null;
   const above =
     holdsPlan &&
-    (arm === 'larger' ||
-      ((arm === 'regular' || arm === 'above') &&
-        entryPool !== null &&
-        currentPool !== null &&
-        entryPool > currentPool));
+    (arm === 'regular' || arm === 'above') &&
+    entryPool !== null &&
+    currentPool !== null &&
+    entryPool > currentPool;
 
   const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 });
   const list = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
   const shares = [...new Set(split.categories.map((c) => percent.format(c.weight)))];
   const names = split.categories.map((c) => categoryLabel(c.key));
+  const pool = arm === 'larger' || arm === 'largest';
+  const offer = pool && entry?.prices ? entry : null;
+  // A pool key this catalog cannot sell is shown as the answer names it, with no buy.
+  const named = arm === 'regular' || arm === 'above' || (pool && !offer);
   const hasTopUp = topUp.high.credits > 0;
-  const buys = arm !== 'topup_only';
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="font-sans text-sm text-(--el-text)">
-        {split.count === 1
-          ? t('calculator.split.one', { category: names[0] ?? '' })
-          : t('calculator.split.even', {
-              categories: list.format(names),
-              shares: list.format(shares),
-            })}
+      <p
+        data-testid="calculator-priced"
+        className="rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-control-x-12) py-(--spacing-control-y-8) font-sans text-sm text-(--el-text)"
+      >
+        {t('calculator.result.priced', {
+          plannedLow: fmt(answer.plannedPerMonth.low, locale),
+          plannedHigh: fmt(answer.plannedPerMonth.high, locale),
+          runLow: fmt(answer.runPerMonth.low, locale),
+          runHigh: fmt(answer.runPerMonth.high, locale),
+        })}
       </p>
+
+      <div className="flex flex-col gap-1">
+        <p className="font-sans text-sm text-(--el-text)">
+          {split.count === 1
+            ? t('calculator.split.one', { category: names[0] ?? '' })
+            : t('calculator.split.even', {
+                categories: list.format(names),
+                shares: list.format(shares),
+              })}
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {split.categories.map((c) => (
+            <Pill
+              key={c.key}
+              className="border-(--el-border-strong) bg-(--el-surface) text-(--el-text-strong)"
+            >
+              {categoryLabel(c.key)} · {percent.format(c.weight)}
+            </Pill>
+          ))}
+        </div>
+      </div>
 
       <div className="flex flex-col gap-1">
         <span className="font-sans text-xs font-medium text-(--el-text-secondary)">
@@ -544,40 +712,20 @@ function Estimate({
         </p>
       </div>
 
-      {arm === 'larger' ? (
-        <div
-          className="flex flex-col gap-1.5 rounded-(--radius-card) border border-dashed p-(--spacing-card-padding)"
-          style={{ borderColor: 'var(--el-accent)' }}
-          data-testid="calculator-larger"
-        >
-          <Pill className="w-fit border-transparent bg-(--el-tint-lavender) text-(--el-text-strong)">
-            {t('calculator.result.largerPoolLabel')}
-          </Pill>
-          <p className="font-sans text-sm text-(--el-text)">
-            {t('calculator.result.largerPlan', { plan: planName ?? '' })}
-          </p>
-          <span className="font-serif text-2xl text-(--el-text)">
-            {t('plans.perMoEquiv', { n: fmt(recommendation.monthlyPriceUsd, locale) })}
-          </span>
-          {/* The pool's size is the answer's own: a derived pool may have no catalog row. */}
-          {recommendation.poolCredits ? (
-            <p
-              className="font-sans text-sm font-semibold text-(--el-text-strong)"
-              data-testid="calculator-larger-pool"
-            >
-              {t('plans.creditsAllotment', { n: fmt(recommendation.poolCredits, locale) })}
-            </p>
-          ) : null}
-          <p className="font-sans text-xs text-(--el-text-secondary)">
-            {t('calculator.result.largerPlanEstimate')}
-          </p>
-          <p className="font-sans text-xs text-(--el-text-secondary)">
-            {t('calculator.result.perOrg')}
-          </p>
-        </div>
+      {offer ? (
+        <PoolOffer
+          plan={offer}
+          largest={arm === 'largest'}
+          excess={Math.max(0, answer.credits.high - (offer.allotment?.credits ?? 0))}
+          topUp={topUp.high}
+          poolCredits={recommendation.poolCredits}
+          holdsPlan={holdsPlan}
+          view={view}
+          data={data}
+        />
       ) : null}
 
-      {arm === 'regular' || arm === 'above' ? (
+      {named ? (
         <div className="flex flex-col gap-1" data-testid="calculator-plan">
           <span className="font-sans text-xs font-medium text-(--el-text-secondary)">
             {t('calculator.result.planLabel')}
@@ -603,7 +751,7 @@ function Estimate({
 
       {arm === 'topup_only' ? <Note>{t('calculator.result.topupOnly')}</Note> : null}
 
-      {arm !== 'larger' && hasTopUp ? (
+      {!offer && hasTopUp ? (
         <div className="flex flex-col gap-0.5" data-testid="calculator-topup">
           <span className="font-sans text-xs font-medium text-(--el-text-secondary)">
             {t('calculator.result.topupLabel')}
@@ -615,31 +763,33 @@ function Estimate({
         </div>
       ) : null}
 
-      <p
-        data-testid="calculator-seat"
-        className="flex items-start gap-1.5 font-sans text-xs text-(--el-text-secondary)"
-      >
-        <Users className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span>
-          {includedSeats === null ? (
-            t('calculator.seat.noPlan')
-          ) : (
-            <>
-              {t('calculator.seat.included', { count: includedSeats })}{' '}
-              {t(
-                cadence === 'annual'
-                  ? 'calculator.seat.feePerUserAnnual'
-                  : 'calculator.seat.feePerUserMonthly',
-                { price: fmt(seatFee, locale) },
-              )}
-            </>
-          )}
-        </span>
-      </p>
+      {offer ? null : (
+        <p
+          data-testid="calculator-seat"
+          className="flex items-start gap-1.5 font-sans text-xs text-(--el-text-secondary)"
+        >
+          <Users className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>
+            {includedSeats === null ? (
+              t('calculator.seat.noPlan')
+            ) : (
+              <>
+                {t('calculator.seat.included', { count: includedSeats })}{' '}
+                {t(
+                  cadence === 'annual'
+                    ? 'calculator.seat.feePerUserAnnual'
+                    : 'calculator.seat.feePerUserMonthly',
+                  { price: fmt(seatFee, locale) },
+                )}
+              </>
+            )}
+          </span>
+        </p>
+      )}
 
       {above ? <Note>{t('calculator.result.upgradeNote')}</Note> : null}
 
-      {buys ? (
+      {arm === 'regular' || arm === 'above' ? (
         <div>
           <Button
             variant="secondary"
@@ -650,6 +800,195 @@ function Estimate({
             {t('calculator.result.goToPlan')}
           </Button>
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+// The larger pool, offered and SOLD from the answer (design panels 2–4, 6–8): the
+// catalog entry's own name, price and pool, and one buy control. No live plan →
+// Checkout at quantity 1; a smaller live plan → the shipped change-of-plan dialog.
+// Above every pool (`largest`), the box under the price says the rest is top-ups.
+function PoolOffer({
+  plan,
+  largest,
+  excess,
+  topUp,
+  poolCredits,
+  holdsPlan,
+  view,
+  data,
+}: {
+  plan: AiPlanCatalogEntry;
+  largest: boolean;
+  /** Credits a month past this pool's — top-ups cover them (`largest` only). */
+  excess: number;
+  topUp: CalculatorEstimateDTO['topUp']['high'];
+  /** The answer's own pool (MOTIR-9262); absent from an engine older than MOTIR-9189. */
+  poolCredits: number | undefined;
+  holdsPlan: boolean;
+  view: ViewContext;
+  data: BillingStatusDTO;
+}) {
+  const t = useTranslations('billing');
+  const { cadence, locale, orgId, checkout, portal, reload, redirecting } = view;
+  const reasonId = useId();
+  const [refusal, setRefusal] = useState<LargerPoolRefusal | null>(null);
+  const [upgrading, setUpgrading] = useState(false);
+  const canManage = data.access.canManageBilling;
+  const prices = plan.prices!;
+  const pool = plan.allotment?.credits ?? 0;
+  const isCurrent = data.motirAi.tier?.key === plan.key;
+  const currentPool =
+    data.catalog.aiPlans.find((p) => p.key === data.motirAi.tier?.key)?.allotment?.credits ?? null;
+  // An org whose live plan already holds at least this pool is not sold it again.
+  const covered = holdsPlan && !isCurrent && currentPool !== null && currentPool >= pool;
+  const planNames: PlanNames = Object.fromEntries(data.catalog.aiPlans.map((p) => [p.key, p.name]));
+  const unitCredits = topUp.units > 0 ? topUp.credits / topUp.units : 0;
+
+  const buy = () => {
+    setRefusal(null);
+    if (holdsPlan) return setUpgrading(true);
+    checkout(prices[cadence].priceLookupKey, (payload) => {
+      const reason = largerPoolRefusalFor(payload);
+      if (reason) setRefusal(reason);
+      return reason !== null;
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      {refusal ? (
+        <p
+          role="alert"
+          data-testid="calculator-larger-refused"
+          className="rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding) font-sans text-sm text-(--el-text)"
+        >
+          {t(`plans.larger.refused.${refusal}`)}
+        </p>
+      ) : null}
+      <div
+        className="flex flex-col gap-2 rounded-(--radius-card) border bg-(--el-surface) p-(--spacing-card-padding) shadow-(--shadow-card)"
+        style={{ borderColor: 'var(--el-accent)' }}
+        data-testid="calculator-larger"
+      >
+        <Pill className="w-fit border-transparent bg-(--el-tint-lavender) text-(--el-text-strong)">
+          {t(largest ? 'calculator.result.largestPoolLabel' : 'calculator.result.largerPoolLabel')}
+        </Pill>
+        <span className="font-sans text-base font-semibold text-(--el-text)">{plan.name}</span>
+        <p className="font-sans text-sm text-(--el-text)">
+          {t(largest ? 'calculator.result.largestPool' : 'calculator.result.largerPlan', {
+            plan: plan.name,
+          })}
+        </p>
+        <OfferPrice plan={plan} cadence={cadence} locale={locale} />
+        {/* The pool's size is the answer's own when it sends one, else the catalog row's. */}
+        <p
+          className="font-sans text-sm font-semibold text-(--el-text-strong)"
+          data-testid="calculator-larger-pool"
+        >
+          {t('plans.creditsAllotment', { n: fmt(poolCredits || pool, locale) })}
+        </p>
+        {largest && topUp.units > 0 ? (
+          <p
+            data-testid="calculator-largest-topup"
+            className="flex items-start gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-control-x-12) py-(--spacing-control-y-8) font-sans text-sm text-(--el-text)"
+          >
+            <Coins className="mt-0.5 h-4 w-4 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
+            <span>
+              {t('calculator.result.largestPoolTopUp', {
+                excess: fmt(excess, locale),
+                units: fmt(topUp.units, locale),
+                unitCredits: fmt(unitCredits, locale),
+                price: fmt(topUp.priceUsd, locale),
+              })}
+            </span>
+          </p>
+        ) : null}
+        <p className="font-sans text-xs text-(--el-text-secondary)">
+          {t('calculator.result.largerPlanEstimate')}
+        </p>
+        <p className="flex items-center gap-1.5 font-sans text-xs text-(--el-text-secondary)">
+          <Users className="h-3.5 w-3.5 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
+          {t('calculator.result.perOrg')}
+        </p>
+        {!canManage ? (
+          <p id={reasonId} className="font-sans text-xs text-(--el-text-secondary)">
+            {t('plans.upgrade.disabledReason')}
+          </p>
+        ) : null}
+        {covered ? null : (
+          <Button
+            variant="primary"
+            size="md"
+            className="w-full"
+            disabled={!canManage || isCurrent}
+            loading={!holdsPlan && redirecting}
+            aria-describedby={!canManage ? reasonId : undefined}
+            aria-haspopup={holdsPlan ? 'dialog' : undefined}
+            onClick={buy}
+          >
+            {isCurrent
+              ? t('plans.ctaCurrent')
+              : holdsPlan
+                ? t('plans.ctaUpgrade', { plan: plan.name })
+                : t('plans.ctaChoose', { plan: plan.name })}
+          </Button>
+        )}
+      </div>
+      {holdsPlan && !isCurrent && !covered ? (
+        <Note>{t('calculator.result.upgradeNote')}</Note>
+      ) : null}
+      {upgrading ? (
+        <UpgradeDialog
+          orgId={orgId}
+          toPlanKey={plan.key}
+          planNames={planNames}
+          onClose={() => setUpgrading(false)}
+          onChanged={() => void reload()}
+          portal={portal}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// The offered pool's price in the plan cards' own price block: the per-month
+// equivalent and the yearly figure on annual, the monthly figure on monthly.
+function OfferPrice({
+  plan,
+  cadence,
+  locale,
+}: {
+  plan: AiPlanCatalogEntry;
+  cadence: BillingCadence;
+  locale: string;
+}) {
+  const t = useTranslations('billing');
+  const { monthly, annual } = plan.prices!;
+  const save = monthly.amountUsd * 12 - annual.amountUsd;
+  return (
+    <div data-testid="calculator-larger-price">
+      <span className="font-serif text-2xl text-(--el-text)">
+        {t('plans.perMoEquiv', {
+          n: fmt(
+            cadence === 'annual' ? Math.round(annual.amountUsd / 12) : monthly.amountUsd,
+            locale,
+          ),
+        })}
+      </span>
+      <p className="font-sans text-xs text-(--el-text-secondary)">
+        {cadence === 'annual'
+          ? t('plans.annualSub', { yr: fmt(annual.amountUsd, locale) })
+          : t('plans.monthlySub', {
+              yr: fmt(monthly.amountUsd * 12, locale),
+              n: fmt(save, locale),
+            })}
+      </p>
+      {cadence === 'annual' && save > 0 ? (
+        <Pill className="mt-1 border-transparent bg-(--el-tint-mint) text-(--el-text-strong)">
+          {t('plans.annualSave', { n: fmt(save, locale) })}
+        </Pill>
       ) : null}
     </div>
   );

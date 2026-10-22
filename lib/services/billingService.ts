@@ -36,6 +36,8 @@ import {
   isAllowedCheckoutQuantity,
   isKnownCheckoutPrice,
   isPlanChangeKey,
+  largerPoolCreditsForPrice,
+  maxMonthlyPlanCredits,
   type BillingCadence,
 } from '@/lib/billing/catalog';
 import {
@@ -43,6 +45,7 @@ import {
   BillingNotAvailableError,
   BillingPlanChangeRefusedError,
   InvalidBillingQuantityError,
+  LargerPoolAtOrBelowCeilingError,
   UnknownBillingPriceError,
 } from '@/lib/billing/errors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
@@ -363,6 +366,17 @@ export const billingService = {
     input: OrgActorInput & { priceLookupKey: string; quantity?: number },
   ): Promise<BillingCheckoutDTO> {
     await this.assertBillingManagerForMutation(input);
+
+    // A larger pool at a size the ladder already covers earns its own refusal
+    // (MOTIR-8990), before the generic unknown-price one would swallow it.
+    const requestedPool = largerPoolCreditsForPrice(input.priceLookupKey);
+    if (requestedPool !== null && requestedPool <= maxMonthlyPlanCredits()) {
+      throw new LargerPoolAtOrBelowCeilingError(
+        input.priceLookupKey,
+        requestedPool,
+        maxMonthlyPlanCredits(),
+      );
+    }
 
     if (!isKnownCheckoutPrice(input.priceLookupKey)) {
       throw new UnknownBillingPriceError(input.priceLookupKey);

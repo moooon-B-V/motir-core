@@ -52,6 +52,7 @@ const {
   BillingNotAvailableError,
   BillingForbiddenError,
   InvalidBillingQuantityError,
+  LargerPoolAtOrBelowCeilingError,
   UnknownBillingPriceError,
 } = await import('@/lib/billing/errors');
 const { OrganizationNotFoundError } = await import('@/lib/organizations/errors');
@@ -656,6 +657,46 @@ describe('billingService.startCheckout', () => {
         actorUserId: owner.id,
         priceLookupKey: 'price_tampered',
         quantity: 99,
+      }),
+    ).rejects.toBeInstanceOf(UnknownBillingPriceError);
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a larger pool at or below the ladder top with its own code (MOTIR-8990)', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    const refusal = billingService.startCheckout({
+      organizationId,
+      actorUserId: owner.id,
+      priceLookupKey: 'pool_60k_pool_monthly',
+    });
+    await expect(refusal).rejects.toBeInstanceOf(LargerPoolAtOrBelowCeilingError);
+    await expect(refusal).rejects.toMatchObject({
+      code: 'BILLING_POOL_AT_OR_BELOW_CEILING',
+      requestedCredits: 60000,
+      ceilingCredits: 60000,
+    });
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('forwards a carried larger-pool rung at quantity 1 (MOTIR-8990)', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    await billingService.startCheckout({
+      organizationId,
+      actorUserId: owner.id,
+      priceLookupKey: 'pool_120k_pool_annual',
+    });
+    expect(createCheckoutSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ priceId: 'pool_120k_pool_annual', quantity: 1 }),
+    );
+  });
+
+  it('keeps a rung-shaped key above the ceiling that no rung carries as UNKNOWN_PRICE', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    await expect(
+      billingService.startCheckout({
+        organizationId,
+        actorUserId: owner.id,
+        priceLookupKey: 'pool_90k_pool_monthly',
       }),
     ).rejects.toBeInstanceOf(UnknownBillingPriceError);
     expect(createCheckoutSessionMock).not.toHaveBeenCalled();

@@ -14,6 +14,7 @@ import {
   EnterpriseRequestValidationError,
   EntitlementExceededError,
   InvalidBillingQuantityError,
+  LargerPoolAtOrBelowCeilingError,
   UnknownBillingPriceError,
 } from '@/lib/billing/errors';
 
@@ -42,6 +43,17 @@ export function mapBillingError(err: unknown): NextResponse | null {
   }
   if (err instanceof InvalidBillingQuantityError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
+  }
+  if (err instanceof LargerPoolAtOrBelowCeilingError) {
+    return NextResponse.json(
+      {
+        code: err.code,
+        error: err.message,
+        requestedCredits: err.requestedCredits,
+        ceilingCredits: err.ceilingCredits,
+      },
+      { status: 400 },
+    );
   }
   if (err instanceof BillingPlanChangeRefusedError) {
     // A refused change of AI plan (MOTIR-8399): the dialog keeps its figures and

@@ -66,6 +66,8 @@ const ESTIMATE: CalculatorEstimateDTO = {
   profilesVersion: 'profiles-fixture',
   categoryRuleVersion: 'rule-fixture',
   cadence: 'monthly',
+  plannedPerMonth: { low: 10, high: 40 },
+  runPerMonth: { low: 10, high: 40 },
   credits: { low: 1234, high: 5678 },
   perItemCredits: { planning: 12.5, running: 30.25 },
   split: {
@@ -91,7 +93,8 @@ const EMPTY_CATEGORY: CalculatorEmptyCategoryDTO = {
 };
 
 const REQUEST = {
-  itemsPerMonth: { low: 10, high: 40 },
+  plannedPerMonth: { low: 10, high: 40 },
+  runPerMonth: { low: 10, high: 40 },
   categories: ['band-a', 'band-b'],
   cadence: 'monthly',
 };
@@ -326,7 +329,7 @@ describe('POST …/calculator/estimate — the answers', () => {
     ['one category', ['band-a']],
     ['two categories', ['band-a', 'band-b']],
     ['three categories', ['band-a', 'band-b', 'band-c']],
-  ])('%s reach the engine as exactly itemsPerMonth, categories and cadence', async (_n, cats) => {
+  ])('%s reach the engine as exactly the two ranges, categories and cadence', async (_n, cats) => {
     const { organizationId, owner } = await makeOrg();
     signInAs(owner);
     fetchMock.mockResolvedValueOnce(json(200, ESTIMATE));
@@ -335,7 +338,12 @@ describe('POST …/calculator/estimate — the answers', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toStrictEqual(ESTIMATE);
     const sent = JSON.parse(String(fetchMock.mock.calls[0]![1]?.body)) as Record<string, unknown>;
-    expect(Object.keys(sent).sort()).toEqual(['cadence', 'categories', 'itemsPerMonth']);
+    expect(Object.keys(sent).sort()).toEqual([
+      'cadence',
+      'categories',
+      'plannedPerMonth',
+      'runPerMonth',
+    ]);
     expect(sent['categories']).toStrictEqual(cats);
   });
 
@@ -413,12 +421,24 @@ describe('POST …/calculator/estimate — a refused body never reaches the engi
     ['an empty-string category key', { ...REQUEST, categories: [''] }, 'categories.0'],
     [
       'a non-integer end',
-      { ...REQUEST, itemsPerMonth: { low: 1.5, high: 4 } },
-      'itemsPerMonth.low',
+      { ...REQUEST, plannedPerMonth: { low: 1.5, high: 4 } },
+      'plannedPerMonth.low',
     ],
-    ['a negative end', { ...REQUEST, itemsPerMonth: { low: 1, high: -4 } }, 'itemsPerMonth.high'],
-    ['a missing end', { ...REQUEST, itemsPerMonth: { low: 1 } }, 'itemsPerMonth.high'],
-    ['low > high', { ...REQUEST, itemsPerMonth: { low: 50, high: 4 } }, 'itemsPerMonth.low'],
+    ['a negative end', { ...REQUEST, runPerMonth: { low: 1, high: -4 } }, 'runPerMonth.high'],
+    ['a missing end', { ...REQUEST, plannedPerMonth: { low: 1 } }, 'plannedPerMonth.high'],
+    ['low > high', { ...REQUEST, runPerMonth: { low: 50, high: 4 } }, 'runPerMonth.low'],
+    ['a missing range', { ...REQUEST, runPerMonth: undefined }, 'runPerMonth'],
+    [
+      'both ranges 0–0',
+      { ...REQUEST, plannedPerMonth: { low: 0, high: 0 }, runPerMonth: { low: 0, high: 0 } },
+      'plannedPerMonth',
+    ],
+    // The single-count shape the two ranges replaced (MOTIR-9224) is refused by name.
+    [
+      'the replaced shape: itemsPerMonth',
+      { ...REQUEST, itemsPerMonth: { low: 1, high: 4 } },
+      'itemsPerMonth',
+    ],
     ['a cadence outside annual | monthly', { ...REQUEST, cadence: 'weekly' }, 'cadence'],
     ['an unknown key: quantity', { ...REQUEST, quantity: 2 }, 'quantity'],
     ['an unknown key: seats', { ...REQUEST, seats: 4 }, 'seats'],

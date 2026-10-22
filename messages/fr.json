@@ -6538,6 +6538,13 @@
       "saveBadge": "Économisez ~33 %",
       "chooseTitle": "Choisissez votre forfait",
       "chooseSub": "Un pool mensuel de crédits au niveau de l'organisation, facturé séparément des sièges. Toute organisation peut l'acheter — aucun forfait de sièges Motir payant n'est requis. Pro est l'offre de référence recommandée.",
+      "yourPlanTitle": "Votre forfait",
+      "needMore": {
+        "title": "Besoin de plus de crédits ?",
+        "body": "Si votre organisation utilise plus que les {credits} crédits par mois de {plan}, estimez votre utilisation et le calculateur vous proposera une réserve de crédits plus grande, dimensionnée sur mesure.",
+        "bodyHeld": "Si votre organisation dépasse ses {credits} crédits par mois, estimez votre utilisation et le calculateur vous proposera une réserve plus grande, dimensionnée sur mesure.",
+        "action": "Ouvrir le calculateur"
+      },
       "current": "Actuel",
       "recommended": "Recommandé",
       "creditsAllotment": "{n} crédits / mois",
@@ -6650,6 +6657,25 @@
         "left": "Il reste {left} crédits d’essai sur {n} · ponctuels.",
         "spent": "Les {n} crédits d’essai sont épuisés.",
         "pickPlan": "Choisissez un forfait mensuel Motir AI pour continuer à planifier."
+      },
+      "larger": {
+        "caption": "Votre estimation va de {low} à {high} crédits par mois. Ce pool est calé sur le haut de cette fourchette, pour ne pas être juste. C’est une estimation, qui évolue avec la vôtre.",
+        "captionCurrent": "C’est le pool que vous avez acheté, calculé à partir d’une estimation de {low} à {high} crédits par mois. Une estimation plus basse par la suite ne change pas le prix d’un plan que vous détenez déjà.",
+        "priceEstimate": "Calculé à partir de votre estimation",
+        "basis": {
+          "monthly": "Calculé à partir du prix mensuel de {plan}, chaque crédit au-delà de son pool étant moins cher qu’en recharge.",
+          "annual": "Calculé au même prix par crédit que {plan} en facturation annuelle. La facturation est annuelle, et le pool arrive toujours mois par mois."
+        },
+        "aboveBand": "Votre estimation dépasse d’environ {credits} crédits par mois le plus grand pool vendu par Motir AI. Le plus grand plan plus une recharge est le maximum possible : il n’y a donc pas de plan plus grand à acheter pour votre estimation.",
+        "bought": "Votre plan {plan} est en cours de mise en place. {credits} crédits par mois seront ajoutés à votre solde dès que le paiement sera finalisé.",
+        "refused": {
+          "atOrBelowCeiling": "Un pool plus grand n’existe qu’au-delà de notre plus grand plan standard. Pour cette estimation, un plan standard ou une recharge suffit. Rien n’a été facturé.",
+          "offerExpired": "Le pool et le prix affichés ne correspondent plus à votre estimation. Rien n’a été facturé, et l’ancienne offre n’a pas été recalculée. Refaites le calcul.",
+          "quantity": "Ce plan correspond à un seul pool, acheté une fois. Un pool plus grand ne peut pas être cumulé. Rien n’a été facturé.",
+          "notForSale": "Ce pool ne peut pas être acheté pour le moment. Rien n’a été facturé, et les plans standard fonctionnent toujours."
+        },
+        "showRegular": "Voir tous les forfaits standard",
+        "hideRegular": "Masquer les forfaits standard"
       }
     },
     "topup": {
@@ -6672,12 +6698,15 @@
       "open": "Estimer votre utilisation",
       "marked": "Correspond à votre estimation",
       "inputs": {
-        "rangeLabel": "Éléments de travail terminés par mois",
+        "plannedLabel": "Éléments de travail planifiés dans Motir par mois",
+        "runLabel": "Éléments de travail exécutés sur le runner de Motir par mois",
+        "runHelp": "Les éléments de travail que vous exécutez avec votre propre agent — Claude Code, Codex — via le MCP ou la CLI de Motir ne consomment aucun crédit ici. Ne comptez que ce que le runner de Motir construit ; 0 est accepté.",
         "rangeHelp": "Une fourchette suffit — les valeurs basse et haute d'un mois normal.",
         "lowLabel": "Basse",
         "highLabel": "Haute",
-        "categoriesLabel": "Catégories de modèles utilisées par votre organisation",
-        "categoriesHelp": "Choisissez-en une à trois. L'estimation est répartie à parts égales entre vos choix, et vous ne choisissez jamais de modèle — chaque catégorie indique à titre d'exemple les modèles qu'elle propose.",
+        "runCategoriesLabel": "Modèles utilisés par le runner",
+        "runCategoriesHelp": "Choisissez-en une à trois. L'exécution est répartie à parts égales entre vos choix : une prend 100 %, deux 50 % chacune, les trois 33 % chacune. Vous ne choisissez jamais de modèle — chaque catégorie indique à titre d'exemple les modèles qu'elle propose.",
+        "categoryShare": "{share} de l'exécution",
         "categoryExamples": "Par exemple : {models}",
         "submit": "Estimer les crédits"
       },
@@ -6686,11 +6715,12 @@
         "empty": "Aucun modèle dans cette catégorie pour le moment, elle ne peut donc pas être choisie."
       },
       "split": {
-        "one": "Une seule catégorie : toute l'estimation porte donc sur {category}.",
-        "even": "Répartie à parts égales entre {categories} — {shares} chacune."
+        "one": "Une seule catégorie : toute l'exécution porte donc sur {category}.",
+        "even": "L'exécution est répartie à parts égales entre {categories} — {shares} chacune."
       },
       "result": {
         "idle": "Rien n'est estimé tant que vous ne lancez pas l'estimation : saisissez la fourchette, choisissez une à trois catégories, puis sélectionnez « Estimer les crédits ».",
+        "priced": "Calculé pour {plannedLow}–{plannedHigh} éléments planifiés dans Motir et {runLow}–{runHigh} exécutés sur le runner de Motir par mois.",
         "loading": "Calcul de vos crédits…",
         "creditsLabel": "Crédits par mois",
         "estimateCaveat": "Il s'agit d'une estimation pour la fourchette saisie : les crédits sont donnés sous forme de fourchette, jamais comme un chiffre exact.",
@@ -6701,8 +6731,11 @@
         "largerPoolLabel": "Réserve de crédits plus grande",
         "largerPlan": "Votre estimation dépasse notre plus grand forfait standard : la réponse est donc une réserve de crédits plus grande, dimensionnée sur mesure : {plan}.",
         "largerPlanEstimate": "La réserve et son prix sont calculés à partir de votre estimation : les deux sont donc des estimations — les montants exacts sont confirmés avant tout paiement.",
+        "largestPoolLabel": "Plus grande réserve de crédits",
+        "largestPool": "Votre estimation dépasse notre plus grande réserve : la réponse est donc cette réserve — {plan} — avec des recharges pour le reste.",
+        "largestPoolTopUp": "Les quelque {excess} crédits restants par mois sont couverts par des recharges : {units} × {unitCredits} crédits, environ {price} $ par mois.",
         "aboveTopRung": "Cela dépasse les {ceiling} crédits par mois du plus grand forfait standard, et aucune réserve plus grande n'est disponible pour le moment : l'excédent est donc couvert par des recharges de crédits.",
-        "upgradeNote": "Une mise à niveau en cours de période est facturée selon les jours restants. La vue des forfaits affiche le montant avant tout paiement.",
+        "upgradeNote": "Une mise à niveau en cours de période est facturée selon les jours restants. Le montant s'affiche avant tout paiement.",
         "goToPlan": "Aller à ce forfait"
       },
       "seat": {
@@ -6715,6 +6748,7 @@
         "rangeEmpty": "Saisissez le nombre d'éléments de travail que votre organisation termine par mois.",
         "rangeInvalid": "Saisissez des nombres entiers — les décimales et les nombres négatifs ne sont pas acceptés.",
         "rangeOrder": "La valeur basse doit être inférieure ou égale à la valeur haute.",
+        "rangeBothZero": "Saisissez au moins un élément de travail par mois — avec les deux plages à 0, il n'y a rien à calculer.",
         "categoryMissing": "Choisissez au moins une catégorie de modèles.",
         "tooManyCategories": "Choisissez au plus trois catégories de modèles.",
         "unavailable": "Nous ne pouvons pas estimer pour le moment. Rien n'a été calculé — réessayez.",

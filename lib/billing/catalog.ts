@@ -45,6 +45,16 @@ export interface CatalogPrice {
 }
 
 /**
+ * Which part of the AI catalog an entry belongs to (MOTIR-8990). `ladder` is a
+ * standing rung every owner can pick from the plan row (Free, Standard, Pro, Max,
+ * Max ×2). `larger_pool` is a rung ABOVE the ladder's top, sold only to an org whose
+ * own estimate passes it (MOTIR-8987). The ceiling, the rung table and both
+ * allow-lists are derived against this field, so a larger pool never moves the
+ * ladder's top.
+ */
+export type AiPlanBand = 'ladder' | 'larger_pool';
+
+/**
  * A Motir AI plan tier (the motir-ai `PlanTier`) as the storefront renders it.
  *
  * PRICED PER ORGANISATION (MOTIR-8390): an org holds ONE AI plan, its credits are
@@ -56,9 +66,11 @@ export interface AiPlanCatalogEntry {
   /**
    * The `PlanTier.key` (matches the usage read's `tier.key`). An org on a tier the
    * catalog does not list (a staff-set `enterprise`) still reads its tier from
-   * motir-ai; it simply has no storefront card.
+   * motir-ai; it simply has no storefront card. A larger pool's key is
+   * `pool_<N>k` — the template member fixes the SHAPE only; which rungs exist is the
+   * array below, never this type.
    */
-  key: 'free' | 'standard' | 'pro' | 'max' | 'max_x2';
+  key: 'free' | 'standard' | 'pro' | 'max' | 'max_x2' | `pool_${number}k`;
   /** Customer-facing name ("Standard", "Pro", …). */
   name: string;
   /**
@@ -80,6 +92,8 @@ export interface AiPlanCatalogEntry {
    * live. Read `INCLUDED_TRACKER_SEATS_PER_AI_PLAN` rather than typing a 1.
    */
   includedTrackerSeats: number;
+  /** A standing ladder rung, or a larger pool above the ladder's top (`AiPlanBand`). */
+  band: AiPlanBand;
 }
 
 /**
@@ -132,6 +146,7 @@ export const BILLING_CATALOG: BillingCatalog = {
       recommended: false,
       prices: null,
       includedTrackerSeats: 0,
+      band: 'ladder',
     },
     // `starter` removed by the 2026-06-23 amendment (8.1.18 / MOTIR-1308).
     {
@@ -144,6 +159,7 @@ export const BILLING_CATALOG: BillingCatalog = {
         annual: { amountUsd: 200, priceLookupKey: 'standard_pool_annual' },
       },
       includedTrackerSeats: 1,
+      band: 'ladder',
     },
     {
       key: 'pro',
@@ -155,6 +171,7 @@ export const BILLING_CATALOG: BillingCatalog = {
         annual: { amountUsd: 600, priceLookupKey: 'pro_pool_annual' },
       },
       includedTrackerSeats: 1,
+      band: 'ladder',
     },
     {
       key: 'max',
@@ -166,6 +183,7 @@ export const BILLING_CATALOG: BillingCatalog = {
         annual: { amountUsd: 1200, priceLookupKey: 'max_pool_annual' },
       },
       includedTrackerSeats: 1,
+      band: 'ladder',
     },
     // Max ×2 — a plan of its own (MOTIR-8390): twice Max's pool at twice its price,
     // on both cadences. The lookup keys are the ones the Stripe card (MOTIR-8395)
@@ -180,6 +198,85 @@ export const BILLING_CATALOG: BillingCatalog = {
         annual: { amountUsd: 2400, priceLookupKey: 'max_x2_pool_annual' },
       },
       includedTrackerSeats: 1,
+      band: 'ladder',
+    },
+    // The larger pools above Max ×2 (MOTIR-8990), the rung table the approved record
+    // MOTIR-8987 fixes: six pools strictly above the ladder's top. Monthly is Max ×2's
+    // $300 plus $4.50 per 1,000 credits above 60,000 (10% off the top-up); annual is
+    // the ladder's own annual rate, pool ÷ 1,000 × $40 — so annual is NOT 8 × monthly
+    // here. `includedTrackerSeats` must equal `INCLUDED_TRACKER_SEATS_PER_AI_PLAN`,
+    // which is declared after this literal and so cannot be read inside it.
+    {
+      key: 'pool_80k',
+      name: 'Pool 80,000',
+      allotment: { credits: 80000, cadence: 'monthly' },
+      recommended: false,
+      prices: {
+        monthly: { amountUsd: 390, priceLookupKey: 'pool_80k_pool_monthly' },
+        annual: { amountUsd: 3200, priceLookupKey: 'pool_80k_pool_annual' },
+      },
+      includedTrackerSeats: 1,
+      band: 'larger_pool',
+    },
+    {
+      key: 'pool_100k',
+      name: 'Pool 100,000',
+      allotment: { credits: 100000, cadence: 'monthly' },
+      recommended: false,
+      prices: {
+        monthly: { amountUsd: 480, priceLookupKey: 'pool_100k_pool_monthly' },
+        annual: { amountUsd: 4000, priceLookupKey: 'pool_100k_pool_annual' },
+      },
+      includedTrackerSeats: 1,
+      band: 'larger_pool',
+    },
+    {
+      key: 'pool_120k',
+      name: 'Pool 120,000',
+      allotment: { credits: 120000, cadence: 'monthly' },
+      recommended: false,
+      prices: {
+        monthly: { amountUsd: 570, priceLookupKey: 'pool_120k_pool_monthly' },
+        annual: { amountUsd: 4800, priceLookupKey: 'pool_120k_pool_annual' },
+      },
+      includedTrackerSeats: 1,
+      band: 'larger_pool',
+    },
+    {
+      key: 'pool_150k',
+      name: 'Pool 150,000',
+      allotment: { credits: 150000, cadence: 'monthly' },
+      recommended: false,
+      prices: {
+        monthly: { amountUsd: 705, priceLookupKey: 'pool_150k_pool_monthly' },
+        annual: { amountUsd: 6000, priceLookupKey: 'pool_150k_pool_annual' },
+      },
+      includedTrackerSeats: 1,
+      band: 'larger_pool',
+    },
+    {
+      key: 'pool_200k',
+      name: 'Pool 200,000',
+      allotment: { credits: 200000, cadence: 'monthly' },
+      recommended: false,
+      prices: {
+        monthly: { amountUsd: 930, priceLookupKey: 'pool_200k_pool_monthly' },
+        annual: { amountUsd: 8000, priceLookupKey: 'pool_200k_pool_annual' },
+      },
+      includedTrackerSeats: 1,
+      band: 'larger_pool',
+    },
+    {
+      key: 'pool_250k',
+      name: 'Pool 250,000',
+      allotment: { credits: 250000, cadence: 'monthly' },
+      recommended: false,
+      prices: {
+        monthly: { amountUsd: 1155, priceLookupKey: 'pool_250k_pool_monthly' },
+        annual: { amountUsd: 10000, priceLookupKey: 'pool_250k_pool_annual' },
+      },
+      includedTrackerSeats: 1,
+      band: 'larger_pool',
     },
     // No Enterprise card (MOTIR-8390). An org staff set to the `enterprise` tier
     // keeps it in motir-ai; it just has nothing to buy here.
@@ -199,28 +296,84 @@ export const BILLING_CATALOG: BillingCatalog = {
   },
 };
 
-/** Tracker seats included with any live AI plan — read this, never type a 1. */
+/** The standing ladder (`band: 'ladder'`) — Free through Max ×2. */
+function ladderPlans(): AiPlanCatalogEntry[] {
+  return BILLING_CATALOG.aiPlans.filter((p) => p.band === 'ladder');
+}
+
+/**
+ * Tracker seats included with any live AI plan — read this, never type a 1. Derived
+ * over the LADDER band only: it states what every standing rung bundles, so a change
+ * to a larger pool's data must not silently move it.
+ */
 export const INCLUDED_TRACKER_SEATS_PER_AI_PLAN: number = Math.max(
-  ...BILLING_CATALOG.aiPlans.filter((p) => p.prices !== null).map((p) => p.includedTrackerSeats),
+  ...ladderPlans()
+    .filter((p) => p.prices !== null)
+    .map((p) => p.includedTrackerSeats),
 );
 
 /**
- * The largest monthly credit pool any plan grants (60,000, Max ×2 today) — computed
- * from the entries, so the calculator's ceiling moves with the catalog.
+ * The top of the LADDER band (60,000, Max ×2 today) — the ceiling every "is this
+ * estimate past the ladder" question measures against. Computed from the entries so
+ * it moves with the ladder, and never the largest pool on sale: a larger pool is
+ * above it by construction (MOTIR-8990).
  */
 export function maxMonthlyPlanCredits(): number {
   return Math.max(
-    ...BILLING_CATALOG.aiPlans.flatMap((p) =>
+    ...ladderPlans().flatMap((p) =>
       p.allotment?.cadence === 'monthly' ? [p.allotment.credits] : [],
     ),
   );
 }
 
+/**
+ * The larger-pool rung table (MOTIR-8990): every `larger_pool` entry with a monthly
+ * allotment strictly above `maxMonthlyPlanCredits()`, ascending by pool. A FRESH array
+ * per call; it mutates nothing. A hoisted declaration on purpose — the allow-lists
+ * below call it while the module initialises.
+ */
+export function largerPoolPlans(): AiPlanCatalogEntry[] {
+  const ceiling = maxMonthlyPlanCredits();
+  return BILLING_CATALOG.aiPlans
+    .filter(
+      (p) =>
+        p.band === 'larger_pool' &&
+        p.prices !== null &&
+        p.allotment?.cadence === 'monthly' &&
+        p.allotment.credits > ceiling,
+    )
+    .sort((a, b) => (a.allotment?.credits ?? 0) - (b.allotment?.credits ?? 0));
+}
+
+/** True when `priceLookupKey` is one of the rung keys this catalog sells. */
+export function isLargerPoolPlanKey(priceLookupKey: string): boolean {
+  return largerPoolPlans().some(
+    (p) =>
+      p.prices?.monthly.priceLookupKey === priceLookupKey ||
+      p.prices?.annual.priceLookupKey === priceLookupKey,
+  );
+}
+
+// A rung-shaped lookup key: `pool_<N>k_pool_<cadence>`, anchored at both ends.
+const LARGER_POOL_KEY = /^pool_(\d+)k_pool_(monthly|annual)$/;
+
+/**
+ * How big a pool a rung-shaped lookup key NAMES, in credits a month — or `null` for
+ * any other key. It says nothing about whether the catalog sells that pool; the
+ * checkout path uses it to tell a request for a pool at or below the ladder's top
+ * from a price that simply is not on sale.
+ */
+export function largerPoolCreditsForPrice(priceLookupKey: string): number | null {
+  const match = LARGER_POOL_KEY.exec(priceLookupKey);
+  return match ? Number(match[1]) * 1000 : null;
+}
+
 // Every lookup key a Checkout may legitimately start — the allow-list
 // `startCheckout` validates against, so the boundary never forwards an arbitrary
-// (or stale) price the UI didn't get from this catalog.
+// (or stale) price the UI didn't get from this catalog. The ladder's keys plus the
+// floored rung table's, so a rung at or below the ladder's top is never admitted.
 export const CHECKOUT_PRICE_LOOKUP_KEYS: ReadonlySet<string> = new Set<string>([
-  ...BILLING_CATALOG.aiPlans.flatMap((p) =>
+  ...[...ladderPlans(), ...largerPoolPlans()].flatMap((p) =>
     p.prices ? [p.prices.monthly.priceLookupKey, p.prices.annual.priceLookupKey] : [],
   ),
   BILLING_CATALOG.seatPlan.prices.monthly.priceLookupKey,
@@ -265,8 +418,8 @@ export function isAllowedCheckoutQuantity(key: string, quantity: number): boolea
  * target. motir-ai holds the same list (`CHANGEABLE_PLAN_KEYS`); this one lets the
  * service refuse a stale or tampered key before the boundary.
  */
-export const PLAN_CHANGE_KEYS: readonly string[] = BILLING_CATALOG.aiPlans.flatMap((p) =>
-  p.prices && p.allotment?.cadence === 'monthly' ? [p.key] : [],
+export const PLAN_CHANGE_KEYS: readonly string[] = [...ladderPlans(), ...largerPoolPlans()].flatMap(
+  (p) => (p.prices && p.allotment?.cadence === 'monthly' ? [p.key] : []),
 );
 
 /** True when `key` names a plan a change of plan may target. */

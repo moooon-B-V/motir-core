@@ -6,7 +6,10 @@ import { renderWithIntl as render, enMessages } from '../helpers/renderWithIntl'
 import { BILLING_CATALOG } from '@/lib/billing/catalog';
 import type { BillingCadence } from '@/lib/billing/catalog';
 import type { BillingStatusDTO } from '@/lib/dto/billing';
-import { CalculatorView } from '@/app/(authed)/settings/organization/billing/_components/CalculatorView';
+import {
+  CATEGORY_MODEL_EXAMPLES,
+  CalculatorView,
+} from '@/app/(authed)/settings/organization/billing/_components/CalculatorView';
 import {
   PINNED_CALCULATOR_REQUEST,
   PINNED_CATEGORIES_ANSWER,
@@ -22,7 +25,11 @@ import {
 // relabelling, re-pricing or inventing them. Nothing here asks the engine anything.
 //
 // The only stubbed boundary is the global `fetch`, answered with the record's own
-// bytes: the shipped browser helper and the render both execute. Every expected
+// bytes: the shipped browser helper and the render both execute. The record predates
+// the two ranges (MOTIR-9223 · MOTIR-9224): it was asked ONE `itemsPerMonth` range,
+// which the engine reads as planned = run, and it echoes neither. The tab types that
+// range into the planned field (the run field follows), and the stub adds the echo the
+// app's server fills from what it sent (`motirAiClient.estimateCalculator`). Every expected
 // value is derived — from the record, or from BILLING_CATALOG by the record's
 // plan key — never typed.
 
@@ -78,7 +85,11 @@ function stubEngine(estimateBody: string = PINNED_ESTIMATE_RAW_BODY) {
         return new Response(PINNED_CATEGORIES_RAW_BODY, { status: 200 });
       }
       if (url.endsWith('/calculator/estimate')) {
-        return new Response(estimateBody, { status: 200 });
+        const sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        const answer = JSON.parse(estimateBody) as Record<string, unknown>;
+        answer['plannedPerMonth'] ??= sent['plannedPerMonth'];
+        answer['runPerMonth'] ??= sent['runPerMonth'];
+        return new Response(JSON.stringify(answer), { status: 200 });
       }
       throw new Error(`unexpected request to ${url}`);
     }),
@@ -87,6 +98,7 @@ function stubEngine(estimateBody: string = PINNED_ESTIMATE_RAW_BODY) {
 
 const status = {
   catalog: BILLING_CATALOG,
+  access: { canManageBilling: true },
   motirAi: {
     tier: { key: 'free', name: 'Free', monthlyCreditAllotment: 0 },
     balance: 0,
@@ -107,6 +119,10 @@ function Tab({ initial }: { initial: BillingCadence }) {
       onCadence={setCadence}
       back={() => {}}
       goToPlan={() => {}}
+      checkout={() => {}}
+      portal={() => {}}
+      reload={async () => {}}
+      redirecting={false}
     />
   );
 }
@@ -127,10 +143,11 @@ async function ask(
       screen.getByRole('button', { name: input.cadence === 'annual' ? 'Annual' : 'Monthly' }),
     );
   }
-  fireEvent.change(screen.getByLabelText(m.inputs.lowLabel), {
+  const planned = screen.getByTestId('calculator-planned');
+  fireEvent.change(within(planned).getByLabelText(m.inputs.lowLabel), {
     target: { value: String(input.itemsPerMonth.low) },
   });
-  fireEvent.change(screen.getByLabelText(m.inputs.highLabel), {
+  fireEvent.change(within(planned).getByLabelText(m.inputs.highLabel), {
     target: { value: String(input.itemsPerMonth.high) },
   });
   for (const key of input.categories) {
@@ -173,15 +190,15 @@ afterAll(() => {
 describe('the Calculator tab against the pinned vector', () => {
   const pinned = PINNED_CALCULATOR_REQUEST;
 
-  it('sends the pinned input — range, each category once, cadence — and no lane or model', async () => {
+  it('sends the pinned input — its range as both ranges, each category once, cadence — and no lane or model', async () => {
     stubEngine();
     await ask(pinned);
     const post = requests.find((r) => r.url.endsWith('/calculator/estimate'));
     const body = need(post, 'a captured estimate request').body as Record<string, unknown>;
-    expect(body.itemsPerMonth).toEqual({
-      low: pinned.itemsPerMonth.low,
-      high: pinned.itemsPerMonth.high,
-    });
+    const range = { low: pinned.itemsPerMonth.low, high: pinned.itemsPerMonth.high };
+    expect(body.plannedPerMonth).toEqual(range);
+    expect(body.runPerMonth).toEqual(range);
+    expect(body).not.toHaveProperty('itemsPerMonth');
     expect([...(body.categories as string[])].sort()).toEqual([...pinned.categories].sort());
     expect(new Set(body.categories as string[]).size).toBe(pinned.categories.length);
     expect(body.cadence).toBe(pinned.cadence);
@@ -247,16 +264,17 @@ describe('the Calculator tab against the pinned vector', () => {
   it('offers the recorded categories, labelled and exemplified from the record, with no model control', async () => {
     stubEngine();
     render(<Tab initial={pinned.cadence} />);
-    const group = await screen.findByRole('group', { name: m.inputs.categoriesLabel });
+    const group = await screen.findByRole('group', { name: m.inputs.runCategoriesLabel });
     const buttons = within(group).getAllByRole('button');
     const recorded = PINNED_CATEGORIES_ANSWER.categories;
     expect(buttons.map((b) => (b.textContent ?? '').replace(/For example.*$/, ''))).toEqual(
       recorded.map((c) => labelOf(c.key)),
     );
-    // Each category lists all of its recorded models as example text in its own control…
+    // Each category names its first recorded models as example text in its own control,
+    // at most CATEGORY_MODEL_EXAMPLES of them…
     recorded.forEach((c, i) => {
-      const text = textOf(buttons[i]!);
-      for (const model of c.models) expect(text).toContain(model.id);
+      const examples = c.models.slice(0, CATEGORY_MODEL_EXAMPLES).map((x) => x.id);
+      expect(textOf(buttons[i]!).endsWith(`For example: ${examples.join(', ')}`)).toBe(true);
     });
     // …and no activatable control IS a model: each is a category, named by its label.
     const modelIds = new Set(recorded.flatMap((c) => c.models.map((x) => x.id)));

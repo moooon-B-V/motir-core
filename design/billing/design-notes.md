@@ -41,13 +41,15 @@ the same primitives — no design→code gap.
 > Code follow-ups blocked on this asset: **8.1.16 / MOTIR-1303** (seat toggle +
 > drop the note) and **8.1.17 / MOTIR-1304** (pricing blocks).
 
-| Surface                                                     | Asset                                                | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ----------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Billing settings · pricing storefront · AI paywall**      | **`billing.mock.html`** (HTML mockup)                | The whole commercial surface, 8 panels: access path · billing settings panel (2 billed lines) · panel states (past_due / trialing / canceled) · role gating · Motir AI plans & subscription (AI-only screen, Monthly/Annual toggle) · Motir seats plan & upgrade screen · AI paywall (402 + tier-gate) · empty/loading/error. A `billing.png` full-page export sits beside it (the board-visible face).                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| **Motir CI — the third billed line** (AMENDMENT)            | **`ci-line.mock.html`** (HTML mockup)                | The CI-minutes line the allowance adds to the settings panel, 8 panels: the line in place at real width · its three non-paused states · `ci_credits_exhausted` for an admin (the two-option decision, measured in a 1280×800 viewport) and for a member (the routing alert) · what renders nothing · loading / balance-unreachable / error · the pointer form on other surfaces · the paused-state card ordering. Amends the row above; redraws none of it. `ci-line.png` beside it. See § "Amendment 2026-07-30 — the Motir CI line" at the end of this file.                                                                                                                                                                                                                                                                                                                  |
-| **Motir Search — the FOURTH billed line** (AMENDMENT)       | **`search-line.mock.html`** (HTML mockup)            | The web-search line the grounding channel adds to the settings panel, 6 panels: the line in place at real width beside ①②③ · its states (spend · nothing billed · the ABSENCE of a paused state, drawn) · the META org, which renders no line · loading / figures-UNAVAILABLE / page error · role gating · the access path, reproduced. Amends the two rows above; redraws neither. `search-line.png` beside it. See § "Amendment 2026-09-05 — the Motir Search line" at the end of this file.                                                                                                                                                                                                                                                                                                                                                                                  |
-| **Contact sales — the Enterprise request form** (AMENDMENT) | **`billing--contact-sales.mock.html`** (HTML mockup) | What the Enterprise card's Contact sales opens, 10 panels: access path · the control closed (manager / member disabled / Request sent) · the form empty and filled · validation · sending · sent · the open request read-only · refused (409 / 403) and network error · `zh` · narrow. Amends panel 5's Enterprise CTA only. See § "Amendment 2026-10-05 — Contact sales opens a request form" at the end of this file.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| **The Calculator view** (AMENDMENT)                         | **`billing--calculator.mock.html`** (HTML mockup)    | The fourth view of Billing & plans and the one link that opens it, 18 panels: S1 the link in the plans view's intro block · S2 initial · S3 ready · S4 asking · S5 categories loading · S6 categories unavailable · S7 a category with no live model · S8 populated (with Max ×2 on both cadences) · S9 above the largest pool · S10 top-up only · S11 the upgrade line and its two neighbours · S12 a retired model · S13 four inline refusals · S14 estimate unavailable · S15 request failed · S16 roles · `zh` · narrow. Amends panel 5's intro only (the link); a fourth view. **Dated note (2026-10-14, MOTIR-8636):** the AI ladder, its pools, the Enterprise card and the top-up rate are read from `lib/billing/catalog.ts` and supersede this file's figures. See § "Amendment 2026-10-14 — the Calculator view and the link that opens it" at the end of this file. |
+| Surface                                                     | Asset                                                              | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Billing settings · pricing storefront · AI paywall**      | **`billing.mock.html`** (HTML mockup)                              | The whole commercial surface, 8 panels: access path · billing settings panel (2 billed lines) · panel states (past_due / trialing / canceled) · role gating · Motir AI plans & subscription (AI-only screen, Monthly/Annual toggle) · Motir seats plan & upgrade screen · AI paywall (402 + tier-gate) · empty/loading/error. A `billing.png` full-page export sits beside it (the board-visible face).                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **Motir CI — the third billed line** (AMENDMENT)            | **`ci-line.mock.html`** (HTML mockup)                              | The CI-minutes line the allowance adds to the settings panel, 8 panels: the line in place at real width · its three non-paused states · `ci_credits_exhausted` for an admin (the two-option decision, measured in a 1280×800 viewport) and for a member (the routing alert) · what renders nothing · loading / balance-unreachable / error · the pointer form on other surfaces · the paused-state card ordering. Amends the row above; redraws none of it. `ci-line.png` beside it. See § "Amendment 2026-07-30 — the Motir CI line" at the end of this file.                                                                                                                                                                                                                                                                                                                  |
+| **Motir Search — the FOURTH billed line** (AMENDMENT)       | **`search-line.mock.html`** (HTML mockup)                          | The web-search line the grounding channel adds to the settings panel, 6 panels: the line in place at real width beside ①②③ · its states (spend · nothing billed · the ABSENCE of a paused state, drawn) · the META org, which renders no line · loading / figures-UNAVAILABLE / page error · role gating · the access path, reproduced. Amends the two rows above; redraws neither. `search-line.png` beside it. See § "Amendment 2026-09-05 — the Motir Search line" at the end of this file.                                                                                                                                                                                                                                                                                                                                                                                  |
+| **Contact sales — the Enterprise request form** (AMENDMENT) | **`billing--contact-sales.mock.html`** (HTML mockup)               | What the Enterprise card's Contact sales opens, 10 panels: access path · the control closed (manager / member disabled / Request sent) · the form empty and filled · validation · sending · sent · the open request read-only · refused (409 / 403) and network error · `zh` · narrow. Amends panel 5's Enterprise CTA only. See § "Amendment 2026-10-05 — Contact sales opens a request form" at the end of this file.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **The Calculator view** (AMENDMENT)                         | **`billing--calculator.mock.html`** (HTML mockup)                  | The fourth view of Billing & plans and the one link that opens it, 18 panels: S1 the link in the plans view's intro block · S2 initial · S3 ready · S4 asking · S5 categories loading · S6 categories unavailable · S7 a category with no live model · S8 populated (with Max ×2 on both cadences) · S9 above the largest pool · S10 top-up only · S11 the upgrade line and its two neighbours · S12 a retired model · S13 four inline refusals · S14 estimate unavailable · S15 request failed · S16 roles · `zh` · narrow. Amends panel 5's intro only (the link); a fourth view. **Dated note (2026-10-14, MOTIR-8636):** the AI ladder, its pools, the Enterprise card and the top-up rate are read from `lib/billing/catalog.ts` and supersede this file's figures. See § "Amendment 2026-10-14 — the Calculator view and the link that opens it" at the end of this file. |
+| **The larger credit pool plan** (AMENDMENT)                 | **`billing--larger-pool.mock.html`** (HTML mockup)                 | One more card at the end of the plans row, offered only from an estimate, 12 panels (with a 2b neighbour): no estimate · offered (the arrival, annual) · upgrade · current · the ladder covers it (absent, no notice) · above the top band (absent, one notice) · read-only · cadence switched · purchase refused · loading · read fails · narrow + dark. Amends panel 5's plan row only. See § "Amendment 2026-10-21 — the larger credit pool plan" at the end of this file.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **The Calculator — planned and run ranges** (AMENDMENT)     | **`billing--calculator--planned-and-run.mock.html`** (HTML mockup) | The Calculator's one items range becomes two (items planned in Motir · items run on Motir's runner, with the own-agent help), 3 panels: the inputs · the priced-range line in the answer · both ranges at 0 refused. Amends the Calculator view's inputs only. See § "Amendment 2026-10-21 — the Calculator's planned and run ranges" at the end of this file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 ## What this area is
 
@@ -1797,3 +1799,175 @@ carries its source on the panel. The design fixes where each figure comes from, 
 Pools and prices of the regular plans are read from `lib/billing/catalog.ts`, which supersedes the
 2,000 / 8,000-credit ladder, the Enterprise card and the $10-per-1,000 top-up the file's opening
 paragraph still carries.
+
+## Amendment 2026-10-21 — the larger credit pool plan
+
+Subtask MOTIR-8988, story MOTIR-8986. Mock: **`billing--larger-pool.mock.html`**. It amends
+`billing.mock.html` panel 5 (the Motir AI plans view) and the answer of
+`billing--calculator--categories.mock.html` (S9, the larger pool offered). Those mocks are records
+and are not edited. The rungs, prices and keys come from MOTIR-8987's approved record (v2), carried
+in `lib/billing/catalog.ts` as the `larger_pool` band (MOTIR-8990).
+
+**Redrawn 2026-10-22 after Yue's review.** The first draft put the larger pool on the plans row as
+a fifth card. Yue chose a different flow: the plans view shows the four regular plans and a way
+into the Calculator, the Calculator offers the pool and sells it directly, and an org that holds a
+pool sees that one plan with the regular plans folded away.
+
+**Redrawn again 2026-10-22 after Yue's second review.** Two fixes: the Calculator asks which model
+categories the runner uses (Economy, Balanced, Flagship, split evenly, specified in § "Amendment
+2026-10-21 — the Calculator's planned and run ranges"), and an estimate above the largest pool is
+offered that pool with top-ups for the rest instead of a notice with no offer. Both mocks are now
+rendered with `renderMock` from the design system's own `Button`, `Card`, `Input`, `Pill` and
+`Segmented`, composed as `BillingClient.tsx` and `CalculatorView.tsx` compose them; the mono lines
+in them name each string's key and are board chrome, not product copy.
+
+### The flow
+
+1. **Plans view, no pool held (panel 1).** The row shows the four regular plans only, and the
+   catalogue's Recommended stays on Pro. Below the row, ONE **Need more credits?** callout
+   (`--el-tint-sky`) holds a primary **Open the Calculator** button. It opens the Calculator view,
+   as the shipped `calculator.open` button does. A pool card is never drawn on this view for an
+   org that does not hold one.
+2. **Calculator, pool offered (panels 2–3 and 6–8).** The Calculator lays out in two columns at
+   desktop width: the form on the left, the answer on the right. When `ceiling.outcome = larger_pool`, the answer on
+   the right carries the offer card. The card shows the pool's name, the shipped `largerPlan`
+   sentence, the price block on the page's cadence, the pool, the shipped `largerPlanEstimate`
+   caveat, the seat line and the buy control. The buy control replaces the shipped "Go to this
+   plan" for this arm:
+   - With no live plan, **Choose Pool N** (`plans.ctaChoose`) starts Checkout from the answer at
+     quantity 1.
+   - With a smaller live plan, **Upgrade to Pool N** (`plans.ctaUpgrade`) opens the shipped
+     `PlanChangeDialog`, followed by the shipped `upgradeNote`.
+   - A read-only manager sees the control disabled and described by `plans.upgrade.disabledReason`.
+3. **Calculator, above the largest pool (panel 4).** When the high end passes the top rung
+   (250,000), the answer offers the top rung, **Pool 250,000**, in the same offer card, labelled
+   **Largest credit pool**. Inside the card, a top-up box says how much is left over and that
+   top-ups cover it: the excess is the high end minus 250,000, shown in 1,000-credit top-up units
+   at the shipped top-up rate. The buy control is the same as panels 2–3. `plans.larger.aboveBand`
+   is no longer drawn.
+4. **Calculator, a regular plan covers it (panel 5).** The shipped regular arm and its "Go to
+   this plan" are unchanged; no pool is offered.
+5. **Refused (panel 8).** ONE notice inside the answer, above the offer, with the `refused.*`
+   sentence the refusal code selects. The offer stays drawn. No toast.
+6. **Plans view, pool held (panels 9–10).** The title reads **Your plan** and the row shows ONE
+   card: the held pool, marked Current, with `captionCurrent`. A **See all regular plans** toggle
+   (`aria-expanded`, `aria-controls`) unfolds the four regular plans below it, each with the
+   shipped switch control, which moves down at period end. Opened, the toggle reads **Hide regular
+   plans**. The Need more credits? callout stays, worded for a holder (`bodyHeld`).
+7. **Narrow (panel 11).** The Calculator stacks to one column (form above answer, the category
+   buttons one per row), and the offer and its button take the full width.
+
+### Copy — new keys in the `billing` namespace (en)
+
+| Key                                  | en                                                                                                                                                      |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plans.needMore.title`               | Need more credits?                                                                                                                                      |
+| `plans.needMore.body`                | If your organization uses more than {plan}'s {credits} credits a month, estimate your usage and the Calculator offers a larger credit pool sized to it. |
+| `plans.needMore.bodyHeld`            | If your organization outgrows its {credits} credits a month, estimate your usage and the Calculator offers a larger pool sized to it.                   |
+| `plans.needMore.action`              | Open the Calculator                                                                                                                                     |
+| `plans.yourPlanTitle`                | Your plan                                                                                                                                               |
+| `plans.larger.showRegular`           | See all regular plans                                                                                                                                   |
+| `plans.larger.hideRegular`           | Hide regular plans                                                                                                                                      |
+| `calculator.result.largestPoolLabel` | Largest credit pool                                                                                                                                     |
+| `calculator.result.largestPool`      | Your estimate is above our largest pool, so the answer is that pool — {plan} — with top-ups for the rest.                                               |
+| `calculator.result.largestPoolTopUp` | The other {excess} credits or so a month are covered by top-ups: about {units} × 1,000 credits, {price} a month at $5 per 1,000.                        |
+
+Every other string is shipped: `calculator.result.{largerPoolLabel, largerPlan, largerPlanEstimate,
+upgradeNote, goToPlan}`, `plans.{ctaChoose, ctaUpgrade, ctaCurrent, upgrade.disabledReason}` and
+`plans.larger.{captionCurrent, refused.*}` (MOTIR-8993). `plans.larger.aboveBand` is no longer
+drawn, since above the band now offers the largest pool. The plans-row keys
+`plans.larger.{caption, priceEstimate, basis.*}` are no longer drawn, because the row never offers a
+pool. The new keys land in every locale with the UI card (MOTIR-8997).
+
+### Colour + shape roles (additions only)
+
+| Element                     | Role                                                                                                                                                |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Need more credits? callout  | `--el-tint-sky` fill, `--el-border-soft`, `--radius-card`, `--spacing-card-padding`, text `--el-text-strong`                                        |
+| Offer card in the answer    | `--el-surface`, `--el-accent` border, `--radius-card`, `--spacing-card-padding`, `--shadow-card`                                                    |
+| Held pool card              | the shipped PlanCard, Current: `--el-accent` border                                                                                                 |
+| See all regular plans       | text button, `--el-link`, `--radius-control`, `--spacing-control-x/y`                                                                               |
+| Captions · seat line        | `--el-text-secondary`                                                                                                                               |
+| Refused notice              | `--el-surface-soft`, dashed `--el-border-strong`, `--radius-card`, text `--el-text`                                                                 |
+| Top-up box (above the band) | `--el-surface-soft`, `--el-border-soft`, `--radius-control`, `--spacing-control-x-12/y-8`, `Coins` glyph `--el-accent-on-surface`, text `--el-text` |
+
+### The numbers are illustrative
+
+The estimates (61,000–74,000; 230,000–290,000), the rungs drawn (Pool 80,000; Pool 250,000) and
+their prices are illustrative. The
+rungs and prices are read from `lib/billing/catalog.ts`.
+
+## Amendment 2026-10-21 — the Calculator's planned and run ranges
+
+Subtask MOTIR-9225, story MOTIR-8986. Mock: **`billing--calculator--planned-and-run.mock.html`**.
+It amends § "Amendment 2026-10-14 — the Calculator view and the link that opens it" and its
+category delta (`billing--calculator--categories.mock.html`, S2–S3 inputs and the head of the S8
+answer); those mocks are records and are not edited. Rendered against what `main` ships:
+`CalculatorView.tsx`'s one range fieldset (`calculator.inputs.rangeLabel`, Low / High `Input`s,
+`rangeHelp`, a `role="alert"` error line).
+
+### What changes
+
+- **Two ranges replace the one.** The form card holds two labelled low/high ranges, stacked, each
+  in the shipped fieldset shape: items planned in Motir a month, and items run on Motir's runner a
+  month. The second carries the own-agent help: items run on your own agent through Motir's MCP or
+  CLI use no credits here. An org that runs everything on its own agent enters 0–0 there and is
+  quoted the planning lane only.
+- **The answer states what was priced.** One line opens the shipped answer, filled from the
+  ranges the answer echoes back (never from the inputs, which may have changed since).
+- **Both ranges at 0 is refused before any request**, with one sentence under the ranges. One
+  range at 0 alone is valid.
+
+- **The categories are the runner's (redrawn 2026-10-22 after Yue's review).** The shipped
+  category group stays (Economy, Balanced, Flagship, each with example models, one to three
+  picked) and is relabelled **Models the runner uses**: it picks the models the run lane is
+  priced on. The run is split evenly across what is picked, and each picked button shows its
+  share: one picked takes 100%, two take 50% each, all three take 33% each (panels 1–3). The
+  answer's split sentence and one pill per picked category repeat the split.
+- The planning lane is priced on Motir's own planner and is not split by these categories. The
+  engine (MOTIR-9223) applies categories to both lanes today, so pricing them to the run lane
+  only is an engine change for the build cards to carry.
+
+The credits figure, the plan block and every other part of the answer ship unchanged. Both mocks
+are rendered with `renderMock` from the design system's own parts.
+
+### Copy (en) — new keys in the `billing` namespace
+
+| Key                                    | en                                                                                                                                                                                                            |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `calculator.inputs.plannedLabel`       | Items planned in Motir a month                                                                                                                                                                                |
+| `calculator.inputs.runLabel`           | Items run on Motir's runner a month                                                                                                                                                                           |
+| `calculator.inputs.runHelp`            | Items you run on your own agent — Claude Code, Codex — through Motir's MCP or CLI use no credits here. Count only the items Motir's runner builds; 0 is fine.                                                 |
+| `calculator.result.priced`             | Priced for {plannedLow}–{plannedHigh} planned in Motir and {runLow}–{runHigh} run on Motir's runner a month.                                                                                                  |
+| `calculator.errors.rangeBothZero`      | Enter at least one item a month — with both ranges at 0 there is nothing to price.                                                                                                                            |
+| `calculator.inputs.runCategoriesLabel` | Models the runner uses                                                                                                                                                                                        |
+| `calculator.inputs.runCategoriesHelp`  | Pick one to three. The run is split evenly across what you pick: one takes 100%, two take 50% each, all three take 33% each. You never choose a model — each category lists the models it serves as examples. |
+| `calculator.inputs.categoryShare`      | {share} of the run                                                                                                                                                                                            |
+
+Changed wording: `calculator.split.one` becomes "One category, so the whole run sits on
+{category}." and `calculator.split.even` becomes "The run is split evenly across {categories} —
+{shares} each." `calculator.inputs.categoriesLabel` and `categoriesHelp` are retired.
+
+`calculator.inputs.rangeLabel` is retired; `rangeHelp`, `lowLabel`, `highLabel` and the other
+range errors (`rangeEmpty`, `rangeInvalid`, `rangeOrder`) apply to each range as shipped. The
+words are MOTIR-9224's to land in every locale.
+
+### Colour + shape roles (additions only)
+
+| Element           | Role                                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------------------------- |
+| Range labels      | `--el-text`, the shipped legend weight                                                                  |
+| Own-agent help    | `--el-text-secondary` (clears AA on every surface)                                                      |
+| Low / High inputs | the shipped `Input`: `--radius-input`, `--spacing-input-x/y`, `--el-border`; invalid `--el-danger` edge |
+| Both-zero refusal | `--el-danger-on-surface`, `role="alert"`, the shipped error line                                        |
+| Priced-range line | `--el-surface-soft` fill, `--el-border-soft`, `--radius-control`, text `--el-text`                      |
+
+### The answer offers the larger pool (panel 6, added 2026-10-22)
+
+When both lanes together pass Max ×2, the answer on the right carries the larger-pool offer and its
+buy control directly. That card and all its states are specified in § "Amendment 2026-10-21 — the
+larger credit pool plan" and drawn in `billing--larger-pool.mock.html`.
+
+### The numbers are illustrative
+
+The ranges and credit figures drawn are illustrative.

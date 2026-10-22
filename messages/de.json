@@ -6538,6 +6538,13 @@
       "saveBadge": "Ca. 33 % sparen",
       "chooseTitle": "Wählen Sie Ihren Plan",
       "chooseSub": "Ein monatlicher Guthabenpool auf Organisationsebene, getrennt von den Plätzen abgerechnet. Jede Organisation kann ihn kaufen – ein kostenpflichtiger Motir-Platzplan ist nicht erforderlich. Pro ist die empfohlene Wahl.",
+      "yourPlanTitle": "Ihr Plan",
+      "needMore": {
+        "title": "Mehr Credits nötig?",
+        "body": "Wenn Ihre Organisation mehr als die {credits} Credits pro Monat von {plan} verbraucht, schätzen Sie Ihre Nutzung – der Rechner bietet Ihnen dann einen größeren, darauf zugeschnittenen Credit-Pool an.",
+        "bodyHeld": "Wenn Ihre Organisation über ihre {credits} Credits pro Monat hinauswächst, schätzen Sie Ihre Nutzung – der Rechner bietet Ihnen dann einen größeren, darauf zugeschnittenen Pool an.",
+        "action": "Rechner öffnen"
+      },
       "current": "Aktuell",
       "recommended": "Empfohlen",
       "creditsAllotment": "{n} Credits / Monat",
@@ -6650,6 +6657,25 @@
         "left": "{left} von {n} Test-Credits übrig · einmalig.",
         "spent": "Alle {n} Test-Credits sind aufgebraucht.",
         "pickPlan": "Wählen Sie einen monatlichen Motir AI-Plan, um weiter zu planen."
+      },
+      "larger": {
+        "caption": "Deine Schätzung liegt bei {low} bis {high} Credits im Monat. Dieser Pool ist auf das obere Ende ausgelegt, damit er nicht zu knapp wird. Es ist eine Schätzung und ändert sich mit deiner Schätzung.",
+        "captionCurrent": "Das ist der Pool, den du gekauft hast, berechnet aus einer Schätzung von {low} bis {high} Credits im Monat. Eine spätere, niedrigere Schätzung ändert den Preis eines Plans, den du schon hast, nicht.",
+        "priceEstimate": "Aus deiner Schätzung berechnet",
+        "basis": {
+          "monthly": "Berechnet aus dem Monatspreis von {plan}; jeder Credit über dessen Pool kostet weniger als beim Aufladen.",
+          "annual": "Berechnet zum selben Preis pro Credit wie {plan} bei jährlicher Abrechnung. Abgerechnet wird einmal im Jahr, der Pool kommt weiterhin Monat für Monat."
+        },
+        "aboveBand": "Deine Schätzung liegt etwa {credits} Credits im Monat über dem größten Pool, den Motir AI verkauft. Mehr als der größte Plan plus Aufladung geht nicht, deshalb gibt es bei deiner Schätzung keinen größeren Plan zu kaufen.",
+        "bought": "Dein Plan {plan} wird eingerichtet. Sobald die Zahlung abgeschlossen ist, werden deinem Guthaben {credits} Credits im Monat gutgeschrieben.",
+        "refused": {
+          "atOrBelowCeiling": "Einen größeren Pool gibt es nur oberhalb unseres größten regulären Plans. Bei dieser Schätzung reicht ein regulärer Plan oder eine Aufladung. Es wurde nichts berechnet.",
+          "offerExpired": "Pool und Preis, die dir angezeigt wurden, passen nicht mehr zu deiner Schätzung. Es wurde nichts berechnet, und das alte Angebot wurde nicht neu bepreist. Berechne es neu.",
+          "quantity": "Dieser Plan ist ein Pool, einmal gekauft. Ein größerer Pool lässt sich nicht stapeln. Es wurde nichts berechnet.",
+          "notForSale": "Dieser Pool kann gerade nicht gekauft werden. Es wurde nichts berechnet, und die regulären Pläne funktionieren weiterhin."
+        },
+        "showRegular": "Alle regulären Pläne anzeigen",
+        "hideRegular": "Reguläre Pläne ausblenden"
       }
     },
     "topup": {
@@ -6672,12 +6698,15 @@
       "open": "Nutzung schätzen",
       "marked": "Passt zu Ihrer Schätzung",
       "inputs": {
-        "rangeLabel": "Abgeschlossene Arbeitselemente pro Monat",
+        "plannedLabel": "In Motir geplante Arbeitselemente pro Monat",
+        "runLabel": "Auf dem Runner von Motir ausgeführte Arbeitselemente pro Monat",
+        "runHelp": "Arbeitselemente, die Sie mit Ihrem eigenen Agenten – Claude Code, Codex – über das MCP oder die CLI von Motir ausführen, verbrauchen hier keine Credits. Zählen Sie nur, was der Runner von Motir baut; 0 ist in Ordnung.",
         "rangeHelp": "Ein Bereich genügt – die untere und die obere Grenze eines normalen Monats.",
         "lowLabel": "Von",
         "highLabel": "Bis",
-        "categoriesLabel": "Modellkategorien, die Ihre Organisation nutzt",
-        "categoriesHelp": "Wählen Sie eine bis drei. Die Schätzung wird gleichmäßig auf Ihre Auswahl verteilt, und ein Modell wählen Sie nie selbst aus – jede Kategorie zeigt die Modelle, die sie abdeckt, als Beispiele.",
+        "runCategoriesLabel": "Modelle, die der Runner nutzt",
+        "runCategoriesHelp": "Wählen Sie eine bis drei. Die Ausführung wird gleichmäßig auf Ihre Auswahl verteilt: eine trägt 100 %, zwei je 50 %, alle drei je 33 %. Ein Modell wählen Sie nie selbst aus – jede Kategorie zeigt die Modelle, die sie abdeckt, als Beispiele.",
+        "categoryShare": "{share} der Ausführung",
         "categoryExamples": "Zum Beispiel: {models}",
         "submit": "Credits schätzen"
       },
@@ -6686,11 +6715,12 @@
         "empty": "In dieser Kategorie ist derzeit kein Modell verfügbar, daher kann sie nicht ausgewählt werden."
       },
       "split": {
-        "one": "Eine Kategorie, daher entfällt die gesamte Schätzung auf {category}.",
-        "even": "Gleichmäßig auf {categories} verteilt – je {shares}."
+        "one": "Eine Kategorie, daher entfällt die gesamte Ausführung auf {category}.",
+        "even": "Die Ausführung wird gleichmäßig auf {categories} verteilt – je {shares}."
       },
       "result": {
         "idle": "Es wird erst geschätzt, wenn Sie es anfordern: Geben Sie den Bereich ein, wählen Sie eine bis drei Kategorien und wählen Sie dann „Credits schätzen“.",
+        "priced": "Berechnet für {plannedLow}–{plannedHigh} in Motir geplante und {runLow}–{runHigh} auf dem Runner von Motir ausgeführte Arbeitselemente pro Monat.",
         "loading": "Ihre Credits werden berechnet…",
         "creditsLabel": "Credits pro Monat",
         "estimateCaveat": "Dies ist eine Schätzung für den eingegebenen Bereich: Die Credits kommen als Bereich zurück, nie als eine genaue Zahl.",
@@ -6701,8 +6731,11 @@
         "largerPoolLabel": "Größerer Credit-Pool",
         "largerPlan": "Ihre Schätzung liegt über unserem größten regulären Plan, daher lautet die Antwort ein größerer, darauf zugeschnittener Credit-Pool: {plan}.",
         "largerPlanEstimate": "Der Pool und sein Preis werden aus Ihrer Schätzung errechnet, daher sind beide eine Schätzung – die genauen Beträge werden bestätigt, bevor etwas berechnet wird.",
+        "largestPoolLabel": "Größter Credit-Pool",
+        "largestPool": "Ihre Schätzung liegt über unserem größten Pool, daher lautet die Antwort dieser Pool – {plan} – plus Aufladungen für den Rest.",
+        "largestPoolTopUp": "Die übrigen rund {excess} Credits pro Monat decken Aufladungen ab: {units} × {unitCredits} Credits, etwa {price} $ pro Monat.",
         "aboveTopRung": "Das sind mehr als die {ceiling} Credits pro Monat des größten regulären Plans, und derzeit ist kein größerer Pool verfügbar, daher wird der Überschuss durch Credit-Aufladungen gedeckt.",
-        "upgradeNote": "Ein Upgrade mitten im Zeitraum wird für die verbleibenden Tage berechnet. Die Plan-Ansicht zeigt den Betrag, bevor etwas berechnet wird.",
+        "upgradeNote": "Ein Upgrade mitten im Zeitraum wird für die verbleibenden Tage berechnet. Der Betrag wird angezeigt, bevor etwas berechnet wird.",
         "goToPlan": "Zu diesem Plan"
       },
       "seat": {
@@ -6715,6 +6748,7 @@
         "rangeEmpty": "Geben Sie ein, wie viele Arbeitselemente Ihre Organisation im Monat abschließt.",
         "rangeInvalid": "Geben Sie ganze Zahlen ein – Dezimalzahlen und negative Zahlen werden nicht akzeptiert.",
         "rangeOrder": "Die untere Grenze darf nicht über der oberen liegen.",
+        "rangeBothZero": "Geben Sie mindestens ein Arbeitselement pro Monat ein – wenn beide Bereiche 0 sind, gibt es nichts zu berechnen.",
         "categoryMissing": "Wählen Sie mindestens eine Modellkategorie.",
         "tooManyCategories": "Wählen Sie höchstens drei Modellkategorien.",
         "unavailable": "Derzeit ist keine Schätzung möglich. Es wurde nichts berechnet – versuchen Sie es erneut.",

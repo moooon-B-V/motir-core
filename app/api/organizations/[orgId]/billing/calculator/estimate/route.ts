@@ -4,9 +4,10 @@ import { billingService } from '@/lib/services/billingService';
 import { mapBillingError } from '@/lib/billing/errorResponse';
 
 // POST /api/organizations/[orgId]/billing/calculator/estimate — one Calculator
-// estimate (MOTIR-8637 · MOTIR-9004). The body is `{ itemsPerMonth: { low, high },
-// categories: [1-3 category keys], cadence? }` — no model is ever chosen; the
-// replaced `planning` / `running` / `modelIds` shape is refused by name. The
+// estimate (MOTIR-8637 · MOTIR-9004 · MOTIR-9224). The body is `{ plannedPerMonth:
+// { low, high }, runPerMonth: { low, high }, categories: [1-3 category keys], cadence? }`
+// — no model is ever chosen; the replaced `itemsPerMonth` and `planning` / `running` /
+// `modelIds` shapes are refused by name. The
 // service gates the actor, parses it with the strict request schema and asks the
 // engine. The answer is the engine's body unaltered — `kind: 'estimate'` or
 // `kind: 'empty_category'`, both 200 — or a typed refusal: 400

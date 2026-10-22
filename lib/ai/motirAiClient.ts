@@ -930,13 +930,21 @@ export async function estimateCalculator(
   const body = await calculatorCall(CALCULATOR_ESTIMATE_PATH, {
     method: 'POST',
     body: JSON.stringify({
-      itemsPerMonth: { low: request.itemsPerMonth.low, high: request.itemsPerMonth.high },
+      plannedPerMonth: { low: request.plannedPerMonth.low, high: request.plannedPerMonth.high },
+      runPerMonth: { low: request.runPerMonth.low, high: request.runPerMonth.high },
       categories: [...request.categories],
       cadence: request.cadence,
     }),
   });
-  if (isCalculatorEstimate(body) || isCalculatorEmptyCategory(body)) return body;
-  throw malformedCalculatorBody(CALCULATOR_ESTIMATE_PATH);
+  if (isCalculatorEmptyCategory(body)) return body;
+  if (!isCalculatorEstimate(body)) throw malformedCalculatorBody(CALCULATOR_ESTIMATE_PATH);
+  // An engine from before MOTIR-9223 answers without the two echoes; the ranges it
+  // priced are then exactly the ones sent, so they are filled from the request.
+  return {
+    ...body,
+    plannedPerMonth: body.plannedPerMonth ?? { ...request.plannedPerMonth },
+    runPerMonth: body.runPerMonth ?? { ...request.runPerMonth },
+  };
 }
 
 type Json = Record<string, unknown>;
@@ -959,6 +967,9 @@ function isCadence(v: unknown): boolean {
 }
 function perLane(v: unknown, test: (x: unknown) => boolean): boolean {
   return isObj(v) && CALCULATOR_LANES.every((lane) => test(v[lane]));
+}
+function isRange(v: unknown): boolean {
+  return isObj(v) && isNum(v['low']) && isNum(v['high']);
 }
 function isTopUpAmount(v: unknown): boolean {
   return isObj(v) && isNum(v['units']) && isNum(v['credits']) && isNum(v['priceUsd']);
@@ -1003,6 +1014,8 @@ function isCalculatorEstimate(v: unknown): v is CalculatorEstimateDTO {
     isStr(v['profilesVersion']) &&
     isStr(v['categoryRuleVersion']) &&
     isCadence(v['cadence']) &&
+    (v['plannedPerMonth'] === undefined || isRange(v['plannedPerMonth'])) &&
+    (v['runPerMonth'] === undefined || isRange(v['runPerMonth'])) &&
     isObj(credits) &&
     isNum(credits['low']) &&
     isNum(credits['high']) &&
@@ -1023,6 +1036,7 @@ function isCalculatorEstimate(v: unknown): v is CalculatorEstimateDTO {
     isNum(ceiling['excessCredits']) &&
     (ceiling['outcome'] === 'within_ladder' ||
       ceiling['outcome'] === 'larger_pool' ||
+      ceiling['outcome'] === 'largest_pool' ||
       ceiling['outcome'] === 'top_ups_only')
   );
 }

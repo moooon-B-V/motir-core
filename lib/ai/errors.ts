@@ -374,7 +374,7 @@ export class CalculatorUnavailableError extends MotirAiError {
 
 // A calculator request refused as sent — by motir-core's own schema before the
 // boundary, or by the engine's `validation_error`. `field` names the offending
-// input when it is known (`itemsPerMonth.low`, `categories.0`, `quantity`).
+// input when it is known (`plannedPerMonth.low`, `categories.0`, `quantity`).
 export class CalculatorRequestRefusedError extends MotirAiError {
   readonly code = 'CALCULATOR_REQUEST_INVALID' as const;
   constructor(

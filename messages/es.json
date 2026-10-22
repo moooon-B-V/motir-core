@@ -6538,6 +6538,13 @@
       "saveBadge": "Ahorra ~33 %",
       "chooseTitle": "Elige tu plan",
       "chooseSub": "Un fondo mensual de créditos a nivel de organización, facturado aparte de los puestos. Cualquier organización puede comprarlo: no hace falta un plan de puestos de Motir de pago. Pro es la opción de referencia recomendada.",
+      "yourPlanTitle": "Tu plan",
+      "needMore": {
+        "title": "¿Necesitas más créditos?",
+        "body": "Si tu organización usa más de los {credits} créditos al mes de {plan}, calcula tu uso y la calculadora te ofrecerá una reserva de créditos mayor, dimensionada a tu medida.",
+        "bodyHeld": "Si tu organización supera sus {credits} créditos al mes, calcula tu uso y la calculadora te ofrecerá una reserva mayor, dimensionada a tu medida.",
+        "action": "Abrir la calculadora"
+      },
       "current": "Actual",
       "recommended": "Recomendado",
       "creditsAllotment": "{n} créditos / mes",
@@ -6650,6 +6657,25 @@
         "left": "Quedan {left} de {n} créditos de prueba · únicos.",
         "spent": "Se han gastado los {n} créditos de prueba.",
         "pickPlan": "Elige un plan mensual de Motir AI para seguir planificando."
+      },
+      "larger": {
+        "caption": "Tu estimación va de {low} a {high} créditos al mes. Este pool se ajusta al extremo alto de ese rango, así que no se quedará corto. Es una estimación y cambia cuando cambia la tuya.",
+        "captionCurrent": "Este es el pool que compraste, calculado a partir de una estimación de {low} a {high} créditos al mes. Una estimación posterior más baja no cambia el precio de un plan que ya tienes.",
+        "priceEstimate": "Calculado a partir de tu estimación",
+        "basis": {
+          "monthly": "Calculado a partir del precio mensual de {plan}, con cada crédito por encima de su pool más barato que en una recarga.",
+          "annual": "Calculado al mismo precio por crédito que {plan} con facturación anual. Se cobra una vez al año y el pool sigue llegando mes a mes."
+        },
+        "aboveBand": "Tu estimación supera en unos {credits} créditos al mes el pool más grande que vende Motir AI. El plan más grande más una recarga es el máximo, así que no hay un plan más grande que comprar para tu estimación.",
+        "bought": "Tu plan {plan} se está configurando. Se añadirán {credits} créditos al mes a tu saldo en cuanto se complete el pago.",
+        "refused": {
+          "atOrBelowCeiling": "Un pool más grande solo existe por encima de nuestro plan estándar más grande. Para esta estimación, basta con un plan estándar o una recarga. No se cobró nada.",
+          "offerExpired": "El pool y el precio que viste ya no coinciden con tu estimación. No se cobró nada y la oferta anterior no se volvió a calcular. Calcúlalo de nuevo.",
+          "quantity": "Este plan es un único pool que se compra una vez. Un pool más grande no se puede acumular. No se cobró nada.",
+          "notForSale": "Este pool no se puede comprar ahora mismo. No se cobró nada y los planes estándar siguen funcionando."
+        },
+        "showRegular": "Ver todos los planes habituales",
+        "hideRegular": "Ocultar los planes habituales"
       }
     },
     "topup": {
@@ -6672,12 +6698,15 @@
       "open": "Calcula tu uso",
       "marked": "Encaja con tu estimación",
       "inputs": {
-        "rangeLabel": "Elementos de trabajo terminados al mes",
+        "plannedLabel": "Elementos de trabajo planificados en Motir al mes",
+        "runLabel": "Elementos de trabajo ejecutados en el runner de Motir al mes",
+        "runHelp": "Los elementos de trabajo que ejecutas con tu propio agente —Claude Code, Codex— a través del MCP o la CLI de Motir no gastan créditos aquí. Cuenta solo lo que construye el runner de Motir; 0 es válido.",
         "rangeHelp": "Un rango basta: el mínimo y el máximo de un mes normal.",
         "lowLabel": "Mínimo",
         "highLabel": "Máximo",
-        "categoriesLabel": "Categorías de modelos que usa tu organización",
-        "categoriesHelp": "Elige de una a tres. La estimación se reparte a partes iguales entre las que elijas y nunca eliges un modelo: cada categoría muestra como ejemplo los modelos que ofrece.",
+        "runCategoriesLabel": "Modelos que usa el runner",
+        "runCategoriesHelp": "Elige de una a tres. La ejecución se reparte a partes iguales entre las que elijas: una lleva el 100 %, dos el 50 % cada una y las tres el 33 % cada una. Nunca eliges un modelo: cada categoría muestra como ejemplo los modelos que ofrece.",
+        "categoryShare": "{share} de la ejecución",
         "categoryExamples": "Por ejemplo: {models}",
         "submit": "Estimar créditos"
       },
@@ -6686,11 +6715,12 @@
         "empty": "Esta categoría no tiene ningún modelo ahora mismo, así que no se puede elegir."
       },
       "split": {
-        "one": "Una sola categoría, así que toda la estimación recae en {category}.",
-        "even": "Repartida a partes iguales entre {categories}: {shares} cada una."
+        "one": "Una sola categoría, así que toda la ejecución recae en {category}.",
+        "even": "La ejecución se reparte a partes iguales entre {categories}: {shares} cada una."
       },
       "result": {
         "idle": "No se estima nada hasta que lo pidas: introduce el rango, elige de una a tres categorías y selecciona «Estimar créditos».",
+        "priced": "Calculado para {plannedLow}–{plannedHigh} elementos planificados en Motir y {runLow}–{runHigh} ejecutados en el runner de Motir al mes.",
         "loading": "Calculando tus créditos…",
         "creditsLabel": "Créditos al mes",
         "estimateCaveat": "Es una estimación para el rango que introdujiste: los créditos se devuelven como un rango, nunca como una cifra exacta.",
@@ -6701,8 +6731,11 @@
         "largerPoolLabel": "Reserva de créditos mayor",
         "largerPlan": "Tu estimación supera nuestro mayor plan habitual, así que la respuesta es una reserva de créditos mayor, dimensionada a tu medida: {plan}.",
         "largerPlanEstimate": "La reserva y su precio se calculan a partir de tu estimación, así que ambos son una estimación: los importes exactos se confirman antes de cobrar nada.",
+        "largestPoolLabel": "Mayor reserva de créditos",
+        "largestPool": "Tu estimación supera nuestra mayor reserva, así que la respuesta es esa reserva —{plan}— con recargas para el resto.",
+        "largestPoolTopUp": "Los otros {excess} créditos aproximados al mes se cubren con recargas: {units} × {unitCredits} créditos, unos {price} $ al mes.",
         "aboveTopRung": "Eso supera los {ceiling} créditos al mes del mayor plan habitual y ahora mismo no hay una reserva mayor disponible, así que el exceso se cubre con recargas de créditos.",
-        "upgradeNote": "Mejorar el plan a mitad de periodo se cobra por los días que quedan. La vista de planes muestra el importe antes de cobrar nada.",
+        "upgradeNote": "Mejorar el plan a mitad de periodo se cobra por los días que quedan. El importe se muestra antes de cobrar nada.",
         "goToPlan": "Ir a este plan"
       },
       "seat": {
@@ -6715,6 +6748,7 @@
         "rangeEmpty": "Introduce cuántos elementos de trabajo termina tu organización al mes.",
         "rangeInvalid": "Introduce números enteros: no se aceptan decimales ni números negativos.",
         "rangeOrder": "El mínimo tiene que ser menor o igual que el máximo.",
+        "rangeBothZero": "Introduce al menos un elemento de trabajo al mes: con los dos rangos en 0 no hay nada que calcular.",
         "categoryMissing": "Elige al menos una categoría de modelos.",
         "tooManyCategories": "Elige como máximo tres categorías de modelos.",
         "unavailable": "Ahora mismo no podemos estimar. No se calculó nada: inténtalo de nuevo.",

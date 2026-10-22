@@ -5,12 +5,16 @@
 // taken again, never edited. The routes take no credential.
 //
 //   node scripts/record-calculator-capture.mjs [origin]   (default https://motir-ai.fly.dev)
+//
+// Each estimate asks the two ranges (MOTIR-9224): the same range planned and run, so
+// a re-record stays comparable with the single-range capture it replaces.
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 
 const origin = process.argv[2] ?? 'https://motir-ai.fly.dev';
 const out = new URL('../tests/fixtures/calculatorEngineCapture.ts', import.meta.url);
 const range = { low: 2, high: 6 };
+const both = (r) => ({ plannedPerMonth: r, runPerMonth: r });
 
 const SAMPLES = [
   { name: 'categories', method: 'GET', path: '/v1/public/calculator/categories' },
@@ -19,7 +23,7 @@ const SAMPLES = [
     method: 'POST',
     path: '/v1/public/calculator/estimate',
     body: {
-      itemsPerMonth: range,
+      ...both(range),
       categories: ['economy', 'balanced', 'flagship'].slice(0, n),
       cadence: 'monthly',
     },
@@ -28,14 +32,14 @@ const SAMPLES = [
     name: 'regularRung',
     method: 'POST',
     path: '/v1/public/calculator/estimate',
-    body: { itemsPerMonth: range, categories: ['economy', 'balanced'], cadence: 'annual' },
+    body: { ...both(range), categories: ['economy', 'balanced'], cadence: 'annual' },
   },
   {
     name: 'overCeiling',
     method: 'POST',
     path: '/v1/public/calculator/estimate',
     body: {
-      itemsPerMonth: { low: 20, high: 60 },
+      ...both({ low: 20, high: 60 }),
       categories: ['balanced', 'flagship'],
       cadence: 'annual',
     },
@@ -44,7 +48,7 @@ const SAMPLES = [
     name: 'validationError',
     method: 'POST',
     path: '/v1/public/calculator/estimate',
-    body: { itemsPerMonth: { low: 9, high: 6 }, categories: ['economy'], cadence: 'monthly' },
+    body: { ...both({ low: 9, high: 6 }), categories: ['economy'], cadence: 'monthly' },
   },
 ];
 

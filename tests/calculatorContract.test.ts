@@ -37,6 +37,16 @@ type Wire = Record<string, any>; // eslint-disable-line @typescript-eslint/no-ex
 const bodyOf = (name: string) => JSON.parse(sample(name).body) as Wire;
 const ESTIMATES = ['estimate1', 'estimate2', 'estimate3', 'regularRung', 'overCeiling'];
 
+// The capture was taken on the engine before MOTIR-9223, which read ONE
+// `itemsPerMonth` range as planned = run and echoed neither. The app now sends the two
+// ranges (MOTIR-9224), so each recorded request is read as that same pair, and the
+// echo the old engine left out is the pair the app sent.
+type Range = { low: number; high: number };
+function asTwoRanges(request: Record<string, unknown> | null): Record<string, unknown> {
+  const { itemsPerMonth, ...rest } = (request ?? {}) as { itemsPerMonth: Range };
+  return { plannedPerMonth: itemsPerMonth, runPerMonth: itemsPerMonth, ...rest };
+}
+
 async function makeOrg() {
   const owner = await createTestUser();
   const { workspace } = await workspacesService.createWorkspace({
@@ -119,22 +129,27 @@ describe('the request the tab’s inputs become — three cardinalities', () => 
     [2, 'estimate2'],
     [3, 'estimate3'],
   ] as const) {
-    it(`${n} categor${n === 1 ? 'y' : 'ies'}: exactly itemsPerMonth, categories and cadence reach the engine`, async () => {
+    it(`${n} categor${n === 1 ? 'y' : 'ies'}: exactly the two ranges, categories and cadence reach the engine`, async () => {
       const { organizationId, owner } = await makeOrg();
       const s = sample(name);
       replay(s);
       await billingService.estimateCalculator({
         organizationId,
         actorUserId: owner.id,
-        body: s.request,
+        body: asTwoRanges(s.request),
       });
       const [url, init] = fetchMock.mock.calls[0]!;
       expect(url).toBe('http://motir-ai.contract/v1/public/calculator/estimate');
       expect(init?.method).toBe('POST');
       const sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
-      expect(sent).toStrictEqual(s.request);
+      expect(sent).toStrictEqual(asTwoRanges(s.request));
       expect((sent['categories'] as string[]).length).toBe(n);
-      expect(Object.keys(sent).sort()).toEqual(['cadence', 'categories', 'itemsPerMonth']);
+      expect(Object.keys(sent).sort()).toEqual([
+        'cadence',
+        'categories',
+        'plannedPerMonth',
+        'runPerMonth',
+      ]);
       const wire = String(init?.body);
       for (const id of modelIds) expect(wire).not.toContain(id);
       expect(wire).not.toContain(organizationId);
@@ -147,12 +162,17 @@ describe('field for field', () => {
     const { organizationId, owner } = await makeOrg();
     const s = sample(name);
     replay(s);
+    const body = asTwoRanges(s.request);
     const out = await billingService.estimateCalculator({
       organizationId,
       actorUserId: owner.id,
-      body: s.request,
+      body,
     });
-    expect(out).toStrictEqual(JSON.parse(s.body));
+    expect(out).toStrictEqual({
+      ...JSON.parse(s.body),
+      plannedPerMonth: body['plannedPerMonth'],
+      runPerMonth: body['runPerMonth'],
+    });
   });
 
   it('the categories list crosses unaltered', async () => {
@@ -172,7 +192,12 @@ describe('field for field', () => {
       billingService.estimateCalculator({
         organizationId,
         actorUserId: owner.id,
-        body: { itemsPerMonth: { low: 1, high: 2 }, categories: ['economy'], cadence: 'monthly' },
+        body: {
+          plannedPerMonth: { low: 1, high: 2 },
+          runPerMonth: { low: 1, high: 2 },
+          categories: ['economy'],
+          cadence: 'monthly',
+        },
       }),
     ).rejects.toMatchObject({ code: 'CALCULATOR_REQUEST_INVALID' });
   });
@@ -238,8 +263,11 @@ describe('plan keys, ladder, ceiling and prices — one source of truth per figu
   });
 
   it('the ceiling is the largest regular rung’s pool, and the engine reports that one number', () => {
+    // The larger pools (MOTIR-8990) sit above the ceiling, so only the ladder counts.
     const regular = BILLING_CATALOG.aiPlans.flatMap((p) =>
-      p.prices && p.allotment?.cadence === 'monthly' ? [p.allotment.credits] : [],
+      p.band === 'ladder' && p.prices && p.allotment?.cadence === 'monthly'
+        ? [p.allotment.credits]
+        : [],
     );
     expect(maxMonthlyPlanCredits()).toBe(Math.max(...regular));
     for (const name of ESTIMATES) {
