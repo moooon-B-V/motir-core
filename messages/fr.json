@@ -7906,7 +7906,8 @@
         "redirectedDebug": "Recherche de l'origine du bug…",
         "laying": "Organisation d'un niveau…",
         "authoring": "Rédaction d'un élément de travail…",
-        "note": "Réflexion en cours…"
+        "note": "Réflexion en cours…",
+        "starting": "Motir AI démarre — cela peut prendre jusqu'à une minute."
       },
       "error": {
         "body": "Cela n'a pas abouti. Votre conversation est enregistrée — réessayez, ou reformulez la modification.",
@@ -7921,7 +7922,8 @@
         "askSilent": "Aucune réponse n'est revenue. Essayez de formuler la question autrement.",
         "failedClosed": "Cette tentative n'a pas abouti, cette session a donc été fermée. Les éléments de travail qu'elle contenait sont revenus à leur état précédent.",
         "revisionInFlight": "Motir AI révise déjà ce plan. Votre message est conservé — renvoyez-le une fois la nouvelle version prête.",
-        "awaitingResume": "Cette session attend d’être reprise et ne peut pas encore recevoir de message. Reprenez-la d’abord — votre message est conservé."
+        "awaitingResume": "Cette session attend d’être reprise et ne peut pas encore recevoir de message. Reprenez-la d’abord — votre message est conservé.",
+        "unavailable": "Motir AI n'a pas répondu à temps. Votre conversation est enregistrée, et rien ne vous sera facturé deux fois. Réessayez."
       },
       "answeredFrom": "{count, plural, =0 {Répondu sans rien citer} one {Répondu à partir de # élément de travail} other {Répondu à partir de # éléments de travail}}",
       "correctToAsk": "Répondre plutôt à cette question",
@@ -7990,6 +7992,7 @@
       },
       "act": {
         "submitted": "envoi",
+        "starting": "démarrage",
         "reading": "lecture",
         "redirected": "relais",
         "redirectedDebug": "relais",
@@ -8304,11 +8307,13 @@
       "reload": "Recharger l'élément de travail",
       "staleNotice": "{key} a changé depuis que ce tour l'a lu. Rechargez-le, puis posez de nouveau la question.",
       "failed": "Ce tour ne s'est pas terminé, rien n'a donc changé dans l'élément de travail.",
+      "startingUp": "Motir AI démarre — cela peut prendre jusqu'à une minute.",
       "errors": {
         "notManual": "Motir AI guide une personne dans un travail manuel ; or cet élément de travail est destiné à un agent, il n'y a donc rien à guider ici.",
         "closed": "Cet élément de travail est terminé ou archivé, il n'y a donc plus rien à guider.",
         "forbidden": "Pour être guidé, vous devez avoir l'autorisation de modifier cet élément de travail et de planifier avec Motir AI.",
-        "offerClosed": "Cette offre a déjà fait l’objet d’une décision et ne peut plus être modifiée. Rechargez l’élément de travail pour voir où elle en est."
+        "offerClosed": "Cette offre a déjà fait l’objet d’une décision et ne peut plus être modifiée. Rechargez l’élément de travail pour voir où elle en est.",
+        "unavailable": "Motir AI n'a pas répondu à temps. Rien n'a changé dans l'élément de travail, et rien ne vous sera facturé deux fois. Réessayez."
       },
       "youTicked": "Vous avez coché l'étape {n} de la liste",
       "youUnticked": "Vous avez décoché l'étape {n} de la liste",

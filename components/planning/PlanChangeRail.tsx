@@ -35,6 +35,7 @@ import { GrillMeControl } from '@/components/planning/GrillMeControl';
 import { SharpenThread } from '@/components/planning/SharpenThread';
 import { useGrillOptIn } from '@/components/planning/useGrillOptIn';
 import { grillFailedAfterHandoff } from '@/lib/planning/grillHandoff';
+import { MOTIR_AI_UNAVAILABLE } from '@/lib/planning/submitStartingUp';
 import { useGrillSession } from '@/components/planning/useGrillSession';
 import { StalePlanNotice } from '@/components/planning/StalePlanNotice';
 import { PlanActRecord, runningBarLine } from '@/components/planning/PlanActRecord';
@@ -1704,6 +1705,10 @@ function errorKey(code: string): string {
     // nothing for it rather than inventing a body for the assistant.
     case 'ASK_SILENT':
       return 'error.askSilent';
+    // Motir AI never answered within the submit's budget (MOTIR-9255): the turn is
+    // kept, and Try again re-sends it under its key, so nothing is charged twice.
+    case MOTIR_AI_UNAVAILABLE:
+      return 'error.unavailable';
     default:
       return 'error.body';
   }

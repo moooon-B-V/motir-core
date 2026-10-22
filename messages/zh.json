@@ -7900,7 +7900,8 @@
         "redirectedDebug": "正在追查缺陷……",
         "laying": "正在铺开层级…",
         "authoring": "正在撰写工作项…",
-        "note": "正在思考…"
+        "note": "正在思考…",
+        "starting": "Motir AI 正在启动，最多可能需要一分钟。"
       },
       "error": {
         "body": "这次没有成功。对话已保存 —— 可以重试，或换种说法。",
@@ -7915,7 +7916,8 @@
         "askSilent": "没有得到任何回复。换一种方式提问试试。",
         "failedClosed": "这次尝试没有成功，此会话已关闭。它占用的工作项已恢复原状。",
         "revisionInFlight": "Motir AI 正在修订这个计划。你的消息已保留——新版本完成后请再发送一次。",
-        "awaitingResume": "此会话正在等待继续，暂时无法接收消息。请先继续它——你的消息已保留。"
+        "awaitingResume": "此会话正在等待继续，暂时无法接收消息。请先继续它——你的消息已保留。",
+        "unavailable": "Motir AI 未能及时响应。对话已保存，也不会重复扣费。请重试。"
       },
       "answeredFrom": "{count, plural, =0 {回答未引用任何内容} other {依据 # 个工作项作答}}",
       "correctToAsk": "改为回答这个问题",
@@ -7984,6 +7986,7 @@
       },
       "act": {
         "submitted": "提交",
+        "starting": "启动",
         "reading": "阅读",
         "redirected": "转交",
         "redirectedDebug": "转交",
@@ -8298,11 +8301,13 @@
       "reload": "重新加载工作项",
       "staleNotice": "{key} 在本轮读取之后已被修改。请重新加载后再问一次。",
       "failed": "这一轮没有完成，因此工作项没有任何改动。",
+      "startingUp": "Motir AI 正在启动，最多可能需要一分钟。",
       "errors": {
         "notManual": "Motir AI 引导人完成手动工作，而这个工作项是交给智能体的，因此这里没有可引导的内容。",
         "closed": "这个工作项已完成或已归档，没有需要引导的内容了。",
         "forbidden": "你需要拥有编辑这个工作项以及使用 Motir AI 规划的权限，才能被引导完成它。",
-        "offerClosed": "这个提议已经有结果，无法再更改。请刷新工作项查看最新状态。"
+        "offerClosed": "这个提议已经有结果，无法再更改。请刷新工作项查看最新状态。",
+        "unavailable": "Motir AI 未能及时响应。工作项没有任何改动，也不会重复扣费。请重试。"
       },
       "youTicked": "你在清单上勾选了第 {n} 步",
       "youUnticked": "你在清单上取消勾选了第 {n} 步",
