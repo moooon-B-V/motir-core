@@ -6,6 +6,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import { holdsRecordView, projectAccessService } from '@/lib/services/projectAccessService';
 import {
   planChangeSessionRepository,
+  type PlanSessionListState,
   type PlanSessionMineScope,
 } from '@/lib/repositories/planChangeSessionRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -103,7 +104,9 @@ export interface PlanRoomAccess {
 export interface ListSessionsOptions {
   /** The scope the caller ASKS for; the service decides what it serves. */
   view?: PlanSessionView;
-  /** Narrow to one plan state; omitted = every session. */
+  /** Narrow to one plan state; omitted = every session. The room serves only sessions
+   *  holding a plan (MOTIR-9300), so `none` — which no listed session can hold — is
+   *  served as All, the rule for a value the URL carried that the list cannot answer. */
   planState?: PlanSessionStateDto | null;
   cursor?: string | null;
   limit?: number;
@@ -125,11 +128,26 @@ function roomReader(
   return { svc: visitorServiceContext(ctx), hiddenIds: excludeIds };
 }
 
+/**
+ * The state a room read asks the list for (MOTIR-9300): the URL's value, except `none`,
+ * which no listed session can hold and is therefore served as All — the same fallback
+ * the parameter gives any value it cannot answer. A guard, not a cast, so the narrowed
+ * {@link PlanSessionListState} is what the compiler checks.
+ */
+function listStateOf(state: PlanSessionStateDto | null | undefined): PlanSessionListState | null {
+  if (state === undefined || state === null || state === 'none') return null;
+  return state;
+}
+
 export const planSessionsService = {
   /**
    * A page of the project's sessions, newest activity first, cursor-paged on
    * `(lastActivityAt desc, id desc)`. ONE statement per page — the repository
    * joins each session's first turn, latest plan, plan count and starter.
+   *
+   * ONLY SESSIONS THAT REACHED PLANNING (MOTIR-9300; amendment 5 clause 6): a
+   * conversation holding no plan is a question that was answered and is not listed,
+   * on any page and under any filter. Every cursor page goes through here.
    */
   async listSessions(
     projectId: string,
@@ -148,7 +166,8 @@ export const planSessionsService = {
           workspaceId: ctx.workspaceId,
           limit: limit + 1,
           after,
-          state: opts.planState ?? null,
+          state: listStateOf(opts.planState),
+          planOnly: true,
           mine: resolved.mine,
           ...(hiddenIds ? { hiddenIds } : {}),
         },
@@ -204,14 +223,17 @@ export const planSessionsService = {
   },
 
   /**
-   * ONE session's row, or null when the id names no session of this project —
-   * the `?session=<id>` landing, for a session that is not on the first page.
+   * ONE session's row, or null when the id names no session of this project. It
+   * serves TWO doors (MOTIR-9300): the room's `?session=<id>` landing, for a session
+   * that is not on the first page, which passes `planOnly: true` so it lands only on
+   * a row the list could show; and {@link isSessionInReaderScope}, the overlay's
+   * by-id read, which leaves it off so a question-only conversation still opens.
    */
   async getSessionRow(
     projectId: string,
     sessionId: string,
     reader: ServiceContext | VisitorReadContext,
-    opts: { view?: PlanSessionView } = {},
+    opts: { view?: PlanSessionView; planOnly?: boolean } = {},
   ): Promise<PlanSessionRowDto | null> {
     const { svc: ctx, hiddenIds } = roomReader(projectId, reader);
     await projectAccessService.assertCanBrowse(projectId, ctx);
@@ -227,6 +249,7 @@ export const planSessionsService = {
           after: null,
           state: null,
           sessionId,
+          planOnly: opts.planOnly ?? false,
           mine,
           ...(hiddenIds ? { hiddenIds } : {}),
         },
@@ -272,20 +295,25 @@ export const planSessionsService = {
   /**
    * Whether ONE session is in the reader's served scope (MOTIR-6330) — the
    * overlay's by-id read and any other door that opens a session for a READER.
-   * The same `resolveScope` + `mineFilter` the list uses, so a session a reader
-   * can open by id is exactly one the list could have shown them.
+   * The same `resolveScope` + `mineFilter` the list uses, so the reader's SCOPE is
+   * the list's. The two differ on purpose in one way (MOTIR-9300): the list admits
+   * only sessions holding a plan, while this door still opens a question-only
+   * conversation for its owner — the overlay resumes it and its history reopens it.
    */
   async isSessionInReaderScope(
     projectId: string,
     sessionId: string,
     ctx: ServiceContext | VisitorReadContext,
   ): Promise<boolean> {
-    return (await this.getSessionRow(projectId, sessionId, ctx)) !== null;
+    // `planOnly: false`: the by-id door opens a conversation that never reached planning.
+    return (await this.getSessionRow(projectId, sessionId, ctx, { planOnly: false })) !== null;
   },
 
   /**
    * How many sessions hold each plan state — zero-filled over the whole
-   * vocabulary, `none` included, so a filter with no rows reads `0`.
+   * vocabulary, `none` included, so a filter with no rows reads `0`. Counted over
+   * the sessions the list serves — those holding a plan (MOTIR-9300) — so `none`
+   * always reads `0` and the All total is the number of listed rows.
    */
   async countSessionsByPlanState(
     projectId: string,

@@ -322,9 +322,11 @@ test('Plans: empty state shows the generate-your-first-plan CTA', async ({ page 
   await signIn(page, empty.email, PLANS_SEED_PASSWORD);
 
   await page.goto('/plans');
-  await expect(page.getByRole('heading', { name: 'No planning conversations yet' })).toBeVisible();
   await expect(
-    page.getByRole('main').getByText(/Start a conversation with Motir AI\./),
+    page.getByRole('heading', { name: 'Nothing has reached planning yet' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('main').getByText('A conversation appears here once it reaches planning.'),
   ).toBeVisible();
 });
 

@@ -788,6 +788,19 @@ describe('8 · no leak — every refusal returns one body', () => {
       const unseeded = await adminDb.planChangeSession.create({
         data: { workspaceId: fx.workspaceId, projectId: fx.projectId, targetKeys: [] },
       });
+      // Both reached planning, so the list could show either (MOTIR-9300): only the
+      // guide seed withholds the one.
+      for (const sessionId of [unseeded.id, sent.json.sessionId as string]) {
+        await adminDb.plan.create({
+          data: {
+            workspaceId: fx.workspaceId,
+            projectId: fx.projectId,
+            sessionId,
+            status: 'generating',
+            createdById: fx.ownerId,
+          },
+        });
+      }
 
       await setProjectAccess(adminDb, fx.projectId, 'public');
       await adminDb.workItem.update({

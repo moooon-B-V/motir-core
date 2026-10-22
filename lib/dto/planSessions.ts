@@ -31,6 +31,21 @@ export const PLAN_SESSION_STATE_VALUES = [
 
 export type PlanSessionStateDto = (typeof PLAN_SESSION_STATE_VALUES)[number];
 
+/** A state a LISTED session can hold — every row state but `none` (MOTIR-9301). */
+export type PlanSessionFilterDto = Exclude<PlanSessionStateDto, 'none'>;
+
+/**
+ * The Plans list's FILTER vocabulary (MOTIR-9301): the row vocabulary without `none`.
+ * The list and its counts admit only a session holding at least one plan (MOTIR-9300),
+ * so no listed row can be `none`, and the strip offers no segment for it. `none` stays
+ * a true ROW state — the overlay's by-id door still returns a plan-less conversation,
+ * and its row chip still labels it — so it is the filter set that narrows, never the
+ * row set. One vocabulary, split by which door asks; DERIVED, so order and membership
+ * follow the row array with no second literal.
+ */
+export const PLAN_SESSION_FILTER_VALUES: readonly PlanSessionFilterDto[] =
+  PLAN_SESSION_STATE_VALUES.filter((s): s is PlanSessionFilterDto => s !== 'none');
+
 /**
  * WHY a session ended (AMENDMENT 23 §1) — `PlanSessionEndReason`, mirrored so
  * the DTO layer names no generated type. Derived from the array, so a switch

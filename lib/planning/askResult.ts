@@ -51,6 +51,40 @@ export interface AskOutcome {
   /** RUN MODE only: whether the answering session could READ the run snapshot core
    *  sent, and why not when it could not. Null / absent on a turn with no run. */
   run?: { readable: boolean; reason: string | null } | null;
+  /**
+   * On an `ask` ONLY: the one offer the answer ended with (MOTIR-9287 producer ↔
+   * MOTIR-9290 consumer). ABSENT when the envelope carried none, or one this build
+   * cannot read — an unrecognised `kind` is NO offer, never coerced to `plan`, since
+   * the field's membership grows on the far side first.
+   */
+  offer?: AskPlanOffer;
+  /**
+   * On an `ask` ONLY: the person's decision on the offer that was PENDING when they
+   * spoke (MOTIR-9292 producer ↔ MOTIR-9291 consumer). `seq` names that offer's
+   * answer turn. ABSENT when the envelope carried none or one this build cannot
+   * read: a missing or non-integer `seq`, or a decision other than `agree` /
+   * `decline`, is NO reply — never agreement.
+   */
+  offerReply?: AskOfferReply;
+}
+
+/** The typed reply to a pending offer, once read. */
+export interface AskOfferReply {
+  seq: number;
+  kind: string;
+  decision: 'agree' | 'decline';
+}
+
+/** The plan offer an answer carries, once read. `requestText` is mapped onto the
+ *  store's `requestMd` here; `targetKey` is the CLAIM the far side made, which the
+ *  landing re-resolves under the caller's access before anything is stored. */
+export interface AskPlanOffer {
+  kind: 'plan';
+  requestMd: string;
+  targetKey: string | null;
+  /** The turn plainly said "plan this" with a grounded target: it starts at once and
+   *  stores no offer. A missing or non-boolean value reads `false`. */
+  immediate: boolean;
 }
 
 // Bounds applied on READ, not merely trusted from the producer — this text
@@ -75,6 +109,33 @@ function boundedString(value: unknown, max: number): string | null {
   const trimmed = value.trim();
   if (trimmed.length === 0) return null;
   return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max - 1).trimEnd()}…`;
+}
+
+/** The envelope's offer, or null when it is absent, of an unknown kind, or carries
+ *  no request text. The target is kept only when it is key-shaped. */
+function readOfferField(value: unknown): AskPlanOffer | null {
+  if (!isRecord(value) || value['kind'] !== 'plan') return null;
+  const requestMd = boundedString(value['requestText'], ASK_ANSWER_MAX_CHARS);
+  if (!requestMd) return null;
+  const target = typeof value['targetKey'] === 'string' ? value['targetKey'].trim() : '';
+  return {
+    kind: 'plan',
+    requestMd,
+    targetKey: WORK_ITEM_KEY.test(target) ? target : null,
+    immediate: value['immediate'] === true,
+  };
+}
+
+/** The envelope's `offerReply`, or null when it is not exactly that shape. */
+function readOfferReplyField(value: unknown): AskOfferReply | null {
+  if (!isRecord(value)) return null;
+  const seq = value['seq'];
+  const kind = value['kind'];
+  const decision = value['decision'];
+  if (typeof seq !== 'number' || !Number.isInteger(seq) || seq < 0) return null;
+  if (typeof kind !== 'string' || kind.trim().length === 0) return null;
+  if (decision !== 'agree' && decision !== 'decline') return null;
+  return { seq, kind, decision };
 }
 
 /** The citations, de-duplicated, key-shaped and bounded. A malformed entry is
@@ -158,11 +219,15 @@ export function readAskOutcome(result: unknown): AskOutcome | null {
     return { intent: 'new_session', answer: null, citations: [] };
   }
 
+  const offer = readOfferField(ask['offer']);
+  const offerReply = readOfferReplyField(ask['offerReply']);
   return {
     intent: 'ask',
     answer: boundedString(ask['answer'], ASK_ANSWER_MAX_CHARS),
     citations: readCitations(ask['citations']),
     ...('offerForward' in ask ? { offerForward: readTextField(ask['offerForward']) } : {}),
     ...(run ? { run } : {}),
+    ...(offer ? { offer } : {}),
+    ...(offerReply ? { offerReply } : {}),
   };
 }

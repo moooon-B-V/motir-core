@@ -1004,8 +1004,6 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
     'onboarding.chat.replies.proveDemand': 'market demand — not a work item',
     'onboarding.chat.canvas.stations.validation.subtitle': 'market demand — not a work item',
     'onboarding.chat.validate.body': 'market demand — not a work item',
-    'aiPlanning.sessions.emptyMineDescription':
-      'to ask / a request (ordinary verb or noun) — not a work item',
     'import.connect.connectHint': 'to ask / a request (ordinary verb or noun) — not a work item',
     'repositoryTakeover.reinstallDetail':
       'to ask / a request (ordinary verb or noun) — not a work item',

@@ -49,6 +49,9 @@ export default defineConfig({
       'tests/integration/planning/failedSessionTurnContinues.test.ts',
       'tests/integration/planning/situationTwoChain.test.ts',
       'tests/integration/approvals/planningSessionGate.test.ts',
+      // Story MOTIR-9217 (a question-only conversation is never gated and ends on the lease):
+      // the chain across its gate, idle close, Plans reads and fresh-start pointer (MOTIR-9302).
+      'tests/integration/planning/planningSessionQuestionOnlyChain.test.ts',
       // pure units and the rendering
       'tests/planChange/planningSessionNeedsYouUnits.test.ts',
       'tests/planChange/resumeRoute.test.ts',

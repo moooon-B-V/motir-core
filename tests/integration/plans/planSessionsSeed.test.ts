@@ -51,6 +51,20 @@ function pctx(userId = fx.ownerId): ProjectContext {
 
 const minutesAgo = (n: number) => new Date(Date.now() - n * 60_000);
 
+/** A generating plan on `sessionId`: the list shows only a session that reached
+ *  planning (MOTIR-9300), so every row these cases read holds one. */
+async function holdPlan(f: WorkItemFixture, sessionId: string): Promise<void> {
+  await adminDb.plan.create({
+    data: {
+      workspaceId: f.workspaceId,
+      projectId: f.projectId,
+      sessionId,
+      status: 'generating',
+      createdById: f.ownerId,
+    },
+  });
+}
+
 /** A decided gate, written in its final state in one INSERT (the
  *  decided-immutable trigger fires on UPDATE). */
 async function refusedGate(
@@ -90,6 +104,7 @@ async function seededSession(
     `${card.identifier} · ${card.title}\nRe-plan this work item from that reason.`,
     gateId,
   );
+  await holdPlan(fx, s.id);
   await adminDb.planChangeSession.update({
     where: { id: s.id },
     data: { lastActivityAt: minutesAgo(minutes) },
@@ -122,6 +137,7 @@ async function plainSession(body: string, minutes: number): Promise<string> {
       authorId: fx.ownerId,
     },
   });
+  await holdPlan(fx, s.id);
   return s.id;
 }
 
@@ -301,6 +317,7 @@ describe('a PICK-seeded session is named as the follow-up to its choice (MOTIR-6
       `${choice.identifier} · ${choice.title}`,
       gate.id,
     );
+    await holdPlan(fx, s.id);
     const row = (await planSessionsService.listSessions(fx.projectId, fx.ctx)).sessions.find(
       (r) => r.id === s.id,
     );
@@ -502,6 +519,7 @@ async function guideSeededSession(
       authorId: f.ownerId,
     },
   });
+  await holdPlan(f, s.id);
   return { sessionId: s.id, guideSessionId: guide.id, turnId: reply.id };
 }
 
@@ -639,6 +657,7 @@ describe('a GUIDE-seeded session is named by the guided card (MOTIR-8697)', () =
           targetKeys: [],
         },
       });
+      await holdPlan(pub, plain.id);
 
       const visitor = await consentedVisitor(identifier);
       const page = await planSessionsService.listSessions(pub.projectId, visitor);

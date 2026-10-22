@@ -475,6 +475,16 @@ describe('listIdleOpen never discovers a waiting session as idle', () => {
     const awaiting = await openSession({ lastActivityAt: stale });
     const unmarked = await openSession({ lastActivityAt: stale });
     await markFailed(failed);
+    // The awaiting one REACHED PLANNING (a decided plan): since MOTIR-9299 a mark on a
+    // session holding no plan does not protect it, so the wait this case pins is a planned one.
+    await adminDb.plan.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        sessionId: awaiting,
+        status: 'declined',
+      },
+    });
     await markAwaiting(awaiting);
 
     const found = await withSystemContext((tx) =>

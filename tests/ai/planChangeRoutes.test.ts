@@ -166,6 +166,16 @@ describe('GET /api/ai/plan-change/session — a look creates nothing (MOTIR-6023
     const id = await started();
     // AMENDMENT 23 §3: an open session resumes at any age; only its END stops it.
     await planSessionEndService.endSession(id, 'idle', { workspaceId: fx.workspaceId });
+    // The notice points only at a conversation that reached planning (MOTIR-9304).
+    await adminDb.plan.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        sessionId: id,
+        status: 'declined',
+        createdById: fx.ownerId,
+      },
+    });
     const before = await adminDb.planChangeSession.count();
 
     const body = (await (await readSession(readReq())).json()) as {

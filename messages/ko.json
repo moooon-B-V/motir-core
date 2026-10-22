@@ -7771,8 +7771,8 @@
     "viaMotir": "Motir AI 경유",
     "sessions": {
       "subtitle": "{project}의 모든 계획 대화(최근 활동순)",
-      "emptyTitle": "아직 계획 대화가 없습니다",
-      "emptyDescription": "Motir AI와 대화를 시작하세요. 계획이 있든 없든 모든 대화가 여기에 표시되며, 대화를 열면 이어서 진행합니다.",
+      "emptyTitle": "아직 계획 단계에 이른 대화가 없습니다",
+      "emptyDescription": "대화가 계획 단계에 이르면 여기에 표시됩니다.",
       "listAria": "계획 대화",
       "filterAria": "계획 상태별로 대화 필터링",
       "filter": {
@@ -7809,9 +7809,9 @@
       "loadMoreRetry": "다시 시도",
       "viewAria": "내 대화 또는 프로젝트 전체 대화 표시",
       "subtitleMine": "{project}에서 내가 시작한 계획 대화와 결정을 요청받은 계획",
-      "emptyMineTitle": "아직 내 계획 대화가 없습니다",
-      "emptyMineDescription": "Motir AI와 시작한 대화와 결정을 요청받은 계획이 여기에 표시됩니다.",
-      "emptyDescriptionRead": "이 프로젝트의 누군가가 Motir AI와 계획 대화를 시작하면, 계획이 있든 없든 여기에 표시됩니다.",
+      "emptyMineTitle": "아직 계획 단계에 이른 내 대화가 없습니다",
+      "emptyMineDescription": "내가 시작한 대화가 계획 단계에 이르면 여기에 표시됩니다.",
+      "emptyDescriptionRead": "대화가 계획 단계에 이르면 여기에 표시됩니다.",
       "filteredEmptyDescriptionMine": "다른 내 대화는 전체에 있습니다.",
       "readFailedTitle": "대화를 불러올 수 없습니다",
       "readFailedBody": "다시 시도하려면 새로 고침하세요.",
@@ -8415,6 +8415,38 @@
         "walkStopped": "안내가 중지되었습니다.",
         "cannotPlan": "여기서는 계획을 시작할 수 없습니다. 시작할 수 있는 사람에게 요청하거나 이 요청을 공유하십시오.",
         "noAi": "여기에는 Motir AI가 설정되어 있지 않아 계획을 시작할 수 없습니다. 이 요청은 공유할 수 있습니다."
+      }
+    },
+    "planOffer": {
+      "label": "계획 제안",
+      "labelMidPlanning": "다른 내용 계획 제안",
+      "target": "대상",
+      "noTarget": "대상 작업 항목이 없습니다. 위의 요청이 계획됩니다.",
+      "targetElsewhere": "{key}은(는) 이 대화를 연 작업 항목이 아닙니다.",
+      "confirm": "확인",
+      "confirming": "시작하는 중…",
+      "decline": "거절",
+      "declining": "거절하는 중…",
+      "confirmHelp": "확인하면 이 요청으로 {key} 계획을 이 대화 안에서 시작합니다. “예”라고 답해도 같습니다.",
+      "confirmHelpNoTarget": "확인하면 이 요청만으로 계획을 이 대화 안에서 시작합니다. “예”라고 답해도 같습니다.",
+      "declineHelp": "거절하면 아무것도 계획되지 않고 대화가 계속됩니다.",
+      "midPlanning": "이 대화는 이미 다른 내용을 계획하고 있습니다. 확인하면 그 계획을 끝내고 ‘새로 계획하기’처럼 이것을 시작합니다.",
+      "started": "계획 시작됨",
+      "startedBy": "확인됨 · {when}",
+      "startedHere": "계획은 여기, 이 대화 안에서 진행됩니다.",
+      "beingPlanned": "{key}은(는) 지금 계획 중이라 다시 계획을 제안하지 않았습니다. 그 계획을 지켜보거나 다른 것을 물어보세요.",
+      "beingPlannedHere": "{key}은(는) 이미 여기, 이 대화 안에서 계획 중입니다. 아래 계획이 바로 그것입니다.",
+      "declined": "거절됨",
+      "declinedBy": "거절됨 · {when}",
+      "recorded": "아무것도 계획되지 않았습니다.",
+      "replaced": "새 제안으로 대체됨",
+      "showAll": "모두 보기",
+      "showLess": "간략히 보기",
+      "cannotStart": {
+        "planningUnavailable": "여기서는 계획을 시작할 수 없습니다. 이 프로젝트에 Motir AI가 설정되지 않았거나 작업 항목을 계획하고 편집할 권한이 없습니다.",
+        "outOfCredits": "조직의 AI 크레딧이 소진되어 계획을 시작할 수 없습니다.",
+        "targetUnavailable": "더 이상 {key}을(를) 열 수 없어 계획을 시작할 수 없습니다.",
+        "generic": "이 제안으로는 계획을 시작할 수 없습니다."
       }
     },
     "restart": {

@@ -7771,8 +7771,8 @@
     "viaMotir": "由 Motir AI 撰写",
     "sessions": {
       "subtitle": "{project} 中的所有规划对话，按最近活动排序",
-      "emptyTitle": "还没有规划对话",
-      "emptyDescription": "与 Motir AI 开始一段对话。每段对话都会列在这里——无论是否已有计划——打开即可继续。",
+      "emptyTitle": "还没有任何对话进入规划",
+      "emptyDescription": "对话进入规划后就会出现在这里。",
       "listAria": "规划对话",
       "filterAria": "按计划状态筛选对话",
       "filter": {
@@ -7809,9 +7809,9 @@
       "loadMoreRetry": "重试",
       "viewAria": "显示你的对话或整个项目的对话",
       "subtitleMine": "你在 {project} 中发起的规划对话，以及请你决定的计划",
-      "emptyMineTitle": "还没有你的规划对话",
-      "emptyMineDescription": "你与 Motir AI 发起的对话，以及请你决定的计划，都会列在这里。",
-      "emptyDescriptionRead": "当本项目中有人与 Motir AI 发起规划对话时，它会列在这里——无论是否已有计划。",
+      "emptyMineTitle": "你还没有对话进入规划",
+      "emptyMineDescription": "你发起的对话进入规划后就会出现在这里。",
+      "emptyDescriptionRead": "对话进入规划后就会出现在这里。",
       "filteredEmptyDescriptionMine": "你的其他对话在“全部”下。",
       "readFailedTitle": "无法加载这些对话",
       "readFailedBody": "请重新加载后重试。",
@@ -8415,6 +8415,38 @@
         "walkStopped": "引导已停止。",
         "cannotPlan": "你无法在这里开始规划——请联系有权限的人，或把此请求分享给他们。",
         "noAi": "这里还没有配置 Motir AI，无法开始规划。你仍可以分享此请求。"
+      }
+    },
+    "planOffer": {
+      "label": "提议规划",
+      "labelMidPlanning": "提议规划其他内容",
+      "target": "目标",
+      "noTarget": "没有指定工作项。将规划的是上面的请求。",
+      "targetElsewhere": "{key} 不是打开本次会话时的那个工作项。",
+      "confirm": "确认",
+      "confirming": "正在开始…",
+      "decline": "拒绝",
+      "declining": "正在拒绝…",
+      "confirmHelp": "确认后将以这个请求开始规划 {key}，就在本次会话中进行。回复“是”也一样。",
+      "confirmHelpNoTarget": "确认后将单独为这个请求开始规划，就在本次会话中进行。回复“是”也一样。",
+      "declineHelp": "拒绝不会规划任何内容，对话会继续。",
+      "midPlanning": "本次会话已在规划其他内容。确认后将结束该计划并开始这一个，与“规划新内容”的做法相同。",
+      "started": "已开始规划",
+      "startedBy": "已确认 · {when}",
+      "startedHere": "规划就在这里，在本次会话中进行。",
+      "beingPlanned": "{key} 正在被规划，所以没有再次提议规划它。可以关注那次规划，或者问我别的事情。",
+      "beingPlannedHere": "{key} 已经在这里、在本次会话中被规划——下面的计划就是它。",
+      "declined": "已拒绝",
+      "declinedBy": "已拒绝 · {when}",
+      "recorded": "没有规划任何内容。",
+      "replaced": "已被更新的提议取代",
+      "showAll": "展开全部",
+      "showLess": "收起",
+      "cannotStart": {
+        "planningUnavailable": "无法在这里开始规划：此项目尚未配置 Motir AI，或没有规划和编辑工作项的权限。",
+        "outOfCredits": "所在组织的 AI 额度已用完，因此无法开始规划。",
+        "targetUnavailable": "已无法打开 {key}，因此无法开始规划。",
+        "generic": "无法从这条提议开始规划。"
       }
     },
     "restart": {

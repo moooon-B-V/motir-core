@@ -452,6 +452,13 @@ const DEADLINE_IRRELEVANT: ReadonlyMap<string, string> = new Map([
       'Response(…, { status: 429 }))`): the route runs with the limiter replaced, so no request ' +
       'counts through the shared Postgres store and the production deadline never applies.',
   ],
+  [
+    'tests/planning/planOfferRoutes.test.ts',
+    "Its 429 comes from a MOCK of `enforceAiRateLimit` (`vi.mock('@/lib/rateLimit/aiGuard')`, " +
+      '`enforceAiRateLimit.mockResolvedValue(new Response(null, { status: 429 }))`): the plan ' +
+      'offer confirm door runs with the limiter replaced, so no request counts through the ' +
+      'shared Postgres store and the production deadline never applies. (MOTIR-9295)',
+  ],
 ]);
 
 /**

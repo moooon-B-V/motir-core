@@ -7774,8 +7774,8 @@
     "viaMotir": "Motir AI 経由",
     "sessions": {
       "subtitle": "{project} のすべての計画の会話(最近のアクティビティ順)",
-      "emptyTitle": "計画の会話はまだありません",
-      "emptyDescription": "Motir AI との会話を始めましょう。計画の有無にかかわらず、すべての会話がここに表示され、開くと続きから再開できます。",
+      "emptyTitle": "計画に進んだ会話はまだありません",
+      "emptyDescription": "会話は計画に進むとここに表示されます。",
       "listAria": "計画の会話",
       "filterAria": "計画の状態で会話を絞り込む",
       "filter": {
@@ -7812,9 +7812,9 @@
       "loadMoreRetry": "再試行",
       "viewAria": "自分の会話とプロジェクト全体の会話を切り替える",
       "subtitleMine": "{project} であなたが始めた計画の会話と、判断を求められた計画",
-      "emptyMineTitle": "あなたの計画の会話はまだありません",
-      "emptyMineDescription": "Motir AI と始めた会話と、判断を求められた計画がここに表示されます。",
-      "emptyDescriptionRead": "このプロジェクトの誰かが Motir AI と計画の会話を始めると、計画の有無にかかわらずここに表示されます。",
+      "emptyMineTitle": "計画に進んだあなたの会話はまだありません",
+      "emptyMineDescription": "あなたが始めた会話は、計画に進むとここに表示されます。",
+      "emptyDescriptionRead": "会話は計画に進むとここに表示されます。",
       "filteredEmptyDescriptionMine": "あなたのほかの会話は「すべて」にあります。",
       "readFailedTitle": "これらの会話を読み込めませんでした",
       "readFailedBody": "再読み込みしてもう一度お試しください。",
@@ -8418,6 +8418,38 @@
         "walkStopped": "ウォークスルーは停止しています。",
         "cannotPlan": "ここでは計画を開始できません。開始できる人に依頼するか、このリクエストを共有してください。",
         "noAi": "ここでは Motir AI が設定されていないため、計画を開始できません。このリクエストは共有できます。"
+      }
+    },
+    "planOffer": {
+      "label": "計画の提案",
+      "labelMidPlanning": "別の内容の計画の提案",
+      "target": "対象",
+      "noTarget": "対象の作業項目はありません。計画されるのは上のリクエストです。",
+      "targetElsewhere": "{key} は、この会話を開いたときの作業項目ではありません。",
+      "confirm": "確定",
+      "confirming": "開始しています…",
+      "decline": "却下",
+      "declining": "却下しています…",
+      "confirmHelp": "確定すると、このリクエストで {key} の計画をこの会話の中で開始します。「はい」と返信しても同じです。",
+      "confirmHelpNoTarget": "確定すると、このリクエストだけで計画をこの会話の中で開始します。「はい」と返信しても同じです。",
+      "declineHelp": "却下しても何も計画されず、会話はそのまま続きます。",
+      "midPlanning": "この会話はすでに別の内容を計画しています。確定するとその計画を終了し、「新しく計画する」と同じようにこちらを開始します。",
+      "started": "計画を開始しました",
+      "startedBy": "確定 · {when}",
+      "startedHere": "計画はここ、この会話の中で進みます。",
+      "beingPlanned": "{key} は現在計画中のため、もう一度計画を提案していません。その計画を見守るか、別のことを質問してください。",
+      "beingPlannedHere": "{key} はすでにここ、この会話の中で計画中です。下の計画がそれです。",
+      "declined": "却下済み",
+      "declinedBy": "却下 · {when}",
+      "recorded": "何も計画されていません。",
+      "replaced": "新しい提案に置き換えられました",
+      "showAll": "すべて表示",
+      "showLess": "表示を減らす",
+      "cannotStart": {
+        "planningUnavailable": "ここでは計画を開始できません。このプロジェクトで Motir AI が設定されていないか、作業項目を計画・編集する権限がありません。",
+        "outOfCredits": "組織の AI クレジットが不足しているため、計画を開始できません。",
+        "targetUnavailable": "{key} を開けなくなったため、計画を開始できません。",
+        "generic": "この提案から計画を開始できません。"
       }
     },
     "restart": {

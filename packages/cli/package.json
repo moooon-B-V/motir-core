@@ -1,16 +1,16 @@
 {
   "name": "@motir/cli",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "Motir CLI — terminal dispatch of the work loop, over Motir's public REST API.",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/moooon-B-V/motir-core.git",
+    "url": "git+https://github.com/motir-co/motir-core.git",
     "directory": "packages/cli"
   },
   "homepage": "https://motir.co",
   "bugs": {
-    "url": "https://github.com/moooon-B-V/motir-core/issues"
+    "url": "https://github.com/motir-co/motir-core/issues"
   },
   "type": "module",
   "bin": {

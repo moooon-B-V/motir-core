@@ -54,6 +54,9 @@ export default defineConfig({
       'tests/integration/planning/failedSessionTurnContinues.test.ts',
       // A failure motir-ai cannot resume releases its attempt (MOTIR-9121).
       'tests/integration/planning/unresumableFailure.test.ts',
+      // Story MOTIR-9217 (a question-only conversation is never gated and ends on the lease):
+      // the chain across its gate, idle close, Plans reads and fresh-start pointer (MOTIR-9302).
+      'tests/integration/planning/planningSessionQuestionOnlyChain.test.ts',
       // Bug MOTIR-8208 (a revision re-opens the plan) added `releaseLapsedRevision` /
       // `releaseLapsedRevisions` and the re-opened arms of the revision-failure paths.
       'tests/integration/plans/revisionLease.test.ts',

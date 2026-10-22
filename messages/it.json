@@ -7777,8 +7777,8 @@
     "viaMotir": "tramite Motir AI",
     "sessions": {
       "subtitle": "Tutte le conversazioni di pianificazione in {project}, dalla più recente",
-      "emptyTitle": "Ancora nessuna conversazione di pianificazione",
-      "emptyDescription": "Avvia una conversazione con Motir AI. Ogni conversazione è elencata qui, con o senza piano, e aprirne una la riprende.",
+      "emptyTitle": "Nessuna conversazione è ancora arrivata alla pianificazione",
+      "emptyDescription": "Una conversazione compare qui non appena arriva alla pianificazione.",
       "listAria": "Conversazioni di pianificazione",
       "filterAria": "Filtra le conversazioni per stato del piano",
       "filter": {
@@ -7815,9 +7815,9 @@
       "loadMoreRetry": "Riprova",
       "viewAria": "Mostra le tue conversazioni o quelle dell’intero progetto",
       "subtitleMine": "Le conversazioni di pianificazione che hai avviato in {project} e i piani su cui ti è stato chiesto di decidere",
-      "emptyMineTitle": "Ancora nessuna tua conversazione di pianificazione",
-      "emptyMineDescription": "Qui sono elencate le conversazioni che avvii con Motir AI e i piani su cui ti viene chiesto di decidere.",
-      "emptyDescriptionRead": "Quando qualcuno in questo progetto avvia una conversazione di pianificazione con Motir AI, viene elencata qui, con o senza piano.",
+      "emptyMineTitle": "Nessuna tua conversazione è ancora arrivata alla pianificazione",
+      "emptyMineDescription": "Una conversazione che avvii compare qui non appena arriva alla pianificazione.",
+      "emptyDescriptionRead": "Una conversazione compare qui non appena arriva alla pianificazione.",
       "filteredEmptyDescriptionMine": "Le tue altre conversazioni si trovano in Tutte.",
       "readFailedTitle": "Non siamo riusciti a caricare queste conversazioni",
       "readFailedBody": "Ricarica per riprovare.",
@@ -8421,6 +8421,38 @@
         "walkStopped": "Il percorso guidato è fermo.",
         "cannotPlan": "Non puoi avviare la pianificazione qui: chiedi a chi può farlo, oppure condividi questa richiesta.",
         "noAi": "Motir AI non è configurato qui, quindi la pianificazione non può partire. Puoi comunque condividere questa richiesta."
+      }
+    },
+    "planOffer": {
+      "label": "Proposta di pianificazione",
+      "labelMidPlanning": "Proposta di pianificare altro",
+      "target": "Destinazione",
+      "noTarget": "Nessun elemento di lavoro è la destinazione. Viene pianificata la richiesta qui sopra.",
+      "targetElsewhere": "{key} non è l’elemento di lavoro su cui è stata aperta questa conversazione.",
+      "confirm": "Conferma",
+      "confirming": "Avvio in corso…",
+      "decline": "Rifiuta",
+      "declining": "Rifiuto in corso…",
+      "confirmHelp": "Conferma avvia la pianificazione di {key} con questa richiesta, qui in questa conversazione. Rispondere «sì» fa lo stesso.",
+      "confirmHelpNoTarget": "Conferma avvia la pianificazione di questa richiesta da sola, qui in questa conversazione. Rispondere «sì» fa lo stesso.",
+      "declineHelp": "Rifiuta non pianifica nulla e la conversazione continua.",
+      "midPlanning": "Questa conversazione sta già pianificando qualcosa. Confermando termini quel piano e avvii questo, come fa «Pianifica qualcosa di nuovo».",
+      "started": "Pianificazione avviata",
+      "startedBy": "Confermato · {when}",
+      "startedHere": "La pianificazione avviene qui, in questa conversazione.",
+      "beingPlanned": "{key} è in fase di pianificazione proprio ora, quindi non ti ho proposto di pianificarlo di nuovo. Puoi seguire quella pianificazione o chiedermi qualcos’altro.",
+      "beingPlannedHere": "{key} è già in fase di pianificazione qui, in questa conversazione: il piano qui sotto è quello.",
+      "declined": "Rifiutato",
+      "declinedBy": "Rifiutato · {when}",
+      "recorded": "Non è stato pianificato nulla.",
+      "replaced": "Sostituita da una proposta più recente",
+      "showAll": "Mostra tutto",
+      "showLess": "Mostra meno",
+      "cannotStart": {
+        "planningUnavailable": "La pianificazione non può iniziare qui: Motir AI non è configurato per questo progetto, oppure non hai il permesso di pianificare e modificare elementi di lavoro.",
+        "outOfCredits": "La tua organizzazione ha esaurito i crediti AI, quindi la pianificazione non può iniziare.",
+        "targetUnavailable": "Non puoi più aprire {key}, quindi la pianificazione non può iniziare.",
+        "generic": "La pianificazione non può iniziare da questa proposta."
       }
     },
     "restart": {

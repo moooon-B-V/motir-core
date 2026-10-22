@@ -517,6 +517,8 @@ function PlanWorkspaceHost({
     startCopied,
     requestRestart,
     answerRestartConfirm,
+    confirmPlanOffer,
+    declinePlanOffer,
     answerRunPause,
     planAgain,
     resume,
@@ -1268,6 +1270,12 @@ function PlanWorkspaceHost({
           onStartNewSession={() => void startCopied()}
           onRequestRestart={() => void requestRestart()}
           onAnswerRestart={(answer) => void answerRestartConfirm(answer)}
+          // THE PLAN OFFER on an answer turn (MOTIR-9294): the doors decide what a
+          // press starts; the hook refetches and follows.
+          onConfirmPlanOffer={(turnId) => void confirmPlanOffer(turnId)}
+          onDeclinePlanOffer={(turnId) => void declinePlanOffer(turnId)}
+          offerAnsweringTurnId={state.offerAnsweringTurnId ?? null}
+          offerRefusal={state.offerRefusal ?? null}
           onAnswerRunPause={(choice) => void answerRunPause(choice)}
           // THE CARRY (MOTIR-7932): the hook routes an ended session's send to it, and
           // its swap re-keys the address through `onRestarted`, the restart's path.

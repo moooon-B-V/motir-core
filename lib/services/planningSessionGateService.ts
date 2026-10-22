@@ -2,6 +2,7 @@ import type { Prisma } from '@/generated/prisma/client';
 
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import { planRepository } from '@/lib/repositories/planRepository';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // THE PLANNING-SESSION GATE'S RAISE AND CLEAR (Story MOTIR-7905 · MOTIR-7913;
@@ -40,8 +41,14 @@ export const PLANNING_SESSION_GATE_KIND = 'planning_session' as const;
  * with a gate.
  *
  * Does nothing — and writes nothing — for a `guide` session, a session whose origin is not
- * `conversation`, a session with no owner, a failed-waiting one (it waits in To resume) and
- * an ended one. A session ALREADY waiting keeps its `since`; a `question` upgrades a
+ * `conversation`, a session with no owner, a failed-waiting one (it waits in To resume), an
+ * ended one, and a session that holds NO PLAN (MOTIR-9299). A conversation that never
+ * reached planning is a question that was answered, not a plan left waiting on its person:
+ * it ends quietly on the lease instead (amendment 5 clause 6). "Reached planning" is a
+ * `plan` row on the session, of any status. The check sits in this one function both raise
+ * sites reach — the turn write's `question` and the sweep's `reply` — and BEFORE the
+ * `already` short-circuit, which would otherwise answer yes for a mark written under the
+ * old rule. A session ALREADY waiting keeps its `since`; a `question` upgrades a
  * `reply` wait, never the reverse. The gate insert yields to the partial unique index on
  * `(subject_id, kind)`, so a second raise leaves the one row.
  */
@@ -65,6 +72,7 @@ export async function raiseWithin(
   ) {
     return false;
   }
+  if ((await planRepository.findLatestIdBySession(sessionId, tx)) === null) return false;
 
   const already = session.awaitingPersonSince !== null;
   if (already && (session.awaitingPersonCause === cause || cause === 'reply')) return true;
@@ -109,7 +117,9 @@ export async function clearWithin(
  * THE `reply` PASS (run by the 5-minute lock sweep BEFORE the idle close, so the close
  * never reaches a session this pass is about to mark): raise the gate for every
  * conversation the planner replied to that the person has left for longer than
- * {@link AWAITING_REPLY_AFTER_MS}. Discovery is cross-tenant (system context); each raise
+ * {@link AWAITING_REPLY_AFTER_MS}. Only a conversation that reached planning — it holds
+ * a plan of any status — is a candidate (MOTIR-9299); one that only asked a question is
+ * left unmarked, so the idle close ends it on the lease. Discovery is cross-tenant (system context); each raise
  * binds the session's own workspace, takes its lock and RE-CHECKS the predicate, so a turn
  * that landed after discovery wins.
  */

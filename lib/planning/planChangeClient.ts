@@ -210,6 +210,39 @@ export async function answerRestart(
   return post('/api/ai/plan-change/session/restart', { sessionId, answer }, signal);
 }
 
+/** What the plan offer's Confirm answers (MOTIR-9291): the run it started — on the
+ *  conversation `sessionId` names, which may not be the one on screen. */
+export interface PlanOfferConfirmResponse {
+  sessionId: string;
+  jobId: string;
+  planId?: string;
+}
+
+/** The ANSWER to a plan offer on an answer turn (Story MOTIR-9219 · MOTIR-9294): one
+ *  post per press. `confirm` starts the offer's plan exactly once; `decline` records
+ *  the decision and plans nothing. A refusal throws with the door's code (and, for a
+ *  refused start, its `reason` in the body). */
+export async function answerPlanOffer(
+  sessionId: string,
+  offerTurnId: string,
+  answer: 'confirm',
+  signal?: AbortSignal,
+): Promise<PlanOfferConfirmResponse>;
+export async function answerPlanOffer(
+  sessionId: string,
+  offerTurnId: string,
+  answer: 'decline',
+  signal?: AbortSignal,
+): Promise<PlanChangeSessionDto>;
+export async function answerPlanOffer(
+  sessionId: string,
+  offerTurnId: string,
+  answer: 'confirm' | 'decline',
+  signal?: AbortSignal,
+): Promise<PlanOfferConfirmResponse | PlanChangeSessionDto> {
+  return post(`/api/ai/plan-change/session/offer/${answer}`, { sessionId, offerTurnId }, signal);
+}
+
 /** One conversation BY ID — a reopened session (the Plans page's row). */
 export async function getPlanChangeSession(
   sessionId: string,
