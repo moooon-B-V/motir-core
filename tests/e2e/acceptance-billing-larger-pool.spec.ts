@@ -440,6 +440,9 @@ test.describe('The larger credit pool, sold from the Calculator', () => {
           format(copy.plans.upgrade.extraCredits, { n: n(preview.extraCredits) }),
         );
         const confirmed = postTo(page, seed, '/upgrade');
+        // A confirmed change reloads the billing read; let it land before navigating,
+        // or the next openBilling catches this response and loses its body.
+        const reloaded = billingRead(page, seed);
         await dialog.getByRole('button', { name: copy.plans.upgrade.confirm }).click();
         const req = await confirmed;
         expect(req.postDataJSON()).toEqual({
@@ -450,6 +453,7 @@ test.describe('The larger credit pool, sold from the Calculator', () => {
         await expect(dialog).toContainText(
           format(copy.plans.upgrade.success, { plan: SMALLEST.name }),
         );
+        await reloaded;
         expect(posts['checkout'] ?? 0).toBe(checkouts);
         setOrgBillingState(
           seed.organizationId,
