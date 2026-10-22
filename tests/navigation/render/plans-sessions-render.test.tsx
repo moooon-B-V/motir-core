@@ -64,8 +64,10 @@ const SESSION = {
   lastActivityAt: '2026-09-23T00:00:00.000Z',
   startedBy: { id: 'u1', name: 'Mara Lind' },
   firstTurn: 'Split invoicing out of billing',
-  latestPlan: null,
-  planCount: 0,
+  // A listed session holds a plan (MOTIR-9300): one that never reached planning is
+  // not on this page at all.
+  latestPlan: { id: 'plan_1', status: 'planned', title: 'Split invoicing out of billing' },
+  planCount: 1,
 };
 
 beforeEach(() => {
@@ -79,9 +81,9 @@ beforeEach(() => {
   getCapabilities.mockResolvedValue({ canBrowse: true });
   listSessions.mockResolvedValue({ sessions: [SESSION], nextCursor: null });
   countSessionsByPlanState.mockResolvedValue({
-    none: 1,
+    none: 0,
     generating: 0,
-    planned: 0,
+    planned: 1,
     stale: 0,
     approved: 0,
     declined: 0,
@@ -97,6 +99,7 @@ describe('/plans renders end to end', () => {
     expect(html).toContain('aria-label="Filter conversations by plan state"');
     expect(html).toContain('Split invoicing out of billing');
     expect(html).toMatch(/href="\/plans\?[^"]*planSession=s_1/);
-    expect(html).toContain('No plan yet');
+    expect(html).not.toContain('No plan yet');
+    expect(html).toContain('Opens the conversation');
   });
 });
