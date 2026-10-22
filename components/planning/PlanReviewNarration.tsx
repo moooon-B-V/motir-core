@@ -72,6 +72,7 @@ export function PlanReviewNarration({ review }: { review: PlanReviewDto }) {
   return (
     <section data-testid="plan-review-narration" className="flex flex-col gap-2">
       <PlanNarration
+        inset="page"
         groups={groups}
         total={narration.earlierCount + narration.entries.length}
         earlierCount={earlierCount}
