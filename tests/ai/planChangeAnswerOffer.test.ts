@@ -34,6 +34,7 @@ function row(answerOffer: unknown): PlanChangeTurn {
     anchorKey: null,
     debugLanding: null,
     guideLandingClaimedAt: null,
+    planStartClaimedAt: null,
     guideTurn: null,
     confirm: null,
     citations: [],

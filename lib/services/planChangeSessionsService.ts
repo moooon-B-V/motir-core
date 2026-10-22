@@ -494,8 +494,11 @@ async function appendLocked(
  * Every append moves `lastActivityAt` in the SAME update that bumps `turnCount`
  * (§3): the idle close and the Plans page's order both read it, and a turn
  * that did not move it would let a live conversation age out mid-sentence.
+ *
+ * Exported for One start per offer (MOTIR-9291), which appends the offer's request
+ * inside its own claim transaction rather than in a second one.
  */
-async function appendWithin(
+export async function appendWithin(
   sessionId: string,
   pctx: ProjectContext,
   turn: AppendTurn,
@@ -2544,6 +2547,20 @@ export const planChangeSessionsService = {
    * earlier or concurrent settle of the same job already had — the loser's cue to
    * write nothing. Only a `user` turn that ran as `debug` can be claimed.
    */
+  /**
+   * The conversation's latest UNDECIDED plan with its status as the next turn reads it
+   * (MOTIR-9291) — the read {@link submit} routes by, for a start that must refuse a
+   * conversation already planning. Null when it holds none. `tx` joins the caller's.
+   */
+  async heldPlanOf(
+    _pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; status: SessionTurnPlanStatus } | null> {
+    const row = await planRepository.findLatestUndecidedBySession(address.sessionId, tx);
+    return row ? { id: row.id, status: await turnStatusOf(row, tx) } : null;
+  },
+
   async claimDebugLanding(
     turnId: string,
     pctx: ProjectContext,

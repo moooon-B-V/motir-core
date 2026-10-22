@@ -58,6 +58,21 @@ export interface AskOutcome {
    * the field's membership grows on the far side first.
    */
   offer?: AskPlanOffer;
+  /**
+   * On an `ask` ONLY: the person's decision on the offer that was PENDING when they
+   * spoke (MOTIR-9292 producer ↔ MOTIR-9291 consumer). `seq` names that offer's
+   * answer turn. ABSENT when the envelope carried none or one this build cannot
+   * read: a missing or non-integer `seq`, or a decision other than `agree` /
+   * `decline`, is NO reply — never agreement.
+   */
+  offerReply?: AskOfferReply;
+}
+
+/** The typed reply to a pending offer, once read. */
+export interface AskOfferReply {
+  seq: number;
+  kind: string;
+  decision: 'agree' | 'decline';
 }
 
 /** The plan offer an answer carries, once read. `requestText` is mapped onto the
@@ -109,6 +124,18 @@ function readOfferField(value: unknown): AskPlanOffer | null {
     targetKey: WORK_ITEM_KEY.test(target) ? target : null,
     immediate: value['immediate'] === true,
   };
+}
+
+/** The envelope's `offerReply`, or null when it is not exactly that shape. */
+function readOfferReplyField(value: unknown): AskOfferReply | null {
+  if (!isRecord(value)) return null;
+  const seq = value['seq'];
+  const kind = value['kind'];
+  const decision = value['decision'];
+  if (typeof seq !== 'number' || !Number.isInteger(seq) || seq < 0) return null;
+  if (typeof kind !== 'string' || kind.trim().length === 0) return null;
+  if (decision !== 'agree' && decision !== 'decline') return null;
+  return { seq, kind, decision };
 }
 
 /** The citations, de-duplicated, key-shaped and bounded. A malformed entry is
@@ -193,6 +220,7 @@ export function readAskOutcome(result: unknown): AskOutcome | null {
   }
 
   const offer = readOfferField(ask['offer']);
+  const offerReply = readOfferReplyField(ask['offerReply']);
   return {
     intent: 'ask',
     answer: boundedString(ask['answer'], ASK_ANSWER_MAX_CHARS),
@@ -200,5 +228,6 @@ export function readAskOutcome(result: unknown): AskOutcome | null {
     ...('offerForward' in ask ? { offerForward: readTextField(ask['offerForward']) } : {}),
     ...(run ? { run } : {}),
     ...(offer ? { offer } : {}),
+    ...(offerReply ? { offerReply } : {}),
   };
 }

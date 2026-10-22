@@ -27,6 +27,9 @@ import {
   GuideReplanOfferAlreadyConfirmedError,
   GuideReplanOfferNotFoundError,
   GuideReplanOfferNotOpenError,
+  PlanOfferNotFoundError,
+  PlanOfferNotOpenError,
+  PlanOfferStartRefusedError,
   PlanChangeRunPauseTurnMismatchError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
@@ -68,6 +71,7 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
     err instanceof PlanSessionNotFoundError ||
     err instanceof PlanChangeTurnNotFoundError ||
     err instanceof GuideReplanOfferNotFoundError ||
+    err instanceof PlanOfferNotFoundError ||
     err instanceof PlanChangeMailboxJobMismatchError ||
     err instanceof PlanChangeRunPauseNotFoundError ||
     err instanceof AskAnchorNotAvailableError ||
@@ -103,6 +107,17 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
   if (err instanceof GuideReplanOfferAlreadyConfirmedError) {
     return NextResponse.json(
       { code: err.code, error: err.message, sessionId: err.sessionId },
+      { status: 409 },
+    );
+  }
+  // The plan offer (MOTIR-9290 · MOTIR-9291): a decision on an offer that is no
+  // longer open, and a start refused before anything was written, each with why.
+  if (err instanceof PlanOfferNotOpenError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  if (err instanceof PlanOfferStartRefusedError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, reason: err.reason },
       { status: 409 },
     );
   }

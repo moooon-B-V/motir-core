@@ -341,6 +341,27 @@ export class PlanOfferNotOpenError extends Error {
   }
 }
 
+/** Why a start of a plan offer was refused (MOTIR-9291). `target_closed` is the
+ *  lifecycle's own reason passed through; the other three only a start can find. */
+export type PlanOfferStartRefusal =
+  | 'target_not_available'
+  | 'target_closed'
+  | 'already_planning'
+  | 'offer_not_open';
+
+/**
+ * A start of a plan offer — a Confirm, a typed yes, or a targeted "plan this" turn —
+ * was refused before anything was claimed, appended or submitted (MOTIR-9291). The
+ * offer stays as it was. → 409 `PLAN_OFFER_START_REFUSED` with `reason`.
+ */
+export class PlanOfferStartRefusedError extends Error {
+  readonly code = 'PLAN_OFFER_START_REFUSED' as const;
+  constructor(readonly reason: PlanOfferStartRefusal) {
+    super(`The plan could not be started: ${reason}.`);
+    this.name = 'PlanOfferStartRefusedError';
+  }
+}
+
 /**
  * A second Confirm of a guide re-plan offer that already started a planning
  * session (MOTIR-8691). Carries that session's id so the client can open it

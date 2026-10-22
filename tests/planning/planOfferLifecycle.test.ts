@@ -366,8 +366,10 @@ describe('land — the offer rides the answer’s own append', () => {
       answerWith({ kind: 'log_bug', requestText: 'File the bug.' }),
       answerWith(),
     ]) {
-      const { session } = await turn(owner(), `Turn ${jobSeq}`, ask);
-      const a = lastAnswer(session.turns);
+      // An immediate offer starts at once (MOTIR-9291) and its settle answers the
+      // session it landed on, so the answer is read off the conversation itself.
+      const { sessionId } = await turn(owner(), `Turn ${jobSeq}`, ask);
+      const a = lastAnswer(await threadOf(owner(), sessionId));
       expect(a.body).toBe('Here is how the export works.');
       expect(a.offer).toBeNull();
       const row = await adminDb.planChangeTurn.findFirstOrThrow({ where: { id: a.id } });
