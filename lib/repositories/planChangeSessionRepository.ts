@@ -113,6 +113,15 @@ function endedWithWaitingPlanForOwnerWhere(args: {
 // under an active workspace context, so the RLS policy's `app.workspace_id` GUC
 // gates the rows; the `workspaceId` argument is the belt-and-suspenders
 // app-level scope (a cross-tenant project id returns null → 404, never 403).
+/**
+ * "This session REACHED PLANNING" on the Prisma side (MOTIR-9304): it holds at least one
+ * `plan` row through `Plan.sessionId`, of any status. The fresh-start notice's read spreads
+ * it. The Plans room states the same fact on the SQL side as {@link planHoldingSql}
+ * (MOTIR-9300) — one fact, two spellings, because one read is a Prisma `where` and the
+ * other a raw statement over the `lp` lateral.
+ */
+const HOLDS_A_PLAN_WHERE = { plans: { some: {} } } as const;
+
 export const planChangeSessionRepository = {
   /** Create a session. `seedGateId` is set ONLY by a seeded first turn
    *  (`planChangeSessionsService.startSeededWithFirstTurn`, AMENDMENT 17 §9), and
@@ -332,9 +341,13 @@ export const planChangeSessionRepository = {
     });
   },
 
-  /** The scope's most recent OTHER conversation, any member's — what a fresh
-   *  start's notice points to (MOTIR-6024). Conversation origin only: a session
-   *  a door opened for a plan has no conversation to return to. */
+  /** The scope's most recent OTHER conversation, any member's, that has REACHED
+   *  PLANNING — what a fresh start's notice points to (MOTIR-6024, MOTIR-9304).
+   *  Conversation origin only: a session a door opened for a plan has no
+   *  conversation to return to. Plan-holding only ({@link HOLDS_A_PLAN_WHERE}), so
+   *  the id the notice links is one the Plans room lists; a NEWER plan-less
+   *  conversation is skipped rather than blocking an older one that planned, and a
+   *  scope where none planned answers null — no link at all. */
   async findLatestConversationInScope(
     projectId: string,
     scopeKey: string,
@@ -348,6 +361,7 @@ export const planChangeSessionRepository = {
         scopeKey,
         workspaceId,
         origin: 'conversation',
+        ...HOLDS_A_PLAN_WHERE,
         ...(excludeId ? { id: { not: excludeId } } : {}),
       },
       orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],

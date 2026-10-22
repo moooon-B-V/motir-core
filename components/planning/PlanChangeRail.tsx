@@ -2369,7 +2369,8 @@ export function Bubble({
  * and this scope has an earlier conversation. One line above the opener, on
  * the information notice tint, linking to that conversation's row on the Plans
  * page. Not dismissible and not persisted — it goes once this conversation has
- * a turn.
+ * a turn. The pointer names only a conversation that has reached planning
+ * (MOTIR-9304); with none, `earlier` is null and no notice renders at all.
  */
 function EarlierNotice({
   earlier,

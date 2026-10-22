@@ -618,7 +618,7 @@ describe('browse is the permission', () => {
 
 describe('the repository reads the overlay leans on (MOTIR-6024)', () => {
   it('the latest conversation of a scope with nothing excluded, and a starter-less session', async () => {
-    const id = await freshSession('only one');
+    const id = await plannedSession('only one');
     const orphan = await adminDb.planChangeSession.create({
       data: { workspaceId: fx.workspaceId, projectId: fx.projectId, origin: 'legacy' },
     });
