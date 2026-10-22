@@ -1314,7 +1314,9 @@ export const planTargetLockService = {
       entries.push({ workItemId: lock.workItemId, outcome });
     }
     return {
-      released: entries.filter((e) => e.outcome !== 'session_waiting').length,
+      released: entries.filter(
+        (e) => e.outcome !== 'session_waiting' && e.outcome !== 'plan_generating',
+      ).length,
       entries,
     };
   },

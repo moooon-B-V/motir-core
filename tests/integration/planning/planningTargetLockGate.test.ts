@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { JobTestEngine } from '../../helpers/jobs';
 
 import { db } from '@/lib/db';
+import { PLAN_STALLED_AFTER_MS } from '@/lib/plans/planProgress';
 import type { ProjectContext } from '@/lib/projects';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { adminDb } from '../../helpers/adminDb';
@@ -353,6 +354,13 @@ async function decline(planId: string): Promise<void> {
  *  test is the shipped sweep, which is handed no help at all. */
 async function ageAllLeases(): Promise<void> {
   await adminDb.planTargetLock.updateMany({ data: { expiresAt: new Date(Date.now() - 1_000) } });
+  // A dead planner also stops WRITING: since MOTIR-9260 the sweep spares a session
+  // whose `generating` plan wrote within `PLAN_STALLED_AFTER_MS`, so a crash is
+  // modelled as a lease past its window AND a plan silent past the stall window.
+  await adminDb.plan.updateMany({
+    where: { status: 'generating' },
+    data: { lastActivityAt: new Date(Date.now() - PLAN_STALLED_AFTER_MS - 1_000) },
+  });
 }
 
 describe('1 · the race, with genuine concurrency', () => {
