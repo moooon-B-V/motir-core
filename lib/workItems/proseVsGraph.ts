@@ -1287,10 +1287,20 @@ const DESIGN_ASSET_MATCHERS: ReadonlyArray<RegExp> = [
 // (*mocks @/lib/foo*, *mocks ./foo*, *mocks lib/x* — MOTIR-9077), or an
 // assertion read off it (*asserted on the mock*). `*.mock.html` and *mockup* stay tells on any line, so a design
 // card's export criterion is unaffected.
+//
+// ⚠️ The assertion arm keys on the GRAMMAR of a double, not on its adjective
+// (MOTIR-9263). *"(asserted by the shared mock's argument identity)"* fired as a
+// design asset: the arm took only *asserted ON*, and its noun-before list had no
+// *shared* — and growing that list one adjective at a time is the fix this
+// detector has already had five times. So the arm takes *asserted / checked BY*
+// as well as *ON*, with any one modifier before the mock, and a POSSESSIVE mock
+// followed by what a double records (*the mock's arguments / calls / identity /
+// invocations*) is a double too. *"the mock's P3 panel"* names a drawing's part
+// and stays a tell.
 const BARE_MOCK_RE = /\bmocks?\b/i;
 
 const TEST_DOUBLE_MOCK_RE =
-  /\b(?:vi|jest)\.mock\b|\bmock(?:ed|ing)\b|\bmocks?\s+(?:the|a|an|its|every|each|out)\b|\b(?:boundary|test|stub|fake|spy|http|fetch|network|transport|server|client|module)\s+mocks?\b|\b(?:asserted|asserts?|recorded|seen|checked|counted)\s+on\s+(?:the\s+)?(?:[\w-]+\s+)?mocks?\b|\bmocks?\s+(?:@\/|\.{1,2}\/|(?!and\/or\b)[\w@.()[\]-]+\/[\w@.()[\]-]+)|\bmocks?\s+(?:clients?|servers?|fetch|calls?|responses?|requests?|modules?|helpers?|leaf|leaves|routes?|boundar(?:y|ies)|transports?|gateways?|adapters?|implementations?|functions?|handlers?)\b/i;
+  /\b(?:vi|jest)\.mock\b|\bmock(?:ed|ing)\b|\bmocks?\s+(?:the|a|an|its|every|each|out)\b|\b(?:boundary|test|stub|fake|spy|http|fetch|network|transport|server|client|module)\s+mocks?\b|\b(?:asserted|asserts?|recorded|seen|checked|counted)\s+(?:on|by)\s+(?:the\s+)?(?:[\w-]+\s+)?mocks?\b|\bmock['’]s\s+(?:arguments?|calls?|identity|identities|invocations?)\b|\bmocks?\s+(?:@\/|\.{1,2}\/|(?!and\/or\b)[\w@.()[\]-]+\/[\w@.()[\]-]+)|\bmocks?\s+(?:clients?|servers?|fetch|calls?|responses?|requests?|modules?|helpers?|leaf|leaves|routes?|boundar(?:y|ies)|transports?|gateways?|adapters?|implementations?|functions?|handlers?)\b/i;
 
 // ── The AMENDMENT, not only the NEW ASSET (MOTIR-4477) ───────────────────────
 // Every matcher above is an ASSET tell — a file, a path, or a word for a
@@ -1385,13 +1395,51 @@ export function namesDesignDocumentAmendment(text: string): boolean {
  * app. Kept UI-specific on purpose: `card`, `row`, `list`, `field` and `table` all
  * mean something else far more often in this corpus, and one of them would fire
  * on nearly every criterion ever written here.
+ *
+ * A POSSESSIVE is not the noun (*"the dialog's request opens a transaction"*):
+ * there the surface modifies another subject, and that subject owns the verb.
  */
-const SURFACE_NOUN_RE =
-  /\b(?:page|screen|view|panel|pane|canvas|modal|dialog|drawer|sidebar|rail|tab|toolbar|banner|toast|tooltip|popover|overlay|breadcrumb|board|picker|combobox|dropdown|menu|nav|navigation|surface|component|badge|chip|button|empty state)\b/i;
+const SURFACE_NOUN_SRC =
+  "\\b(?:page|screen|view|panel|pane|canvas|modal|dialog|drawer|sidebar|rail|tab|toolbar|banner|toast|tooltip|popover|overlay|breadcrumb|board|picker|combobox|dropdown|menu|nav|navigation|surface|component|badge|chip|button|empty state)s?\\b(?!['’]s?\\b)";
 
 /** Verbs that put such a noun ON SCREEN — the criterion is about what renders. */
-const SURFACE_VERB_RE =
-  /\b(?:renders?|rendered|draws?|drawn|shows?|shown|displays?|displayed|paints?|painted|appears?|is visible|opens?|highlights?|lists)\b/i;
+const SURFACE_VERB_SRC =
+  '\\b(?:renders?|rendered|draws?|drawn|shows?|shown|displays?|displayed|paints?|painted|appears?|is visible|opens?|highlights?|lists)\\b';
+
+/**
+ * How many words may sit between a surface noun and its verb and still be read
+ * as one phrase — enough for an auxiliary, a number or a short modifier
+ * (*"the surface IS rendered"*, *"Panel 12 draws"*, *"renders THE EMPTY state"*,
+ * *"is drawn AS OPENING THE PLANNING surface"*), too few for a second subject
+ * to arrive in between. The clause split does the rest: a subordinate clause's
+ * own subject never shares a clause with the noun.
+ */
+const SURFACE_BIND_GAP = 4;
+
+/**
+ * A surface noun BOUND to its render verb, as the verb's subject (*"the page
+ * renders"*) or its object (*"renders the page"*), within {@link SURFACE_BIND_GAP}
+ * words. Run per CLAUSE (see {@link surfaceClauses}), never over the whole line.
+ */
+const SURFACE_BOUND_RE = new RegExp(
+  `${SURFACE_NOUN_SRC}(?:\\s+\\S+){0,${SURFACE_BIND_GAP}}?\\s+${SURFACE_VERB_SRC}` +
+    `|${SURFACE_VERB_SRC}(?:\\s+\\S+){0,${SURFACE_BIND_GAP}}?\\s+${SURFACE_NOUN_SRC}`,
+  'i',
+);
+
+/**
+ * Where one clause ends and the next begins: sentence and clause punctuation
+ * (a full stop only when it ENDS a word, so `design-notes.md` and `1.5` stay
+ * whole), a dash, a bracket, and the subordinators that open a clause with a
+ * subject of its own — *"refused BEFORE any transaction opens"*.
+ */
+const CLAUSE_BREAK_RE =
+  /[.!?](?=\s|$)|[;:()[\]—–]|\s-\s|\b(?:before|after|until|unless|while|whereas|because|since|once|whenever|when|if|then)\b/i;
+
+/** A criterion line cut into the clauses the surface binding is tested within. */
+function surfaceClauses(text: string): string[] {
+  return text.split(new RegExp(CLAUSE_BREAK_RE.source, 'gi'));
+}
 
 /**
  * A React component path — a `.tsx` / `.jsx` file that is NOT part of a design
@@ -1415,10 +1463,21 @@ export function namesDesignAsset(text: string): boolean {
 /**
  * Whether a criterion builds or changes a RENDERED SURFACE — a surface noun put
  * on screen by a render verb, or a component path named outright.
+ *
+ * ⚠️ THE NOUN AND THE VERB MUST BE ONE PHRASE IN ONE CLAUSE (MOTIR-9263). Two
+ * independent tests over the line read *"A page in another project is refused
+ * before any transaction OPENS"* as a surface, because `page` matched and so did
+ * `opens` — whose subject is the transaction. Every earlier false positive here
+ * was closed by growing a word list; binding the verb to its noun, as
+ * {@link DESIGN_DOCUMENT_GROWS_RE} already does for design documents, closes the
+ * class instead.
+ *
+ * Exported so the predicate is asserted directly (MOTIR-4477's convention), not
+ * only through {@link selfBlockingDesignCriteria}.
  */
-function namesRenderedSurface(text: string): boolean {
+export function namesRenderedSurface(text: string): boolean {
   if (COMPONENT_PATH_RE.test(text)) return true;
-  return SURFACE_NOUN_RE.test(text) && SURFACE_VERB_RE.test(text);
+  return surfaceClauses(text).some((clause) => SURFACE_BOUND_RE.test(clause));
 }
 
 /**

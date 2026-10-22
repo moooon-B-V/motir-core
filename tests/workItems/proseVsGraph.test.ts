@@ -24,6 +24,7 @@ import {
   selfBlockingDesignCriteria,
   namesDesignAsset,
   namesDesignDocumentAmendment,
+  namesRenderedSurface,
   type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
 import {
@@ -1365,6 +1366,105 @@ describe('an AMENDMENT to an existing design document is a design criterion (MOT
       '2. The design notes are extended with the copy table for every string that moves.',
     ].join('\n');
     expect(selfBlockingDesignCriteria(designOnly)).toBeNull();
+  });
+});
+
+describe('a server card is not its own design blocker — MOTIR-9263', () => {
+  /**
+   * THE FIXTURE STRINGS, held here as literals. F2 and F7 are the two halves of
+   * the false positive the hand-link write path (plan `cmvi3iy180013hmq1rbzi1flc`,
+   * card `cmvi3o6kt`, now MOTIR-9197) was reported with; the rest are the
+   * neighbours each half must keep reading the way it did.
+   */
+  const F2 = "(asserted by the shared mock's argument identity)";
+  const F3 = 'asserted by the boundary mock';
+  const F4 = 'the link dialog matches `design/pages/link.mock.html`';
+  const F5 = 'matches the mockup';
+  const F6 = "the mock's P3 panel";
+  const F7 = 'A page in another project is refused before any transaction opens';
+  const F8 = "The page is refused; the dialog's request opens a transaction";
+  const F9 = 'the page renders the empty state';
+  const F10 = 'the picker opens on focus';
+
+  /**
+   * F1 — the hand-link card's criteria as that plan authored them: eight
+   * bullets, criterion 4 ending in F2 and criterion 8 being F7. The card was
+   * reworded to unblock its plan ("on the shared repository double", "before
+   * any transaction is started"), so 4 and 8 are restored to the wording the
+   * detector misread; 1–3 and 5–7 are the card's own, trimmed. It draws
+   * nothing, so the check must say nothing.
+   */
+  const F1 = [
+    '## Acceptance criteria',
+    '',
+    '- `pageLinksService.linkPageForWorkItem` writes exactly one row for the pair, with',
+    "  `source: 'manual'` and the caller's user id, asserted against the mocked repository.",
+    '- A second link of the same pair raises `PageLinkAlreadyExistsError` (409) and records',
+    '  no revision.',
+    '- Linking a page that already mentions the work item writes only the `manual` row.',
+    '- `unlinkPageForWorkItem` deletes exactly the `manual` row for the pair and records ONE',
+    '  revision on the same `tx` the service passed to the delete',
+    `  ${F2}.`,
+    '- Unlinking a pair with no `manual` row raises `PageLinkNotFoundError` (404) and records',
+    '  no revision.',
+    '- LINKING an archived page raises `PageArchivedError` (409); UNLINKING a hand link on it',
+    '  succeeds and records its revision.',
+    '- The delete path consults no archive state.',
+    `- ${F7}.`,
+  ].join('\n');
+
+  it('the hand-link card (F1) is not reported as its own design blocker', () => {
+    expect(selfBlockingDesignCriteria(F1)).toBeNull();
+  });
+
+  it.each([F2, F3])('a mock in an assertion relationship is a test double: %s', (line) => {
+    expect(namesDesignAsset(line)).toBe(false);
+  });
+
+  it.each([F4, F5, F6])('a drawing is still a design asset: %s', (line) => {
+    expect(namesDesignAsset(line)).toBe(true);
+  });
+
+  it.each([F7, F8])(
+    'a surface noun whose verb belongs to another subject is not a surface: %s',
+    (line) => {
+      expect(namesRenderedSurface(line)).toBe(false);
+    },
+  );
+
+  it.each([F9, F10])('a surface noun bound to its render verb is a surface: %s', (line) => {
+    expect(namesRenderedSurface(line)).toBe(true);
+  });
+
+  it.each([
+    'the plan-detail canvas draws a DECIDED plan',
+    'Panel 12 draws the composer at the minimum width',
+    'The shipped surface is RENDERED before anything is drawn',
+    'the detail route renders that panel',
+    'asserted as a component test over the rendered dialog',
+    'the toast is visible after the save',
+  ])('binds a noun as the subject OR the object of its verb: %s', (line) => {
+    expect(namesRenderedSurface(line)).toBe(true);
+  });
+
+  it.each([
+    // The noun and the verb in two clauses, split at punctuation or at a
+    // subordinator — the shape F7 and F8 both have.
+    'The banner is hidden; the job opens a lock',
+    'The page is refused — the worker then opens a transaction',
+    'A modal is refused until the queue opens',
+    // A possessive surface noun modifies another subject.
+    "the dialog's request opens a transaction",
+  ])('does not bind a noun and a verb across a clause or a possessive: %s', (line) => {
+    expect(namesRenderedSurface(line)).toBe(false);
+  });
+
+  it('the false positive needed BOTH halves — each alone was already silent', () => {
+    // The card's reproduction table, rows 2 and 3: fixing either half alone
+    // already silences F1, so each half is asserted on its own predicate above
+    // rather than only through the pair.
+    expect(namesDesignAsset(F7)).toBe(false);
+    expect(namesRenderedSurface(F2)).toBe(false);
   });
 });
 
