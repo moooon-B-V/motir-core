@@ -146,24 +146,21 @@ for (const run of RUNS) {
         await signUpHere(page, email, PASSWORD);
         ({ projectId } = await grantAi(email));
         const band = await expectHeroScreen(page, run, screen('entrance'));
-        // The idea box is the hero's control; the import door is a section below it.
-        await expect(
-          band.getByRole('textbox', { name: t('onboarding.entrance.ideaLabel') }),
-        ).toBeVisible();
-        await expect(
-          band.getByRole('button', { name: t('onboarding.entrance.startCta') }),
-        ).toBeVisible();
-        const importSection = page.getByRole('region', {
-          name: t('onboarding.entrance.importTitle'),
+        // The idea box is the hero's control; the import door is the idea card's
+        // last row, inside the hero (MOTIR-8935).
+        const idea = band.getByRole('textbox', { name: t('onboarding.entrance.ideaLabel') });
+        await expect(idea).toBeVisible();
+        const start = band.getByRole('button', { name: t('onboarding.entrance.startCta') });
+        await expect(start).toBeVisible();
+        const importProject = band.getByRole('link', {
+          name: t('onboarding.entrance.importProject'),
           exact: true,
         });
-        await expect(importSection).toBeVisible();
-        expect(
-          await band.evaluate((b, s) => b.contains(s), await importSection.elementHandle()),
-        ).toBe(false);
-        const heroBox = (await band.boundingBox())!;
-        const importBox = (await importSection.boundingBox())!;
-        expect(importBox.y).toBeGreaterThanOrEqual(heroBox.y + heroBox.height - 1);
+        await expect(importProject).toBeVisible();
+        await expect(band.getByText(t('onboarding.entrance.importTitle'))).toBeVisible();
+        const startBox = (await start.boundingBox())!;
+        const importBox = (await importProject.boundingBox())!;
+        expect(importBox.y).toBeGreaterThanOrEqual(startBox.y + startBox.height - 1);
       });
 
       await chapter(`How Motir works, and back — ${run.label}`, async () => {
@@ -248,7 +245,7 @@ for (const run of RUNS) {
           (r) => r.url().endsWith('/api/onboarding/migrate') && r.request().method() === 'POST',
         );
         await page
-          .getByRole('link', { name: new RegExp(t('onboarding.entrance.importCta')) })
+          .getByRole('link', { name: t('onboarding.entrance.importProject'), exact: true })
           .click();
         await page.waitForURL('**/onboarding/migrate');
         // One project: the run starts on arrival and opens on Connect.

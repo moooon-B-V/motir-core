@@ -9,7 +9,7 @@ import { Button, buttonVariants } from '@/components/ui/Button';
 import { cn } from '@/lib/utils/cn';
 import { startPlanningAction } from '@/app/(onboarding)/onboarding/actions';
 import { AuthLanguageControl } from '@/components/i18n/AuthLanguageControl';
-import { OnboardingHero, OnboardingSection } from '@/components/onboarding/layout';
+import { OnboardingHero } from '@/components/onboarding/layout';
 
 // The onboarding ENTRANCE — the fork the user lands on at `/onboarding`
 // (Subtask 7.22.4 / MOTIR-1462, designed by MOTIR-1461 in
@@ -17,18 +17,19 @@ import { OnboardingHero, OnboardingSection } from '@/components/onboarding/layou
 // `onboarding-entrance--vibe-layout.mock.html` + design-notes.md § "2026-10-11"
 // and its Revisions 1 and 2). It is idea-first: the idea box is the HERO's
 // control (Start → the 7.3 discovery chat, seeded with the typed idea), and
-// "import an existing project" is ONE section band below the hero — visibly
-// secondary: a smaller serif head, a secondary button, the page ground rather
-// than the hero's (→ the 7.15 migrate wizard / 7.17 tracker import, owned
-// downstream). This screen only ROUTES — it draws no repo-connect,
+// "import an existing project" is the idea card's LAST row (MOTIR-8935, designed
+// by MOTIR-8934 in `onboarding-entrance--refinements.mock.html` + design-notes.md
+// § "2026-10-21"): "Already have a project?" and an "Import project" button in
+// motir.co's warm decision fill (→ the 7.15 migrate wizard / 7.17 tracker
+// import, owned downstream). This screen only ROUTES — it draws no repo-connect,
 // source-selection, index, or generate UI (all of that is 7.15/7.17).
 //
 // Two panels (per the design):
 //   • DEFAULT (no carried-over idea) — "Vibe the project", an empty idea box,
-//     and the import section band under the hero.
+//     and the import row at the foot of the card.
 //   • CARRIED (arrived with a preserved idea from the motir.co hero, MOTIR-1458)
 //     — "Ready when you are", the idea box PRE-FILLED with the preserved idea and
-//     a "Carried over from your idea" label; the import section is dropped (an
+//     a "Carried over from your idea" label; the import row is dropped (an
 //     idea in hand means the user is starting fresh).
 //
 // "See how Motir works" opens the explainer in a NEW TAB (Revision 1): nothing
@@ -60,8 +61,8 @@ export function OnboardingEntrance({ carriedIdea }: OnboardingEntranceProps) {
 
   return (
     // The page ground. The entrance owns the whole viewport (the (onboarding)
-    // route group renders outside the app shell) and is page-shaped now: the
-    // hero, then the import band, scrolling as one page. No "Save & exit":
+    // route group renders outside the app shell) and the page ends with the
+    // hero. No "Save & exit":
     // nothing is saved here (no project/session exists until the user continues).
     <div className="min-h-dvh bg-(--el-page-bg)">
       <main>
@@ -88,34 +89,20 @@ export function OnboardingEntrance({ carriedIdea }: OnboardingEntranceProps) {
         >
           {/* PRIMARY — the idea box. A form posting to the server action, so it
               works without JS (progressive enhancement); the action seeds the
-              idea and redirects to the discovery chat. */}
+              idea and redirects to the discovery chat. No focus ring on the
+              card (MOTIR-8934 Change 2): the autoFocus'd box lit up on load. The
+              only cue is the border stepping to `--el-border-strong` while the
+              TEXTAREA has focus — keyed on it, not on focus-within, because the
+              import row's link sits inside the same form. */}
           <form
             action={startPlanningAction}
             ref={formRef}
             data-surface="card"
-            className="grid w-full gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-card) p-(--spacing-card-padding) text-left shadow-(--shadow-elevated) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:ring-offset-2 focus-within:ring-offset-(--el-surface)"
+            className="grid w-full gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-card) p-(--spacing-card-padding) text-left shadow-(--shadow-elevated) has-[textarea:focus]:border-(--el-border-strong)"
           >
             <IdeaFields carried={carried} carriedIdea={carriedIdea} formRef={formRef} />
           </form>
         </OnboardingHero>
-
-        {/* SECONDARY — migrate an existing codebase, one section band under the
-            hero (the design dropped the "OR" divider: the band is the
-            separation). Dropped in the carried-idea panel: arriving with an idea
-            means the user is starting fresh. Routes to the migrate wizard
-            (7.15 / MOTIR-934), whose optional Import step reaches the issue
-            importer (7.17 / MOTIR-942) at /onboarding/import. */}
-        {!carried && (
-          <OnboardingSection title={t('importTitle')} lede={t('importDesc')}>
-            <Link
-              href="/onboarding/migrate"
-              className={cn(buttonVariants({ variant: 'secondary', size: 'lg' }), 'no-underline')}
-            >
-              <span>{t('importCta')}</span>
-              <ArrowRight className="size-4" aria-hidden="true" />
-            </Link>
-          </OnboardingSection>
-        )}
       </main>
     </div>
   );
@@ -203,6 +190,31 @@ function IdeaFields({
           {carried ? t('continueCta') : t('startCta')}
         </Button>
       </div>
+      {/* SECONDARY — migrate an existing codebase, the card's last row. Its
+          colour is motir.co's own "Import project" door (the warm decision
+          fill), the entrance's one warm element; Start stays the ink primary.
+          It stays enabled while Start is pending: leaving to import is fine
+          mid-submit. Dropped in the carried-idea panel: arriving with an idea
+          means the user is starting fresh. Routes to the migrate wizard
+          (7.15 / MOTIR-934), whose optional Import step reaches the issue
+          importer (7.17 / MOTIR-942) at /onboarding/import. */}
+      {!carried && (
+        <div className="flex flex-wrap items-center gap-3 border-t border-(--el-border-soft) pt-3">
+          <span className="mr-auto text-[15px] font-semibold text-(--el-text-strong)">
+            {t('importTitle')}
+          </span>
+          <Link
+            href="/onboarding/migrate"
+            className={cn(
+              buttonVariants({ size: 'md' }),
+              'ml-auto border-transparent bg-(--el-showcase-decision) text-(--el-showcase-decision-text) no-underline hover:bg-(--el-showcase-decision) hover:brightness-105',
+            )}
+          >
+            <span>{t('importProject')}</span>
+            <ArrowRight className="size-4" aria-hidden="true" />
+          </Link>
+        </div>
+      )}
     </>
   );
 }

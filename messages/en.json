@@ -6881,8 +6881,7 @@
       "hintDefault": "A few sentences is enough. Motir asks about the rest.",
       "hintCarried": "Add or refine anything before you continue — the discovery chat takes it from here.",
       "importTitle": "Already have a project?",
-      "importDesc": "Motir reads your code, tasks and history before changing anything, then plans what's next. You decide what ships.",
-      "importCta": "We can vibe it too"
+      "importProject": "Import project"
     },
     "import": {
       "title": "Import an existing project",

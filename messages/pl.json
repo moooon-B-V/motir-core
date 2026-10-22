@@ -6881,8 +6881,7 @@
       "hintDefault": "Wystarczy kilka zdań. O resztę Motir zapyta.",
       "hintCarried": "Dodaj lub dopracuj cokolwiek przed kontynuacją — dalej przejmie to czat odkrywczy.",
       "importTitle": "Masz już projekt?",
-      "importDesc": "Motir czyta Twój kod, zadania i historię, zanim cokolwiek zmieni, a potem planuje kolejne kroki. To Ty decydujesz, co trafia do wydania.",
-      "importCta": "Jego też zvibe’ujemy"
+      "importProject": "Importuj projekt"
     },
     "import": {
       "title": "Importuj istniejący projekt",
