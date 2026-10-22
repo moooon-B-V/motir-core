@@ -1,5 +1,17 @@
 # @motir/design-system
 
+## 0.17.0
+
+### Minor Changes
+
+- 8c7aacf: New role tokens for the Motir mark at work (MOTIR-9212 · MOTIR-9213). `--el-mark-wave-1..3` are the three hues the mark cycles through while it flows on the ink circle (`--el-accent`): each wave hue (`--el-showcase-wave-1..3`) mixed toward the ink on the circle (`--el-accent-text`), 35% hue in the base and 60% in the Motir palette, light and dark. The raw wave hues fall to 1.00:1 on the circle in the palettes whose accent is a wave hue; these keep 3:1 (WCAG 1.4.11) for each role, every blend between two neighbours and every point of the ramp toward the ink, in every palette and theme. No existing token moves.
+
+## 0.16.0
+
+### Minor Changes
+
+- 853486a: A `zh-Hant` font set for Traditional Chinese (MOTIR-9239). The registry gains `zh-tw`, served by Noto Sans TC, Noto Serif TC and LXGW WenKai TC, and `resolveFontSet` now tries the full language tag before its primary subtag, so `zh-TW` resolves to the Traditional set instead of falling back to the Simplified one. `theme.css` adds `[lang]:lang(zh-TW)` blocks that select the Traditional faces. No existing set or token changes.
+
 ## 0.15.1
 
 ### Patch Changes

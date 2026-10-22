@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import {
+  FONT_SET_EXTRA_LOCALES,
   FONT_SET_LOCALES,
   FONT_SET_REGISTRY,
   FONT_SET_ROLES,
@@ -10,6 +11,7 @@ import {
   LOCALE_FONT_SET,
   fontSetMemberVar,
   fontSetPickAttributes,
+  isFontSetLanguage,
   isFontSetLocale,
   resolveFontSet,
   resolveFontSetMember,
@@ -20,7 +22,8 @@ import {
 // MOTIR-7843 — the locale → font-set registry. The EXPECTED rows below are
 // copied by hand from docs/typography/font-sets.md as committed in 144b53826
 // (MOTIR-7841), NOT derived from the registry: a check computed from the thing
-// it checks always passes. Change a row in both places or neither.
+// it checks always passes. Change a row in both places or neither. The zh-Hant
+// set and the zh-tw row were added to both by MOTIR-9239.
 const EXPECTED_LOCALE_SET: Record<string, string> = {
   en: 'latin',
   de: 'latin',
@@ -33,6 +36,7 @@ const EXPECTED_LOCALE_SET: Record<string, string> = {
   zh: 'zh-Hans',
   ja: 'ja',
   ko: 'ko',
+  'zh-tw': 'zh-Hant',
 };
 
 // set → role → [default, ...every member id, in the doc's order], plus each
@@ -56,6 +60,17 @@ const EXPECTED_SETS: Record<
       ],
     },
     mono: { default: 'noto-sans-sc', members: [['noto-sans-sc', false]] },
+  },
+  'zh-Hant': {
+    sans: { default: 'noto-sans-tc', members: [['noto-sans-tc', false]] },
+    serif: {
+      default: 'noto-serif-tc',
+      members: [
+        ['noto-serif-tc', false],
+        ['lxgw-wenkai-tc', false],
+      ],
+    },
+    mono: { default: 'noto-sans-tc', members: [['noto-sans-tc', false]] },
   },
   ja: {
     sans: {
@@ -111,7 +126,13 @@ describe('font-set registry shape', () => {
       'pl',
       'pt',
     ]);
-    expect(Object.keys(LOCALE_FONT_SET)).toEqual([...FONT_SET_LOCALES]);
+    expect(FONT_SET_EXTRA_LOCALES).toEqual(['zh-tw']);
+    expect(Object.keys(LOCALE_FONT_SET)).toEqual([...FONT_SET_LOCALES, ...FONT_SET_EXTRA_LOCALES]);
+  });
+
+  it('draws zh and zh-tw in two different sets', () => {
+    expect(LOCALE_FONT_SET['zh-tw']).toBe('zh-Hant');
+    expect(LOCALE_FONT_SET['zh-tw']).not.toBe(LOCALE_FONT_SET.zh);
   });
 
   it('sends every locale to a registered set, and zh / ja / ko to three different ones', () => {
@@ -154,6 +175,12 @@ describe('font-set registry shape', () => {
     expect(fontSetMemberVar('ja', 'sans', 'noto-sans-jp')).toBe('--font-set-ja-sans-noto-sans-jp');
     expect(fontSetMemberVar('ja', 'mono', 'noto-sans-jp')).toBe('--font-set-ja-sans-noto-sans-jp');
     expect(fontSetMemberVar('ja', 'sans', 'not-a-member')).toBeNull();
+    expect(fontSetMemberVar('zh-Hant', 'serif', 'lxgw-wenkai-tc')).toBe(
+      '--font-set-zh-Hant-serif-lxgw-wenkai-tc',
+    );
+    expect(fontSetMemberVar('zh-Hant', 'mono', 'noto-sans-tc')).toBe(
+      fontSetMemberVar('zh-Hant', 'sans', 'noto-sans-tc'),
+    );
   });
 
   it('records each google member with its next/font export name', () => {
@@ -163,7 +190,10 @@ describe('font-set registry shape', () => {
     });
     expect(FONT_SET_REGISTRY.latin.cjk).toBe(false);
     expect(
-      FONT_SET_REGISTRY.ja.cjk && FONT_SET_REGISTRY.ko.cjk && FONT_SET_REGISTRY['zh-Hans'].cjk,
+      FONT_SET_REGISTRY.ja.cjk &&
+        FONT_SET_REGISTRY.ko.cjk &&
+        FONT_SET_REGISTRY['zh-Hans'].cjk &&
+        FONT_SET_REGISTRY['zh-Hant'].cjk,
     ).toBe(true);
   });
 });
@@ -202,6 +232,16 @@ describe('resolveFontSet', () => {
     expect(resolveFontSet('zh-Hans').id).toBe('zh-Hans');
     expect(resolveFontSet('zh').id).toBe('zh-Hans');
     expect(resolveFontSet('KO').id).toBe('ko');
+    expect(resolveFontSet('zh-CN').id).toBe('zh-Hans');
+  });
+
+  it('tries the whole tag before the primary subtag (MOTIR-9239)', () => {
+    expect(resolveFontSet('zh-TW').id).toBe('zh-Hant');
+    expect(resolveFontSet('zh_tw').id).toBe('zh-Hant');
+    expect(resolveFontSet('ZH-tw').id).toBe('zh-Hant');
+    expect(resolveFontSet(' zh-TW ').id).toBe('zh-Hant');
+    // No script or region heuristic: those reach zh-Hant through a zh-TW page.
+    expect(resolveFontSet('zh-HK').id).toBe('zh-Hans');
   });
 
   it('falls back to Latin for an empty or unknown tag, and the guard tells the two apart', () => {
@@ -210,10 +250,16 @@ describe('resolveFontSet', () => {
     expect(isFontSetLocale('xx')).toBe(false);
     expect(isFontSetLocale('pl')).toBe(true);
     expect(isFontSetLocale(undefined)).toBe(false);
+    expect(isFontSetLocale('zh-tw')).toBe(false);
+    expect(isFontSetLanguage('zh-tw')).toBe(true);
+    expect(isFontSetLanguage('pl')).toBe(true);
+    expect(isFontSetLanguage('zh-hk')).toBe(false);
+    expect(isFontSetLanguage(42)).toBe(false);
   });
 
   it('gives each CJK set the lang tag the app renders on <html>', () => {
     expect(FONT_SET_REGISTRY['zh-Hans'].lang).toBe('zh');
+    expect(FONT_SET_REGISTRY['zh-Hant'].lang).toBe('zh-TW');
     expect(FONT_SET_REGISTRY.ja.lang).toBe('ja');
     expect(FONT_SET_REGISTRY.ko.lang).toBe('ko');
     expect(FONT_SET_REGISTRY.latin.lang).toBeNull();
@@ -247,6 +293,10 @@ describe('fontSetPickAttributes', () => {
     expect(fontSetPickAttributes('ko', 'nanum-gothic')).toEqual({
       'data-font-set-sans': 'nanum-gothic',
     });
+    expect(fontSetPickAttributes('zh-tw', 'lxgw-wenkai-tc')).toEqual({
+      'data-font-set-serif': 'lxgw-wenkai-tc',
+    });
+    expect(fontSetPickAttributes('zh-tw', 'noto-serif-tc')).toEqual({});
   });
 
   it('returns nothing for a default, null, an unknown id or another set’s member', () => {
@@ -274,7 +324,7 @@ describe('fontSetPickAttributes', () => {
       ),
     );
     let seen = 0;
-    for (const locale of FONT_SET_LOCALES) {
+    for (const locale of [...FONT_SET_LOCALES, ...FONT_SET_EXTRA_LOCALES]) {
       const set = FONT_SET_REGISTRY[LOCALE_FONT_SET[locale]];
       for (const role of FONT_SET_ROLES) {
         for (const m of set.roles[role].members as readonly FontSetMember[]) {

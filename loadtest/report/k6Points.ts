@@ -53,12 +53,44 @@ export interface CountRow {
   n: number;
 }
 
+/** One agent-mix class's steady-window counts by outcome and `ok` latency samples (ms). */
+export interface MixCell {
+  outcomes: Record<string, number>;
+  samples: number[];
+}
+
+/** k6's `scenario` tag on a reader point → the reader sub-class it names. */
+export const READER_SUBCLASSES: Readonly<Record<string, string>> = {
+  reader_tab: 'tab',
+  reader_browse: 'browse',
+};
+
+/**
+ * The agent-mix classes one judged point counts toward (mix.ts): an MCP point its
+ * `group`, a run point `run`, a reader point `readers` and — when k6's `scenario`
+ * tag names one — `readers.tab` / `readers.browse` as well. The held stream and the
+ * run recycle step are in none, as they are not in served throughput.
+ */
+export function mixClassesOf(
+  source: Source,
+  label: string,
+  tags: Readonly<Record<string, string>>,
+): string[] {
+  if (source === 'mcp') return [label];
+  if (source === 'run') return label === RECYCLE_STEP ? [] : ['run'];
+  if (label === STREAM_ROUTE) return [];
+  const sub = READER_SUBCLASSES[tags['scenario'] ?? ''];
+  return sub ? ['readers', `readers.${sub}`] : ['readers'];
+}
+
 export interface PointsAggregate {
   steadySeconds: number;
   /** Steady-window counts, one row per (source, label, detail, outcome). */
   counts: CountRow[];
   /** Steady-window `ok` latency samples (ms), keyed `source:label:detail`. */
   latency: Map<string, number[]>;
+  /** Steady-window counts and `ok` latency per agent-mix class (`mixClassesOf`). */
+  mix: Map<string, MixCell>;
   /** Steady-window `retry_after_seconds` samples. */
   retryAfter: number[];
   /** Whole run. */
@@ -93,6 +125,7 @@ export async function aggregatePoints(
 ): Promise<PointsAggregate> {
   const counts = new Map<string, CountRow>();
   const latency = new Map<string, number[]>();
+  const mix = new Map<string, MixCell>();
   const retryAfter: number[] = [];
   const streams = {
     stream_opened: 0,
@@ -154,8 +187,14 @@ export async function aggregatePoints(
     }
     const label = tags[spec!.label] ?? 'unknown';
     const detail = spec!.source === 'mcp' ? (tags['tool'] ?? 'unknown') : label;
+    const outcome = tags['outcome'] ?? 'unknown';
+    for (const c of mixClassesOf(spec!.source, label, tags)) {
+      const cell = mix.get(c) ?? { outcomes: {}, samples: [] };
+      if (counter) cell.outcomes[outcome] = (cell.outcomes[outcome] ?? 0) + value;
+      else cell.samples.push(value);
+      mix.set(c, cell);
+    }
     if (counter) {
-      const outcome = tags['outcome'] ?? 'unknown';
       const k = `${counter.source}\u0000${label}\u0000${detail}\u0000${outcome}`;
       const row = counts.get(k) ?? { source: counter.source, label, detail, outcome, n: 0 };
       row.n += value;
@@ -171,6 +210,7 @@ export async function aggregatePoints(
     steadySeconds: (steady.end - steady.start) / 1000,
     counts: [...counts.values()],
     latency,
+    mix,
     retryAfter,
     streams,
     http503,
