@@ -6,10 +6,11 @@ says; these files fix **which words** each language uses for Motir's own nouns,
 so the person adding a key next year writes the same word the catalogue already
 uses. (Story MOTIR-7730 · MOTIR-7744.)
 
-| file                                                                                      | what it is                                                                                                                      |
-| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `ja.json` `ko.json` `de.json` `fr.json` `es.json` `it.json` `nl.json` `pl.json` `pt.json` | the glossaries for the nine languages added by MOTIR-7730 (`pt` is Brazilian Portuguese)                                        |
-| `zh.json`                                                                                 | the **reference column**: the terms `messages/zh.json` already uses, each cited by key path. It records; it decides nothing new |
+| file                                                                                      | what it is                                                                                                                                                                              |
+| ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ja.json` `ko.json` `de.json` `fr.json` `es.json` `it.json` `nl.json` `pl.json` `pt.json` | the glossaries for the nine languages added by MOTIR-7730 (`pt` is Brazilian Portuguese)                                                                                                |
+| `zh.json`                                                                                 | the **reference column**: the terms `messages/zh.json` already uses, each cited by key path. It records; it decides nothing new                                                         |
+| `zh-tw.json`                                                                              | Traditional Chinese in **Taiwan** usage, for motir.co's `/zh-tw` (MOTIR-8937 · MOTIR-9238). motir-core ships no `zh-tw` app catalogue yet; the file exists for motir-marketing's mirror |
 
 The files live in this subdirectory on purpose: catalogues are addressed as
 `messages/${locale}.json`, and `tsconfig.json` includes `messages/*.json`, so a
@@ -42,6 +43,9 @@ The catalogue script (`scripts/i18n/`) loads and validates exactly this shape:
 - `terms` is keyed by the English term, and **every file carries the same key
   set**. Each term has a `translation` and a `source` saying where it was
   checked; `note` says why, and says so when no reference could be reached.
+  `zh-tw.json` also carries the motir.co product names (`nav.productItems.*`)
+  and the `vibe coding` / `Vibe the project` slogans, which motir-marketing's
+  copy test reads from the glossary.
 
 ## The rules every catalogue follows
 
@@ -54,6 +58,6 @@ The catalogue script (`scripts/i18n/`) loads and validates exactly this shape:
   lists those words. "Card" stays correct for a **payment card** and a **UI
   panel**; `allowedSenses` says so.
 - **A new catalogue key is translated under these terms.** When you add a key
-  to `messages/en.json`, its ten translations use the words recorded here. If a
+  to `messages/en.json`, its translations use the words recorded here. If a
   term is missing or wrong, change it here first, in the same pull request, and
   say why in its `note`.
