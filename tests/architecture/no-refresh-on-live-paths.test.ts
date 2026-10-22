@@ -142,11 +142,6 @@ const ALLOWED: readonly Allowed[] = [
     reason: "the reader's OWN save of a How to test they wrote.",
   },
   {
-    file: 'app/(authed)/_components/ReportWidgetModal.tsx',
-    symbol: 'handleSubmit',
-    reason: "the reader's OWN submit of a report (the triage inbox is a server read).",
-  },
-  {
     file: 'app/(authed)/items/[key]/_components/translation/TranslationProvider.tsx',
     symbol: 'refresh',
     reason:
