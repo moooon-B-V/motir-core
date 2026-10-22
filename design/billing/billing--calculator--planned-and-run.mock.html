@@ -1314,6 +1314,198 @@
         outline-offset: 3px;
         border-radius: var(--radius-control);
       }
+
+      /* ── Added by this delta (MOTIR-9225): the larger-pool offer in the answer, from MOTIR-8988 ── */
+      .lp-row {
+        display: flex;
+        align-items: stretch;
+        gap: 12px;
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        padding-bottom: 6px;
+      }
+      .lp-card {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        flex: 1 0 0;
+        min-width: 10rem;
+        scroll-snap-align: start;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        padding: var(--spacing-card-padding);
+        box-shadow: var(--shadow-card);
+      }
+      .lp-card.accent {
+        border-color: var(--el-accent);
+      }
+      .lp-card.solo {
+        flex: 0 1 22rem;
+      }
+      .lp-top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .lp-name {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .lp-use {
+        min-height: 2.75rem;
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .lp-price {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        color: var(--el-text);
+      }
+      .lp-sub {
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .lp-alot {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .lp-ladder,
+      .lp-seat,
+      .lp-cap {
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .lp-act {
+        margin-top: auto;
+        padding-top: 4px;
+      }
+      .lp-act .btn {
+        width: 100%;
+      }
+      .lp-key {
+        display: block;
+        margin: 8px 0 0;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .lp-more {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 12px;
+        padding: var(--spacing-card-padding);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-tint-sky);
+      }
+      .lp-more p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .lp-more b {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 2px;
+      }
+      .lp-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 12px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-link);
+      }
+      .lp-toggle svg {
+        width: 14px;
+        height: 14px;
+      }
+      .lp-notice {
+        margin: 0;
+        padding: 10px 12px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .lp-reason {
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .lp-strip {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 16px;
+        padding: var(--spacing-card-padding);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .lp-topup {
+        margin-top: 16px;
+        padding: var(--spacing-card-padding);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .lp-cad {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 0 0 12px;
+      }
+      .lp-h {
+        margin: 16px 0 4px;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .lp-offer {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: var(--spacing-card-padding);
+        border: 1px solid var(--el-accent);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-card);
+      }
+      .lp-offer .btn {
+        width: 100%;
+      }
+      .lp-narrow {
+        max-width: 375px;
+      }
+      .is-new {
+        outline: 2px dashed var(--el-accent);
+        outline-offset: 3px;
+      }
     </style>
   </head>
   <body>
@@ -1321,10 +1513,10 @@
       <div>
         <h1>Calculator, delta — items planned in Motir and items run on Motir (MOTIR-9225)</h1>
         <p>
-          Three panels: the two ranges · the priced-range line in the answer · both ranges at 0
-          refused. The category group, the plan block and everything else in the answer ship
-          unchanged. Mono lines name the i18n key each string takes.
-          <b>Every figure is illustrative.</b>
+          Four panels: the two ranges · the priced-range line in the answer · both ranges at 0
+          refused · the answer offering the larger pool. The category group, the plan block and
+          everything else in the answer ship unchanged. Mono lines name the i18n key each string
+          takes. <b>Every figure is illustrative.</b>
         </p>
       </div>
       <button class="toggle" onclick="toggleTheme()">Toggle dark</button>
@@ -1643,6 +1835,157 @@
                     Nothing is estimated until you ask: enter the ranges, pick one to three
                     categories, then choose Estimate credits.
                   </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      4 · The answer offers the larger pool on the right. With both lanes counted the high end
+      passes Max ×2’s 60,000, so the answer carries the pool, its price and its buy control directly
+      — <b>Choose Pool 80,000</b> opens Checkout from here. Every state of the offer is drawn in
+      <code>billing--larger-pool.mock.html</code> (MOTIR-8988).
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
+          </header>
+          <div class="calc">
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Your usage</h3></div>
+              </div>
+              <div class="card-body fstack">
+                <div class="pr-ranges">
+                  <div class="field">
+                    <span class="flabel">Items planned in Motir a month</span
+                    ><span class="pr-slot">calculator.inputs.plannedLabel</span>
+                    <div class="range">
+                      <div class="rbox">
+                        <span class="rlab">Low</span>
+                        <div class="inp"><span class="val">300</span></div>
+                      </div>
+                      <span class="dash" aria-hidden="true">–</span>
+                      <div class="rbox">
+                        <span class="rlab">High</span>
+                        <div class="inp"><span class="val">500</span></div>
+                      </div>
+                    </div>
+                    <p class="help">A range is fine — the low and high ends of a normal month.</p>
+                    <span class="pr-slot">calculator.inputs.rangeHelp (shipped, unchanged)</span>
+                  </div>
+                  <div class="field">
+                    <span class="flabel">Items run on Motir’s runner a month</span
+                    ><span class="pr-slot">calculator.inputs.runLabel</span>
+                    <div class="range">
+                      <div class="rbox">
+                        <span class="rlab">Low</span>
+                        <div class="inp"><span class="val">40</span></div>
+                      </div>
+                      <span class="dash" aria-hidden="true">–</span>
+                      <div class="rbox">
+                        <span class="rlab">High</span>
+                        <div class="inp"><span class="val">60</span></div>
+                      </div>
+                    </div>
+                    <p class="help">
+                      Items you run on your own agent — Claude Code, Codex — through Motir’s MCP or
+                      CLI use no credits here. Count only the items Motir’s runner builds; 0 is
+                      fine.
+                    </p>
+                    <span class="pr-slot">calculator.inputs.runHelp</span>
+                  </div>
+                </div>
+                <p class="help">Model categories — the shipped group, unchanged (one to three).</p>
+                <span class="srcl"
+                  >the category group is not redrawn here; see
+                  billing--calculator--categories.mock.html S3</span
+                >
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg> Estimate
+                  credits
+                </button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Estimate</h3></div>
+                <span class="pill pill-neutral">Illustrative figures</span>
+              </div>
+              <div class="card-body">
+                <div class="res">
+                  <p class="pr-priced is-new-outline">
+                    Priced for <b>300–500</b> planned in Motir and <b>40–60</b> run on Motir’s
+                    runner a month.
+                  </p>
+                  <span class="pr-slot"
+                    >calculator.result.priced · {plannedLow} {plannedHigh} {runLow} {runHigh} — from
+                    the answer’s echoed ranges</span
+                  >
+                  <p class="estword">This estimate uses one category, so it carries all of it.</p>
+                  <div class="fig">
+                    <p class="rlabel">Credits a month</p>
+                    <p class="famt">61,000 – 74,000</p>
+                    <p class="estword">
+                      This is an estimate for the range you entered: the credits come back as a
+                      range, never one exact figure.
+                    </p>
+                  </div>
+                  <div class="lp-offer is-new" data-testid="calculator-larger">
+                    <div class="lp-top">
+                      <span
+                        class="pill"
+                        style="
+                          background: var(--el-tint-lavender);
+                          color: var(--el-text-strong);
+                          border-color: transparent;
+                        "
+                        >Larger credit pool</span
+                      ><span class="srcl">calculator.result.largerPoolLabel</span>
+                    </div>
+                    <span class="lp-name">Pool 80,000</span>
+                    <p class="lp-cap">
+                      Your estimate is above our largest regular plan, so the answer is a larger
+                      credit pool sized to it: Pool 80,000.
+                    </p>
+                    <div>
+                      <span class="lp-price">$267 / mo</span>
+                      <p class="lp-sub">billed annually · $3,200 / yr</p>
+                      <span
+                        class="pill"
+                        style="
+                          background: var(--el-tint-mint);
+                          color: var(--el-text-strong);
+                          border-color: transparent;
+                        "
+                        >Save $1,480/yr</span
+                      >
+                    </div>
+                    <p class="lp-alot">80,000 credits / mo</p>
+                    <p class="lp-cap">
+                      The pool and its price are worked out from your estimate, so both are an
+                      estimate — the exact amounts are confirmed before anything is charged.
+                    </p>
+                    <p class="lp-seat">
+                      + 1 Motir seat · work items uncapped · one plan for the whole organization
+                    </p>
+                    <button class="btn btn-primary">Choose Pool 80,000</button
+                    ><span class="lp-key">plans.ctaChoose (shipped)</span
+                    ><span class="srcl"
+                      >starts Stripe Checkout here, quantity 1 — no stop on the plans view</span
+                    >
+                  </div>
                 </div>
               </div>
             </div>

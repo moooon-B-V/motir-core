@@ -1803,67 +1803,79 @@ paragraph still carries.
 ## Amendment 2026-10-21 — the larger credit pool plan
 
 Subtask MOTIR-8988, story MOTIR-8986. Mock: **`billing--larger-pool.mock.html`**. It amends
-`billing.mock.html` panel 5 (the Motir AI plans view), the plan row only; that mock is a record and
-is not edited. The rungs, prices and keys are MOTIR-8987's approved record (v2), carried in
-`lib/billing/catalog.ts` as the `larger_pool` band (MOTIR-8990).
+`billing.mock.html` panel 5 (the Motir AI plans view) and the answer of
+`billing--calculator--categories.mock.html` (S9, the larger pool offered). Those mocks are records
+and are not edited. The rungs, prices and keys come from MOTIR-8987's approved record (v2), carried
+in `lib/billing/catalog.ts` as the `larger_pool` band (MOTIR-8990).
 
-### What the card is
+**Redrawn 2026-10-22 after Yue's review.** The first draft put the larger pool on the plans row as
+a fifth card. Yue chose a different flow: the plans view shows the four regular plans and a way
+into the Calculator, the Calculator offers the pool and sells it directly, and an org that holds a
+pool sees that one plan with the regular plans folded away.
 
-The larger pool is **one more `PlanCard`** at the END of the shipped row, in the shipped grammar
-(flex column, `min-width: 10rem`, `--radius-card`, `--spacing-card-padding`, `--shadow-card`, the
-action pinned at the bottom). It is never a standing rung: it renders only when an estimate is in
-context, its high end is above the ladder top (Max ×2, 60,000), and at or below the top band
-(250,000). The rung drawn is the smallest whose pool covers the high end.
+### The flow
 
-- **Recommended moves to it.** While it is offered it carries the row's ONLY Recommended pill;
-  otherwise the catalogue default keeps it.
-- **The caption replaces the ladder line.** The card shows `billing.plans.larger.caption` (the
-  estimate range it was derived from) in the slot the ladder line takes, whether or not the rung is
-  a whole multiple of the rung below (panel 2b).
-- **The basis line** names the plan it is priced from (Max ×2) and follows the cadence
-  (`basis.monthly` / `basis.annual`). `priceEstimate` sits under the price block.
-- **Actions.** No live plan ⇒ Checkout, quantity 1. A smaller live plan ⇒ the shipped
-  change-of-plan control, not a checkout. Held ⇒ marked Current, `captionCurrent`, no buy control,
-  and no other larger pool is drawn.
+1. **Plans view, no pool held (panel 1).** The row shows the four regular plans only, and the
+   catalogue's Recommended stays on Pro. Below the row, ONE **Need more credits?** callout
+   (`--el-tint-sky`) holds a primary **Open the Calculator** button. It opens the Calculator view,
+   as the shipped `calculator.open` button does. A pool card is never drawn on this view for an
+   org that does not hold one.
+2. **Calculator, pool offered (panels 2–5).** When `ceiling.outcome = larger_pool`, the answer on
+   the right carries the offer card. The card shows the pool's name, the shipped `largerPlan`
+   sentence, the price block on the page's cadence, the pool, the shipped `largerPlanEstimate`
+   caveat, the seat line and the buy control. The buy control replaces the shipped "Go to this
+   plan" for this arm:
+   - With no live plan, **Choose Pool N** (`plans.ctaChoose`) starts Checkout from the answer at
+     quantity 1.
+   - With a smaller live plan, **Upgrade to Pool N** (`plans.ctaUpgrade`) opens the shipped
+     `PlanChangeDialog`, followed by the shipped `upgradeNote`.
+   - A read-only manager sees the control disabled and described by `plans.upgrade.disabledReason`.
+3. **Calculator, not an offer (panels 6–7).** If a regular plan covers the estimate, the shipped
+   regular arm and its "Go to this plan" are unchanged. Above the top band, there is no offer card
+   and ONE notice with `plans.larger.aboveBand`.
+4. **Refused (panel 8).** ONE notice inside the answer, above the offer, with the `refused.*`
+   sentence the refusal code selects. The offer stays drawn. No toast.
+5. **Plans view, pool held (panels 9–10).** The title reads **Your plan** and the row shows ONE
+   card: the held pool, marked Current, with `captionCurrent`. A **See all regular plans** toggle
+   (`aria-expanded`, `aria-controls`) unfolds the four regular plans below it, each with the
+   shipped switch control, which moves down at period end. Opened, the toggle reads **Hide regular
+   plans**. The Need more credits? callout stays, worded for a holder (`bodyHeld`).
+6. **Narrow (panel 11).** The Calculator stacks to one column, and the offer and its button take
+   the full width.
 
-### States (panel by panel)
+### Copy — new keys in the `billing` namespace (en)
 
-| Panel | State                             | What renders                                                                                  |
-| ----- | --------------------------------- | --------------------------------------------------------------------------------------------- |
-| 1     | No estimate                       | the four rungs, Pro Recommended, no larger card                                               |
-| 2, 2b | Offered (annual, the row default) | the larger card last, the only Recommended; 2b at a rung that is a whole multiple             |
-| 3     | Upgrade                           | the held plan Current; the larger card carries the change-of-plan control                     |
-| 4     | Current                           | the held larger pool last, Current, `captionCurrent`, no checkout anywhere                    |
-| 5     | The ladder covers it              | the larger card ABSENT, no notice above the row                                               |
-| 6     | Above the top band                | the larger card ABSENT; ONE dashed notice `aboveBand`; the top-up card is the remaining reach |
-| 7     | Read-only manager                 | the card in full, its action disabled, described by the shipped disabled-reason line          |
-| 8     | Monthly                           | the same pool re-priced in the shipped price block; `basis.monthly`                           |
-| 9     | Purchase refused                  | ONE notice above the row with the `refused.*` key the refusal code selects; no toast          |
-| 10    | Loading                           | the shipped skeleton; the larger card adds none                                               |
-| 11    | Read fails                        | the shipped fail-closed error; no larger card beside it                                       |
-| 12    | Narrow (~400px) and dark          | the row scrolls and never wraps; the larger card is reached by scrolling; the caption wraps   |
+| Key                        | en                                                                                                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plans.needMore.title`     | Need more credits?                                                                                                                                      |
+| `plans.needMore.body`      | If your organization uses more than {plan}'s {credits} credits a month, estimate your usage and the Calculator offers a larger credit pool sized to it. |
+| `plans.needMore.bodyHeld`  | If your organization outgrows its {credits} credits a month, estimate your usage and the Calculator offers a larger pool sized to it.                   |
+| `plans.needMore.action`    | Open the Calculator                                                                                                                                     |
+| `plans.yourPlanTitle`      | Your plan                                                                                                                                               |
+| `plans.larger.showRegular` | See all regular plans                                                                                                                                   |
+| `plans.larger.hideRegular` | Hide regular plans                                                                                                                                      |
 
-### Copy
-
-Every string the card adds is a key of the words card (MOTIR-8993), drawn in the mock as a dashed
-mono slot naming the key: `billing.plans.larger.{caption, captionCurrent, priceEstimate, basis.monthly, basis.annual, bought,
-aboveBand, refused.atOrBelowCeiling, refused.notForSale, refused.offerExpired, refused.quantity}`.
-This asset writes no wording. The plan's name is not a key: it is the catalog entry's `name`, the
-same string the Stripe product carries. The refusal code → key map is MOTIR-8997's.
+Every other string is shipped: `calculator.result.{largerPoolLabel, largerPlan, largerPlanEstimate,
+upgradeNote, goToPlan}`, `plans.{ctaChoose, ctaUpgrade, ctaCurrent, upgrade.disabledReason}` and
+`plans.larger.{captionCurrent, aboveBand, refused.*}` (MOTIR-8993). The plans-row keys
+`plans.larger.{caption, priceEstimate, basis.*}` are no longer drawn, because the row never offers a
+pool. The new keys land in every locale with the UI card (MOTIR-8997).
 
 ### Colour + shape roles (additions only)
 
-| Element                     | Role                                                                                         |
-| --------------------------- | -------------------------------------------------------------------------------------------- |
-| Larger card                 | the shipped PlanCard: `--el-surface`, `--el-accent` border (recommended or current)          |
-| Caption · basis · seat line | `--el-text-secondary` (clears AA on every surface)                                           |
-| Above-band / refused notice | `--el-surface-soft`, dashed `--el-border-strong`, `--radius-card`, text `--el-text`          |
-| Pills                       | Current and Recommended `--el-tint-lavender`, save `--el-tint-mint`, text `--el-text-strong` |
+| Element                     | Role                                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Need more credits? callout  | `--el-tint-sky` fill, `--el-border-soft`, `--radius-card`, `--spacing-card-padding`, text `--el-text-strong` |
+| Offer card in the answer    | `--el-surface`, `--el-accent` border, `--radius-card`, `--spacing-card-padding`, `--shadow-card`             |
+| Held pool card              | the shipped PlanCard, Current: `--el-accent` border                                                          |
+| See all regular plans       | text button, `--el-link`, `--radius-control`, `--spacing-control-x/y`                                        |
+| Captions · seat line        | `--el-text-secondary`                                                                                        |
+| Above-band / refused notice | `--el-surface-soft`, dashed `--el-border-strong`, `--radius-card`, text `--el-text`                          |
 
 ### The numbers are illustrative
 
-The estimate (61,000–74,000), the rung drawn (Pool 80,000; Pool 120,000 in 2b) and its prices are
-illustrative. The rungs and prices are read from `lib/billing/catalog.ts`.
+The estimate (61,000–74,000), the rung drawn (Pool 80,000) and its prices are illustrative. The
+rungs and prices are read from `lib/billing/catalog.ts`.
 
 ## Amendment 2026-10-21 — the Calculator's planned and run ranges
 
@@ -1912,6 +1924,12 @@ words are MOTIR-9224's to land in every locale.
 | Low / High inputs | the shipped `Input`: `--radius-input`, `--spacing-input-x/y`, `--el-border`; invalid `--el-danger` edge |
 | Both-zero refusal | `--el-danger-on-surface`, `role="alert"`, the shipped error line                                        |
 | Priced-range line | `--el-surface-soft` fill, `--el-border-soft`, `--radius-control`, text `--el-text`                      |
+
+### The answer offers the larger pool (panel 4, added 2026-10-22)
+
+When both lanes together pass Max ×2, the answer on the right carries the larger-pool offer and its
+buy control directly. That card and all its states are specified in § "Amendment 2026-10-21 — the
+larger credit pool plan" and drawn in `billing--larger-pool.mock.html`.
 
 ### The numbers are illustrative
 

@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- DELTA 2026-10-21 (MOTIR-8988): the larger credit pool plan on Billing & plans. Amends billing.mock.html; that file is a record and is not edited. -->
+<!-- DELTA 2026-10-22 (MOTIR-8988, redrawn after review): the larger credit pool plan — offered by the Calculator, held on Billing & plans. Amends billing.mock.html and billing--calculator--categories.mock.html; those files are records and are not edited. -->
 <html lang="en" data-theme="light">
   <head>
     <meta charset="utf-8" />
@@ -7,22 +7,13 @@
     <title>Design mock · BILLING, delta — the larger credit pool plan (MOTIR-8988)</title>
     <!--
       DESIGN ASSET (HTML mockup, DELTA) — subtask MOTIR-8988, story MOTIR-8986.
-      A DELTA. It amends design/billing/billing.mock.html, the Motir AI plans view (panel 5) ONLY.
-      The earlier mock is a record and is not edited. No plan-delivery delta for the ladder story
-      is in design/billing/ at run time (listed 2026-10-21), so this file's row drawing is the only one.
-
-      IT COMPOSES, and defines no new grammar: the shipped PlanCard grammar and measurements
-      (BillingClient.tsx: flex column, min-width 10rem, --radius-card, --spacing-card-padding,
-      --shadow-card, accent border when current or recommended, the action pinned at the bottom),
-      the row (items-stretch, gap 12px, snap-x, overflow-x auto), the card / button / pill / token
-      block the deltas in this area carry (copied from billing--calculator--categories.mock.html),
-      the cadence Segmented with its save badge, the free-trial strip slot above the row, the top-up
-      card below it, and the dashed notice block.
-
-      The row's cadence control DEFAULTS TO ANNUAL, so the arrival (panel 2) is drawn at annual.
-      Every string the larger plan adds is a KEY of the words card (MOTIR-8993), drawn as a dashed
-      slot naming that key; this asset writes no wording. EVERY NUMBER IS ILLUSTRATIVE (the rungs
-      are MOTIR-8987's record and lib/billing/catalog.ts).
+      Redrawn 2026-10-22 after Yue's review of the first draft: the plans view shows the four
+      regular plans and a "Need more credits?" way into the Calculator; the Calculator's answer
+      offers the larger pool and buys it directly; an org holding a pool sees that one plan, with
+      the regular plans behind "See all regular plans".
+      Composes the shipped PlanCard grammar (BillingClient.tsx), the shipped Calculator answer
+      (CalculatorView.tsx) and the classes of billing--calculator--categories.mock.html.
+      English is drawn; the mono line under each string names its key. EVERY FIGURE IS ILLUSTRATIVE.
     -->
     <style>
       /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
@@ -176,55 +167,6 @@
         --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
         --color-hairline: #2a2a2a;
         --el-overlay-scrim: #000000a6;
-      }
-      /* re-emitted so a nested data-theme='dark' scope (panel 12) recomputes Tier 3 (MOTIR-3592) */
-      [data-theme='dark'] {
-        --el-page-bg: var(--color-background);
-        --el-text: var(--color-foreground);
-        --el-text-strong: var(--color-charcoal);
-        --el-text-secondary: var(--color-slate);
-        --el-text-tertiary: var(--color-steel);
-        --el-text-muted: var(--color-muted-foreground);
-        --el-text-faint: var(--color-stone);
-        --el-text-inverted: var(--color-background);
-        --el-surface: var(--color-surface);
-        --el-surface-soft: var(--color-surface-soft);
-        --el-muted: var(--color-muted);
-        --el-border: var(--color-border);
-        --el-border-soft: var(--color-hairline-soft);
-        --el-border-strong: var(--color-hairline-strong);
-        --el-link: var(--color-link);
-        --el-link-pressed: var(--color-link-pressed);
-        --el-accent: var(--color-primary);
-        --el-accent-pressed: var(--color-primary-pressed);
-        --el-accent-text: var(--color-primary-foreground);
-        --el-accent-on-surface: var(--color-primary);
-        --el-highlight: var(--color-accent);
-        --el-success: var(--color-success);
-        --el-warning: var(--color-warning);
-        --el-danger: var(--color-destructive);
-        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
-        --el-info: var(--color-info);
-        --el-tint-peach: var(--color-tint-peach);
-        --el-tint-rose: var(--color-tint-rose);
-        --el-tint-mint: var(--color-tint-mint);
-        --el-tint-lavender: var(--color-tint-lavender);
-        --el-tint-sky: var(--color-tint-sky);
-        --el-tint-yellow: var(--color-tint-yellow);
-        --el-type-epic: var(--color-accent);
-        --el-type-story: var(--color-accent-green);
-        --el-type-task: var(--color-info);
-        --el-type-bug: var(--color-destructive);
-        --el-type-subtask: var(--color-accent-teal);
-        --el-overlay-scrim: #00000066;
-        --el-danger-surface: var(--color-tint-rose);
-        --el-danger-surface-text: var(--color-charcoal);
-        --el-input-border: var(--color-hairline-strong);
-        --el-input-disabled-bg: var(--color-muted);
-        --el-input-disabled-border: var(--color-hairline);
-        --el-input-disabled-text: var(--color-slate);
-        --el-tabnav-track: var(--color-surface);
-        --el-tabnav-active: var(--color-primary);
       }
 
       /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
@@ -1343,7 +1285,7 @@
         }
       }
 
-      /* ── Added by this delta (MOTIR-8988): the plan row at the shipped PlanCard grammar ── */
+      /* ── Added by this delta (MOTIR-8988, redrawn 2026-10-22): the plan row, the way in, the offer ── */
       .lp-row {
         display: flex;
         align-items: stretch;
@@ -1368,8 +1310,12 @@
       .lp-card.accent {
         border-color: var(--el-accent);
       }
+      .lp-card.solo {
+        flex: 0 1 22rem;
+      }
       .lp-top {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         justify-content: space-between;
         gap: 8px;
@@ -1401,12 +1347,9 @@
         font-weight: 600;
         color: var(--el-text-strong);
       }
-      .lp-ladder {
-        margin: 0;
-        font-size: 11.5px;
-        color: var(--el-text-secondary);
-      }
-      .lp-seat {
+      .lp-ladder,
+      .lp-seat,
+      .lp-cap {
         margin: 0;
         font-size: 12px;
         color: var(--el-text-secondary);
@@ -1418,24 +1361,55 @@
       .lp-act .btn {
         width: 100%;
       }
-      /* a string slot owned by the words card (MOTIR-8993): the KEY, never wording */
-      .lp-slot {
+      .lp-key {
         display: block;
-        margin: 0;
-        padding: 6px 8px;
-        border: 1px dashed var(--el-border-strong);
-        border-radius: var(--radius-control);
-        background: var(--el-surface-soft);
+        margin: 8px 0 0;
         font-family: var(--font-mono);
         font-size: 11px;
-        line-height: 1.45;
         color: var(--el-text-secondary);
       }
-      .lp-notice {
+      .lp-more {
         display: flex;
-        gap: 8px;
-        align-items: flex-start;
-        margin: 0 0 12px;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 12px;
+        padding: var(--spacing-card-padding);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-tint-sky);
+      }
+      .lp-more p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .lp-more b {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 2px;
+      }
+      .lp-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 12px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-link);
+      }
+      .lp-toggle svg {
+        width: 14px;
+        height: 14px;
+      }
+      .lp-notice {
+        margin: 0;
         padding: 10px 12px;
         border: 1px dashed var(--el-border-strong);
         border-radius: var(--radius-card);
@@ -1444,18 +1418,22 @@
         color: var(--el-text);
       }
       .lp-reason {
-        margin: 0 0 8px;
+        margin: 0;
         font-size: 12px;
         color: var(--el-text-secondary);
       }
       .lp-strip {
-        margin: 0 0 12px;
-        padding: 10px 12px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 16px;
+        padding: var(--spacing-card-padding);
         border: 1px solid var(--el-border-soft);
         border-radius: var(--radius-card);
-        background: var(--el-tint-sky);
+        background: var(--el-surface);
         font-size: 13px;
-        color: var(--el-text-strong);
+        color: var(--el-text-secondary);
       }
       .lp-topup {
         margin-top: 16px;
@@ -1473,49 +1451,62 @@
         margin: 0 0 12px;
       }
       .lp-h {
-        margin: 0 0 4px;
+        margin: 16px 0 4px;
         font-size: 18px;
         font-weight: 600;
         color: var(--el-text);
       }
-      .lp-skel {
-        height: 220px;
-        flex: 1 0 0;
-        min-width: 10rem;
+      .lp-offer {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: var(--spacing-card-padding);
+        border: 1px solid var(--el-accent);
         border-radius: var(--radius-card);
-        background: var(--el-muted);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-card);
+      }
+      .lp-offer .btn {
+        width: 100%;
       }
       .lp-narrow {
-        max-width: 400px;
+        max-width: 375px;
+      }
+      .is-new {
+        outline: 2px dashed var(--el-accent);
+        outline-offset: 3px;
       }
     </style>
   </head>
   <body>
     <div class="review-head">
       <div>
-        <h1>Billing &amp; plans, delta — the larger credit pool plan (MOTIR-8988)</h1>
+        <h1>Billing &amp; plans + Calculator, delta — the larger credit pool plan (MOTIR-8988)</h1>
         <p>
-          Amends <code>billing.mock.html</code>'s plans view only. The larger pool is one more card
-          at the end of the shipped row, offered only from an estimate. Twelve states (panel 2
-          carries a 2b neighbour): no estimate · offered · upgrade · current · two NOT-AN-OFFER
-          absences · read-only · cadence · refused · loading · read fails · narrow + dark. Dashed
-          mono slots are the words card's keys (MOTIR-8993). <b>Every figure is illustrative.</b>
+          The plans view shows the four regular plans and a <b>Need more credits?</b> way into the
+          Calculator. The Calculator’s answer offers the larger pool and buys it directly. An org
+          holding a pool sees only that plan, with the regular plans behind
+          <b>See all regular plans</b>. Eleven panels. Dashed outline = what this delta adds.
+          <b>Every figure is illustrative.</b>
         </p>
       </div>
       <button class="toggle" onclick="toggleTheme()">Toggle dark</button>
     </div>
     <div class="panel-label">
-      1 · No estimate in context — the plans view opened cold. Four standing rungs, the catalogue
-      default (Pro) carries <b>Recommended</b>, no larger card, no caption.
+      1 · Billing &amp; plans — the four regular plans, and the way in. The row shows ONLY the four
+      regular plans (Pro carries the catalogue’s Recommended). Below the row, ONE
+      <b>Need more credits?</b> callout sends the owner to the Calculator. No pool card is ever
+      drawn on this view for an org that does not hold one.
     </div>
     <div class="panel">
       <div class="stage">
         <div class="page">
           <header class="vhead">
-            <span class="crumb">Organization · Acme · Motir AI</span>
+            <p class="crumb">Organization · Acme · Motir AI</p>
             <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
           </header>
-          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
+          <div style="margin-top: 16px"></div>
+          <p class="lp-h">Choose your plan</p>
           <div class="lp-cad">
             <div class="seg" role="group" aria-label="Billing cadence">
               <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
@@ -1530,11 +1521,10 @@
               >Save ~33%</span
             >
           </div>
-          <div class="lp-strip">The free-trial strip (shipped) — 300 credits · one-time</div>
           <div class="lp-row">
             <div class="lp-card">
               <div class="lp-top"><span class="lp-name">Standard</span></div>
-              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
+              <p class="lp-use">For a small team planning its first projects.</p>
               <div>
                 <span class="lp-price">$17 / mo</span>
                 <p class="lp-sub">billed annually · $200 / yr</p>
@@ -1567,7 +1557,7 @@
                   >Recommended</span
                 >
               </div>
-              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
+              <p class="lp-use">For a team planning and running work every week.</p>
               <div>
                 <span class="lp-price">$50 / mo</span>
                 <p class="lp-sub">billed annually · $600 / yr</p>
@@ -1582,15 +1572,13 @@
                 >
               </div>
               <p class="lp-alot">15,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
+              <p class="lp-ladder">3× Standard the rung below</p>
               <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-primary btn-sm">Upgrade to Pro</button>
-              </div>
+              <div class="lp-act"><button class="btn btn-primary btn-sm">Choose Pro</button></div>
             </div>
             <div class="lp-card">
               <div class="lp-top"><span class="lp-name">Max</span></div>
-              <p class="lp-use">billing.plans.tiers.max.useCase</p>
+              <p class="lp-use">For several teams, or heavy hosted runs.</p>
               <div>
                 <span class="lp-price">$100 / mo</span>
                 <p class="lp-sub">billed annually · $1,200 / yr</p>
@@ -1605,13 +1593,13 @@
                 >
               </div>
               <p class="lp-alot">30,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
+              <p class="lp-ladder">2× Pro the rung below</p>
               <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
               <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Max</button></div>
             </div>
             <div class="lp-card">
               <div class="lp-top"><span class="lp-name">Max ×2</span></div>
-              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
+              <p class="lp-use">For an organization running Motir all day.</p>
               <div>
                 <span class="lp-price">$200 / mo</span>
                 <p class="lp-sub">billed annually · $2,400 / yr</p>
@@ -1626,13 +1614,27 @@
                 >
               </div>
               <p class="lp-alot">60,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
+              <p class="lp-ladder">2× Max the rung below</p>
               <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
               <div class="lp-act">
                 <button class="btn btn-secondary btn-sm">Choose Max ×2</button>
               </div>
             </div>
           </div>
+          <div class="lp-more is-new">
+            <p>
+              <b>Need more credits?</b>If your organization uses more than Max ×2’s 60,000 credits a
+              month, estimate your usage and the Calculator offers a larger credit pool sized to it.
+            </p>
+            <button class="btn btn-primary btn-sm">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg> Open the
+              Calculator
+            </button>
+          </div>
+          <span class="lp-key"
+            >plans.needMore.title · plans.needMore.body {plan} {credits} · plans.needMore.action —
+            NEW keys</span
+          >
           <div class="lp-topup">
             <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
               >the shipped top-up card, unchanged</span
@@ -1642,1665 +1644,1525 @@
       </div>
     </div>
     <div class="panel-label">
-      2 · Offered — the arrival. Estimate high end above the ladder top, no live plan: the row ends
-      with the larger pool, which carries the <b>only</b> Recommended pill. Drawn at the row
-      default, annual.
+      2 · Calculator — the larger pool offered, no live plan. The estimate’s high end passes 60,000:
+      the answer on the right carries the pool, its price on the page’s cadence, and the buy control
+      itself. <b>Choose Pool 80,000</b> opens Checkout straight from the answer.
     </div>
     <div class="panel">
       <div class="stage">
         <div class="page">
           <header class="vhead">
-            <span class="crumb">Organization · Acme · Motir AI</span>
-            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
           </header>
-          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
-          <div class="lp-cad">
-            <div class="seg" role="group" aria-label="Billing cadence">
-              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
-            </div>
-            <span
-              class="pill"
-              style="
-                background: var(--el-tint-mint);
-                color: var(--el-text-strong);
-                border-color: transparent;
-              "
-              >Save ~33%</span
-            >
-          </div>
-          <div class="lp-strip">The free-trial strip (shipped) — 300 credits · one-time</div>
-          <div class="lp-row">
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Standard</span></div>
-              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
-              <div>
-                <span class="lp-price">$17 / mo</span>
-                <p class="lp-sub">billed annually · $200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $100/yr</span
-                >
+          <div class="calc">
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Your usage</h3></div>
               </div>
-              <p class="lp-alot">5,000 credits / mo</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm">Choose Standard</button>
+              <div class="card-body fstack">
+                <div class="field">
+                  <span class="flabel">Items planned in Motir a month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">Low</span>
+                      <div class="inp"><span class="val">300</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">High</span>
+                      <div class="inp"><span class="val">500</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="field">
+                  <span class="flabel">Items run on Motir’s runner a month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">Low</span>
+                      <div class="inp"><span class="val">40</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">High</span>
+                      <div class="inp"><span class="val">60</span></div>
+                    </div>
+                  </div>
+                </div>
+                <p class="help">Categories: Balanced · Flagship (the shipped group).</p>
+                <span class="srcl">the form is MOTIR-9225’s; it is not redrawn here</span>
               </div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Pro</span></div>
-              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
-              <div>
-                <span class="lp-price">$50 / mo</span>
-                <p class="lp-sub">billed annually · $600 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $300/yr</span
-                >
-              </div>
-              <p class="lp-alot">15,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Pro</button></div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max</span></div>
-              <p class="lp-use">billing.plans.tiers.max.useCase</p>
-              <div>
-                <span class="lp-price">$100 / mo</span>
-                <p class="lp-sub">billed annually · $1,200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $600/yr</span
-                >
-              </div>
-              <p class="lp-alot">30,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Max</button></div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
-              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
-              <div>
-                <span class="lp-price">$200 / mo</span>
-                <p class="lp-sub">billed annually · $2,400 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $1,200/yr</span
-                >
-              </div>
-              <p class="lp-alot">60,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm">Choose Max ×2</button>
-              </div>
-            </div>
-            <div class="lp-card accent is-new">
-              <div class="lp-top">
-                <span class="lp-name">Pool 80,000</span
-                ><span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-lavender);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Recommended</span
-                >
-              </div>
-              <p class="lp-use">
-                <span class="srcl"
-                  >name = catalog data (MOTIR-8990): it states the monthly pool</span
-                >
-              </p>
-              <div>
-                <span class="lp-price">$267 / mo</span>
-                <p class="lp-sub">billed annually · $3,200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $1,480/yr</span
-                >
-              </div>
-              <span class="lp-slot">billing.plans.larger.priceEstimate</span
-              ><span class="lp-slot">billing.plans.larger.basis.annual · {plan} Max ×2</span>
-              <p class="lp-alot">80,000 credits / mo</p>
-              <span class="lp-slot"
-                >billing.plans.larger.caption · {low} 61,000 · {high} 74,000 — an estimate; it moves
-                with the estimate</span
-              ><span class="srcl"
-                >the caption takes the ladder-line slot; no ladder line on this card</span
-              >
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-primary btn-sm">Upgrade to Pool 80,000</button
-                ><span class="srcl">starts Checkout · quantity 1</span>
-              </div>
-            </div>
-          </div>
-          <div class="lp-topup">
-            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
-              >the shipped top-up card, unchanged</span
-            >
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="panel-label">
-      2b · The same arrival at a rung that IS a whole multiple of the rung below (120,000 = 2 × Max
-      ×2): the caption still replaces the ladder line, so the suppression follows the caption, not
-      the multiple.
-    </div>
-    <div class="panel">
-      <div class="stage">
-        <div class="page">
-          <header class="vhead">
-            <span class="crumb">Organization · Acme · Motir AI</span>
-            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
-          </header>
-          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
-          <div class="lp-cad">
-            <div class="seg" role="group" aria-label="Billing cadence">
-              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
-            </div>
-            <span
-              class="pill"
-              style="
-                background: var(--el-tint-mint);
-                color: var(--el-text-strong);
-                border-color: transparent;
-              "
-              >Save ~33%</span
-            >
-          </div>
-          <div class="lp-row">
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Standard</span></div>
-              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
-              <div>
-                <span class="lp-price">$17 / mo</span>
-                <p class="lp-sub">billed annually · $200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $100/yr</span
-                >
-              </div>
-              <p class="lp-alot">5,000 credits / mo</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm">Choose Standard</button>
-              </div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Pro</span></div>
-              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
-              <div>
-                <span class="lp-price">$50 / mo</span>
-                <p class="lp-sub">billed annually · $600 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $300/yr</span
-                >
-              </div>
-              <p class="lp-alot">15,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Pro</button></div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max</span></div>
-              <p class="lp-use">billing.plans.tiers.max.useCase</p>
-              <div>
-                <span class="lp-price">$100 / mo</span>
-                <p class="lp-sub">billed annually · $1,200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $600/yr</span
-                >
-              </div>
-              <p class="lp-alot">30,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Max</button></div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
-              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
-              <div>
-                <span class="lp-price">$200 / mo</span>
-                <p class="lp-sub">billed annually · $2,400 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $1,200/yr</span
-                >
-              </div>
-              <p class="lp-alot">60,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm">Choose Max ×2</button>
-              </div>
-            </div>
-            <div class="lp-card accent is-new">
-              <div class="lp-top">
-                <span class="lp-name">Pool 120,000</span
-                ><span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-lavender);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Recommended</span
-                >
-              </div>
-              <p class="lp-use">
-                <span class="srcl"
-                  >name = catalog data (MOTIR-8990): it states the monthly pool</span
-                >
-              </p>
-              <div>
-                <span class="lp-price">$400 / mo</span>
-                <p class="lp-sub">billed annually · $4,800 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $2,040/yr</span
-                >
-              </div>
-              <span class="lp-slot">billing.plans.larger.priceEstimate</span
-              ><span class="lp-slot">billing.plans.larger.basis.annual · {plan} Max ×2</span>
-              <p class="lp-alot">120,000 credits / mo</p>
-              <span class="lp-slot"
-                >billing.plans.larger.caption · {low} 61,000 · {high} 74,000 — an estimate; it moves
-                with the estimate</span
-              ><span class="srcl"
-                >the caption takes the ladder-line slot; no ladder line on this card</span
-              >
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-primary btn-sm">Upgrade to Pool 120,000</button
-                ><span class="srcl">starts Checkout · quantity 1</span>
-              </div>
-            </div>
-          </div>
-          <div class="lp-topup">
-            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
-              >the shipped top-up card, unchanged</span
-            >
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="panel-label">
-      3 · Upgrade — the same estimate, the org holds a smaller live plan (Standard): the larger card
-      carries the shipped change-of-plan control in the action slot, not a checkout.
-    </div>
-    <div class="panel">
-      <div class="stage">
-        <div class="page">
-          <header class="vhead">
-            <span class="crumb">Organization · Acme · Motir AI</span>
-            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
-          </header>
-          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
-          <div class="lp-cad">
-            <div class="seg" role="group" aria-label="Billing cadence">
-              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
-            </div>
-            <span
-              class="pill"
-              style="
-                background: var(--el-tint-mint);
-                color: var(--el-text-strong);
-                border-color: transparent;
-              "
-              >Save ~33%</span
-            >
-          </div>
-          <div class="lp-row">
-            <div class="lp-card accent">
-              <div class="lp-top">
-                <span class="lp-name">Standard</span
-                ><span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-lavender);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Current</span
-                >
-              </div>
-              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
-              <div>
-                <span class="lp-price">$17 / mo</span>
-                <p class="lp-sub">billed annually · $200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $100/yr</span
-                >
-              </div>
-              <p class="lp-alot">5,000 credits / mo</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm" disabled>Current plan</button>
-              </div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Pro</span></div>
-              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
-              <div>
-                <span class="lp-price">$50 / mo</span>
-                <p class="lp-sub">billed annually · $600 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $300/yr</span
-                >
-              </div>
-              <p class="lp-alot">15,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm">Upgrade to Pro</button>
-              </div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max</span></div>
-              <p class="lp-use">billing.plans.tiers.max.useCase</p>
-              <div>
-                <span class="lp-price">$100 / mo</span>
-                <p class="lp-sub">billed annually · $1,200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $600/yr</span
-                >
-              </div>
-              <p class="lp-alot">30,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm">Upgrade to Max</button>
-              </div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
-              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
-              <div>
-                <span class="lp-price">$200 / mo</span>
-                <p class="lp-sub">billed annually · $2,400 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $1,200/yr</span
-                >
-              </div>
-              <p class="lp-alot">60,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm">Upgrade to Max ×2</button>
-              </div>
-            </div>
-            <div class="lp-card accent is-new">
-              <div class="lp-top">
-                <span class="lp-name">Pool 80,000</span
-                ><span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-lavender);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Recommended</span
-                >
-              </div>
-              <p class="lp-use">
-                <span class="srcl"
-                  >name = catalog data (MOTIR-8990): it states the monthly pool</span
-                >
-              </p>
-              <div>
-                <span class="lp-price">$267 / mo</span>
-                <p class="lp-sub">billed annually · $3,200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $1,480/yr</span
-                >
-              </div>
-              <span class="lp-slot">billing.plans.larger.priceEstimate</span
-              ><span class="lp-slot">billing.plans.larger.basis.annual · {plan} Max ×2</span>
-              <p class="lp-alot">80,000 credits / mo</p>
-              <span class="lp-slot"
-                >billing.plans.larger.caption · {low} 61,000 · {high} 74,000 — an estimate; it moves
-                with the estimate</span
-              ><span class="srcl"
-                >the caption takes the ladder-line slot; no ladder line on this card</span
-              >
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-primary btn-sm">Upgrade to Pool 80,000</button
-                ><span class="srcl">the shipped change-of-plan control — no checkout</span>
-              </div>
-            </div>
-          </div>
-          <div class="lp-topup">
-            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
-              >the shipped top-up card, unchanged</span
-            >
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="panel-label">
-      4 · Current — the org holds the larger pool the estimate derives (or a larger one). The held
-      card renders LAST, marked Current, with the held caption; no checkout control anywhere; no
-      other larger pool is drawn.
-    </div>
-    <div class="panel">
-      <div class="stage">
-        <div class="page">
-          <header class="vhead">
-            <span class="crumb">Organization · Acme · Motir AI</span>
-            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
-          </header>
-          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
-          <div class="lp-cad">
-            <div class="seg" role="group" aria-label="Billing cadence">
-              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
-            </div>
-            <span
-              class="pill"
-              style="
-                background: var(--el-tint-mint);
-                color: var(--el-text-strong);
-                border-color: transparent;
-              "
-              >Save ~33%</span
-            >
-          </div>
-          <div class="lp-row">
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Standard</span></div>
-              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
-              <div>
-                <span class="lp-price">$17 / mo</span>
-                <p class="lp-sub">billed annually · $200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $100/yr</span
-                >
-              </div>
-              <p class="lp-alot">5,000 credits / mo</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act"></div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Pro</span></div>
-              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
-              <div>
-                <span class="lp-price">$50 / mo</span>
-                <p class="lp-sub">billed annually · $600 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $300/yr</span
-                >
-              </div>
-              <p class="lp-alot">15,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act"></div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max</span></div>
-              <p class="lp-use">billing.plans.tiers.max.useCase</p>
-              <div>
-                <span class="lp-price">$100 / mo</span>
-                <p class="lp-sub">billed annually · $1,200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $600/yr</span
-                >
-              </div>
-              <p class="lp-alot">30,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act"></div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
-              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
-              <div>
-                <span class="lp-price">$200 / mo</span>
-                <p class="lp-sub">billed annually · $2,400 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $1,200/yr</span
-                >
-              </div>
-              <p class="lp-alot">60,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act"></div>
-            </div>
-            <div class="lp-card accent is-new">
-              <div class="lp-top">
-                <span class="lp-name">Pool 80,000</span
-                ><span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-lavender);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Current</span
-                >
-              </div>
-              <p class="lp-use">
-                <span class="srcl"
-                  >name = catalog data (MOTIR-8990): it states the monthly pool</span
-                >
-              </p>
-              <div>
-                <span class="lp-price">$267 / mo</span>
-                <p class="lp-sub">billed annually · $3,200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $1,480/yr</span
-                >
-              </div>
-              <span class="lp-slot">billing.plans.larger.priceEstimate</span
-              ><span class="lp-slot">billing.plans.larger.basis.annual · {plan} Max ×2</span>
-              <p class="lp-alot">80,000 credits / mo</p>
-              <span class="lp-slot">billing.plans.larger.captionCurrent</span
-              ><span class="srcl"
-                >the caption takes the ladder-line slot; no ladder line on this card</span
-              >
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm" disabled>Current plan</button>
-              </div>
-            </div>
-          </div>
-          <div class="lp-topup">
-            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
-              >the shipped top-up card, unchanged</span
-            >
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="panel-label">
-      5 · NOT AN OFFER — the regular ladder covers the estimate (high end ≤ 60,000). The larger card
-      is ABSENT; no notice above the row; the sentence this owner needs is on the Calculator answer,
-      one surface away.
-    </div>
-    <div class="panel">
-      <div class="stage">
-        <div class="page">
-          <header class="vhead">
-            <span class="crumb">Organization · Acme · Motir AI</span>
-            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
-          </header>
-          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
-          <div class="lp-cad">
-            <div class="seg" role="group" aria-label="Billing cadence">
-              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
-            </div>
-            <span
-              class="pill"
-              style="
-                background: var(--el-tint-mint);
-                color: var(--el-text-strong);
-                border-color: transparent;
-              "
-              >Save ~33%</span
-            >
-          </div>
-          <div class="lp-row">
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Standard</span></div>
-              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
-              <div>
-                <span class="lp-price">$17 / mo</span>
-                <p class="lp-sub">billed annually · $200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $100/yr</span
-                >
-              </div>
-              <p class="lp-alot">5,000 credits / mo</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm">Choose Standard</button>
-              </div>
-            </div>
-            <div class="lp-card accent">
-              <div class="lp-top">
-                <span class="lp-name">Pro</span
-                ><span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-lavender);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Recommended</span
-                >
-              </div>
-              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
-              <div>
-                <span class="lp-price">$50 / mo</span>
-                <p class="lp-sub">billed annually · $600 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $300/yr</span
-                >
-              </div>
-              <p class="lp-alot">15,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-primary btn-sm">Upgrade to Pro</button>
-              </div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max</span></div>
-              <p class="lp-use">billing.plans.tiers.max.useCase</p>
-              <div>
-                <span class="lp-price">$100 / mo</span>
-                <p class="lp-sub">billed annually · $1,200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $600/yr</span
-                >
-              </div>
-              <p class="lp-alot">30,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Max</button></div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
-              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
-              <div>
-                <span class="lp-price">$200 / mo</span>
-                <p class="lp-sub">billed annually · $2,400 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $1,200/yr</span
-                >
-              </div>
-              <p class="lp-alot">60,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm">Choose Max ×2</button>
-              </div>
-            </div>
-          </div>
-          <div class="lp-topup">
-            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
-              >the shipped top-up card, unchanged</span
-            >
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="panel-label">
-      6 · NOT AN OFFER — the estimate is past the top band (high end above 250,000). The larger card
-      is ABSENT; ONE notice in the slot above the row carries the words card key; Max ×2 is the last
-      plan sold and the top-up card below is the remaining reach.
-    </div>
-    <div class="panel">
-      <div class="stage">
-        <div class="page">
-          <header class="vhead">
-            <span class="crumb">Organization · Acme · Motir AI</span>
-            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
-          </header>
-          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
-          <div class="lp-cad">
-            <div class="seg" role="group" aria-label="Billing cadence">
-              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
-            </div>
-            <span
-              class="pill"
-              style="
-                background: var(--el-tint-mint);
-                color: var(--el-text-strong);
-                border-color: transparent;
-              "
-              >Save ~33%</span
-            >
-          </div>
-          <div class="lp-notice is-new">
-            <span class="lp-slot"
-              >billing.plans.larger.aboveBand · {excess} 40,000 — the words card's key (MOTIR-8993);
-              this asset writes no wording</span
-            >
-          </div>
-          <div class="lp-row">
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Standard</span></div>
-              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
-              <div>
-                <span class="lp-price">$17 / mo</span>
-                <p class="lp-sub">billed annually · $200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $100/yr</span
-                >
-              </div>
-              <p class="lp-alot">5,000 credits / mo</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm">Choose Standard</button>
-              </div>
-            </div>
-            <div class="lp-card accent">
-              <div class="lp-top">
-                <span class="lp-name">Pro</span
-                ><span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-lavender);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Recommended</span
-                >
-              </div>
-              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
-              <div>
-                <span class="lp-price">$50 / mo</span>
-                <p class="lp-sub">billed annually · $600 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $300/yr</span
-                >
-              </div>
-              <p class="lp-alot">15,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-primary btn-sm">Upgrade to Pro</button>
-              </div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max</span></div>
-              <p class="lp-use">billing.plans.tiers.max.useCase</p>
-              <div>
-                <span class="lp-price">$100 / mo</span>
-                <p class="lp-sub">billed annually · $1,200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $600/yr</span
-                >
-              </div>
-              <p class="lp-alot">30,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Max</button></div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
-              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
-              <div>
-                <span class="lp-price">$200 / mo</span>
-                <p class="lp-sub">billed annually · $2,400 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $1,200/yr</span
-                >
-              </div>
-              <p class="lp-alot">60,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm">Choose Max ×2</button>
-              </div>
-            </div>
-          </div>
-          <div class="lp-topup">
-            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
-              >the shipped top-up card, unchanged</span
-            >
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="panel-label">
-      7 · Read-only manager — an admin who may view but not buy: the larger card in full, its action
-      disabled and described by the shipped disabled-reason line; the caption still renders.
-    </div>
-    <div class="panel">
-      <div class="stage">
-        <div class="page">
-          <header class="vhead">
-            <span class="crumb">Organization · Acme · Motir AI</span>
-            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
-          </header>
-          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
-          <div class="lp-cad">
-            <div class="seg" role="group" aria-label="Billing cadence">
-              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
-            </div>
-            <span
-              class="pill"
-              style="
-                background: var(--el-tint-mint);
-                color: var(--el-text-strong);
-                border-color: transparent;
-              "
-              >Save ~33%</span
-            >
-          </div>
-          <p class="lp-reason" id="lp-reason">
-            Only owners and admins can change the plan<span class="srcl"
-              >billing.plans.upgrade.disabledReason · aria-describedby on every disabled
-              action</span
-            >
-          </p>
-          <div class="lp-row">
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Standard</span></div>
-              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
-              <div>
-                <span class="lp-price">$17 / mo</span>
-                <p class="lp-sub">billed annually · $200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $100/yr</span
-                >
-              </div>
-              <p class="lp-alot">5,000 credits / mo</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm" disabled aria-describedby="lp-reason">
-                  Choose Standard
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg> Estimate
+                  credits
                 </button>
               </div>
             </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Pro</span></div>
-              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
-              <div>
-                <span class="lp-price">$50 / mo</span>
-                <p class="lp-sub">billed annually · $600 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $300/yr</span
-                >
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Estimate</h3></div>
+                <span class="pill pill-neutral">Illustrative figures</span>
               </div>
-              <p class="lp-alot">15,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm" disabled aria-describedby="lp-reason">
-                  Choose Pro
-                </button>
-              </div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max</span></div>
-              <p class="lp-use">billing.plans.tiers.max.useCase</p>
-              <div>
-                <span class="lp-price">$100 / mo</span>
-                <p class="lp-sub">billed annually · $1,200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $600/yr</span
-                >
-              </div>
-              <p class="lp-alot">30,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm" disabled aria-describedby="lp-reason">
-                  Choose Max
-                </button>
-              </div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
-              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
-              <div>
-                <span class="lp-price">$200 / mo</span>
-                <p class="lp-sub">billed annually · $2,400 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $1,200/yr</span
-                >
-              </div>
-              <p class="lp-alot">60,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm" disabled aria-describedby="lp-reason">
-                  Choose Max ×2
-                </button>
+              <div class="card-body">
+                <div class="res">
+                  <p class="estword">
+                    Priced for 300–500 planned in Motir and 40–60 run on Motir’s runner a month.
+                  </p>
+                  <div class="fig">
+                    <p class="rlabel">Credits a month</p>
+                    <p class="famt">61,000 – 74,000</p>
+                    <p class="estword">
+                      This is an estimate for the range you entered: the credits come back as a
+                      range, never one exact figure.
+                    </p>
+                  </div>
+                  <div class="lp-offer is-new" data-testid="calculator-larger">
+                    <div class="lp-top">
+                      <span
+                        class="pill"
+                        style="
+                          background: var(--el-tint-lavender);
+                          color: var(--el-text-strong);
+                          border-color: transparent;
+                        "
+                        >Larger credit pool</span
+                      ><span class="srcl">calculator.result.largerPoolLabel</span>
+                    </div>
+                    <span class="lp-name">Pool 80,000</span>
+                    <p class="lp-cap">
+                      Your estimate is above our largest regular plan, so the answer is a larger
+                      credit pool sized to it: Pool 80,000.
+                    </p>
+                    <div>
+                      <span class="lp-price">$267 / mo</span>
+                      <p class="lp-sub">billed annually · $3,200 / yr</p>
+                      <span
+                        class="pill"
+                        style="
+                          background: var(--el-tint-mint);
+                          color: var(--el-text-strong);
+                          border-color: transparent;
+                        "
+                        >Save $1,480/yr</span
+                      >
+                    </div>
+                    <p class="lp-alot">80,000 credits / mo</p>
+                    <p class="lp-cap">
+                      The pool and its price are worked out from your estimate, so both are an
+                      estimate — the exact amounts are confirmed before anything is charged.
+                    </p>
+                    <p class="lp-seat">
+                      + 1 Motir seat · work items uncapped · one plan for the whole organization
+                    </p>
+                    <button class="btn btn-primary">Choose Pool 80,000</button
+                    ><span class="lp-key">plans.ctaChoose (shipped)</span
+                    ><span class="srcl"
+                      >starts Stripe Checkout here, quantity 1 — no stop on the plans view</span
+                    >
+                  </div>
+                </div>
               </div>
             </div>
-            <div class="lp-card accent is-new">
-              <div class="lp-top">
-                <span class="lp-name">Pool 80,000</span
-                ><span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-lavender);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Recommended</span
-                >
-              </div>
-              <p class="lp-use">
-                <span class="srcl"
-                  >name = catalog data (MOTIR-8990): it states the monthly pool</span
-                >
-              </p>
-              <div>
-                <span class="lp-price">$267 / mo</span>
-                <p class="lp-sub">billed annually · $3,200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $1,480/yr</span
-                >
-              </div>
-              <span class="lp-slot">billing.plans.larger.priceEstimate</span
-              ><span class="lp-slot">billing.plans.larger.basis.annual · {plan} Max ×2</span>
-              <p class="lp-alot">80,000 credits / mo</p>
-              <span class="lp-slot"
-                >billing.plans.larger.caption · {low} 61,000 · {high} 74,000 — an estimate; it moves
-                with the estimate</span
-              ><span class="srcl"
-                >the caption takes the ladder-line slot; no ladder line on this card</span
-              >
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-primary btn-sm" disabled aria-describedby="lp-reason">
-                  Upgrade to Pool 80,000</button
-                ><span class="srcl">starts Checkout · quantity 1</span>
-              </div>
-            </div>
-          </div>
-          <div class="lp-topup">
-            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
-              >the shipped top-up card, unchanged</span
-            >
           </div>
         </div>
       </div>
     </div>
     <div class="panel-label">
-      8 · Cadence switched — Monthly. The same derived pool, re-priced in the shipped price-block
-      shape; the basis line follows the cadence. (Panel 2 is the annual default.)
+      3 · Calculator — the larger pool offered to an org on a smaller live plan (Standard). The same
+      answer; the control is <b>Upgrade to Pool 80,000</b>, which opens the shipped change-of-plan
+      dialog instead of Checkout. The shipped upgrade note follows.
     </div>
     <div class="panel">
       <div class="stage">
         <div class="page">
           <header class="vhead">
-            <span class="crumb">Organization · Acme · Motir AI</span>
-            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
           </header>
-          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
-          <div class="lp-cad">
-            <div class="seg" role="group" aria-label="Billing cadence">
-              <button class="seg-opt on">Monthly</button><button class="seg-opt">Annual</button>
-            </div>
-          </div>
-          <div class="lp-row">
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Standard</span></div>
-              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
-              <div>
-                <span class="lp-price">$25 / mo</span>
-                <p class="lp-sub">$300 / yr · Save $100 with annual</p>
+          <div class="calc">
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Your usage</h3></div>
               </div>
-              <p class="lp-alot">5,000 credits / mo</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm">Choose Standard</button>
+              <div class="card-body fstack">
+                <div class="field">
+                  <span class="flabel">Items planned in Motir a month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">Low</span>
+                      <div class="inp"><span class="val">300</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">High</span>
+                      <div class="inp"><span class="val">500</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="field">
+                  <span class="flabel">Items run on Motir’s runner a month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">Low</span>
+                      <div class="inp"><span class="val">40</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">High</span>
+                      <div class="inp"><span class="val">60</span></div>
+                    </div>
+                  </div>
+                </div>
+                <p class="help">Categories: Balanced · Flagship (the shipped group).</p>
+                <span class="srcl">the form is MOTIR-9225’s; it is not redrawn here</span>
               </div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Pro</span></div>
-              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
-              <div>
-                <span class="lp-price">$75 / mo</span>
-                <p class="lp-sub">$900 / yr · Save $300 with annual</p>
-              </div>
-              <p class="lp-alot">15,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Pro</button></div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max</span></div>
-              <p class="lp-use">billing.plans.tiers.max.useCase</p>
-              <div>
-                <span class="lp-price">$150 / mo</span>
-                <p class="lp-sub">$1,800 / yr · Save $600 with annual</p>
-              </div>
-              <p class="lp-alot">30,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Max</button></div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
-              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
-              <div>
-                <span class="lp-price">$300 / mo</span>
-                <p class="lp-sub">$3,600 / yr · Save $1,200 with annual</p>
-              </div>
-              <p class="lp-alot">60,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm">Choose Max ×2</button>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg> Estimate
+                  credits
+                </button>
               </div>
             </div>
-            <div class="lp-card accent is-new">
-              <div class="lp-top">
-                <span class="lp-name">Pool 80,000</span
-                ><span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-lavender);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Recommended</span
-                >
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Estimate</h3></div>
+                <span class="pill pill-neutral">Illustrative figures</span>
               </div>
-              <p class="lp-use">
-                <span class="srcl"
-                  >name = catalog data (MOTIR-8990): it states the monthly pool</span
-                >
-              </p>
-              <div>
-                <span class="lp-price">$390 / mo</span>
-                <p class="lp-sub">$4,680 / yr · Save $1,480 with annual</p>
-              </div>
-              <span class="lp-slot">billing.plans.larger.priceEstimate</span
-              ><span class="lp-slot">billing.plans.larger.basis.monthly · {plan} Max ×2</span>
-              <p class="lp-alot">80,000 credits / mo</p>
-              <span class="lp-slot"
-                >billing.plans.larger.caption · {low} 61,000 · {high} 74,000 — an estimate; it moves
-                with the estimate</span
-              ><span class="srcl"
-                >the caption takes the ladder-line slot; no ladder line on this card</span
-              >
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-primary btn-sm">Upgrade to Pool 80,000</button
-                ><span class="srcl">starts Checkout · quantity 1</span>
+              <div class="card-body">
+                <div class="res">
+                  <p class="estword">
+                    Priced for 300–500 planned in Motir and 40–60 run on Motir’s runner a month.
+                  </p>
+                  <div class="fig">
+                    <p class="rlabel">Credits a month</p>
+                    <p class="famt">61,000 – 74,000</p>
+                    <p class="estword">
+                      This is an estimate for the range you entered: the credits come back as a
+                      range, never one exact figure.
+                    </p>
+                  </div>
+                  <div class="lp-offer is-new" data-testid="calculator-larger">
+                    <div class="lp-top">
+                      <span
+                        class="pill"
+                        style="
+                          background: var(--el-tint-lavender);
+                          color: var(--el-text-strong);
+                          border-color: transparent;
+                        "
+                        >Larger credit pool</span
+                      ><span class="srcl">calculator.result.largerPoolLabel</span>
+                    </div>
+                    <span class="lp-name">Pool 80,000</span>
+                    <p class="lp-cap">
+                      Your estimate is above our largest regular plan, so the answer is a larger
+                      credit pool sized to it: Pool 80,000.
+                    </p>
+                    <div>
+                      <span class="lp-price">$267 / mo</span>
+                      <p class="lp-sub">billed annually · $3,200 / yr</p>
+                      <span
+                        class="pill"
+                        style="
+                          background: var(--el-tint-mint);
+                          color: var(--el-text-strong);
+                          border-color: transparent;
+                        "
+                        >Save $1,480/yr</span
+                      >
+                    </div>
+                    <p class="lp-alot">80,000 credits / mo</p>
+                    <p class="lp-cap">
+                      The pool and its price are worked out from your estimate, so both are an
+                      estimate — the exact amounts are confirmed before anything is charged.
+                    </p>
+                    <p class="lp-seat">
+                      + 1 Motir seat · work items uncapped · one plan for the whole organization
+                    </p>
+                    <button class="btn btn-primary">Upgrade to Pool 80,000</button
+                    ><span class="lp-key">plans.ctaUpgrade (shipped)</span
+                    ><span class="srcl"
+                      >opens the shipped change-of-plan dialog (PlanChangeDialog): days left priced,
+                      extra credits once, one subscription</span
+                    >
+                  </div>
+                  <p class="lp-notice">
+                    Upgrading mid-period is priced for the days left in your period. The plans view
+                    shows the amount before anything is charged.
+                  </p>
+                  <span class="lp-key">calculator.result.upgradeNote (shipped)</span>
+                </div>
               </div>
             </div>
-          </div>
-          <div class="lp-topup">
-            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
-              >the shipped top-up card, unchanged</span
-            >
           </div>
         </div>
       </div>
     </div>
     <div class="panel-label">
-      9 · Purchase refused — the buy was pressed and the boundary refused: ONE notice above the row
-      carries the sentence the refusal code selects; the offer stays drawn unchanged; no toast. (The
-      target; today the island toasts.)
+      4 · Calculator — read-only manager. The offer in full; its control disabled and described by
+      the shipped disabled-reason line.
     </div>
     <div class="panel">
       <div class="stage">
         <div class="page">
           <header class="vhead">
-            <span class="crumb">Organization · Acme · Motir AI</span>
-            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
           </header>
-          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
-          <div class="lp-cad">
-            <div class="seg" role="group" aria-label="Billing cadence">
-              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
-            </div>
-            <span
-              class="pill"
-              style="
-                background: var(--el-tint-mint);
-                color: var(--el-text-strong);
-                border-color: transparent;
-              "
-              >Save ~33%</span
-            >
-          </div>
-          <div class="lp-notice is-new">
-            <span class="lp-slot"
-              >billing.plans.larger.refused.{atOrBelowCeiling | notForSale | offerExpired |
-              quantity} — chosen by the refusal code (MOTIR-8997 maps code → key)</span
-            >
-          </div>
-          <div class="lp-row">
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Standard</span></div>
-              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
-              <div>
-                <span class="lp-price">$17 / mo</span>
-                <p class="lp-sub">billed annually · $200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $100/yr</span
-                >
+          <div class="calc">
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Your usage</h3></div>
               </div>
-              <p class="lp-alot">5,000 credits / mo</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm">Choose Standard</button>
+              <div class="card-body fstack">
+                <div class="field">
+                  <span class="flabel">Items planned in Motir a month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">Low</span>
+                      <div class="inp"><span class="val">300</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">High</span>
+                      <div class="inp"><span class="val">500</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="field">
+                  <span class="flabel">Items run on Motir’s runner a month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">Low</span>
+                      <div class="inp"><span class="val">40</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">High</span>
+                      <div class="inp"><span class="val">60</span></div>
+                    </div>
+                  </div>
+                </div>
+                <p class="help">Categories: Balanced · Flagship (the shipped group).</p>
+                <span class="srcl">the form is MOTIR-9225’s; it is not redrawn here</span>
               </div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Pro</span></div>
-              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
-              <div>
-                <span class="lp-price">$50 / mo</span>
-                <p class="lp-sub">billed annually · $600 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $300/yr</span
-                >
-              </div>
-              <p class="lp-alot">15,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Pro</button></div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max</span></div>
-              <p class="lp-use">billing.plans.tiers.max.useCase</p>
-              <div>
-                <span class="lp-price">$100 / mo</span>
-                <p class="lp-sub">billed annually · $1,200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $600/yr</span
-                >
-              </div>
-              <p class="lp-alot">30,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Max</button></div>
-            </div>
-            <div class="lp-card">
-              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
-              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
-              <div>
-                <span class="lp-price">$200 / mo</span>
-                <p class="lp-sub">billed annually · $2,400 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $1,200/yr</span
-                >
-              </div>
-              <p class="lp-alot">60,000 credits / mo</p>
-              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-secondary btn-sm">Choose Max ×2</button>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg> Estimate
+                  credits
+                </button>
               </div>
             </div>
-            <div class="lp-card accent is-new">
-              <div class="lp-top">
-                <span class="lp-name">Pool 80,000</span
-                ><span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-lavender);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Recommended</span
-                >
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Estimate</h3></div>
+                <span class="pill pill-neutral">Illustrative figures</span>
               </div>
-              <p class="lp-use">
-                <span class="srcl"
-                  >name = catalog data (MOTIR-8990): it states the monthly pool</span
-                >
-              </p>
-              <div>
-                <span class="lp-price">$267 / mo</span>
-                <p class="lp-sub">billed annually · $3,200 / yr</p>
-                <span
-                  class="pill"
-                  style="
-                    background: var(--el-tint-mint);
-                    color: var(--el-text-strong);
-                    border-color: transparent;
-                  "
-                  >Save $1,480/yr</span
-                >
-              </div>
-              <span class="lp-slot">billing.plans.larger.priceEstimate</span
-              ><span class="lp-slot">billing.plans.larger.basis.annual · {plan} Max ×2</span>
-              <p class="lp-alot">80,000 credits / mo</p>
-              <span class="lp-slot"
-                >billing.plans.larger.caption · {low} 61,000 · {high} 74,000 — an estimate; it moves
-                with the estimate</span
-              ><span class="srcl"
-                >the caption takes the ladder-line slot; no ladder line on this card</span
-              >
-              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-              <div class="lp-act">
-                <button class="btn btn-primary btn-sm">Upgrade to Pool 80,000</button
-                ><span class="srcl">starts Checkout · quantity 1</span>
+              <div class="card-body">
+                <div class="res">
+                  <p class="estword">
+                    Priced for 300–500 planned in Motir and 40–60 run on Motir’s runner a month.
+                  </p>
+                  <div class="fig">
+                    <p class="rlabel">Credits a month</p>
+                    <p class="famt">61,000 – 74,000</p>
+                    <p class="estword">
+                      This is an estimate for the range you entered: the credits come back as a
+                      range, never one exact figure.
+                    </p>
+                  </div>
+                  <div class="lp-offer is-new" data-testid="calculator-larger">
+                    <div class="lp-top">
+                      <span
+                        class="pill"
+                        style="
+                          background: var(--el-tint-lavender);
+                          color: var(--el-text-strong);
+                          border-color: transparent;
+                        "
+                        >Larger credit pool</span
+                      ><span class="srcl">calculator.result.largerPoolLabel</span>
+                    </div>
+                    <span class="lp-name">Pool 80,000</span>
+                    <p class="lp-cap">
+                      Your estimate is above our largest regular plan, so the answer is a larger
+                      credit pool sized to it: Pool 80,000.
+                    </p>
+                    <div>
+                      <span class="lp-price">$267 / mo</span>
+                      <p class="lp-sub">billed annually · $3,200 / yr</p>
+                      <span
+                        class="pill"
+                        style="
+                          background: var(--el-tint-mint);
+                          color: var(--el-text-strong);
+                          border-color: transparent;
+                        "
+                        >Save $1,480/yr</span
+                      >
+                    </div>
+                    <p class="lp-alot">80,000 credits / mo</p>
+                    <p class="lp-cap">
+                      The pool and its price are worked out from your estimate, so both are an
+                      estimate — the exact amounts are confirmed before anything is charged.
+                    </p>
+                    <p class="lp-seat">
+                      + 1 Motir seat · work items uncapped · one plan for the whole organization
+                    </p>
+                    <p class="lp-reason" id="lp-reason">
+                      Only owners and admins can change the plan
+                    </p>
+                    <span class="lp-key">plans.upgrade.disabledReason (shipped)</span
+                    ><button class="btn btn-primary" disabled aria-describedby="lp-reason">
+                      Choose Pool 80,000</button
+                    ><span class="lp-key">plans.ctaChoose (shipped)</span
+                    ><span class="srcl"
+                      >starts Stripe Checkout here, quantity 1 — no stop on the plans view</span
+                    >
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-          <div class="lp-topup">
-            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
-              >the shipped top-up card, unchanged</span
-            >
           </div>
         </div>
       </div>
     </div>
     <div class="panel-label">
-      10 · Loading — the shipped billing skeleton. The larger card adds no skeleton of its own; the
-      row is never drawn half-arrived.
+      5 · Calculator — monthly. The same pool, re-priced in the shipped monthly price block when the
+      page’s cadence is Monthly.
     </div>
     <div class="panel">
       <div class="stage">
         <div class="page">
           <header class="vhead">
-            <span class="crumb">Organization · Acme · Motir AI</span>
-            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
           </header>
-          <div class="lp-row" style="margin-top: 16px">
-            <div class="lp-skel" aria-hidden="true"></div>
-            <div class="lp-skel" aria-hidden="true"></div>
-            <div class="lp-skel" aria-hidden="true"></div>
-            <div class="lp-skel" aria-hidden="true"></div>
+          <div class="calc">
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Your usage</h3></div>
+              </div>
+              <div class="card-body fstack">
+                <div class="field">
+                  <span class="flabel">Items planned in Motir a month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">Low</span>
+                      <div class="inp"><span class="val">300</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">High</span>
+                      <div class="inp"><span class="val">500</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="field">
+                  <span class="flabel">Items run on Motir’s runner a month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">Low</span>
+                      <div class="inp"><span class="val">40</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">High</span>
+                      <div class="inp"><span class="val">60</span></div>
+                    </div>
+                  </div>
+                </div>
+                <p class="help">Categories: Balanced · Flagship (the shipped group).</p>
+                <span class="srcl">the form is MOTIR-9225’s; it is not redrawn here</span>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg> Estimate
+                  credits
+                </button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Estimate</h3></div>
+                <span class="pill pill-neutral">Illustrative figures</span>
+              </div>
+              <div class="card-body">
+                <div class="res">
+                  <p class="estword">
+                    Priced for 300–500 planned in Motir and 40–60 run on Motir’s runner a month.
+                  </p>
+                  <div class="fig">
+                    <p class="rlabel">Credits a month</p>
+                    <p class="famt">61,000 – 74,000</p>
+                    <p class="estword">
+                      This is an estimate for the range you entered: the credits come back as a
+                      range, never one exact figure.
+                    </p>
+                  </div>
+                  <div class="lp-offer is-new" data-testid="calculator-larger">
+                    <div class="lp-top">
+                      <span
+                        class="pill"
+                        style="
+                          background: var(--el-tint-lavender);
+                          color: var(--el-text-strong);
+                          border-color: transparent;
+                        "
+                        >Larger credit pool</span
+                      ><span class="srcl">calculator.result.largerPoolLabel</span>
+                    </div>
+                    <span class="lp-name">Pool 80,000</span>
+                    <p class="lp-cap">
+                      Your estimate is above our largest regular plan, so the answer is a larger
+                      credit pool sized to it: Pool 80,000.
+                    </p>
+                    <div>
+                      <span class="lp-price">$390 / mo</span>
+                      <p class="lp-sub">$4,680 / yr · Save $1,480 with annual</p>
+                    </div>
+                    <p class="lp-alot">80,000 credits / mo</p>
+                    <p class="lp-cap">
+                      The pool and its price are worked out from your estimate, so both are an
+                      estimate — the exact amounts are confirmed before anything is charged.
+                    </p>
+                    <p class="lp-seat">
+                      + 1 Motir seat · work items uncapped · one plan for the whole organization
+                    </p>
+                    <button class="btn btn-primary">Choose Pool 80,000</button
+                    ><span class="lp-key">plans.ctaChoose (shipped)</span
+                    ><span class="srcl"
+                      >starts Stripe Checkout here, quantity 1 — no stop on the plans view</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
     <div class="panel-label">
-      11 · Read fails — the shipped fail-closed error. No partial catalogue, no larger card beside a
-      failed read.
+      6 · Calculator — NOT AN OFFER: a regular plan covers it (high end ≤ 60,000). The shipped
+      regular answer, unchanged; no pool.
     </div>
     <div class="panel">
       <div class="stage">
         <div class="page">
-          <div class="lp-notice">
-            <span
-              >We couldn't load billing. Try again.<span class="srcl"
-                >the shipped fail-closed error state — no plan row, no larger card beside it</span
-              ></span
-            >
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
+          </header>
+          <div class="calc">
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Your usage</h3></div>
+              </div>
+              <div class="card-body fstack">
+                <div class="field">
+                  <span class="flabel">Items planned in Motir a month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">Low</span>
+                      <div class="inp"><span class="val">100</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">High</span>
+                      <div class="inp"><span class="val">200</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="field">
+                  <span class="flabel">Items run on Motir’s runner a month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">Low</span>
+                      <div class="inp"><span class="val">40</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">High</span>
+                      <div class="inp"><span class="val">60</span></div>
+                    </div>
+                  </div>
+                </div>
+                <p class="help">Categories: Balanced · Flagship (the shipped group).</p>
+                <span class="srcl">the form is MOTIR-9225’s; it is not redrawn here</span>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg> Estimate
+                  credits
+                </button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Estimate</h3></div>
+                <span class="pill pill-neutral">Illustrative figures</span>
+              </div>
+              <div class="card-body">
+                <div class="res">
+                  <p class="estword">
+                    Priced for 100–200 planned in Motir and 40–60 run on Motir’s runner a month.
+                  </p>
+                  <div class="fig">
+                    <p class="rlabel">Credits a month</p>
+                    <p class="famt">18,400 – 33,600</p>
+                    <p class="estword">
+                      This is an estimate for the range you entered: the credits come back as a
+                      range, never one exact figure.
+                    </p>
+                  </div>
+                  <div class="recplan">
+                    <p class="rlabel">The plan that fits</p>
+                    <div class="recrow">
+                      <span class="pill pill-tier">Max</span
+                      ><span class="rprice"
+                        ><span class="amt">$1,200</span> <span class="per">/ yr</span></span
+                      >
+                    </div>
+                    <p class="oneplan">
+                      One plan for the whole organization — its credits are shared by everyone.
+                    </p>
+                  </div>
+                  <div><button class="btn btn-secondary btn-sm">Go to this plan</button></div>
+                  <span class="srcl"
+                    >the shipped regular arm and its "Go to this plan", unchanged — no pool is
+                    offered</span
+                  >
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
     <div class="panel-label">
-      12 · Narrow (~400px) and dark — the row scrolls horizontally and never wraps; the larger card
-      is last and reached by scrolling; the caption wraps without clipping. Use “Toggle dark” for
-      the dark board.
+      7 · Calculator — NOT AN OFFER: above the top band (high end past 250,000). No offer card; ONE
+      notice with the shipped words.
     </div>
     <div class="panel">
-      <div data-theme="dark" style="background: var(--el-page-bg); padding: 16px">
-        <div class="stage">
-          <div class="page lp-narrow">
-            <header class="vhead">
-              <span class="crumb">Organization · Acme · Motir AI</span>
-              <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
-            </header>
-            <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
-            <div class="lp-cad">
-              <div class="seg" role="group" aria-label="Billing cadence">
-                <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
+          </header>
+          <div class="calc">
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Your usage</h3></div>
               </div>
+              <div class="card-body fstack">
+                <div class="field">
+                  <span class="flabel">Items planned in Motir a month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">Low</span>
+                      <div class="inp"><span class="val">1,500</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">High</span>
+                      <div class="inp"><span class="val">2,500</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="field">
+                  <span class="flabel">Items run on Motir’s runner a month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">Low</span>
+                      <div class="inp"><span class="val">200</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">High</span>
+                      <div class="inp"><span class="val">300</span></div>
+                    </div>
+                  </div>
+                </div>
+                <p class="help">Categories: Balanced · Flagship (the shipped group).</p>
+                <span class="srcl">the form is MOTIR-9225’s; it is not redrawn here</span>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg> Estimate
+                  credits
+                </button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Estimate</h3></div>
+                <span class="pill pill-neutral">Illustrative figures</span>
+              </div>
+              <div class="card-body">
+                <div class="res">
+                  <p class="estword">
+                    Priced for 1,500–2,500 planned in Motir and 200–300 run on Motir’s runner a
+                    month.
+                  </p>
+                  <div class="fig">
+                    <p class="rlabel">Credits a month</p>
+                    <p class="famt">230,000 – 290,000</p>
+                    <p class="estword">
+                      This is an estimate for the range you entered: the credits come back as a
+                      range, never one exact figure.
+                    </p>
+                  </div>
+                  <p class="lp-notice">
+                    Your estimate is about 40,000 credits a month above the largest pool Motir AI
+                    sells. The largest plan plus a top-up is as far as it goes, so there’s no larger
+                    plan to buy at your estimate.
+                  </p>
+                  <span class="lp-key">plans.larger.aboveBand (shipped words)</span
+                  ><span class="srcl">no offer card; the shipped top-up line follows</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      8 · Calculator — the purchase was refused. ONE notice inside the answer, above the offer, with
+      the sentence the refusal code selects; the offer stays drawn; no toast.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
+          </header>
+          <div class="calc">
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Your usage</h3></div>
+              </div>
+              <div class="card-body fstack">
+                <div class="field">
+                  <span class="flabel">Items planned in Motir a month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">Low</span>
+                      <div class="inp"><span class="val">300</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">High</span>
+                      <div class="inp"><span class="val">500</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="field">
+                  <span class="flabel">Items run on Motir’s runner a month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">Low</span>
+                      <div class="inp"><span class="val">40</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">High</span>
+                      <div class="inp"><span class="val">60</span></div>
+                    </div>
+                  </div>
+                </div>
+                <p class="help">Categories: Balanced · Flagship (the shipped group).</p>
+                <span class="srcl">the form is MOTIR-9225’s; it is not redrawn here</span>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg> Estimate
+                  credits
+                </button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Estimate</h3></div>
+                <span class="pill pill-neutral">Illustrative figures</span>
+              </div>
+              <div class="card-body">
+                <div class="res">
+                  <p class="estword">
+                    Priced for 300–500 planned in Motir and 40–60 run on Motir’s runner a month.
+                  </p>
+                  <div class="fig">
+                    <p class="rlabel">Credits a month</p>
+                    <p class="famt">61,000 – 74,000</p>
+                    <p class="estword">
+                      This is an estimate for the range you entered: the credits come back as a
+                      range, never one exact figure.
+                    </p>
+                  </div>
+                  <p class="lp-notice" role="alert">
+                    The pool and price you were shown no longer match your estimate. Nothing was
+                    charged, and the old offer wasn’t re-priced. Go back to the calculator and price
+                    it again.
+                  </p>
+                  <span class="lp-key"
+                    >plans.larger.refused.{atOrBelowCeiling | notForSale | offerExpired | quantity}
+                    — chosen by the refusal code</span
+                  >
+                  <div class="lp-offer is-new" data-testid="calculator-larger">
+                    <div class="lp-top">
+                      <span
+                        class="pill"
+                        style="
+                          background: var(--el-tint-lavender);
+                          color: var(--el-text-strong);
+                          border-color: transparent;
+                        "
+                        >Larger credit pool</span
+                      ><span class="srcl">calculator.result.largerPoolLabel</span>
+                    </div>
+                    <span class="lp-name">Pool 80,000</span>
+                    <p class="lp-cap">
+                      Your estimate is above our largest regular plan, so the answer is a larger
+                      credit pool sized to it: Pool 80,000.
+                    </p>
+                    <div>
+                      <span class="lp-price">$267 / mo</span>
+                      <p class="lp-sub">billed annually · $3,200 / yr</p>
+                      <span
+                        class="pill"
+                        style="
+                          background: var(--el-tint-mint);
+                          color: var(--el-text-strong);
+                          border-color: transparent;
+                        "
+                        >Save $1,480/yr</span
+                      >
+                    </div>
+                    <p class="lp-alot">80,000 credits / mo</p>
+                    <p class="lp-cap">
+                      The pool and its price are worked out from your estimate, so both are an
+                      estimate — the exact amounts are confirmed before anything is charged.
+                    </p>
+                    <p class="lp-seat">
+                      + 1 Motir seat · work items uncapped · one plan for the whole organization
+                    </p>
+                    <button class="btn btn-primary">Choose Pool 80,000</button
+                    ><span class="lp-key">plans.ctaChoose (shipped)</span
+                    ><span class="srcl"
+                      >starts Stripe Checkout here, quantity 1 — no stop on the plans view</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      9 · Billing &amp; plans — the org HOLDS a larger pool. The current-plan strip, then ONE card:
+      the held pool, marked Current. The four regular plans are folded away behind
+      <b>See all regular plans</b>. The <b>Need more credits?</b> callout stays, for an owner who
+      has outgrown this pool.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <p class="crumb">Organization · Acme · Motir AI</p>
+            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+          </header>
+          <div style="margin-top: 16px">
+            <div class="lp-strip">
               <span
                 class="pill"
                 style="
-                  background: var(--el-tint-mint);
+                  background: var(--el-tint-lavender);
                   color: var(--el-text-strong);
                   border-color: transparent;
                 "
-                >Save ~33%</span
-              >
+                >Pool 80,000</span
+              ><span>80,000 credits / mo · 41,200 left · renews Nov 14, 2026</span
+              ><span class="srcl">the shipped current-plan strip, unchanged</span>
             </div>
-            <div class="lp-row">
-              <div class="lp-card">
-                <div class="lp-top"><span class="lp-name">Standard</span></div>
-                <p class="lp-use">billing.plans.tiers.standard.useCase</p>
-                <div>
-                  <span class="lp-price">$17 / mo</span>
-                  <p class="lp-sub">billed annually · $200 / yr</p>
-                  <span
-                    class="pill"
-                    style="
-                      background: var(--el-tint-mint);
-                      color: var(--el-text-strong);
-                      border-color: transparent;
-                    "
-                    >Save $100/yr</span
-                  >
-                </div>
-                <p class="lp-alot">5,000 credits / mo</p>
-                <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-                <div class="lp-act">
-                  <button class="btn btn-secondary btn-sm">Choose Standard</button>
-                </div>
-              </div>
-              <div class="lp-card">
-                <div class="lp-top"><span class="lp-name">Pro</span></div>
-                <p class="lp-use">billing.plans.tiers.pro.useCase</p>
-                <div>
-                  <span class="lp-price">$50 / mo</span>
-                  <p class="lp-sub">billed annually · $600 / yr</p>
-                  <span
-                    class="pill"
-                    style="
-                      background: var(--el-tint-mint);
-                      color: var(--el-text-strong);
-                      border-color: transparent;
-                    "
-                    >Save $300/yr</span
-                  >
-                </div>
-                <p class="lp-alot">15,000 credits / mo</p>
-                <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
-                <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-                <div class="lp-act">
-                  <button class="btn btn-secondary btn-sm">Choose Pro</button>
-                </div>
-              </div>
-              <div class="lp-card">
-                <div class="lp-top"><span class="lp-name">Max</span></div>
-                <p class="lp-use">billing.plans.tiers.max.useCase</p>
-                <div>
-                  <span class="lp-price">$100 / mo</span>
-                  <p class="lp-sub">billed annually · $1,200 / yr</p>
-                  <span
-                    class="pill"
-                    style="
-                      background: var(--el-tint-mint);
-                      color: var(--el-text-strong);
-                      border-color: transparent;
-                    "
-                    >Save $600/yr</span
-                  >
-                </div>
-                <p class="lp-alot">30,000 credits / mo</p>
-                <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
-                <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-                <div class="lp-act">
-                  <button class="btn btn-secondary btn-sm">Choose Max</button>
-                </div>
-              </div>
-              <div class="lp-card">
-                <div class="lp-top"><span class="lp-name">Max ×2</span></div>
-                <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
-                <div>
-                  <span class="lp-price">$200 / mo</span>
-                  <p class="lp-sub">billed annually · $2,400 / yr</p>
-                  <span
-                    class="pill"
-                    style="
-                      background: var(--el-tint-mint);
-                      color: var(--el-text-strong);
-                      border-color: transparent;
-                    "
-                    >Save $1,200/yr</span
-                  >
-                </div>
-                <p class="lp-alot">60,000 credits / mo</p>
-                <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
-                <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-                <div class="lp-act">
-                  <button class="btn btn-secondary btn-sm">Choose Max ×2</button>
-                </div>
-              </div>
-              <div class="lp-card accent is-new">
-                <div class="lp-top">
-                  <span class="lp-name">Pool 80,000</span
-                  ><span
-                    class="pill"
-                    style="
-                      background: var(--el-tint-lavender);
-                      color: var(--el-text-strong);
-                      border-color: transparent;
-                    "
-                    >Recommended</span
-                  >
-                </div>
-                <p class="lp-use">
-                  <span class="srcl"
-                    >name = catalog data (MOTIR-8990): it states the monthly pool</span
-                  >
-                </p>
-                <div>
-                  <span class="lp-price">$267 / mo</span>
-                  <p class="lp-sub">billed annually · $3,200 / yr</p>
-                  <span
-                    class="pill"
-                    style="
-                      background: var(--el-tint-mint);
-                      color: var(--el-text-strong);
-                      border-color: transparent;
-                    "
-                    >Save $1,480/yr</span
-                  >
-                </div>
-                <span class="lp-slot">billing.plans.larger.priceEstimate</span
-                ><span class="lp-slot">billing.plans.larger.basis.annual · {plan} Max ×2</span>
-                <p class="lp-alot">80,000 credits / mo</p>
-                <span class="lp-slot"
-                  >billing.plans.larger.caption · {low} 61,000 · {high} 74,000 — an estimate; it
-                  moves with the estimate</span
-                ><span class="srcl"
-                  >the caption takes the ladder-line slot; no ladder line on this card</span
+          </div>
+          <p class="lp-h">Your plan</p>
+          <div class="lp-cad">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
+            </div>
+            <span
+              class="pill"
+              style="
+                background: var(--el-tint-mint);
+                color: var(--el-text-strong);
+                border-color: transparent;
+              "
+              >Save ~33%</span
+            >
+          </div>
+          <div class="lp-row">
+            <div class="lp-card accent solo is-new">
+              <div class="lp-top">
+                <span class="lp-name">Pool 80,000</span
+                ><span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-lavender);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Current</span
                 >
-                <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
-                <div class="lp-act">
-                  <button class="btn btn-primary btn-sm">Upgrade to Pool 80,000</button
-                  ><span class="srcl">starts Checkout · quantity 1</span>
-                </div>
+              </div>
+              <div>
+                <span class="lp-price">$267 / mo</span>
+                <p class="lp-sub">billed annually · $3,200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $1,480/yr</span
+                >
+              </div>
+              <p class="lp-alot">80,000 credits / mo</p>
+              <p class="lp-cap">
+                This is the pool you bought, sized from an estimate of 61,000 to 74,000 credits a
+                month. A later, lower estimate doesn’t re-price a plan you already hold.
+              </p>
+              <span class="lp-key">plans.larger.captionCurrent (shipped words)</span>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm" disabled>Current plan</button>
               </div>
             </div>
-            <div class="lp-topup">
-              <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
-                >the shipped top-up card, unchanged</span
-              >
+          </div>
+          <button class="lp-toggle is-new" aria-expanded="false" aria-controls="regular-plans">
+            See all regular plans
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg></button
+          ><span class="lp-key">plans.larger.showRegular — NEW key</span>
+          <div class="lp-more is-new">
+            <p>
+              <b>Need more credits?</b>If your organization outgrows its 80,000 credits a month,
+              estimate your usage and the Calculator offers a larger pool sized to it.
+            </p>
+            <button class="btn btn-primary btn-sm">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg> Open the
+              Calculator
+            </button>
+          </div>
+          <span class="lp-key"
+            >plans.needMore.title · plans.needMore.bodyHeld {credits} · plans.needMore.action — NEW
+            keys</span
+          >
+          <div class="lp-topup">
+            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
+              >the shipped top-up card, unchanged</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      10 · Billing &amp; plans — a pool holder opened <b>See all regular plans</b>. The four regular
+      plans appear below the held card, each with the shipped switch control (a move down takes
+      effect at the end of the period, per the shipped downgrade); the toggle now reads
+      <b>Hide regular plans</b>.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <p class="crumb">Organization · Acme · Motir AI</p>
+            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+          </header>
+          <div style="margin-top: 16px">
+            <div class="lp-strip">
+              <span
+                class="pill"
+                style="
+                  background: var(--el-tint-lavender);
+                  color: var(--el-text-strong);
+                  border-color: transparent;
+                "
+                >Pool 80,000</span
+              ><span>80,000 credits / mo · 41,200 left · renews Nov 14, 2026</span
+              ><span class="srcl">the shipped current-plan strip, unchanged</span>
+            </div>
+          </div>
+          <p class="lp-h">Your plan</p>
+          <div class="lp-cad">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
+            </div>
+            <span
+              class="pill"
+              style="
+                background: var(--el-tint-mint);
+                color: var(--el-text-strong);
+                border-color: transparent;
+              "
+              >Save ~33%</span
+            >
+          </div>
+          <div class="lp-row">
+            <div class="lp-card accent solo is-new">
+              <div class="lp-top">
+                <span class="lp-name">Pool 80,000</span
+                ><span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-lavender);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Current</span
+                >
+              </div>
+              <div>
+                <span class="lp-price">$267 / mo</span>
+                <p class="lp-sub">billed annually · $3,200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $1,480/yr</span
+                >
+              </div>
+              <p class="lp-alot">80,000 credits / mo</p>
+              <p class="lp-cap">
+                This is the pool you bought, sized from an estimate of 61,000 to 74,000 credits a
+                month. A later, lower estimate doesn’t re-price a plan you already hold.
+              </p>
+              <span class="lp-key">plans.larger.captionCurrent (shipped words)</span>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm" disabled>Current plan</button>
+              </div>
+            </div>
+          </div>
+          <button class="lp-toggle is-new" aria-expanded="true" aria-controls="regular-plans">
+            Hide regular plans
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polyline points="6 15 12 9 18 15" />
+            </svg></button
+          ><span class="lp-key">plans.larger.hideRegular — NEW key</span>
+          <div class="lp-row" id="regular-plans" style="margin-top: 12px">
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Standard</span></div>
+              <p class="lp-use">For a small team planning its first projects.</p>
+              <div>
+                <span class="lp-price">$17 / mo</span>
+                <p class="lp-sub">billed annually · $200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $100/yr</span
+                >
+              </div>
+              <p class="lp-alot">5,000 credits / mo</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Switch to Standard</button>
+              </div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Pro</span></div>
+              <p class="lp-use">For a team planning and running work every week.</p>
+              <div>
+                <span class="lp-price">$50 / mo</span>
+                <p class="lp-sub">billed annually · $600 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $300/yr</span
+                >
+              </div>
+              <p class="lp-alot">15,000 credits / mo</p>
+              <p class="lp-ladder">3× Standard the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Switch to Pro</button>
+              </div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max</span></div>
+              <p class="lp-use">For several teams, or heavy hosted runs.</p>
+              <div>
+                <span class="lp-price">$100 / mo</span>
+                <p class="lp-sub">billed annually · $1,200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $600/yr</span
+                >
+              </div>
+              <p class="lp-alot">30,000 credits / mo</p>
+              <p class="lp-ladder">2× Pro the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Switch to Max</button>
+              </div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
+              <p class="lp-use">For an organization running Motir all day.</p>
+              <div>
+                <span class="lp-price">$200 / mo</span>
+                <p class="lp-sub">billed annually · $2,400 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $1,200/yr</span
+                >
+              </div>
+              <p class="lp-alot">60,000 credits / mo</p>
+              <p class="lp-ladder">2× Max the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Switch to Max ×2</button>
+              </div>
+            </div>
+          </div>
+          <div class="lp-more is-new">
+            <p>
+              <b>Need more credits?</b>If your organization outgrows its 80,000 credits a month,
+              estimate your usage and the Calculator offers a larger pool sized to it.
+            </p>
+            <button class="btn btn-primary btn-sm">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg> Open the
+              Calculator
+            </button>
+          </div>
+          <span class="lp-key"
+            >plans.needMore.title · plans.needMore.bodyHeld {credits} · plans.needMore.action — NEW
+            keys</span
+          >
+          <div class="lp-topup">
+            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
+              >the shipped top-up card, unchanged</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      11 · Narrow (375px) — the Calculator stacks the form above the answer; the offer and its
+      button take the full width. Use “Toggle dark” for the dark board.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page lp-narrow">
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
+          </header>
+          <div class="calc one">
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Your usage</h3></div>
+              </div>
+              <div class="card-body fstack">
+                <div class="field">
+                  <span class="flabel">Items planned in Motir a month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">Low</span>
+                      <div class="inp"><span class="val">300</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">High</span>
+                      <div class="inp"><span class="val">500</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="field">
+                  <span class="flabel">Items run on Motir’s runner a month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">Low</span>
+                      <div class="inp"><span class="val">40</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">High</span>
+                      <div class="inp"><span class="val">60</span></div>
+                    </div>
+                  </div>
+                </div>
+                <p class="help">Categories: Balanced · Flagship (the shipped group).</p>
+                <span class="srcl">the form is MOTIR-9225’s; it is not redrawn here</span>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg> Estimate
+                  credits
+                </button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Estimate</h3></div>
+                <span class="pill pill-neutral">Illustrative figures</span>
+              </div>
+              <div class="card-body">
+                <div class="res">
+                  <p class="estword">
+                    Priced for 300–500 planned in Motir and 40–60 run on Motir’s runner a month.
+                  </p>
+                  <div class="fig">
+                    <p class="rlabel">Credits a month</p>
+                    <p class="famt">61,000 – 74,000</p>
+                    <p class="estword">
+                      This is an estimate for the range you entered: the credits come back as a
+                      range, never one exact figure.
+                    </p>
+                  </div>
+                  <div class="lp-offer is-new" data-testid="calculator-larger">
+                    <div class="lp-top">
+                      <span
+                        class="pill"
+                        style="
+                          background: var(--el-tint-lavender);
+                          color: var(--el-text-strong);
+                          border-color: transparent;
+                        "
+                        >Larger credit pool</span
+                      ><span class="srcl">calculator.result.largerPoolLabel</span>
+                    </div>
+                    <span class="lp-name">Pool 80,000</span>
+                    <p class="lp-cap">
+                      Your estimate is above our largest regular plan, so the answer is a larger
+                      credit pool sized to it: Pool 80,000.
+                    </p>
+                    <div>
+                      <span class="lp-price">$267 / mo</span>
+                      <p class="lp-sub">billed annually · $3,200 / yr</p>
+                      <span
+                        class="pill"
+                        style="
+                          background: var(--el-tint-mint);
+                          color: var(--el-text-strong);
+                          border-color: transparent;
+                        "
+                        >Save $1,480/yr</span
+                      >
+                    </div>
+                    <p class="lp-alot">80,000 credits / mo</p>
+                    <p class="lp-cap">
+                      The pool and its price are worked out from your estimate, so both are an
+                      estimate — the exact amounts are confirmed before anything is charged.
+                    </p>
+                    <p class="lp-seat">
+                      + 1 Motir seat · work items uncapped · one plan for the whole organization
+                    </p>
+                    <button class="btn btn-primary">Choose Pool 80,000</button
+                    ><span class="lp-key">plans.ctaChoose (shipped)</span
+                    ><span class="srcl"
+                      >starts Stripe Checkout here, quantity 1 — no stop on the plans view</span
+                    >
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-arrowleft"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </g>
+        <g
+          id="i-arrowright"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </g>
+        <g
+          id="i-calc"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="16" height="20" x="4" y="2" rx="2" />
+          <path d="M8 6h8" />
+          <path d="M16 14v4" />
+          <path d="M16 10h.01" />
+          <path d="M12 10h.01" />
+          <path d="M8 10h.01" />
+          <path d="M12 14h.01" />
+          <path d="M8 14h.01" />
+          <path d="M12 18h.01" />
+          <path d="M8 18h.01" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-users"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </g>
+        <g
+          id="i-coins"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="8" cy="8" r="6" />
+          <path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
+          <path d="M7 6h1v4" />
+          <path d="m16.71 13.88.7.71-2.82 2.82" />
+        </g>
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 8v4" />
+          <path d="M12 16h.01" />
+        </g>
+        <g
+          id="i-alert-tri"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-clock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 6v6l4 2" />
+        </g>
+        <g
+          id="i-refresh"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+        </g>
+        <g
+          id="i-wifioff"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 20h.01" />
+          <path d="M8.5 16.43a5 5 0 0 1 7 0" />
+          <path d="M5 12.86a10 10 0 0 1 5.17-2.69" />
+          <path d="M19 12.86a10 10 0 0 0-2-1.52" />
+          <path d="M2 8.82a15 15 0 0 1 4.18-2.64" />
+          <path d="M22 8.82a15 15 0 0 0-11.29-3.76" />
+          <path d="m2 2 20 20" />
+        </g>
+        <g
+          id="i-trend"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M22 7 13.5 15.5 8.5 10.5 2 17" />
+          <path d="M16 7h6v6" />
+        </g>
+        <g
+          id="i-sparkle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z"
+          />
+        </g>
+        <g
+          id="i-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M8 12h8" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-external"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3" />
+        </g>
+      </defs>
+    </svg>
     <script>
       function toggleTheme() {
         const h = document.documentElement;
