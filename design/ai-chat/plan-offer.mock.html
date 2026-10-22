@@ -4204,9 +4204,9 @@
         (<span class="ref">guide-replan-offer.mock.html</span>, shipped as
         <code>components/planning/GuideReplanOffer.tsx</code>) — same chrome, same tokens, same
         measurements — and adds what a plan offer has and a guide offer does not: an offer with no
-        target, three cannot-start reasons, the mid-planning variant, and the line Motir AI says
-        instead of an offer when the target is being planned right now. Every panel is derived from
-        the stored offer alone. The spec is <code>design/ai-chat/design-notes.md</code> §
+        target, the mid-planning variant, and what Motir AI says instead of an offer when one cannot
+        start or its target is being planned right now. Every panel is derived from the stored offer
+        alone. The spec is <code>design/ai-chat/design-notes.md</code> §
         <i>The plan offer on an answer turn</i>.
       </p>
     </div>
@@ -4636,24 +4636,27 @@
       <div class="sheethead">
         <div class="snum">3</div>
         <div>
-          <h2>Undecided, cannot start — one line per reason, and no Confirm</h2>
+          <h2>An offer that cannot start — no panel and no Decline; the conversation carries on</h2>
           <p>
-            Confirm is <b>absent, not disabled</b>. One locked line states the reason in words (the
-            lock glyph is <code>aria-hidden</code>); Decline stays so the person can close the
-            offer. The three reasons are the three codes the offer DTO serves as
-            <code>cannotStart</code>: <code>planning_unavailable</code>, <code>target_closed</code>,
-            <code>out_of_credits</code>. A value outside the three draws the generic line. A done
-            target is <code>target_closed</code> — the stored offer keeps only the target it was
-            offered on, so there is nothing to resolve forward from. A target that is
-            <b>being planned right now</b> is not a cannot-start line: it draws no panel at all
-            (sheet 4).
+            When an offer could not start, there is <b>no offer panel and no Decline</b>: there is
+            nothing to confirm and nothing to decline.
+            <b>A target that is done or cancelled</b> gets no offer at all. Motir AI reads the work
+            item and keeps the conversation going: it says how the feature works now, or why it was
+            closed or cancelled (from what is recorded on the card), and asks what the person wants
+            — rework it, or build something new on top. That is the answer itself, not a stored
+            line. <b>The other reasons</b> — <code>planning_unavailable</code>,
+            <code>out_of_credits</code>, and any other value (generic) — are not about the target.
+            Motir AI states the reason as one more line of its answer turn, with nothing to press. A
+            target that is <b>being planned right now</b> is sheet 4.
           </p>
         </div>
       </div>
       <div class="sheetbody">
         <div class="po-grid">
           <div class="po-cell">
-            <span class="shotcap">en · light · cannot start · planning_unavailable</span>
+            <span class="shotcap"
+              >en · light · target done — Motir AI explains and asks, no offer</span
+            >
             <div class="anatbox railbox po-rail" style="display: flex; flex-direction: column">
               <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
                 <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
@@ -4672,7 +4675,7 @@
                   <div
                     class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text) wrap-anywhere"
                   >
-                    Actually I want to plan a fix for that.
+                    Can you plan a fix for ACME-42?
                   </div>
                 </div>
                 <div class="flex items-start gap-2">
@@ -4696,70 +4699,26 @@
                   <div
                     class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
                   >
-                    I can plan that: a fix to the export service so every custom field becomes a
-                    column, with tests for the cases the read found. Confirm below and I’ll start.
-                  </div>
-                </div>
-                <section
-                  class="po-panel"
-                  aria-label="Offer to plan"
-                  data-testid="plan-offer"
-                  data-offer-state="undecided"
-                >
-                  <p class="po-label">Offer to plan</p>
-                  <div class="po-request" data-testid="plan-offer-request">
                     <p>
-                      Plan a fix for the CSV export dropping custom fields: add the missing fields
-                      to the export service and cover them in its tests.
+                      ACME-42 is <b>done</b>: it shipped on Oct 3 with PR #3702. The export service
+                      now adds each custom field as a column after the built-in ones, and dates and
+                      people are formatted the way the board shows them.
+                    </p>
+                    <p>
+                      So there is nothing left to fix on that card. What would you like to do —
+                      change how the export works, or plan something new on top of it, such as
+                      exporting a field’s history?
                     </p>
                   </div>
-                  <p class="po-target" data-testid="plan-offer-target">
-                    <span>Target</span
-                    ><span class="po-chip" data-testid="plan-offer-target-chip"
-                      ><span class="po-key">ACME-42</span
-                      ><span class="po-chip-title">CSV export drops custom fields</span></span
-                    >
-                  </p>
-                  <p
-                    class="po-rule"
-                    data-testid="plan-offer-cannot-start"
-                    data-reason="planning_unavailable"
-                  >
-                    <svg
-                      class="po-glyph"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
-                      focusable="false"
-                    >
-                      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
-                    ><span
-                      >Planning can’t start here: Motir AI isn’t set up for this project, or you
-                      don’t have permission to plan and edit work items.</span
-                    >
-                  </p>
-                  <div class="po-actions">
-                    <button
-                      type="button"
-                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 border border-(--el-border) bg-(--el-surface) text-(--el-text) hover:bg-(--el-surface-soft) h-(--height-btn-sm) px-3 text-xs shrink-0"
-                      data-testid="plan-offer-decline"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                  <p class="po-help">Decline plans nothing, and the conversation carries on.</p>
-                </section>
+                </div>
                 <p class="po-meta">Answered from 3 work items</p>
               </div>
             </div>
           </div>
           <div class="po-cell">
-            <span class="shotcap">en · light · cannot start · target_closed</span>
+            <span class="shotcap"
+              >en · light · target cancelled — Motir AI explains and asks, no offer</span
+            >
             <div class="anatbox railbox po-rail" style="display: flex; flex-direction: column">
               <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
                 <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
@@ -4778,7 +4737,7 @@
                   <div
                     class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text) wrap-anywhere"
                   >
-                    Actually I want to plan a fix for that.
+                    Can you plan a fix for ACME-42?
                   </div>
                 </div>
                 <div class="flex items-start gap-2">
@@ -4802,67 +4761,22 @@
                   <div
                     class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
                   >
-                    I can plan that: a fix to the export service so every custom field becomes a
-                    column, with tests for the cases the read found. Confirm below and I’ll start.
-                  </div>
-                </div>
-                <section
-                  class="po-panel"
-                  aria-label="Offer to plan"
-                  data-testid="plan-offer"
-                  data-offer-state="undecided"
-                >
-                  <p class="po-label">Offer to plan</p>
-                  <div class="po-request" data-testid="plan-offer-request">
                     <p>
-                      Plan a fix for the CSV export dropping custom fields: add the missing fields
-                      to the export service and cover them in its tests.
+                      ACME-42 was <b>cancelled</b> on Sep 28. Its last comment says the CSV export
+                      moved to the reports page instead, under ACME-61.
+                    </p>
+                    <p>
+                      Do you want to bring the export back as ACME-42 described it, or plan custom
+                      fields for the reports page export?
                     </p>
                   </div>
-                  <p class="po-target" data-testid="plan-offer-target">
-                    <span>Target</span
-                    ><span class="po-chip" data-testid="plan-offer-target-chip"
-                      ><span class="po-key">ACME-42</span
-                      ><span class="po-chip-title">CSV export drops custom fields</span></span
-                    >
-                  </p>
-                  <p
-                    class="po-rule"
-                    data-testid="plan-offer-cannot-start"
-                    data-reason="target_closed"
-                  >
-                    <svg
-                      class="po-glyph"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
-                      focusable="false"
-                    >
-                      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
-                    ><span>This work item is done or cancelled, so it can’t be planned.</span>
-                  </p>
-                  <div class="po-actions">
-                    <button
-                      type="button"
-                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 border border-(--el-border) bg-(--el-surface) text-(--el-text) hover:bg-(--el-surface-soft) h-(--height-btn-sm) px-3 text-xs shrink-0"
-                      data-testid="plan-offer-decline"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                  <p class="po-help">Decline plans nothing, and the conversation carries on.</p>
-                </section>
+                </div>
                 <p class="po-meta">Answered from 3 work items</p>
               </div>
             </div>
           </div>
           <div class="po-cell">
-            <span class="shotcap">en · light · cannot start · out_of_credits</span>
+            <span class="shotcap">en · light · planning_unavailable — a line, no panel</span>
             <div class="anatbox railbox po-rail" style="display: flex; flex-direction: column">
               <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
                 <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
@@ -4905,67 +4819,32 @@
                   <div
                     class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
                   >
-                    I can plan that: a fix to the export service so every custom field becomes a
-                    column, with tests for the cases the read found. Confirm below and I’ll start.
+                    <b>ACME-42 is the bug where the CSV export leaves out custom fields.</b> The
+                    export service only lists the built-in columns, so a project’s own fields never
+                    reach the file.
                   </div>
                 </div>
-                <section
-                  class="po-panel"
-                  aria-label="Offer to plan"
-                  data-testid="plan-offer"
-                  data-offer-state="undecided"
+                <div
+                  class="flex items-start gap-2"
+                  data-testid="plan-offer-cannot-start"
+                  data-reason="planning_unavailable"
                 >
-                  <p class="po-label">Offer to plan</p>
-                  <div class="po-request" data-testid="plan-offer-request">
+                  <span aria-hidden="true" class="size-7 shrink-0"></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
                     <p>
-                      Plan a fix for the CSV export dropping custom fields: add the missing fields
-                      to the export service and cover them in its tests.
+                      Planning can’t start here: Motir AI isn’t set up for this project, or you
+                      don’t have permission to plan and edit work items.
                     </p>
                   </div>
-                  <p class="po-target" data-testid="plan-offer-target">
-                    <span>Target</span
-                    ><span class="po-chip" data-testid="plan-offer-target-chip"
-                      ><span class="po-key">ACME-42</span
-                      ><span class="po-chip-title">CSV export drops custom fields</span></span
-                    >
-                  </p>
-                  <p
-                    class="po-rule"
-                    data-testid="plan-offer-cannot-start"
-                    data-reason="out_of_credits"
-                  >
-                    <svg
-                      class="po-glyph"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
-                      focusable="false"
-                    >
-                      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
-                    ><span>Your organization is out of AI credits, so planning can’t start.</span>
-                  </p>
-                  <div class="po-actions">
-                    <button
-                      type="button"
-                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 border border-(--el-border) bg-(--el-surface) text-(--el-text) hover:bg-(--el-surface-soft) h-(--height-btn-sm) px-3 text-xs shrink-0"
-                      data-testid="plan-offer-decline"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                  <p class="po-help">Decline plans nothing, and the conversation carries on.</p>
-                </section>
+                </div>
                 <p class="po-meta">Answered from 3 work items</p>
               </div>
             </div>
           </div>
           <div class="po-cell">
-            <span class="shotcap">en · light · cannot start · any other value (generic)</span>
+            <span class="shotcap">en · light · out_of_credits — a line, no panel</span>
             <div class="anatbox railbox po-rail" style="display: flex; flex-direction: column">
               <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
                 <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
@@ -5008,57 +4887,88 @@
                   <div
                     class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
                   >
-                    I can plan that: a fix to the export service so every custom field becomes a
-                    column, with tests for the cases the read found. Confirm below and I’ll start.
+                    <b>ACME-42 is the bug where the CSV export leaves out custom fields.</b> The
+                    export service only lists the built-in columns, so a project’s own fields never
+                    reach the file.
                   </div>
                 </div>
-                <section
-                  class="po-panel"
-                  aria-label="Offer to plan"
-                  data-testid="plan-offer"
-                  data-offer-state="undecided"
+                <div
+                  class="flex items-start gap-2"
+                  data-testid="plan-offer-cannot-start"
+                  data-reason="out_of_credits"
                 >
-                  <p class="po-label">Offer to plan</p>
-                  <div class="po-request" data-testid="plan-offer-request">
-                    <p>
-                      Plan a fix for the CSV export dropping custom fields: add the missing fields
-                      to the export service and cover them in its tests.
-                    </p>
+                  <span aria-hidden="true" class="size-7 shrink-0"></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <p>Your organization is out of AI credits, so planning can’t start.</p>
                   </div>
-                  <p class="po-target" data-testid="plan-offer-target">
-                    <span>Target</span
-                    ><span class="po-chip" data-testid="plan-offer-target-chip"
-                      ><span class="po-key">ACME-42</span
-                      ><span class="po-chip-title">CSV export drops custom fields</span></span
-                    >
-                  </p>
-                  <p class="po-rule" data-testid="plan-offer-cannot-start" data-reason="generic">
-                    <svg
-                      class="po-glyph"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
-                      focusable="false"
-                    >
-                      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
-                    ><span>Planning can’t start from this offer.</span>
-                  </p>
-                  <div class="po-actions">
-                    <button
-                      type="button"
-                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 border border-(--el-border) bg-(--el-surface) text-(--el-text) hover:bg-(--el-surface-soft) h-(--height-btn-sm) px-3 text-xs shrink-0"
-                      data-testid="plan-offer-decline"
-                    >
-                      Decline
-                    </button>
+                </div>
+                <p class="po-meta">Answered from 3 work items</p>
+              </div>
+            </div>
+          </div>
+          <div class="po-cell">
+            <span class="shotcap">en · light · any other value (generic) — a line, no panel</span>
+            <div class="anatbox railbox po-rail" style="display: flex; flex-direction: column">
+              <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
+                <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
+                ><span
+                  class="font-mono text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                  >Motir AI</span
+                >
+              </div>
+              <div class="railscroll" role="log" style="flex: 1; min-height: 0">
+                <div class="flex items-start gap-2 flex-row-reverse">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                    >·</span
+                  >
+                  <div
+                    class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text) wrap-anywhere"
+                  >
+                    Actually I want to plan a fix for that.
                   </div>
-                  <p class="po-help">Decline plans nothing, and the conversation carries on.</p>
-                </section>
+                </div>
+                <div class="flex items-start gap-2">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                    ><span class="brand-inv"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        class="brand-glyph"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        ></path></svg></span
+                  ></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <b>ACME-42 is the bug where the CSV export leaves out custom fields.</b> The
+                    export service only lists the built-in columns, so a project’s own fields never
+                    reach the file.
+                  </div>
+                </div>
+                <div
+                  class="flex items-start gap-2"
+                  data-testid="plan-offer-cannot-start"
+                  data-reason="generic"
+                >
+                  <span aria-hidden="true" class="size-7 shrink-0"></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <p>Planning can’t start from this offer.</p>
+                  </div>
+                </div>
                 <p class="po-meta">Answered from 3 work items</p>
               </div>
             </div>
@@ -6076,12 +5986,11 @@
           <h2>A long request, a refused press, and the rail at its floor</h2>
           <p>
             Above 480 characters the request block clamps to its fixed height with <i>Show all</i> /
-            <i>Show less</i> beneath it (<code>aria-expanded</code>). A press refused for out of
-            credits stops Confirm’s loading state and flips the panel to the
-            <code>out_of_credits</code> line — the same state, reached by the press. A start refused
-            because the person can no longer read the target draws the
-            <code>targetUnavailable</code> line in place of the actions. At the rail’s floor (352
-            px) the actions and the target row wrap and nothing scrolls sideways.
+            <i>Show less</i> beneath it (<code>aria-expanded</code>). A
+            <b>press that is refused</b> — out of credits, or the person can no longer read the
+            target — stops Confirm’s loading state and replaces the actions with the reason line.
+            Confirm and Decline both go: nothing is left to press, and nothing to decline. At the
+            rail’s floor (352 px) the actions and the target row wrap and nothing scrolls sideways.
           </p>
         </div>
       </div>
@@ -6405,16 +6314,6 @@
                       <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
                     ><span>Your organization is out of AI credits, so planning can’t start.</span>
                   </p>
-                  <div class="po-actions">
-                    <button
-                      type="button"
-                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 border border-(--el-border) bg-(--el-surface) text-(--el-text) hover:bg-(--el-surface-soft) h-(--height-btn-sm) px-3 text-xs shrink-0"
-                      data-testid="plan-offer-decline"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                  <p class="po-help">Decline plans nothing, and the conversation carries on.</p>
                 </section>
                 <p class="po-meta">Answered from 3 work items</p>
               </div>
@@ -6510,16 +6409,6 @@
                       <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
                     ><span>You can no longer open ACME-42, so planning can’t start.</span>
                   </p>
-                  <div class="po-actions">
-                    <button
-                      type="button"
-                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 border border-(--el-border) bg-(--el-surface) text-(--el-text) hover:bg-(--el-surface-soft) h-(--height-btn-sm) px-3 text-xs shrink-0"
-                      data-testid="plan-offer-decline"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                  <p class="po-help">Decline plans nothing, and the conversation carries on.</p>
                 </section>
                 <p class="po-meta">Answered from 3 work items</p>
               </div>
@@ -6636,8 +6525,8 @@
         <div>
           <h2>Dark</h2>
           <p>
-            The same panels on <code>data-theme='dark'</code>: undecided, cannot start, confirmed,
-            declined, and the being-planned line that replaces a panel. Every ink is
+            The same panels on <code>data-theme='dark'</code>: undecided, confirmed, declined, and
+            the cannot-start and being-planned lines that replace a panel. Every ink is
             <code>--el-text</code>, <code>--el-text-strong</code> or
             <code>--el-text-secondary</code>, so it clears AA on every surface in both themes.
           </p>
@@ -6740,7 +6629,7 @@
             </div>
           </div>
           <div class="po-cell" data-theme="dark" data-appearance-scope>
-            <span class="shotcap">en · dark · cannot start · out_of_credits</span>
+            <span class="shotcap">en · dark · out_of_credits — a line, no panel</span>
             <div class="anatbox railbox po-rail" style="display: flex; flex-direction: column">
               <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
                 <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
@@ -6783,61 +6672,23 @@
                   <div
                     class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
                   >
-                    I can plan that: a fix to the export service so every custom field becomes a
-                    column, with tests for the cases the read found. Confirm below and I’ll start.
+                    <b>ACME-42 is the bug where the CSV export leaves out custom fields.</b> The
+                    export service only lists the built-in columns, so a project’s own fields never
+                    reach the file.
                   </div>
                 </div>
-                <section
-                  class="po-panel"
-                  aria-label="Offer to plan"
-                  data-testid="plan-offer"
-                  data-offer-state="undecided"
+                <div
+                  class="flex items-start gap-2"
+                  data-testid="plan-offer-cannot-start"
+                  data-reason="out_of_credits"
                 >
-                  <p class="po-label">Offer to plan</p>
-                  <div class="po-request" data-testid="plan-offer-request">
-                    <p>
-                      Plan a fix for the CSV export dropping custom fields: add the missing fields
-                      to the export service and cover them in its tests.
-                    </p>
-                  </div>
-                  <p class="po-target" data-testid="plan-offer-target">
-                    <span>Target</span
-                    ><span class="po-chip" data-testid="plan-offer-target-chip"
-                      ><span class="po-key">ACME-42</span
-                      ><span class="po-chip-title">CSV export drops custom fields</span></span
-                    >
-                  </p>
-                  <p
-                    class="po-rule"
-                    data-testid="plan-offer-cannot-start"
-                    data-reason="out_of_credits"
+                  <span aria-hidden="true" class="size-7 shrink-0"></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
                   >
-                    <svg
-                      class="po-glyph"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
-                      focusable="false"
-                    >
-                      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
-                    ><span>Your organization is out of AI credits, so planning can’t start.</span>
-                  </p>
-                  <div class="po-actions">
-                    <button
-                      type="button"
-                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 border border-(--el-border) bg-(--el-surface) text-(--el-text) hover:bg-(--el-surface-soft) h-(--height-btn-sm) px-3 text-xs shrink-0"
-                      data-testid="plan-offer-decline"
-                    >
-                      Decline
-                    </button>
+                    <p>Your organization is out of AI credits, so planning can’t start.</p>
                   </div>
-                  <p class="po-help">Decline plans nothing, and the conversation carries on.</p>
-                </section>
+                </div>
                 <p class="po-meta">Answered from 3 work items</p>
               </div>
             </div>
