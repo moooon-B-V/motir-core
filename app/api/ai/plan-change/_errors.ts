@@ -17,6 +17,7 @@ import {
   ResumeAlreadyStartedError,
   SessionNotFailedError,
   GuideTurnFilesRefusedError,
+  InvalidPlanSessionCursorError,
   PlanChangeJobNotRunningError,
   PlanChangeFlipNotOfferedError,
   PlanChangeMailboxJobMismatchError,
@@ -113,6 +114,11 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }
   if (err instanceof EmptyPlanChangeTurnError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
+  }
+  // The History list's cursor (MOTIR-9306) is opaque: one this read did not mint
+  // is a malformed request, never an empty page.
+  if (err instanceof InvalidPlanSessionCursorError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
   }
   // Files on a turn (MOTIR-7484; `guide-turn-files.md` A3.2): files on a

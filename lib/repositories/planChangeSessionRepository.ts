@@ -919,6 +919,10 @@ export const planChangeSessionRepository = {
       sessionId?: string;
       /** The reader's OWN sessions only (`mine`), or null for every session. */
       mine?: PlanSessionMineScope | null;
+      /** Only the sessions this user STARTED (`created_by_id`) — the overlay's History
+       *  (MOTIR-9306). Narrower than `mine`, which also takes in routed plans; never
+       *  pass both. */
+      ownerId?: string;
       /** A Visitor's private-epic hidden set (MOTIR-6645) — see {@link sessionWithheldSql}. */
       hiddenIds?: readonly string[];
     },
@@ -928,6 +932,7 @@ export const planChangeSessionRepository = {
       ? Prisma.sql`AND (s."last_activity_at", s."id") < (${args.after.lastActivityAt}, ${args.after.id})`
       : Prisma.empty;
     const only = args.sessionId ? Prisma.sql`AND s."id" = ${args.sessionId}` : Prisma.empty;
+    const owner = args.ownerId ? Prisma.sql`AND s."created_by_id" = ${args.ownerId}` : Prisma.empty;
     return tx.$queryRaw<PlanSessionListRow[]>`
       SELECT s."id", s."origin"::text AS "origin", s."target_keys" AS "targetKeys",
              s."last_activity_at" AS "lastActivityAt",
@@ -980,7 +985,7 @@ export const planChangeSessionRepository = {
       ) pc ON true
       WHERE s."project_id" = ${args.projectId} AND s."workspace_id" = ${args.workspaceId}
         AND s."origin" <> 'guide'
-        ${stateFilter(args.state)} ${mineFilter(args.mine ?? null)} ${after} ${only}
+        ${stateFilter(args.state)} ${mineFilter(args.mine ?? null)} ${owner} ${after} ${only}
         ${sessionWithheldSql(args.hiddenIds)}
       ORDER BY s."last_activity_at" DESC, s."id" DESC
       LIMIT ${args.limit}
