@@ -97,7 +97,7 @@ function AnswerLine({
       {...(reason ? { 'data-reason': reason } : {})}
     >
       <span aria-hidden="true" className="size-7 shrink-0" />
-      <div className="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-ai) px-3 py-2 text-sm text-(--el-text) wrap-anywhere">
+      <div className="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-ai) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text) wrap-anywhere">
         {children}
       </div>
     </div>
