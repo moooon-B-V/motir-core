@@ -583,6 +583,16 @@ describe('the idle close', () => {
       data: { failedAt: new Date(), failedJobId: 'j', failureReason: 'internal' },
     });
     const awaiting = await openSession(await seedCard(), { idleMs: 2 * HOUR });
+    // It REACHED PLANNING (a decided plan): since MOTIR-9299 a mark on a session holding no
+    // plan does not protect it, so the wait this case spares is a planned session's.
+    await adminDb.plan.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        sessionId: awaiting,
+        status: 'declined',
+      },
+    });
     await adminDb.planChangeSession.update({
       where: { id: awaiting },
       data: { awaitingPersonSince: new Date(), awaitingPersonCause: 'reply' },

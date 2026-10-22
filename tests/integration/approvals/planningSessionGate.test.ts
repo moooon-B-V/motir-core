@@ -11,16 +11,27 @@ import {
   planningSessionGateService,
 } from '@/lib/services/planningSessionGateService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import type { PlanSessionEndReason } from '@/generated/prisma/client';
+import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import { PLAN_TARGET_LOCK_LEASE_MS } from '@/lib/planChange/targetLock';
+import { planTargetLockSweep } from '@/lib/jobs/definitions/planTargetLockSweep';
+import { withSystemContext } from '@/lib/workspaces/context';
+import type { PlanSessionEndReason, PlanStatus } from '@/generated/prisma/client';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { JobTestEngine } from '../../helpers/jobs';
 
 // THE PLANNING-SESSION GATE (Story MOTIR-7905 · MOTIR-7913), against a REAL Postgres: its
 // raise on a planner's question and on a waited reply, its clear on the person's turn and
 // on the session's end, the Waiting on you read and count admitting only a session that
 // still waits, and the verbs it does not have. Counterfactuals sit beside each claim.
+//
+// ⚠️ ONLY A SESSION THAT REACHED PLANNING IS EVER WAITING ON ITS PERSON (MOTIR-9299). The
+// first-turn door starts a conversation with NO plan, and such a conversation is a question
+// that was answered: it is never marked, and the idle close ends it on the lease. So every
+// case that expects a raise opens its session through `openPlannedSession()`, which seeds a
+// DECIDED plan — the one plan state that neither blocks the raise nor holds the session open.
 
 const getJobMock = vi.fn();
 vi.mock('@/lib/ai/motirAiClient', () => ({
@@ -89,6 +100,21 @@ async function openSession(): Promise<string> {
   ).id;
 }
 
+/** A plan on the session, written directly: the session has REACHED PLANNING. */
+async function seedPlan(sessionId: string, status: PlanStatus): Promise<string> {
+  const plan = await adminDb.plan.create({
+    data: { workspaceId: fx.workspaceId, projectId: fx.projectId, sessionId, status },
+  });
+  return plan.id;
+}
+
+/** The owner's open session that reached planning — its plan already decided. */
+async function openPlannedSession(): Promise<string> {
+  const sessionId = await openSession();
+  await seedPlan(sessionId, 'declined');
+  return sessionId;
+}
+
 const sessionRow = (id: string) => adminDb.planChangeSession.findUniqueOrThrow({ where: { id } });
 const gatesOf = (sessionId: string) =>
   adminDb.approvalGate.findMany({
@@ -138,7 +164,7 @@ describe('the schema admits the kind and only the kinds that may be card-less', 
     'accepts a planning_session row with no work item, and refuses a card-bearing kind without one',
     T,
     async () => {
-      const sessionId = await openSession();
+      const sessionId = await openPlannedSession();
       await adminDb.approvalGate.create({
         data: {
           workspaceId: fx.workspaceId,
@@ -171,7 +197,7 @@ describe('the question cause', () => {
     'marks the session and raises exactly ONE gate, in the owner’s name, with no work item',
     T,
     async () => {
-      const sessionId = await openSession();
+      const sessionId = await openPlannedSession();
 
       await plannerSpeaks(sessionId, 'job-q1', 'Before I split it —', 'Which team owns this?');
 
@@ -191,7 +217,7 @@ describe('the question cause', () => {
   );
 
   it('raises no second row when it happens again', T, async () => {
-    const sessionId = await openSession();
+    const sessionId = await openPlannedSession();
     await plannerSpeaks(sessionId, 'job-q1', 'First —', 'One?');
     const since = (await sessionRow(sessionId)).awaitingPersonSince;
 
@@ -202,7 +228,7 @@ describe('the question cause', () => {
   });
 
   it('raises nothing for a planner turn WITHOUT a question', T, async () => {
-    const sessionId = await openSession();
+    const sessionId = await openPlannedSession();
 
     await plannerSpeaks(sessionId, 'job-r1', 'Here is what I found.', null);
 
@@ -211,9 +237,9 @@ describe('the question cause', () => {
   });
 
   it('raises nothing on a `guide` session, nor on a failed-waiting one', T, async () => {
-    const guide = await openSession();
+    const guide = await openPlannedSession();
     await adminDb.planChangeSession.update({ where: { id: guide }, data: { origin: 'guide' } });
-    const failed = await openSession();
+    const failed = await openPlannedSession();
     await adminDb.planChangeSession.update({
       where: { id: failed },
       data: { failedAt: new Date(), failedJobId: 'j', failureReason: 'internal' },
@@ -234,7 +260,7 @@ describe('the reply cause — raised by the sweep', () => {
     'raises a conversation the person left, and the idle close in the same sweep does not end it',
     T,
     async () => {
-      const sessionId = await openSession();
+      const sessionId = await openPlannedSession();
       await plannerReplyQuietFor(sessionId, AWAITING_REPLY_AFTER_MS + 5 * MIN);
 
       const out = await planningSessionGateService.raiseAwaitingReplies();
@@ -249,7 +275,7 @@ describe('the reply cause — raised by the sweep', () => {
   );
 
   it('is left untouched when quiet for LESS than the threshold', T, async () => {
-    const sessionId = await openSession();
+    const sessionId = await openPlannedSession();
     await plannerReplyQuietFor(sessionId, AWAITING_REPLY_AFTER_MS - 3 * MIN);
 
     expect((await planningSessionGateService.raiseAwaitingReplies()).raised).toBe(0);
@@ -310,7 +336,7 @@ describe('the reply cause — raised by the sweep', () => {
   );
 
   it('is left untouched when the last turn is the PERSON’s', T, async () => {
-    const sessionId = await openSession(); // its only turn is the person's first
+    const sessionId = await openPlannedSession(); // its only turn is the person's first
     await adminDb.planChangeSession.update({
       where: { id: sessionId },
       data: { lastActivityAt: new Date(Date.now() - AWAITING_REPLY_AFTER_MS - 5 * MIN) },
@@ -320,7 +346,7 @@ describe('the reply cause — raised by the sweep', () => {
   });
 
   it('is idempotent: a second pass raises nothing new', T, async () => {
-    const sessionId = await openSession();
+    const sessionId = await openPlannedSession();
     await plannerReplyQuietFor(sessionId, AWAITING_REPLY_AFTER_MS + 5 * MIN);
 
     await planningSessionGateService.raiseAwaitingReplies();
@@ -331,12 +357,175 @@ describe('the reply cause — raised by the sweep', () => {
   });
 });
 
+describe('a conversation that never reached planning (MOTIR-9299)', () => {
+  it(
+    'a planner question on a plan-less conversation marks nothing and raises no gate; the same on a planned one does both',
+    T,
+    async () => {
+      const planless = await openSession();
+      const planned = await openPlannedSession();
+
+      await plannerSpeaks(planless, 'job-q-none', 'Before I answer —', 'Which team owns this?');
+      await plannerSpeaks(planned, 'job-q-plan', 'Before I answer —', 'Which team owns this?');
+
+      expect((await sessionRow(planless)).awaitingPersonSince).toBeNull();
+      expect(await gatesOf(planless)).toHaveLength(0);
+      expect((await sessionRow(planned)).awaitingPersonCause).toBe('question');
+      expect(await awaitingGates(planned)).toHaveLength(1);
+    },
+  );
+
+  it(
+    'the reply pass never raises a plan-less conversation, and its discovery read never returns one',
+    T,
+    async () => {
+      const sessionId = await openSession();
+      await plannerReplyQuietFor(sessionId, AWAITING_REPLY_AFTER_MS + 5 * MIN);
+
+      const before = new Date(Date.now() - AWAITING_REPLY_AFTER_MS);
+      const candidates = await withSystemContext((tx) =>
+        planChangeSessionRepository.listAwaitingReplyCandidates(before, 100, tx),
+      );
+      const out = await planningSessionGateService.raiseAwaitingReplies();
+
+      expect(candidates.map((c) => c.id)).not.toContain(sessionId);
+      expect(out).toEqual({ raised: 0, sessionIds: [] });
+      expect((await sessionRow(sessionId)).awaitingPersonSince).toBeNull();
+      expect(await gatesOf(sessionId)).toHaveLength(0);
+    },
+  );
+
+  it.each(['generating', 'planned', 'stale'] as const)(
+    'a session holding a %s plan is still never raised (the undecided exclusion survives)',
+    T,
+    async (status) => {
+      const sessionId = await openSession();
+      await seedPlan(sessionId, status);
+      await plannerReplyQuietFor(sessionId, AWAITING_REPLY_AFTER_MS + 5 * MIN);
+
+      expect((await planningSessionGateService.raiseAwaitingReplies()).raised).toBe(0);
+      expect(await gatesOf(sessionId)).toHaveLength(0);
+    },
+  );
+
+  it(
+    'a session holding a declined plan is still raised — the existence test is any plan',
+    T,
+    async () => {
+      const sessionId = await openPlannedSession();
+      await plannerReplyQuietFor(sessionId, AWAITING_REPLY_AFTER_MS + 5 * MIN);
+
+      const out = await planningSessionGateService.raiseAwaitingReplies();
+
+      expect(out.sessionIds).toEqual([sessionId]);
+      expect((await sessionRow(sessionId)).awaitingPersonCause).toBe('reply');
+      expect(await awaitingGates(sessionId)).toHaveLength(1);
+    },
+  );
+
+  /** A mark written under the OLD rule: marker and awaiting gate row, set directly. */
+  async function legacyMark(sessionId: string, quietMs: number) {
+    const since = new Date(Date.now() - quietMs);
+    await adminDb.planChangeSession.update({
+      where: { id: sessionId },
+      data: { awaitingPersonSince: since, awaitingPersonCause: 'reply', lastActivityAt: since },
+    });
+    await adminDb.approvalGate.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: null,
+        kind: 'planning_session',
+        subjectId: sessionId,
+        routedToId: fx.ownerId,
+        state: 'awaiting',
+        subjectVersion: since.toISOString(),
+      },
+    });
+  }
+
+  it(
+    'the idle close releases a mark left on a plan-less conversation — but not a failed attempt, nor a planned session',
+    T,
+    async () => {
+      const pastLease = PLAN_TARGET_LOCK_LEASE_MS + 5 * MIN;
+      const planless = await openSession();
+      await legacyMark(planless, pastLease);
+      const failed = await openSession();
+      await adminDb.planChangeSession.update({
+        where: { id: failed },
+        data: {
+          failedAt: new Date(),
+          failedJobId: 'j',
+          failureReason: 'internal',
+          lastActivityAt: new Date(Date.now() - pastLease),
+        },
+      });
+      const planned = await openPlannedSession();
+      await legacyMark(planned, pastLease);
+
+      const out = await planSessionEndService.closeIdleSessions();
+
+      expect(out.sessionIds).toEqual([planless]);
+      const s = await sessionRow(planless);
+      expect(s.endReason).toBe('idle');
+      expect(s.endedAt).not.toBeNull();
+      expect(s.awaitingPersonSince).toBeNull();
+      expect(s.awaitingPersonCause).toBeNull();
+      expect((await gatesOf(planless)).map((g) => [g.state, g.supersededCause])).toEqual([
+        ['superseded', 'session_ended'],
+      ]);
+      expect((await sessionRow(failed)).endedAt).toBeNull();
+      expect((await sessionRow(planned)).endedAt).toBeNull();
+      expect(await awaitingGates(planned)).toHaveLength(1);
+    },
+  );
+
+  it(
+    'one sweep pass ends a legacy-marked plan-less conversation; a second pass changes nothing',
+    T,
+    async () => {
+      const sessionId = await openSession();
+      await legacyMark(sessionId, PLAN_TARGET_LOCK_LEASE_MS + 5 * MIN);
+      const engine = new JobTestEngine({ function: planTargetLockSweep });
+
+      const first = await engine.execute();
+      const endedAt = (await sessionRow(sessionId)).endedAt;
+      const second = await engine.execute();
+
+      expect(first.result).toMatchObject({ idle: { sessionIds: [sessionId] } });
+      expect(endedAt).not.toBeNull();
+      expect(second.result).toMatchObject({ idle: { closed: 0, sessionIds: [] } });
+      expect((await planningSessionGateService.raiseAwaitingReplies()).raised).toBe(0);
+      expect((await sessionRow(sessionId)).endedAt).toEqual(endedAt);
+      expect(await awaitingGates(sessionId)).toHaveLength(0);
+    },
+  );
+
+  it.each([
+    [29, false],
+    [31, true],
+  ] as const)(
+    'a legacy-marked plan-less conversation %i minutes past its last turn is closed: %s',
+    T,
+    async (minutes, closed) => {
+      const sessionId = await openSession();
+      await legacyMark(sessionId, minutes * MIN);
+
+      const { result } = await new JobTestEngine({ function: planTargetLockSweep }).execute();
+
+      expect(result).toMatchObject({ idle: { sessionIds: closed ? [sessionId] : [] } });
+      expect((await sessionRow(sessionId)).endedAt === null).toBe(!closed);
+    },
+  );
+});
+
 describe('the clear', () => {
   it.each(['question', 'reply'] as const)(
     'the person’s next turn supersedes the %s gate `answered` and nulls the marker',
     T,
     async (cause) => {
-      const sessionId = await openSession();
+      const sessionId = await openPlannedSession();
       if (cause === 'question') {
         await plannerSpeaks(sessionId, 'job-q', 'Hmm —', 'Which?');
       } else {
@@ -359,7 +548,7 @@ describe('the clear', () => {
     'ending the session as %s supersedes its awaiting gate `session_ended`',
     T,
     async (reason: PlanSessionEndReason) => {
-      const sessionId = await openSession();
+      const sessionId = await openPlannedSession();
       await plannerSpeaks(sessionId, 'job-q', 'Hmm —', 'Which?');
 
       await planSessionEndService.endSession(sessionId, reason, {
@@ -391,7 +580,7 @@ describe('Waiting on you — the routing read and its count', () => {
     'lists the awaiting session for its owner with its summary, and for nobody else',
     T,
     async () => {
-      const sessionId = await openSession();
+      const sessionId = await openPlannedSession();
       await plannerSpeaks(sessionId, 'job-q', 'Before I split it —', 'Which team owns this?');
       const rival = await secondMember();
 
@@ -443,7 +632,7 @@ describe('Waiting on you — the routing read and its count', () => {
         }),
     ],
   ])('a stale gate row is invisible once the session %s', T, async (_name, strand) => {
-    const sessionId = await openSession();
+    const sessionId = await openPlannedSession();
     await plannerSpeaks(sessionId, 'job-q', 'Hmm —', 'Which?');
     expect((await approvalGatesService.listAwaitingMe(actor())).total).toBe(1);
 
@@ -462,7 +651,7 @@ describe('the gate has no verbs', () => {
     '%s is refused through the decide door and the gate stays awaiting',
     T,
     async (decision) => {
-      const sessionId = await openSession();
+      const sessionId = await openPlannedSession();
       await plannerSpeaks(sessionId, 'job-q', 'Hmm —', 'Which?');
       const [gate] = await awaitingGates(sessionId);
 
@@ -493,7 +682,7 @@ describe('real concurrency — a turn racing the sweep’s raise', () => {
       for (let i = 0; i < 15; i++) {
         await truncateAuthTables();
         fx = await makeWorkItemFixture();
-        const sessionId = await openSession();
+        const sessionId = await openPlannedSession();
         await plannerReplyQuietFor(sessionId, AWAITING_REPLY_AFTER_MS + 5 * MIN);
 
         const results = await Promise.allSettled([

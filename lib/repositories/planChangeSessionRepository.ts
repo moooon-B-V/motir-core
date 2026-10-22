@@ -26,6 +26,14 @@ export type PlanChangeSessionUpdateInput = Prisma.PlanChangeSessionUncheckedUpda
  * (MOTIR-7913), over an aliased `plan_change_session s`. The last turn is read with
  * `ORDER BY seq DESC LIMIT 1`; a `system` marker turn (a submission) is a last turn
  * that is NOT the planner's, so a session mid-submission never qualifies.
+ *
+ * Only a session that REACHED PLANNING qualifies (MOTIR-9299): it holds at least one
+ * `plan` row, of any status. A conversation that only asked a question is not waiting on
+ * its person, so it is never marked and the idle close ends it on the lease. The two plan
+ * clauses answer different questions and both stay — "did it ever plan" (EXISTS) and "is
+ * its plan still someone's to decide" (the undecided exclusion). The reply threshold
+ * itself is the service's (`AWAITING_REPLY_AFTER_MS`); it arrives here already turned
+ * into the `before` cutoff.
  */
 function awaitingReplyCandidateSql(before: Date): Prisma.Sql {
   return Prisma.sql`
@@ -42,6 +50,7 @@ function awaitingReplyCandidateSql(before: Date): Prisma.Sql {
       ORDER BY t."seq" DESC
       LIMIT 1
     )
+    AND EXISTS (SELECT 1 FROM "plan" p WHERE p."session_id" = s."id")
     AND NOT EXISTS (
       SELECT 1 FROM "plan" p
       WHERE p."session_id" = s."id"
@@ -462,7 +471,12 @@ export const planChangeSessionRepository = {
         // conversation they have not answered — is NOT idle (MOTIR-7908). Without
         // this a failure that came before the first proposal, and a reply nobody has
         // read yet, are indistinguishable from a thread nobody is coming back to.
-        ...NOT_WAITING_WHERE,
+        // ⚠️ AMENDED BY MOTIR-9299: a mark on a session that holds NO PLAN does not
+        // protect it. Such a conversation is no longer marked, but one marked under the
+        // old rule would otherwise nag in Waiting on you for ever; the end operation
+        // clears the mark and withdraws its gate. A failed attempt keeps its To resume
+        // entry whether or not it wrote a plan (`failedAt: null`).
+        OR: [NOT_WAITING_WHERE, { ...AWAITING_PERSON_WHERE, failedAt: null, plans: { none: {} } }],
         plans: { none: { status: { in: [...UNDECIDED_PLAN_STATUSES] } } },
       },
       select: { id: true, workspaceId: true },
