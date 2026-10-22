@@ -8423,6 +8423,38 @@
         "noAi": "Motir AI ist hier nicht eingerichtet, daher kann die Planung nicht starten. Sie können diese Anfrage trotzdem teilen."
       }
     },
+    "planOffer": {
+      "label": "Angebot zur Planung",
+      "labelMidPlanning": "Angebot, etwas anderes zu planen",
+      "target": "Ziel",
+      "noTarget": "Kein Arbeitselement ist das Ziel. Geplant wird die Anfrage oben.",
+      "targetElsewhere": "{key} ist nicht das Arbeitselement, für das diese Unterhaltung geöffnet wurde.",
+      "confirm": "Bestätigen",
+      "confirming": "Wird gestartet…",
+      "decline": "Ablehnen",
+      "declining": "Wird abgelehnt…",
+      "confirmHelp": "Bestätigen startet die Planung von {key} mit dieser Anfrage, hier in dieser Unterhaltung. Eine Antwort mit „Ja“ bewirkt dasselbe.",
+      "confirmHelpNoTarget": "Bestätigen startet die Planung dieser Anfrage für sich, hier in dieser Unterhaltung. Eine Antwort mit „Ja“ bewirkt dasselbe.",
+      "declineHelp": "Ablehnen plant nichts, und die Unterhaltung geht weiter.",
+      "midPlanning": "Diese Unterhaltung plant bereits etwas. Bestätigen beendet diesen Plan und startet diesen, so wie „Etwas Neues planen“.",
+      "started": "Planung gestartet",
+      "startedBy": "Bestätigt · {when}",
+      "startedHere": "Die Planung läuft hier, in dieser Unterhaltung.",
+      "beingPlanned": "{key} wird gerade geplant, daher habe ich nicht erneut angeboten, es zu planen. Sie können diese Planung verfolgen oder mich etwas anderes fragen.",
+      "beingPlannedHere": "{key} wird bereits hier geplant, in dieser Unterhaltung – der Plan unten ist es.",
+      "declined": "Abgelehnt",
+      "declinedBy": "Abgelehnt · {when}",
+      "recorded": "Es wurde nichts geplant.",
+      "replaced": "Durch ein neueres Angebot ersetzt",
+      "showAll": "Alle anzeigen",
+      "showLess": "Weniger anzeigen",
+      "cannotStart": {
+        "planningUnavailable": "Die Planung kann hier nicht starten: Motir AI ist für dieses Projekt nicht eingerichtet, oder Ihnen fehlt die Berechtigung, Arbeitselemente zu planen und zu bearbeiten.",
+        "outOfCredits": "Ihre Organisation hat keine AI-Credits mehr, daher kann die Planung nicht starten.",
+        "targetUnavailable": "Sie können {key} nicht mehr öffnen, daher kann die Planung nicht starten.",
+        "generic": "Die Planung kann aus diesem Angebot nicht starten."
+      }
+    },
     "restart": {
       "control": "Etwas Neues planen",
       "confirm": {
