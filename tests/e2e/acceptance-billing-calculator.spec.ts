@@ -286,7 +286,9 @@ test.describe('The Calculator on Billing & plans', () => {
       'Need more credits? opens the Calculator, which estimates nothing until asked',
       async () => {
         await openPlans(page, seed, t('ai.choosePlan'));
-        await expect(page.getByTestId('plans-need-more')).toContainText(t('plans.needMore.title'));
+        await expect(live(page).getByTestId('plans-need-more')).toContainText(
+          t('plans.needMore.title'),
+        );
         await expect(page.getByRole('button', { name: t('plans.needMore.action') })).toHaveCount(1);
         await openTab(page);
         expect(page.url()).toContain(billingPath);
