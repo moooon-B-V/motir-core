@@ -63,6 +63,41 @@ const VERSIONS = {
 /** Enough tags that the read is not classified blind, but none of ours. */
 const UNRELATED_TAGS = ['runner-v1.0.0', 'cli-v0.3.0'];
 
+/**
+ * What is wrong with `release.yml`'s `Push the version tags` step (MOTIR-9266).
+ *
+ * The step must run on every push to `main`, so its condition may not mention
+ * `hasChangesets`, and it must read the versions from the pushed commit, because
+ * on a run with changesets pending the checkout is `changeset-release/main` with
+ * the next, unmerged versions in it. Whole-line comments are ignored: the step's
+ * own comment names the old gate.
+ */
+function tagStepProblems(lane: string): string[] {
+  const lines = lane.split('\n').filter((l) => !/^\s*#/.test(l));
+  const start = lines.findIndex((l) => /^\s*- name: Push the version tags\s*$/.test(l));
+  if (start === -1) return ['release.yml has no `Push the version tags` step'];
+  const indent = lines[start]!.indexOf('-');
+  let end = start + 1;
+  while (end < lines.length) {
+    const line = lines[end]!;
+    if (line.trim() !== '' && line.search(/\S/) <= indent) break;
+    end += 1;
+  }
+  const step = lines.slice(start, end).join('\n');
+  const problems: string[] = [];
+  if (/^\s*if:.*hasChangesets/m.test(step)) {
+    problems.push(
+      'the tag step is gated on `hasChangesets`: a Version Packages merge that lands after another changeset is skipped, stays green, and is never tagged or published',
+    );
+  }
+  if (!/^\s*run: node scripts\/push-release-tags\.mjs --ref "\$GITHUB_SHA"\s*$/m.test(step)) {
+    problems.push(
+      'the tag step does not run `node scripts/push-release-tags.mjs --ref "$GITHUB_SHA"`: with changesets pending it would read the unmerged versions on `changeset-release/main`',
+    );
+  }
+  return problems;
+}
+
 describe('the derivation produces this repository’s tag format (MOTIR-3970)', () => {
   it('names exactly the three published packages', () => {
     // A fourth published package must fail a test rather than silently never
@@ -280,21 +315,42 @@ describe('the release lane is wired to the script it claims to run (MOTIR-3970)'
     expect(code).not.toMatch(/^\s+publish:/m);
   });
 
-  it('pushes the tags only once the Version Packages pull request has merged', () => {
-    // BOTH halves of the gate (MOTIR-3967). `hasChangesets == 'false'` is the
-    // original condition: no changesets left means that pull request has just
-    // merged and the bumped versions are on `main`, which is when tags are owed.
-    //
-    // `queued == 'false'` was added when the merge queue turned out to forbid the
-    // sync push while the Version Packages pull request is queued. A run that
-    // skipped the sync leaves `hasChangesets` EMPTY, which is already not
-    // `'false'` — but a gate that depends on an empty string meaning "no" is a
-    // gate nobody can read. Naming the skip is what makes it legible, and it is
-    // asserted here so it cannot be dropped as redundant.
-    expect(code).toContain(
-      "if: steps.queued.outputs.queued == 'false' && steps.changesets.outputs.hasChangesets == 'false'",
+  it('pushes the tags on every push, reading the versions from `$GITHUB_SHA`', () => {
+    // MOTIR-7717 / MOTIR-9266: the step was gated on `hasChangesets == 'false'`,
+    // and a changeset that reached `main` before the Version Packages merge made
+    // that run skip it — green, untagged, unpublished. The gate is gone, and
+    // `--ref "$GITHUB_SHA"` is what makes removing it safe.
+    expect(tagStepProblems(workflow)).toEqual([]);
+  });
+
+  it('fails if the tag step is gated on `hasChangesets` again', () => {
+    const gated = workflow.replace(
+      '      - name: Push the version tags\n',
+      "      - name: Push the version tags\n        if: steps.changesets.outputs.hasChangesets == 'false'\n",
     );
-    expect(code).toContain('run: node scripts/push-release-tags.mjs');
+    expect(gated).not.toBe(workflow);
+    const problems = tagStepProblems(gated);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('hasChangesets');
+  });
+
+  it('fails if the tag step stops passing `--ref "$GITHUB_SHA"`', () => {
+    const unpinned = workflow.replace(
+      'run: node scripts/push-release-tags.mjs --ref "$GITHUB_SHA"',
+      'run: node scripts/push-release-tags.mjs',
+    );
+    expect(unpinned).not.toBe(workflow);
+    const problems = tagStepProblems(unpinned);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('--ref "$GITHUB_SHA"');
+  });
+
+  it('fails if the tag step is gone', () => {
+    const problems = tagStepProblems(
+      workflow.replace('- name: Push the version tags', '- name: x'),
+    );
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('no `Push the version tags` step');
   });
 
   it('asks the merge queue before trying to sync a branch it may not update', () => {

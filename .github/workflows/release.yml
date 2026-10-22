@@ -5,10 +5,11 @@
 #   1. Keep a **Version Packages** pull request in sync with the accumulated
 #      changesets. Merging it is what bumps the three published packages'
 #      versions and writes their changelogs.
-#   2. When that pull request merges — i.e. when there are no changesets left —
-#      push `cli-v<version>` / `brand-v<version>` / `design-system-v<version>`
-#      for whatever is now on `main`. Those tags are what make the EXISTING
-#      release lanes fire.
+#   2. Push `cli-v<version>` / `brand-v<version>` / `design-system-v<version>`
+#      for every version on `main` that has no tag yet, each on the commit that
+#      set it. That happens when the Version Packages pull request merges, even
+#      if new changesets are already pending. Those tags are what make the
+#      EXISTING release lanes fire.
 #
 # ── ⚠️ IT DOES NOT PUBLISH, AND THAT IS THE DESIGN ──────────────────────────
 #
@@ -192,21 +193,35 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
-      # `hasChangesets == 'false'` means the Version Packages pull request has
-      # just merged and the bumped versions are now on `main` — which is exactly
-      # when the tags are owed. While changesets are still accumulating the step
-      # is skipped, because the versions on `main` have not moved.
-      # Both halves are required. `hasChangesets` is EMPTY when the sync above was
-      # skipped for a queued pull request, and an empty string is not `'false'` —
-      # but naming the skip explicitly says what is meant rather than relying on
-      # that. A run that skipped the sync owes no tags: it is not the run in which
-      # the Version Packages pull request merged, and the run that IS will push
-      # them.
+      # The tags are pushed on EVERY push to `main` (MOTIR-7717, MOTIR-9266). The
+      # step used to run only when the sync above reported `hasChangesets ==
+      # 'false'`, on the theory that such a run is the one in which the Version
+      # Packages pull request merged. A changeset that reached `main` before that
+      # merge broke the theory: the merge run reported `hasChangesets: true`,
+      # skipped this step and stayed green, and the version it set was never
+      # tagged or published (0.9.0 / 0.4.0, then 0.16.0 / 0.4.7 on 2026-10-22).
+      #
+      # Running it on every push is safe because of TWO things, which ship
+      # together and must never be separated:
+      #
+      #   - `--ref "$GITHUB_SHA"`. Whenever changesets are pending, the sync above
+      #     leaves the checkout on `changeset-release/main` with the NEXT versions
+      #     written into the manifests. The runner reads the versions from the
+      #     commit that was pushed to `main`, never from that checkout, so it
+      #     cannot tag a version that has not merged.
+      #   - Idempotence. A version already tagged is skipped, and each new tag goes
+      #     on the commit that set its version, not on `HEAD`
+      #     (`scripts/releaseTags.mjs`). On a push that moved no version the step
+      #     pushes nothing.
+      #
+      # There is no `queued` condition either. That one guards the sync, which may
+      # not update a branch whose pull request is in the merge queue (`GH006`).
+      # This step pushes only tags and never touches `changeset-release/main`, and
+      # when the sync is skipped the checkout is already `$GITHUB_SHA`.
       - name: Push the version tags
-        if: steps.queued.outputs.queued == 'false' && steps.changesets.outputs.hasChangesets == 'false'
         env:
           # `actions/checkout` already persisted this credential for `git push`;
           # it is set here as well so a reader of this step can see which token
           # the push that must trigger the release lanes is made with.
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: node scripts/push-release-tags.mjs
+        run: node scripts/push-release-tags.mjs --ref "$GITHUB_SHA"
