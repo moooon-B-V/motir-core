@@ -72,9 +72,21 @@ export interface AskJobOutcome {
    * The code graph could not be read for this answer (Story MOTIR-8136 · MOTIR-8144):
    * the result carries motir-ai's top-level `codeUnreadable` signal beside the answer.
    * Present only when declared, so every other reply is byte-identical to before.
+   * `true` sends the default reason (`snapshot_integrity`); a reason names which
+   * outage it was — `hydrate_failed` (the graph is unavailable) or `not_indexed` (the
+   * repository has no graph yet) — so a spec reaches each (Story MOTIR-9216 · MOTIR-9234).
    */
-  codeUnreadable?: boolean;
+  codeUnreadable?: boolean | CodeUnreadableReason;
+  /**
+   * `out_of_credits` refuses the SUBMIT with motir-ai's `402` (Story MOTIR-9216 ·
+   * MOTIR-9234), the guide's arm for an ask: no job is created. Consumed per
+   * submit attempt, like the guide's.
+   */
+  submit?: 'accepted' | 'out_of_credits';
 }
+
+/** The outage reasons motir-ai's `codeUnreadable` signal names. */
+export type CodeUnreadableReason = 'snapshot_integrity' | 'hydrate_failed' | 'not_indexed';
 
 /**
  * What the next ROUTING run should decide (Story MOTIR-4753 · MOTIR-4762).
@@ -214,6 +226,13 @@ const CODE_UNREADABLE_SIGNAL = {
   repoRefs: ['acme/web'],
   reason: 'snapshot_integrity',
 } as const;
+
+/** The signal an ask outcome declared, with the reason it named. */
+function codeUnreadableSignal(declared: boolean | CodeUnreadableReason) {
+  return declared === true
+    ? CODE_UNREADABLE_SIGNAL
+    : { ...CODE_UNREADABLE_SIGNAL, reason: declared };
+}
 
 /** One recorded `POST /v1/jobs` (diagnostic; the spec owns the fixture file). */
 export interface SubmittedJob {
@@ -673,11 +692,12 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
       const rawBody = String(req.body ?? '{}');
       const kind = kindOfSubmit(rawBody);
       notifySubmitObservers(rawBody);
-      // The ONE refusal this seam models at the submit (the guide's MOTIR-7468): motir-ai's own `402 out_of_credits` problem, so the real
+      // The refusal this seam models at the submit (the guide's MOTIR-7468, then the translate's and the ask's): motir-ai's own `402 out_of_credits` problem, so the real
       // client maps it.
       if (
         (kind === 'guide_work_item' &&
           guideOutcomeAt(submitOrdinal(kind)).submit === 'out_of_credits') ||
+        (kind === 'ask_project' && askOutcomeAt(submitOrdinal(kind)).submit === 'out_of_credits') ||
         (kind === 'translate' &&
           translateOutcomeAt(submitOrdinal(kind)).submit === 'out_of_credits')
       ) {
@@ -866,7 +886,9 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
                   : {}),
                 ...(outcome.run !== undefined ? { run: outcome.run } : {}),
               },
-              ...(outcome.codeUnreadable ? { codeUnreadable: CODE_UNREADABLE_SIGNAL } : {}),
+              ...(outcome.codeUnreadable
+                ? { codeUnreadable: codeUnreadableSignal(outcome.codeUnreadable) }
+                : {}),
             }
           : kind === 'guide_work_item' && guideOutcomeAt(index).guideTurn !== undefined
             ? { guideTurn: guideOutcomeAt(index).guideTurn }
