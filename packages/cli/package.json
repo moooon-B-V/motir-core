@@ -5,12 +5,12 @@
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/moooon-B-V/motir-core.git",
+    "url": "git+https://github.com/motir-co/motir-core.git",
     "directory": "packages/cli"
   },
   "homepage": "https://motir.co",
   "bugs": {
-    "url": "https://github.com/moooon-B-V/motir-core/issues"
+    "url": "https://github.com/motir-co/motir-core/issues"
   },
   "type": "module",
   "bin": {
