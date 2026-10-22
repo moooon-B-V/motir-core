@@ -109,8 +109,20 @@ export function narrationHeadLines(groups: readonly NarrationGroup[], tc: Tc): N
 const DISCLOSURE_CLASS =
   'inline-flex shrink-0 items-center gap-0.5 rounded-(--radius-control) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-[11px] font-medium text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none';
 
+/** The sticky bar's place in its scroll container, per host. `top-0` would stick
+ *  below the container's top padding and leave a gap the notes show through, so
+ *  the bar's negative top cancels that padding. In the chat rail the notes sit
+ *  beside Motir AI's avatar, so the bar bleeds right only and never covers it. */
+const BAR_INSET_CLASS = {
+  rail: '-top-4 -mr-4 pr-4',
+  page: '-top-5 -mx-5 px-5',
+} as const;
+
 export interface PlanNarrationProps {
   groups: readonly NarrationGroup[];
+  /** Which scroll container the notes sit in: the chat rail (`p-4`, beside the
+   *  avatar) or the plan review page (`p-5`). */
+  inset: keyof typeof BAR_INSET_CLASS;
   /** The plan's total sentence count: the read's window plus its `earlierCount`. */
   total: number;
   /** Sentences before the earliest one in hand. */
@@ -121,6 +133,7 @@ export interface PlanNarrationProps {
 
 export function PlanNarration({
   groups,
+  inset,
   total,
   earlierCount,
   loadingEarlier = false,
@@ -139,7 +152,7 @@ export function PlanNarration({
       {total > 0 ? (
         <div
           data-testid="plan-narration-bar"
-          className="sticky top-0 z-10 -mx-4 flex items-center gap-2 bg-(--el-surface) px-4 py-1"
+          className={`sticky z-10 flex items-center gap-2 bg-(--el-surface) py-1 ${BAR_INSET_CLASS[inset]}`}
         >
           <span className="font-mono text-[10px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
             {tc('narration.label')}
