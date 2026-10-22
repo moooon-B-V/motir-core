@@ -12,6 +12,7 @@ import {
   settleGuideJob,
   type GuideTurnResponse,
 } from '@/lib/planning/guideClient';
+import { whileStartingUp } from '@/lib/planning/submitStartingUp';
 
 // The client state behind the overlay's GUIDE mode (Story MOTIR-7459 ·
 // MOTIR-7466). It follows `usePlanChangeConversation`'s APPEND-THEN-RUN shape on
@@ -54,6 +55,8 @@ export interface GuideConversationState {
   progress: TodoProgressDto | null;
   /** A turn that did not finish, or a door that refused (a typed code). */
   errorCode: string | null;
+  /** The door has not answered for a while — Motir AI is waking (MOTIR-9255). */
+  startingUp: boolean;
   outOfCredits: boolean;
   markers: GuidePersonMarker[];
   /** A canvas tick the card refused, in the to-do catalog's words. */
@@ -131,6 +134,7 @@ export function useGuideConversation({ itemKey, workItemId, todos }: UseGuideCon
     rows: null,
     progress: null,
     errorCode: null,
+    startingUp: false,
     outOfCredits: false,
     markers: [],
     tickError: null,
@@ -171,6 +175,22 @@ export function useGuideConversation({ itemKey, workItemId, todos }: UseGuideCon
       /* the last read stands */
     }
   }, [workItemId]);
+
+  /** Await a door that submits a turn, saying "starting up" while it waits long
+   *  (MOTIR-9255): the server rides out a waking machine, so no error is drawn. */
+  const door = useCallback(
+    <T>(pending: Promise<T>): Promise<T> =>
+      whileStartingUp(
+        pending,
+        () => {
+          if (mountedRef.current) setState((s) => ({ ...s, startingUp: true }));
+        },
+        () => {
+          if (mountedRef.current) setState((s) => ({ ...s, startingUp: false }));
+        },
+      ),
+    [],
+  );
 
   /** Watch a job to its end, then land it and re-read the rows. */
   const follow = useCallback(
@@ -258,7 +278,7 @@ export function useGuideConversation({ itemKey, workItemId, todos }: UseGuideCon
     openedRef.current = itemKey;
     void (async () => {
       try {
-        const response = await openGuideOnce(itemKey);
+        const response = await door(openGuideOnce(itemKey));
         await take(response);
       } catch (err) {
         if (!mountedRef.current) return;
@@ -266,7 +286,7 @@ export function useGuideConversation({ itemKey, workItemId, todos }: UseGuideCon
         setState((s) => ({ ...s, phase: 'idle', errorCode: code, outOfCredits }));
       }
     })();
-  }, [itemKey, take]);
+  }, [itemKey, take, door]);
 
   useEffect(() => {
     void reloadRows();
@@ -296,17 +316,19 @@ export function useGuideConversation({ itemKey, workItemId, todos }: UseGuideCon
       if (stateRef.current.phase !== 'idle') return;
       setState((s) => ({ ...s, phase: 'running', errorCode: null, outOfCredits: false }));
       try {
-        await take(await sendGuideTurn(session.id, body, attachmentIds));
+        await take(await door(sendGuideTurn(session.id, body, attachmentIds)));
       } catch (err) {
         if (!mountedRef.current) return;
         const { code, outOfCredits } = errorCodeOf(err);
         setState((s) => ({ ...s, phase: 'idle', errorCode: code, outOfCredits }));
       }
     },
-    [take],
+    [take, door],
   );
 
-  /** Try again — re-run the turn that did not finish. No second turn is written. */
+  /** Try again — re-run the turn that did not finish. No second turn is written.
+   *  The server re-sends it under the turn's same key (MOTIR-9255), so a job
+   *  motir-ai ran late is the one that comes back — nothing is charged twice. */
   const retry = useCallback(async () => {
     const session = stateRef.current.session;
     if (stateRef.current.phase !== 'idle') return;
@@ -314,7 +336,7 @@ export function useGuideConversation({ itemKey, workItemId, todos }: UseGuideCon
       // The door itself failed: open again.
       setState((s) => ({ ...s, phase: 'opening', errorCode: null, outOfCredits: false }));
       try {
-        await take(await openGuideOnce(itemKey));
+        await take(await door(openGuideOnce(itemKey)));
       } catch (err) {
         if (!mountedRef.current) return;
         const { code, outOfCredits } = errorCodeOf(err);
@@ -326,7 +348,7 @@ export function useGuideConversation({ itemKey, workItemId, todos }: UseGuideCon
     if (!open) return;
     setState((s) => ({ ...s, phase: 'running', errorCode: null, outOfCredits: false }));
     try {
-      const rerun = await resubmitGuideTurn(session.id, open.id);
+      const rerun = await door(resubmitGuideTurn(session.id, open.id));
       // A turn that already HAD a job comes back with it: its settle is what
       // failed, so following the job again is the retry.
       await take(rerun.jobId ? rerun : { ...rerun, jobId: open.jobId });
@@ -335,7 +357,7 @@ export function useGuideConversation({ itemKey, workItemId, todos }: UseGuideCon
       const { code, outOfCredits } = errorCodeOf(err);
       setState((s) => ({ ...s, phase: 'idle', errorCode: code, outOfCredits }));
     }
-  }, [itemKey, take]);
+  }, [itemKey, take, door]);
 
   /**
    * The PERSON'S OWN tick or untick on the canvas (design panel 13) — through the

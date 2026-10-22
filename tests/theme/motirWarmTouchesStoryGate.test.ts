@@ -21,7 +21,8 @@ import { declaredIn, loadTokenLayer, resolveValue, type ThemeContext } from './p
 // screens' warm primary button, MOTIR-8254), the same way. And the `--el-drafting`
 // pair (the drafted card's at-work cue, MOTIR-8416), the same way. And the
 // `--el-chart-workload-*` pair (the Workload report's Assigned / Unassigned segment
-// hues, MOTIR-8919), the same way.
+// hues, MOTIR-8919), the same way. And the `--el-mark-wave-*` family (the Motir
+// mark's at-work flow, MOTIR-9213), the same way.
 
 const REPO = process.cwd();
 const THEMES = ['light', 'dark'] as const;

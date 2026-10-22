@@ -41,6 +41,7 @@ import {
   type RunInputs,
 } from './inputs';
 import { aggregatePoints, type PointsAggregate } from './k6Points';
+import { mixTable } from './mix';
 import { judgeP2028, readLogP2028, readPlatformP2028 } from './p2028';
 import { createPromClient, PRODUCTION_APP } from './prometheus';
 import { countProxyCodes, readPlatform503, type ProxyShed } from './proxyShed';
@@ -445,6 +446,10 @@ export async function buildReport(dir: string, deps: ReportDeps): Promise<Report
   }
 
   const routes = points.state === 'ok' ? ok(routeTable(points.value)) : points;
+  const mix =
+    points.state === 'ok'
+      ? ok(mixTable(points.value, resolved.state === 'ok' ? resolved.value.vus : null))
+      : points;
   const waitHold = steady
     ? await readWaitHold(prom, steady)
     : unmeasured('the steady window is unmeasured');
@@ -497,7 +502,7 @@ export async function buildReport(dir: string, deps: ReportDeps): Promise<Report
         `Every held stream costs one workbench watermark read per second: readerStreamsPerInstance ${run.offered.readerStreamsPerInstance} is background database load named here, not lost inside a req/s figure.`,
       ],
     },
-    tables: { routes, waitHold, statements },
+    tables: { mix, routes, waitHold, statements },
     crossChecks,
   };
 }

@@ -6881,8 +6881,7 @@
       "hintDefault": "Wystarczy kilka zdań. O resztę Motir zapyta.",
       "hintCarried": "Dodaj lub dopracuj cokolwiek przed kontynuacją — dalej przejmie to czat odkrywczy.",
       "importTitle": "Masz już projekt?",
-      "importDesc": "Motir czyta Twój kod, zadania i historię, zanim cokolwiek zmieni, a potem planuje kolejne kroki. To Ty decydujesz, co trafia do wydania.",
-      "importCta": "Jego też zvibe’ujemy"
+      "importProject": "Importuj projekt"
     },
     "import": {
       "title": "Importuj istniejący projekt",
@@ -7907,7 +7906,8 @@
         "redirectedDebug": "Śledzenie błędu…",
         "laying": "Rozkładanie poziomu…",
         "authoring": "Pisanie elementu roboczego…",
-        "note": "Przemyślenie sprawy…"
+        "note": "Przemyślenie sprawy…",
+        "starting": "Motir AI się uruchamia — może to potrwać do minuty."
       },
       "error": {
         "body": "To się nie udało. Rozmowa jest zapisana — spróbuj ponownie albo przeformułuj zmianę.",
@@ -7922,7 +7922,8 @@
         "askSilent": "Nic nie wróciło. Spróbuj zapytać inaczej.",
         "failedClosed": "Ta próba się nie powiodła, więc sesja została zamknięta. Elementy robocze, które w niej były, wróciły na swoje miejsce.",
         "revisionInFlight": "Motir AI już poprawia ten plan. Twoja wiadomość została zachowana — wyślij ją ponownie, gdy pojawi się nowa wersja.",
-        "awaitingResume": "Ta sesja czeka na wznowienie i nie może jeszcze przyjąć wiadomości. Najpierw ją wznów — Twoja wiadomość została zachowana."
+        "awaitingResume": "Ta sesja czeka na wznowienie i nie może jeszcze przyjąć wiadomości. Najpierw ją wznów — Twoja wiadomość została zachowana.",
+        "unavailable": "Motir AI nie odpowiedział na czas. Rozmowa jest zapisana i nie zostaniesz obciążony dwa razy. Spróbuj ponownie."
       },
       "answeredFrom": "{count, plural, =0 {Odpowiedź bez powoływania się na źródła} one {Odpowiedź na podstawie # elementu roboczego} few {Odpowiedź na podstawie # elementów roboczych} many {Odpowiedź na podstawie # elementów roboczych} other {Odpowiedź na podstawie # elementu roboczego}}",
       "correctToAsk": "Zamiast tego odpowiedz na to",
@@ -7991,6 +7992,7 @@
       },
       "act": {
         "submitted": "wysłanie",
+        "starting": "start",
         "reading": "czytanie",
         "redirected": "przekazanie",
         "redirectedDebug": "przekazanie",
@@ -8305,11 +8307,13 @@
       "reload": "Wczytaj element roboczy ponownie",
       "staleNotice": "{key} zmienił się od czasu, gdy ta tura go odczytała. Wczytaj go ponownie i zapytaj jeszcze raz.",
       "failed": "Ta tura się nie zakończyła, więc w elemencie roboczym nic się nie zmieniło.",
+      "startingUp": "Motir AI się uruchamia — może to potrwać do minuty.",
       "errors": {
         "notManual": "Motir AI prowadzi człowieka przez pracę ręczną, a ten element roboczy jest przeznaczony dla agenta, więc nie ma tu przez co prowadzić.",
         "closed": "Ten element roboczy jest gotowy lub zarchiwizowany, więc nie ma już przez co prowadzić.",
         "forbidden": "Aby skorzystać z przewodnika, potrzebujesz uprawnień do edycji tego elementu roboczego i do planowania z Motir AI.",
-        "offerClosed": "Ta oferta została już rozstrzygnięta, więc nie można jej zmienić. Wczytaj ponownie element roboczy, aby zobaczyć, na jakim jest etapie."
+        "offerClosed": "Ta oferta została już rozstrzygnięta, więc nie można jej zmienić. Wczytaj ponownie element roboczy, aby zobaczyć, na jakim jest etapie.",
+        "unavailable": "Motir AI nie odpowiedział na czas. W elemencie roboczym nic się nie zmieniło i nie zostaniesz obciążony dwa razy. Spróbuj ponownie."
       },
       "youTicked": "Zaznaczono krok {n} na liście",
       "youUnticked": "Odznaczono krok {n} na liście",

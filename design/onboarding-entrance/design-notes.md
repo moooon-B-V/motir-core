@@ -843,3 +843,118 @@ the control.
 | **MOTIR-8286** | **GIVES:** mount `AuthLanguageControl` (the same component; import it or lift it) at the trailing end of the brand bar on `/onboarding` and `/onboarding/how-it-works`. Keep its `setLocale` → `router.refresh()` behaviour, and assert in a test that an idea typed in the box survives a switch. It needs no new keys, and it does not need to collapse at 390 px. |
 | **MOTIR-8251** | **GIVES additionally:** the same control at the same trailing end of `OnboardingTopBar`, for the migrate wizard and the importer                                                                                                                                                                                                                                     |
 | MOTIR-8252     | unchanged. The brand bar's second slot is a plain child of `OnboardingHero`'s header, not a new primitive.                                                                                                                                                                                                                                                           |
+
+## 2026-10-21 — onboarding refinements: an Import project button, no idea-box highlight, a coloured way back (MOTIR-8934)
+
+**Design system — files read:** `package.json` (`"@motir/design-system": "workspace:*"`),
+`app/globals.css` (`@import '@motir/design-system/theme.css'`), `app/layout.tsx` (stamps `data-style` /
+`data-palette` / `data-type`), `packages/design-system/package.json` (version 0.15.1, which exports
+`@motir/design-system/mock`). **Verdict: ON MOTIR DESIGN — branch (a).** Axes drawn: `warm-editorial` ·
+`motir` · `motir`, the same axes the two amended mocks wear. The mock is built with `renderMock`: the
+unchanged surfaces are the shipped vibe-layout panels, the Import project link and the pending Start
+are the package's own `buttonVariants` / `Button` (`loading`), and Tailwind is compiled over the
+markup. No part is proposed for `@motir/design-system` and nothing new is product-local.
+
+**Amends:** § _2026-10-11 — the vibe layout_ above (`onboarding-entrance--vibe-layout.mock.html`,
+panels 1, 2 and 5) and `design/onboarding-migrate/design-notes.md` § _2026-10-12_ (the wizard bar in
+`onboarding-migrate--vibe-layout.mock.html`, panels 1a and 10). Both older mocks are records and are
+not edited. **Delta mock:**
+[`onboarding-entrance--refinements.mock.html`](./onboarding-entrance--refinements.mock.html). Story
+MOTIR-8933; build card MOTIR-8935, which waits on this design.
+
+**Answers the sent-back draft.** The 2026-10-18 draft (refused: _"I don't see the import project button
+added, the design doesn't show the button location"_) tucked a small button into the brand bar and drew
+the entrance as a hand-made sketch. This draft draws the whole shipped page with the import door in
+place in panels 1, 2 and 6, as a row inside the idea card (Revision 1 under Change 1).
+
+**Shipped reality read:** `components/onboarding/OnboardingEntrance.tsx` (the import
+`OnboardingSection`, the form's `focus-within:ring-2 … ring-offset-2` and the textarea's `autoFocus`),
+`components/onboarding/layout/OnboardingWizardBar.tsx` (`BAR_SECONDARY_HOVER`),
+`app/(onboarding)/onboarding/migrate/_components/MigrateWizard.tsx` (the `secondary` `sm` link carrying
+`brandBar.planAi`), and `messages/en.json` (`onboarding.entrance.import{Title,Desc,Cta}`,
+`onboardingMigrate.brandBar.planAi`).
+
+### Change 1 — `/onboarding`: the "Already have a project?" band becomes an import row inside the idea card
+
+**Revision 1 (Yue, 2026-10-21, on the gate):** _"Add a row under the "Start" button, make it a part of
+the panel, add text "Already have a project" and "Import project" button, give import project button a
+color like motir.co."_ The first version of this section put a plain secondary button under the card;
+this replaces it.
+
+- **Removed:** the whole import `OnboardingSection` band below the hero: its head, its lede and its "We
+  can vibe it too" button. The page now ends with the hero. Keys `importDesc` and `importCta` become
+  unused (MOTIR-8935 removes them); `importTitle` ("Already have a project?") is reused by the row.
+- **Placement:** a new LAST row of the idea card (the `<form data-surface="card">`), directly under the
+  hint + Start footer, divided from it by the same `border-t border-(--el-border-soft) pt-3` hairline
+  the footer uses. It is part of the card, not a sibling of it.
+- **Leading:** the text **"Already have a project?"** (`onboarding.entrance.importTitle`), 15 px,
+  semibold, `--el-text-strong` (15.59:1 light / 13.76:1 dark on `--el-card`).
+- **Trailing, right-aligned under Start (`ml-auto`):** an **"Import project"** `Link` to
+  `/onboarding/migrate` (new key `onboarding.entrance.importProject`), `buttonVariants({ size: 'md' })`,
+  the same size as Start, with a trailing `ArrowRight` `size-4` (`aria-hidden`).
+- **Colour, as motir.co:** the motir.co hero's own "Already have a project? · Import project" door
+  (the motir-marketing repository's landing page, its `data-hero-existing` paragraph) wears the palette's warm decision
+  fill. The same classes: `border-transparent bg-(--el-showcase-decision)
+text-(--el-showcase-decision-text) hover:bg-(--el-showcase-decision) hover:brightness-105`. Label
+  contrast on the fill: **4.65:1** light, **5.89:1** dark. It is the entrance's one warm element (Start
+  stays the ink primary), the same split motir.co draws.
+- **Focus-visible:** the package's 2 px `--focus-ring-color` ring, unchanged.
+- **Narrow (390 px):** the row wraps like the footer above it, the text on its own line and the button
+  under it at the trailing edge.
+- **States:** at rest, while the idea box is focused, and while Start is pending (panel 2c: Start shows
+  its spinner and is disabled, the box dims, the import row stays enabled, since leaving to import
+  is fine mid-submit).
+- **Carried-idea panel (3): no import row**, unchanged. An idea in hand means starting fresh (the
+  MOTIR-4370 ruling).
+
+### Change 2 — `/onboarding`: the idea box loses its highlight
+
+The highlight is the form's `focus-within:ring-2 ring-(--focus-ring-color) ring-offset-2`, shown from
+page load because the textarea has `autoFocus`.
+
+- **No ring at rest and none on focus.** The card keeps what already made it the primary control: the
+  hero's only raised surface (`--el-card` on `--el-surface`, a 1 px `--el-border` hairline,
+  `--shadow-elevated`) with the page's one primary button, Start, inside it.
+- **`autoFocus` stays.** With nothing lighting up, focusing the box on load costs nothing visually and
+  keeps "land and type".
+- **Keyboard focus:** when the TEXTAREA has focus the card's border steps from `--el-border` to
+  `--el-border-strong` (key it on the textarea, e.g. `has-[textarea:focus]:`, not on `focus-within`,
+  because the import row's button now sits inside the same form), and the caret blinks in the box.
+  That is the only focus cue on this control.
+- **Accessibility trade-off, recorded:** the border step measures 1.27:1 → 1.61:1 against the card in
+  light (1.78:1 in dark), so it is not a 3:1 focus outline. The control meets WCAG 2.4.7 (focus
+  visible) through the caret and the border change, not the stricter 2.4.13 focus-appearance bar
+  (AAA). Every other control on the page keeps its focus ring.
+
+### Change 3 — `/onboarding/migrate`: "Start from an idea instead" gets a colour
+
+- **Position unchanged:** the wizard bar's trailing group, the first control after the flow name and
+  before Save & exit (at 390 px, the bar's third row, before Save & exit). Panels 4 and 6 draw the
+  whole first screen around it.
+- **Shape unchanged:** `secondary` `sm`, label and trailing `ArrowRight` `size-3.5` as today.
+- **Colour:** ink AND border `--el-accent-on-surface`, the accent ink the lockup and the hero lede
+  already wear on this screen. Save & exit stays a plain ghost, so this is the one coloured control in
+  the bar.
+- **Hover:** fill `--el-tint-sky` (the accent's own tint), ink and border unchanged. This replaces
+  `BAR_SECONDARY_HOVER` on this one link. **Focus-visible:** the package's 2 px `--focus-ring-color`
+  ring with its 2 px offset, unchanged.
+- **Contrast, measured** in the rendered mock (`motir` palette): `--el-accent-on-surface` is
+  **5.53:1** on the hero's `--el-surface` and **6.31:1** on the page ground in light, **9.05:1** and
+  **10.01:1** in dark. On the hover fill `--el-tint-sky` it is **5.13:1** light and **8.11:1** dark.
+  All clear 4.5:1.
+
+### Per-element tokens (changed elements only)
+
+| Element                       | Colour (`--el-*`)                                                                                              | Shape                                                          |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Already have a project? (row) | ink `--el-text-strong`; row rule `--el-border-soft`                                                            | card row, `pt-3`                                               |
+| Import project                | fill `--el-showcase-decision`, ink `--el-showcase-decision-text`, `border-transparent`; hover `brightness-105` | `--radius-btn`, `--height-btn-md`, `--spacing-btn-x`           |
+| Idea card, rest → focused     | `--el-card`, border `--el-border` → `--el-border-strong`, **no ring**                                          | `--radius-card`, `--spacing-card-padding`, `--shadow-elevated` |
+| Start from an idea instead    | ink + border `--el-accent-on-surface`; hover fill `--el-tint-sky`; ring `--focus-ring-color`                   | `--radius-btn`, `--height-btn-sm`                              |
+
+### Panels
+
+1 `/onboarding` default, light and dark, 1280 px · 2 the idea card at rest, focused (typing) and Start
+pending, light | dark · 3 `/onboarding` carried idea, light and dark, 1280 px (unchanged, no Import
+project) · 4 `/onboarding/migrate` first screen, light and dark, 1280 px · 5 "Start from an idea
+instead" at rest, hover and focus-visible, light | dark · 6 narrow 390 px, both pages, light | dark.
