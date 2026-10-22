@@ -171,14 +171,20 @@ export function runScript(extraOut: readonly string[] = [`json=${REMOTE_POINTS}`
   ].join('\n');
 }
 
-/** Prepare the remote directories (the secret one 0700, on tmpfs). */
+/**
+ * Prepare the remote directories (the secret one 0700, on tmpfs). The run directory
+ * is on the generator's volume, so an earlier run's files are still there, and
+ * `fly ssh sftp put` refuses to overwrite a remote file: every run starts from an
+ * EMPTY run directory (MOTIR-9268), which also keeps an earlier run's point file
+ * from being fetched as this run's.
+ */
 export async function prepareRemote(g: GeneratorRef): Promise<void> {
   const r = await g.fly(
     sshArgs(
       g.app,
       g.id,
       shScript(
-        `mkdir -p ${REMOTE_RUN_DIR} ${REMOTE_SECRET_DIR} && chmod 700 ${REMOTE_SECRET_DIR} && rm -rf ${REMOTE_RUN_DIR}/k6`,
+        `rm -rf ${REMOTE_RUN_DIR} && mkdir -p ${REMOTE_RUN_DIR} ${REMOTE_SECRET_DIR} && chmod 700 ${REMOTE_SECRET_DIR}`,
       ),
     ),
   );
