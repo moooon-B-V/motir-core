@@ -125,14 +125,23 @@ afterEach(() => {
 });
 
 describe('planStateFromParam — the URL is a place a person can type', () => {
-  it('takes each of the six states, `none` included', () => {
-    for (const state of ['none', 'generating', 'planned', 'stale', 'approved', 'declined']) {
+  it('takes each listable state', () => {
+    for (const state of [
+      'generating',
+      'waiting',
+      'planned',
+      'stale',
+      'approved',
+      'declined',
+      'closed',
+    ]) {
       expect(planStateFromParam(state)).toBe(state);
     }
   });
 
   it('falls back to ALL (null) for absent, empty, unknown and malformed values', () => {
-    for (const raw of [undefined, null, '', 'nonsense', 'APPROVED', 'planned ', 'all']) {
+    // `none` is one of them since MOTIR-9301: no listed row can hold it.
+    for (const raw of [undefined, null, '', 'nonsense', 'APPROVED', 'planned ', 'all', 'none']) {
       expect(planStateFromParam(raw)).toBeNull();
     }
   });
@@ -150,12 +159,12 @@ describe('/plans reads the filter from the URL', () => {
     expect(getSessionRow).not.toHaveBeenCalled();
   });
 
-  it('`?planState=none` opens on No plan yet', async () => {
+  it('`?planState=none` — an old link — opens on All (MOTIR-9301)', async () => {
     const tree = await render({ planState: 'none' });
 
-    expect(listSessions.mock.calls[0]![2]).toEqual({ planState: 'none', view: 'project' });
-    expect(find(tree, PlanStatusTabs)[0]!.props.value).toBe('none');
-    expect(find(tree, SessionsList)[0]!.props.planState).toBe('none');
+    expect(listSessions.mock.calls[0]![2]).toEqual({ planState: null, view: 'project' });
+    expect(find(tree, PlanStatusTabs)[0]!.props.value).toBeNull();
+    expect(find(tree, SessionsList)[0]!.props.planState).toBeNull();
   });
 
   it('`?planState=nonsense` falls back to All without throwing', async () => {

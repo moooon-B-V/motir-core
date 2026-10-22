@@ -38,15 +38,14 @@ const option = (name: string) => screen.getByRole('button', { name: new RegExp(`
 const group = () => screen.getByRole('group', { name: 'Filter conversations by plan state' });
 
 describe('the filter’s a11y contract', () => {
-  it('is a LABELLED group of nine real buttons — All first, then every state', () => {
+  it('is a LABELLED group of eight real buttons — All first, then every listable state', () => {
     renderWithIntl(<PlanStatusTabs value={null} counts={COUNTS} />);
 
     const labels = within(group())
       .getAllByRole('button')
       .map((b) => b.textContent);
     expect(labels).toEqual([
-      'All26',
-      'No plan yet2',
+      'All24',
       'Writing1',
       'Waiting to resume2',
       'Waiting for approval3',
@@ -59,9 +58,21 @@ describe('the filter’s a11y contract', () => {
     expect(screen.queryByRole('tablist')).toBeNull();
   });
 
+  // MOTIR-9301: the list admits only a conversation holding a plan (MOTIR-9300), so no
+  // listed row can be `none` — the strip draws no segment for it, and All sums only
+  // the seven it draws (a stray `none` count in the payload is not added).
+  it('draws no "No plan yet" segment, and All sums only the seven segments drawn', () => {
+    renderWithIntl(<PlanStatusTabs value={null} counts={COUNTS} />);
+    const labels = within(group())
+      .getAllByRole('button')
+      .map((b) => b.textContent ?? '');
+    expect(labels.some((l) => l.startsWith('No plan'))).toBe(false);
+    expect(within(option('All')).getByText('24')).toBeTruthy();
+  });
+
   it('presses the state in view', () => {
-    renderWithIntl(<PlanStatusTabs value="none" counts={COUNTS} />);
-    expect(option('No plan yet').getAttribute('aria-pressed')).toBe('true');
+    renderWithIntl(<PlanStatusTabs value="declined" counts={COUNTS} />);
+    expect(option('Declined').getAttribute('aria-pressed')).toBe('true');
     expect(option('All').getAttribute('aria-pressed')).toBe('false');
   });
 
@@ -83,9 +94,9 @@ describe('the URL it writes', () => {
     mocks.search.value = 'foo=1';
     renderWithIntl(<PlanStatusTabs value={null} counts={COUNTS} />);
 
-    fireEvent.click(option('No plan yet'));
+    fireEvent.click(option('Approved'));
 
-    expect(mocks.push).toHaveBeenCalledWith(`/plans?foo=1&${PLAN_STATE_PARAM}=none`, {
+    expect(mocks.push).toHaveBeenCalledWith(`/plans?foo=1&${PLAN_STATE_PARAM}=approved`, {
       scroll: false,
     });
   });
