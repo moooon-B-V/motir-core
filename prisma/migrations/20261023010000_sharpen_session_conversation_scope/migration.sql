@@ -17,12 +17,14 @@
 
 DELETE FROM "sharpen_session" WHERE "scope_kind" = 'work_item';
 
--- The work-item target goes.
+-- The work-item target goes. Its COLUMN stays, with its FK and index: this is the
+-- SCHEMA-ONLY phase of the column's removal (docs/decisions/delivery-reader-migration.md
+-- §6a). The image serving while this migration lands still selects `work_item_id`,
+-- so the field is `@ignore`d in the datamodel here and the column is dropped in a
+-- later release, once no serving client selects it. The new scope check leaves it
+-- NULL on every row.
 ALTER TABLE "sharpen_session" DROP CONSTRAINT "sharpen_session_scope_check";
 DROP INDEX "sharpen_session_open_work_item_key";
-ALTER TABLE "sharpen_session" DROP CONSTRAINT "sharpen_session_work_item_id_fkey";
-DROP INDEX "sharpen_session_work_item_id_idx";
-ALTER TABLE "sharpen_session" DROP COLUMN "work_item_id";
 
 -- AlterEnum: `work_item` out, `conversation` in.
 CREATE TYPE "sharpen_scope_kind_new" AS ENUM ('plan', 'conversation');
@@ -43,8 +45,10 @@ ALTER TABLE "sharpen_session" ADD CONSTRAINT "sharpen_session_plan_change_sessio
 
 -- Exactly one target, and it matches the scope kind.
 ALTER TABLE "sharpen_session" ADD CONSTRAINT "sharpen_session_scope_check" CHECK (
-  ("scope_kind" = 'plan' AND "plan_id" IS NOT NULL AND "plan_change_session_id" IS NULL)
-  OR ("scope_kind" = 'conversation' AND "plan_change_session_id" IS NOT NULL AND "plan_id" IS NULL)
+  "work_item_id" IS NULL AND (
+    ("scope_kind" = 'plan' AND "plan_id" IS NOT NULL AND "plan_change_session_id" IS NULL)
+    OR ("scope_kind" = 'conversation' AND "plan_change_session_id" IS NOT NULL AND "plan_id" IS NULL)
+  )
 );
 
 -- ONE OPEN session per person per conversation (the plan one is unchanged).
