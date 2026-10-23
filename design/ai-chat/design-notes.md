@@ -391,10 +391,10 @@ it supersedes the separate per-story designs `7.11.1`/`MOTIR-898` +
 > population predicate is _declares NO `--el-_` at all*; three declarations
 > satisfy it, so this asset fell outside the eleven — and MOTIR-4318's own card
 > names this file in exactly that role, AND predicts this shape as the reason its
-> limb (b) had to exist (_"an asset that declares one token and aliases the rest
-> — a file that passes the guard and is exactly as unmeasurable as the eleven"_).
+> limb (b) had to exist (*"an asset that declares one token and aliases the rest
+> — a file that passes the guard and is exactly as unmeasurable as the eleven"*).
 > Both sentences are in the same card. What was never done is MEASURE limb (b)'s
-> population, so the file named as _outside the eleven_ and the shape named as
+> population, so the file named as *outside the eleven* and the shape named as
 > *what limb (b) is for\* were never put beside each other. That measurement gap
 > is a separate planning bug; this is the sweep.
 >
