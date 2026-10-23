@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { instanceMaxRunning, INSTANCE_NAME_PATTERN } from '@/lib/agentInstances/config';
+import { INSTANCE_NAME_PATTERN } from '@/lib/agentInstances/config';
 import { buildCloneCommand, installationBasicAuth } from '@/lib/agentInstances/cloneCommand';
 import {
   AgentInstanceNameInvalidError,
@@ -180,15 +180,6 @@ describe('profiles and caps', () => {
     });
     expect(agentSignInHint('cursor')).toBeNull();
     expect(agentSignInHint('unknown')).toBeNull();
-  });
-
-  it('reads the agent pool’s safety valve from the environment — default 50, no per-organisation cap', () => {
-    vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '');
-    expect(instanceMaxRunning()).toBe(50);
-    vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '120');
-    expect(instanceMaxRunning()).toBe(120);
-    vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', 'nonsense');
-    expect(instanceMaxRunning()).toBe(50);
   });
 
   it('accepts a lower-case dashed name and refuses the rest', () => {

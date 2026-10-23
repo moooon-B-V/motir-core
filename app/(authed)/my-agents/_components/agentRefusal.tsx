@@ -42,6 +42,9 @@ export function refusalKey(body: RefusalBody | null): string {
     case 'ai_plan_required':
       return 'aiPlanRequired';
     case 'ai_plan_unknown':
+    // The plan's agent figures could not be read (MOTIR-9374): the same "could
+    // not check your plan, try again" words, never the generic refusal.
+    case 'plan_unknown':
       return 'aiPlanUnknown';
     case 'credits':
       return 'credits';
