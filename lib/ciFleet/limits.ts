@@ -5,17 +5,12 @@
 //
 // `docs/decisions/fleet-per-org-pool.md` is why the numbers are what they are:
 //
-//   * THE ORGANISATION'S POOL — `MOTIR_FLEET_ORG_MAX_IN_FLIGHT`, default
-//     `TENANT_TARGET.peakRunners` (AMENDMENT 1, which replaced §2's 500). Each
-//     organisation holds its own pool, so one org's burst never queues another's,
-//     and no tenant holds more of the fleet than a tenant was sized for
-//     (`shardTargets.ts`). Motir's own (meta) orgs keep `META_ORG_POOL_CAP`: they
-//     are the source of the measurements, not a target-sized tenant (chosen by
-//     `fleetCeilingService.resolveOrgPool`, never in this directory). The org's
-//     credits still bound its spend (§3), and the attribution reconciler removes
-//     anything no paying org owns (§5). An enterprise org may carry its own
-//     number, set by platform staff on the org row (`Organization.fleetPoolCap`);
-//     it is never a per-org env var.
+//   * THE ORGANISATION'S POOL (§2, `MOTIR_FLEET_ORG_MAX_IN_FLIGHT`, default 500)
+//     is GONE (MOTIR-9375 took it out of admission, MOTIR-9377 out of the
+//     monitor; the fleet-capacity decision record MOTIR-9357). Every workload is
+//     held to its own plan figure (`lib/billing/planCaps.ts`), and nothing reads
+//     the env var any more. `Organization.fleetPoolCap`, set by platform staff,
+//     overrides the plan's CI burst cap and nothing else.
 //   * THE KILL SWITCH — `MOTIR_FLEET_MAX_IN_FLIGHT` (§6). It USED to be the one
 //     fleet-wide ceiling (MOTIR-1997, default 24) and the only bound on Motir's
 //     invoice. It is now the operator's kill switch and nothing else: `0` stops
@@ -32,17 +27,12 @@
 //
 // ⚠️ AGENT INSTANCES ARE NOT IN THE ORG POOL (`docs/decisions/agent-instances.md`
 // AMENDMENT 2). They are an `own`-pool workload: slotted under the same lock,
-// bounded by their own `MOTIR_INSTANCE_MAX_RUNNING`, and never summed into an
-// org's pool — a long-lived per-minute machine must not take CI's capacity. The
-// kill switch still stops them.
-
-import { TENANT_TARGET } from '@/lib/ciFleet/shardTargets';
+// bounded by their plan's `agentsRunningPerOrg` (MOTIR-9374), and never summed
+// into an org's count — a long-lived per-minute machine must not take CI's
+// capacity. The kill switch still stops them.
 
 /** The env var an operator sets to `0` to stop every new boot — the kill switch. */
 const FLEET_KILL_SWITCH_ENV = 'MOTIR_FLEET_MAX_IN_FLIGHT';
-
-/** The env var an operator raises or lowers every organisation's pool with. */
-const ORG_POOL_ENV = 'MOTIR_FLEET_ORG_MAX_IN_FLIGHT';
 
 /** The env var an operator raises or lowers the INDEX workload's own cap with
  *  (MOTIR-1990). Fairness and throughput, UNDERNEATH the ceiling above. */
@@ -51,29 +41,6 @@ const INDEX_CAP_ENV = 'MOTIR_INDEX_MAX_IN_FLIGHT';
 /** The env var that tunes how long an unreleased slot keeps occupying capacity
  *  before the safety net ages it out. */
 const FLEET_SLOT_TTL_ENV = 'MOTIR_FLEET_SLOT_TTL_SECONDS';
-
-/**
- * THE ORGANISATION'S POOL when the environment sets none — how many containers
- * of the shared workloads (CI runners, hosted-agent runs, index containers) ONE
- * organisation may have in flight at once (`fleet-per-org-pool.md` AMENDMENT 1).
- *
- * DERIVED, NEVER TYPED: it is one target tenant's peak concurrency
- * (`TENANT_TARGET.peakRunners`), because the fleet's accounts are sized in target
- * tenants and one tenant must not hold more of the fleet than it was sized for.
- * It replaced §2's 500, which was sized to a workload no account was sized for.
- */
-export const DEFAULT_ORG_POOL_CAP: number = TENANT_TARGET.peakRunners;
-
-/**
- * THE POOL OF MOTIR'S OWN (META) ORGANISATIONS when the environment sets none —
- * §2's original 500, about ten pull requests' worth of a real repository's CI
- * (≈ 50 jobs each, motir-core#3243).
- *
- * Motir's own org is the SOURCE of the measurements the tenant targets are a
- * quarter of, not a target-sized tenant: shrinking it to a tenant's pool would
- * throttle Motir's own CI the day the targets landed.
- */
-export const META_ORG_POOL_CAP = 500;
 
 /**
  * How long a slot taken by a slot-backed workload keeps counting if nobody ever
@@ -152,31 +119,6 @@ export function fleetKillSwitchEngaged(): boolean {
 }
 
 /**
- * THE ORGANISATION'S POOL — how many shared-workload containers one org may have
- * in flight at once.
- *
- * `override` is the org's own number, set by platform staff for an enterprise
- * deal (`Organization.fleetPoolCap`, §2); when it is a non-negative integer it
- * wins over the environment. Otherwise `MOTIR_FLEET_ORG_MAX_IN_FLIGHT`, read on
- * every call so an operator can move it without a deploy, else `defaultCap`:
- * {@link DEFAULT_ORG_POOL_CAP} for a tenant, or {@link META_ORG_POOL_CAP}, which
- * `fleetCeilingService.resolveOrgPool` passes for one of Motir's own orgs. The
- * choice is made there, not here: nothing in `lib/ciFleet/` branches on which
- * org it is (`fleetNoOrgIdentityBranch.test.ts`). Always a number: an org whose
- * pool is unbounded is not expressible, and `0` legitimately means "this org
- * boots nothing".
- */
-export function orgPoolCap(
-  override: number | null = null,
-  defaultCap: number = DEFAULT_ORG_POOL_CAP,
-): number {
-  if (override !== null && Number.isInteger(override) && override >= 0) return override;
-  /* istanbul ignore next -- the `?? 0` is UNREACHABLE: a non-null fallback means
-     the shared reader cannot answer null here. */
-  return readCeilingEnv(ORG_POOL_ENV, defaultCap) ?? 0;
-}
-
-/**
  * How long an unreleased fleet slot keeps occupying capacity, in seconds.
  *
  * Reuses the same reader as the ceilings, which means ZERO IS LEGAL here too —
@@ -189,8 +131,7 @@ export function orgPoolCap(
  * rather than being read as zero, for the same reason the ceilings do.
  */
 export function fleetSlotTtlSeconds(): number {
-  /* istanbul ignore next -- unreachable for the same reason as the pool
-     above: a non-null fallback means the reader never answers null. */
+  /* istanbul ignore next -- unreachable: a non-null fallback means the reader never answers null. */
   return readCeilingEnv(FLEET_SLOT_TTL_ENV, DEFAULT_FLEET_SLOT_TTL_SECONDS) ?? 0;
 }
 
@@ -207,7 +148,7 @@ export function fleetSlotTtlSeconds(): number {
  */
 export function indexInFlightCap(): number {
   /* istanbul ignore next -- the `?? 0` is UNREACHABLE for the same reason as
-     `orgPoolCap`'s: a non-null fallback means the shared reader cannot answer
+     `fleetSlotTtlSeconds`': a non-null fallback means the shared reader cannot answer
      null here. */
   return readCeilingEnv(INDEX_CAP_ENV, DEFAULT_INDEX_IN_FLIGHT_CAP) ?? 0;
 }

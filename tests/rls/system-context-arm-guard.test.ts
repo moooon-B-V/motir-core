@@ -145,6 +145,26 @@ const WALLED_SITES: Record<string, string> = {
     'carries the arm), and resolveDeliveredWorkItems (work_item_delivery → work_item). ' +
     'With no owner there is no actor, so every card is skipped as no_actor and no gate, ' +
     'work item or status write is reached. CLEAN.',
+
+  'lib/services/fleetShardControlsService.ts#change':
+    'write ∈ { the three closures in setCeiling, disable and enable } — read in full ' +
+    '(MOTIR-8972). Each touches fleet_shard alone (setAdmissionCeilingOverrideInTx, ' +
+    'updateState) on the row change() locked by name, and fleet_shard_system_only carries ' +
+    'the system_admin arm. No tenant table is read or written. CLEAN.',
+  'lib/services/fleetShardHeadroomService.ts#readAccountHeadroom':
+    'peak ∈ { PEAK_ON_SHARD[fleetKind] } — today one implementation, ciRunnerPeak, read in ' +
+    'full (MOTIR-8969): one findMany on ci_runner_provisioning_intent by fleet_shard_id, whose ' +
+    'ci_runner_provisioning_intent_workspace_or_system policy carries the system_admin arm. ' +
+    'The rows come from fleet_shard (fleet_shard_system_only, armed). Cross-tenant by design ' +
+    "— an account's peak spans every org on it — and nothing else is read. CLEAN. A kind " +
+    'that adds its own reader re-opens this entry.',
+  'lib/services/fleetShardHeadroomService.ts#run':
+    'peak ∈ { PEAK_ON_SHARD[fleetKind] } — today one implementation, ciRunnerPeak, read in ' +
+    'full (MOTIR-8969): one findMany on ci_runner_provisioning_intent by fleet_shard_id, whose ' +
+    'ci_runner_provisioning_intent_workspace_or_system policy carries the system_admin arm. ' +
+    'The rows come from fleet_shard (fleet_shard_system_only, armed). Cross-tenant by design ' +
+    "— an account's peak spans every org on it — and nothing else is read. CLEAN. A kind " +
+    'that adds its own reader re-opens this entry.',
 };
 
 let rlsTables: Set<string>;

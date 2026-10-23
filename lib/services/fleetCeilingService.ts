@@ -10,13 +10,7 @@ import {
   FLEET_WORKLOAD_KINDS,
   type FleetWorkloadKind,
 } from '@/lib/ciFleet/workloads';
-import {
-  DEFAULT_ORG_POOL_CAP,
-  fleetKillSwitchEngaged,
-  fleetSlotTtlSeconds,
-  META_ORG_POOL_CAP,
-  orgPoolCap,
-} from '@/lib/ciFleet/limits';
+import { fleetKillSwitchEngaged, fleetSlotTtlSeconds } from '@/lib/ciFleet/limits';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import {
@@ -24,6 +18,8 @@ import {
   AI_PLAN_REQUIRED_ADMISSION_DETAIL,
   PLAN_UNKNOWN_ADMISSION_DETAIL,
 } from '@/lib/services/aiPlanGateService';
+import { planCapsService } from '@/lib/services/planCapsService';
+import type { PlanCaps } from '@/lib/billing/planCaps';
 
 // THE FLEET'S ADMISSION — PER ORGANISATION (Story MOTIR-6906 · MOTIR-6907,
 // re-cutting MOTIR-1916 · MOTIR-1997). `docs/decisions/fleet-per-org-pool.md`.
@@ -34,12 +30,22 @@ import {
 // `codeGraphIndexAdmissionService`).
 //
 // ── WHAT DECIDES ────────────────────────────────────────────────────────────
-//   * THE ORGANISATION'S POOL (§2) — `MOTIR_FLEET_ORG_MAX_IN_FLIGHT`, default
-//     500, or the org's own enterprise number. It counts the org's CI runners,
-//     hosted-agent runs and index containers, summed across workloads, so one
-//     org's burst queues only that org. It is NOT the bound on Motir's spend:
-//     the org's credits are (§3), and the attribution reconciler removes every
-//     machine no paying org owns (§5).
+//   * THE PLAN'S FIGURE FOR THE WORKLOAD (MOTIR-9363 · MOTIR-9373; the
+//     fleet-capacity decision MOTIR-9357, amending §2). A hosted-agent run is
+//     held to its org's plan's `agentRunsInParallel` (Standard 1, Pro 3, Max 5),
+//     judged against the org's in-flight HOSTED-AGENT count alone — never the
+//     cross-workload sum, so a CI burst no longer stops an agent run and an
+//     agent run no longer takes CI's room. `PLAN_FIGURE_BY_WORKLOAD` says which
+//     figure holds which workload. Motir's own orgs are held by no figure.
+//     CI runners are held to the plan's `ciBurstCap` (Standard 5, Pro 10, Max 25,
+//     Host and `pool_*` 50) over the org's CI runner count alone, by the CI gate
+//     (MOTIR-9375); `Organization.fleetPoolCap`, set by platform staff, overrides
+//     that one figure and nothing else ({@link fleetCeilingService.resolveCiBurstCap}).
+//     Code-graph indexing is held to no plan figure: its own index caps bound it.
+//   * THE ORGANISATION'S POOL (§2, the flat 500) is GONE: no admission reads it
+//     (MOTIR-9375) and the platform monitor shows each workload against its own
+//     plan figure instead (MOTIR-9377), reading the same `capsFor` and
+//     {@link fleetCeilingService.resolveCiBurstCap} the gates read.
 //   * THE KILL SWITCH (§6) — `MOTIR_FLEET_MAX_IN_FLIGHT=0` stops every new boot
 //     of every workload. It is what the one fleet-wide ceiling (MOTIR-1997,
 //     default 24) became; unset or positive, it imposes nothing.
@@ -60,8 +66,9 @@ import {
 // If the count, or the org's pool, cannot be established, DO NOT BOOT. A queued
 // container is recoverable; a container nothing bounds is not.
 //
-// ── NO BYPASS, AND NO ORG-LESS SLOT ──────────────────────────────────────────
-// `isMeta` keeps the same pool (§1). A request that names no organisation is
+// ── NO ORG-LESS SLOT ─────────────────────────────────────────────────────────
+// Motir's own orgs (`isMeta` / `internalBilling`) are held by no plan figure —
+// the kill switch still stops them. A request that names no organisation is
 // REFUSED (`organization_required`): it would be counted by no org's pool, which
 // is a container nothing bounds.
 
@@ -78,25 +85,36 @@ export interface FleetInFlightCensus {
 
 export type FleetSlotVerdict =
   /** Reserved — the slot is taken and this caller owes the release. */
-  | { outcome: 'reserved'; census: FleetInFlightCensus; pool: number | null }
+  | {
+      outcome: 'reserved';
+      census: FleetInFlightCensus;
+      /** The plan figure this reservation was judged against (MOTIR-9373);
+       *  `null` when none held it — an exempt org, or a workload no figure
+       *  holds. */
+      pool: number | null;
+    }
   /** This `(workload, ref)` already held a slot. Not an error: the take is
    *  idempotent, so a redelivery lands here rather than double-occupying. */
   | { outcome: 'already_held' }
   /** Not reserved. Nothing was written; the caller queues and retries. */
   | {
       outcome: 'deferred';
-      /** `org_pool` (MOTIR-6907): the request's organisation already holds its
-       *  pool. `fleet_ceiling`: the operator's kill switch is engaged
+      /** `plan_cap` (MOTIR-9373): the org already runs as many of this
+       *  workload as its plan's figure allows (`PLAN_FIGURE_BY_WORKLOAD`); the
+       *  detail names the plan and the figure (the CI gate returns the same
+       *  reason for its CI burst cap, MOTIR-9375). `fleet_ceiling`: the operator's kill switch is engaged
        *  (`MOTIR_FLEET_MAX_IN_FLIGHT=0`). `organization_required`: the request
        *  named no organisation, so no pool could count it. `workload_cap`
        *  (MOTIR-6872): the request's own {@link FleetSlotRequest.guard} refused —
        *  a workload-specific cap under the same lock. `ai_plan_required` /
        *  `plan_unknown` (MOTIR-6909): the org has no paid AI plan, or it could
-       *  not be read — a shared-pool workload is paid-AI-plan only. */
+       *  not be read — a shared-pool workload is paid-AI-plan only. Since
+       *  MOTIR-9373 `plan_unknown` is also the answer when the plan's figures
+       *  cannot be read, or its key has no caps row: never a default figure. */
       reason:
         | 'ai_plan_required'
         | 'plan_unknown'
-        | 'org_pool'
+        | 'plan_cap'
         | 'fleet_ceiling'
         | 'organization_required'
         | 'gate_unavailable'
@@ -152,9 +170,85 @@ export function describeFleetCensus(census: FleetInFlightCensus): string {
   ).join(', ');
 }
 
-/** The words an `org_pool` deferral carries (`fleet-per-org-pool.md` §4). */
-export function orgPoolDetail(census: FleetInFlightCensus, pool: number): string {
-  return `the organization is running ${census.total} of its ${pool} fleet containers (${describeFleetCensus(census)})`;
+/**
+ * WHICH PLAN FIGURE HOLDS WHICH WORKLOAD (MOTIR-9373; decision MOTIR-9357).
+ * Total by construction, like `FLEET_WORKLOADS`: a workload added to the union
+ * without an entry here is a compile error. `null` means no plan figure holds it
+ * — indexing (Motir charges nobody for it; its index caps bound it) and agent
+ * instances (their own `guard` reads the plan at create and wake). The CI gate
+ * reads the same map, so "which figure holds CI" has one spelling.
+ */
+export const PLAN_FIGURE_BY_WORKLOAD: Readonly<Record<FleetWorkloadKind, keyof PlanCaps | null>> =
+  Object.freeze({
+    hosted_agent: 'agentRunsInParallel',
+    ci_runner: 'ciBurstCap',
+    code_graph_index: null,
+    agent_instance: null,
+  });
+
+/** One of a workload, and many — what a `plan_cap` deferral counts. */
+const PLAN_CAP_NOUN: Record<FleetWorkloadKind, readonly [string, string]> = {
+  hosted_agent: ['agent run', 'agent runs'],
+  ci_runner: ['CI job', 'CI jobs'],
+  code_graph_index: ['index container', 'index containers'],
+  agent_instance: ['agent', 'agents'],
+};
+
+/**
+ * The words a `plan_cap` deferral carries: "a Standard organization runs 1
+ * agent run at once, and 1 is already running". Names the plan as motir-ai sends
+ * it and the figure — never the retired pool.
+ */
+export function planCapDetail(
+  planName: string,
+  figure: number,
+  workload: FleetWorkloadKind,
+  inFlight: number,
+): string {
+  const [one, many] = PLAN_CAP_NOUN[workload];
+  const article = /^[aeiou]/i.test(planName) ? 'an' : 'a';
+  const verb = inFlight === 1 ? 'is' : 'are';
+  return `${article} ${planName} organization runs ${figure} ${figure === 1 ? one : many} at once, and ${inFlight} ${verb} already running`;
+}
+
+/** The words a `plan_unknown` deferral carries when the plan's figures could not
+ *  be read — naming the key when there was one with no caps row. */
+export function planUnknownCapDetail(planKey: string | null): string {
+  return planKey === null
+    ? PLAN_UNKNOWN_ADMISSION_DETAIL
+    : `This organization's AI plan (${planKey}) has no fleet figures, so nothing boots until it does.`;
+}
+
+/**
+ * THE ONE FIGURE THE CI GATE JUDGES AN ORG'S CI RUNNERS AGAINST (MOTIR-9375).
+ * `Organization.fleetPoolCap`, set by platform staff, overrides the plan's
+ * `ciBurstCap` and means nothing else; it holds an exempt org too, but never
+ * rescues a plan that could not be read — an override is never a default.
+ */
+export type CiBurstCap =
+  | { kind: 'capped'; figure: number; planName: string | null; source: 'override' | 'plan' }
+  /** Motir's own orgs, or a build with no billing, with no override: no figure. */
+  | { kind: 'unlimited' }
+  /** The plan could not be read, or its key has no row. FAIL-CLOSED. */
+  | { kind: 'plan_unknown'; planKey: string | null }
+  /** The override could not be read. FAIL-CLOSED (`gate_unavailable`). */
+  | { kind: 'unreadable' };
+
+/**
+ * The words a CI `plan_cap` deferral carries: the plan and its figure ("a Pro
+ * organization runs 10 CI jobs at once, and 10 are already running"), or, for a
+ * staff override, that Motir set the limit for this organization. Never the
+ * retired pool.
+ */
+export function ciBurstDetail(
+  cap: Extract<CiBurstCap, { kind: 'capped' }>,
+  inFlight: number,
+): string {
+  if (cap.source === 'plan' && cap.planName !== null) {
+    return planCapDetail(cap.planName, cap.figure, 'ci_runner', inFlight);
+  }
+  const verb = inFlight === 1 ? 'is' : 'are';
+  return `this organization runs ${cap.figure} ${cap.figure === 1 ? 'CI job' : 'CI jobs'} at once, a limit Motir set for it, and ${inFlight} ${verb} already running`;
 }
 
 /** The words a kill-switch deferral carries. */
@@ -247,30 +341,47 @@ export const fleetCeilingService = {
   },
 
   /**
-   * The organisation's POOL — its enterprise override when platform staff set
-   * one, else the environment's number, else the default for a tenant or for one
-   * of Motir's own (meta) orgs (`orgPoolCap`). Null when the org row
-   * could not be read: every caller then FAILS CLOSED rather than hand an org
-   * whose pool is unknown the default.
-   *
-   * Read under the ORG GUC (`withOrgServiceWriteContext`), NOT inside the
-   * admission's system-context transaction: the org policies have no system
-   * escape in production, so a read there would silently answer "no override".
-   * It is read BEFORE the lock, so the fleet-wide lock is never held across it.
+   * The CI BURST CAP for one organisation (MOTIR-9375): the staff override, else
+   * the plan's `ciBurstCap` (`PLAN_FIGURE_BY_WORKLOAD.ci_runner`). Both reads
+   * happen BEFORE the fleet lock — the plan may go to motir-ai, and the override
+   * is an org-GUC read the system context cannot see. A `plan_unknown` plan stays
+   * unknown whatever the override says; a non-negative integer override wins
+   * over a readable plan, exempt included; anything else is ignored.
    */
-  async resolveOrgPool(organizationId: string): Promise<number | null> {
+  async resolveCiBurstCap(organizationId: string): Promise<CiBurstCap> {
+    const plan = await planCapsService.capsFor(organizationId);
+    if (plan.kind === 'plan_unknown') return { kind: 'plan_unknown', planKey: plan.planKey };
+
+    let override: number | null;
     try {
-      const { fleetPoolCap, isMeta } = await withOrgServiceWriteContext(organizationId, (tx) =>
+      override = await withOrgServiceWriteContext(organizationId, (tx) =>
         organizationRepository.findFleetPoolCapInTx(organizationId, tx),
       );
-      return orgPoolCap(fleetPoolCap, isMeta ? META_ORG_POOL_CAP : DEFAULT_ORG_POOL_CAP);
     } catch (err) {
-      console.error("[fleetCeilingService] could not read the organization's fleet pool", {
+      console.error("[fleetCeilingService] could not read the organization's CI burst override", {
         organizationId,
         detail: detailOf(err),
       });
-      return null;
+      return { kind: 'unreadable' };
     }
+    if (override !== null && Number.isInteger(override) && override >= 0) {
+      return {
+        kind: 'capped',
+        figure: override,
+        planName: plan.kind === 'capped' ? plan.planName : null,
+        source: 'override',
+      };
+    }
+    if (plan.kind === 'exempt') return { kind: 'unlimited' };
+    const figureKey = PLAN_FIGURE_BY_WORKLOAD.ci_runner;
+    /* v8 ignore next -- the map holds CI to `ciBurstCap`; a null is a code change */
+    if (figureKey === null) return { kind: 'unlimited' };
+    return {
+      kind: 'capped',
+      figure: plan.caps[figureKey],
+      planName: plan.planName,
+      source: 'plan',
+    };
   },
 
   /**
@@ -280,8 +391,10 @@ export const fleetCeilingService = {
    * CI and indexing do not use this: their gates have more to decide in one
    * transaction and take the same lock themselves, so they call
    * {@link orgCensus} in-line. Everything else — Epic 9's hosted runs, the agent
-   * instances — gets the pool by calling this and nothing more, which is the
-   * point: a new workload cannot be admitted without being counted.
+   * instances — is admitted by calling this and nothing more, which is the
+   * point: a new workload cannot be admitted without being counted. A hosted
+   * run is held to its plan's parallel-run figure (MOTIR-9373); an agent
+   * instance to its `guard`.
    *
    * Deciding and taking the slot in ONE locked transaction is what makes the
    * pool exact: a gate that decided and let someone else take the slot would be
@@ -311,21 +424,28 @@ export const fleetCeilingService = {
     }
 
     const shared = FLEET_WORKLOADS[request.workload].pool === 'shared';
-    // The shared pool is paid-AI-plan only (MOTIR-6909). An `own`-pool workload
-    // (the agent instances) asks its own plan question at create and wake.
+    // The shared workloads are paid-AI-plan only (MOTIR-6909). An `own`-pool
+    // workload (the agent instances) asks its own plan question at create and
+    // wake, and is bounded by its guard alone.
+    let cap: { planName: string; figure: number } | null = null;
     if (shared) {
       const refused = await this.planDeferral(request.organizationId);
       if (refused) return refused;
-    }
-    // An `own`-pool workload is bounded by its guard alone and never reads the
-    // org's pool (AMENDMENT 2 of `agent-instances.md`).
-    const pool = shared ? await this.resolveOrgPool(request.organizationId) : null;
-    if (shared && pool === null) {
-      return {
-        outcome: 'deferred',
-        reason: 'gate_unavailable',
-        detail: "the organization's fleet pool could not be read",
-      };
+      // The plan's figure for this workload (MOTIR-9373), read BEFORE the lock
+      // as the pool was, so the fleet-wide lock is never held across a remote
+      // read. Fail closed: an unreadable plan or a key with no row defers.
+      const plan = await planCapsService.capsFor(request.organizationId);
+      if (plan.kind === 'plan_unknown') {
+        return {
+          outcome: 'deferred',
+          reason: 'plan_unknown',
+          detail: planUnknownCapDetail(plan.planKey),
+        };
+      }
+      const figureKey = PLAN_FIGURE_BY_WORKLOAD[request.workload];
+      if (plan.kind === 'capped' && figureKey !== null) {
+        cap = { planName: plan.planName, figure: plan.caps[figureKey] };
+      }
     }
 
     const ttlSeconds = request.ttlSeconds ?? fleetSlotTtlSeconds();
@@ -355,12 +475,15 @@ export const fleetCeilingService = {
           }
         }
 
+        // The workload's OWN count, never the cross-workload total: each
+        // workload is held to its own figure.
         const census = await this.orgCensus(organizationId, now, tx);
-        if (pool !== null && census.total >= pool) {
+        const inFlight = census.byWorkload[request.workload];
+        if (cap !== null && inFlight >= cap.figure) {
           return {
             outcome: 'deferred' as const,
-            reason: 'org_pool' as const,
-            detail: orgPoolDetail(census, pool),
+            reason: 'plan_cap' as const,
+            detail: planCapDetail(cap.planName, cap.figure, request.workload, inFlight),
           };
         }
 
@@ -380,7 +503,7 @@ export const fleetCeilingService = {
         // idempotent — the slot exists exactly once either way.
         if (!took) return { outcome: 'already_held' as const };
 
-        return { outcome: 'reserved' as const, census, pool };
+        return { outcome: 'reserved' as const, census, pool: cap?.figure ?? null };
       });
     } catch (err) {
       // FAIL CLOSED. The transaction rolled back, so no slot was taken. An

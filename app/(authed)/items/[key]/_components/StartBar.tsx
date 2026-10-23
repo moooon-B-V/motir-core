@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Cloud, SquareTerminal } from 'lucide-react';
 import { useAgentRefusal } from '@/app/(authed)/my-agents/_components/agentRefusal';
-import { INSTANCE_MAX_PER_USER } from '@/lib/agentInstances/config';
 import { runsHref } from '@/lib/runs/runsAddress';
 import { isLiveRun } from '@/lib/runs/timeline';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
@@ -120,7 +119,7 @@ export function AgentSendNotice({
 }) {
   const t = useTranslations('runs.agent.refused');
   const routes = useReaderRoutes();
-  const wakeWords = useAgentRefusal(INSTANCE_MAX_PER_USER);
+  const wakeWords = useAgentRefusal();
   const { agent } = refusal;
   const names = { name: agent.name, agent: agent.profileName };
   const nothing = t('nothing');
@@ -133,7 +132,12 @@ export function AgentSendNotice({
   switch (refusal.kind) {
     case 'wake':
       title = t('wakeTitle', names);
-      body = wakeWords({ code: refusal.code, reason: refusal.reason }).message;
+      body = wakeWords({
+        code: refusal.code,
+        reason: refusal.reason,
+        limit: refusal.limit,
+        planName: refusal.planName,
+      }).message;
       break;
     case 'runActive': {
       const key = refusal.workItemKey;

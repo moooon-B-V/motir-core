@@ -45,6 +45,7 @@ import { ciRunnerProvisionSweep, ciRunnerBoot } from './definitions/ciRunnerFlee
 import { fleetAttribution } from './definitions/fleetAttribution';
 import { fleetDebitMonitor } from './definitions/fleetDebitMonitor';
 import { fleetShardHeadroom } from './definitions/fleetShardHeadroom';
+import { hostedRunAdmit } from './definitions/hostedRunAdmit';
 import { hostedRunSupervise } from './definitions/hostedRunSupervise';
 import {
   statusDerivationOnChildSetChanged,
@@ -150,6 +151,7 @@ export const jobDefinitions = [
   fleetAttribution,
   fleetDebitMonitor,
   fleetShardHeadroom,
+  hostedRunAdmit,
   hostedRunSupervise,
   planDriftOnTransitioned,
   statusDerivationOnTransitioned,

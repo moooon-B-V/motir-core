@@ -246,7 +246,6 @@ async function mount(
       projectName="motir"
       initial={opts.initial ?? routes.list()}
       profiles={PROFILES}
-      maxPerUser={10}
       openAgentId={opts.openAgentId ?? 'a1'}
       openTab={opts.openTab ?? 'terminal'}
     />,

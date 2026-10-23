@@ -10307,34 +10307,41 @@
       "fleet": {
         "orgs": {
           "title": "Fleet · organisations running containers",
-          "subtitle": "Each organisation holding a container now, beside what the CI debit did for it in the last {minutes} minutes (two debit periods). Mismatched first.",
+          "subtitle": "Each organisation holding a container now, against its plan’s figures, beside what the CI debit did for it in the last {minutes} minutes (two debit periods). Mismatched first.",
           "mismatchedCount": "{count} mismatched",
           "runningCount": "{count, plural, one {# org running} other {# orgs running}}",
           "noMismatch": "No mismatch",
           "stat": {
             "orgs": "organisations running a container",
-            "pooled": "containers in per-org pools (CI · hosted · index)",
-            "instances": "agent instances · their own pool, not counted above",
+            "ciRunners": "CI runners · each org held to its plan’s burst cap",
+            "hostedAgents": "hosted-agent runs · each org held to its plan’s parallel runs",
+            "instances": "agent instances running · each org held to its plan’s figure",
             "mismatched": "mismatched · running and debited disagree"
           },
           "group": {
-            "pool": "In the {pool}-container pool",
-            "own": "Own pool"
+            "plan": "Held to the plan",
+            "uncapped": "No plan figure"
           },
           "col": {
             "org": "Organisation",
+            "plan": "Plan",
             "ciRunner": "CI runners",
             "hostedAgent": "Hosted-agent runs",
             "index": "Index containers",
-            "poolUsed": "Pool used",
             "agentInstance": "Agent instances",
-            "agentInstanceNote": "not in the pool",
             "accrued": "CI minutes · last {minutes} min",
             "credits": "Credits this month · confirmed",
             "verdict": "Verdict"
           },
-          "poolOf": "{used} / {pool}",
-          "poolUnknown": "pool unreadable",
+          "plan": {
+            "named": "{plan}<pp> · {perUser} per person</pp>",
+            "exempt": "No plan limit",
+            "unknown": "Plan unknown · {key}",
+            "unknownNoKey": "Plan unknown",
+            "unknownNote": "new containers refused"
+          },
+          "usedOf": "<b>{used}</b> of {figure}",
+          "override": "override",
           "metaTag": "meta org · isMeta",
           "unnamed": "Organisation {id}",
           "accrued": {
@@ -10352,7 +10359,7 @@
           "foot": "Showing {from}–{to} of {total} · mismatched first, then most containers · only CI is judged — it is the one workload debited while it runs",
           "empty": {
             "title": "No organisation is running a fleet container",
-            "body": "Every per-org pool is empty right now, so there is nothing to compare against the debit. This is a healthy reading, not a fault."
+            "body": "No organisation holds a CI runner, hosted-agent run, agent instance or index container right now, so there is nothing to compare against the debit. This is a healthy reading, not a fault."
           },
           "error": {
             "title": "Couldn’t read the fleet",
@@ -11448,12 +11455,20 @@
         "charge": {
           "ciRunner": "Charged while it runs",
           "hostedAgent": "Charged when the run ends",
-          "agentInstance": "Charged per running interval · outside the pool",
+          "agentInstance": "Charged per running interval",
           "index": "Motir’s cost — never charged"
         },
+        "tile": {
+          "of": " of {figure}",
+          "override": "override"
+        },
         "facts": {
-          "pool": "Pool <strong>{used} of {pool}</strong>",
-          "poolUnknown": "Pool <strong>{used} of —</strong>",
+          "plan": "Plan <strong>{plan}</strong> · hosted runs at once: {runs} · agents per person: {perUser} · agents running: {running} · CI jobs at once: {ci}",
+          "planCiUnreadable": "Plan <strong>{plan}</strong> · hosted runs at once: {runs} · agents per person: {perUser} · agents running: {running} · CI limit unreadable",
+          "planExempt": "Plan <strong>No plan limit</strong>",
+          "planExemptOverride": "Plan <strong>No plan limit</strong> · CI jobs at once: {ci} (override)",
+          "planUnknown": "Plan <strong>unknown · {key}</strong> · new containers refused",
+          "planUnknownNoKey": "Plan <strong>unknown</strong> · new containers refused",
           "accrued": "Accrued, last {minutes} min <strong>{value} min</strong>",
           "debited": "Debited this month <strong>{credits} credits</strong>",
           "pending": "Awaiting confirmation <strong>{credits} credits</strong>"
@@ -12315,8 +12330,10 @@
       "aiPlanUnknown": "Motir could not check your organization’s AI plan just now. Try again in a moment.",
       "credits": "Your organization is out of credits. Agents use credits while they run and for their storage every day, asleep or not. <link>Add credits</link> to create or wake an agent.",
       "creditsUnknown": "Motir could not check your organization’s credits just now. Try again in a moment.",
-      "userCap": "You already have {count} agents. Each one is charged for its storage every day, even asleep. Delete one to create another.",
-      "orgRunningLimit": "Your organization is running {limit} of its {limit} agents. Hibernate one to start another.",
+      "userCap": "Your organization’s {plan} plan allows {limit, plural, one {# agent} other {# agents}} per person. Each one is charged for its storage every day, even asleep. Delete one to create another.",
+      "userCapNoFigure": "You already have as many agents as your organization’s plan allows per person. Each one is charged for its storage every day, even asleep. Delete one to create another.",
+      "orgRunningLimit": "Your organization’s {plan} plan runs {limit, plural, one {# agent} other {# agents}} at once, and all of them are running. Hibernate one to start another.",
+      "orgRunningLimitNoFigure": "Your organization is already running as many agents at once as its plan allows. Hibernate one to start another.",
       "busy": "Motir is running as many machines as it can right now. Try again in a few minutes.",
       "notOffered": "That coding agent isn’t offered: its terms don’t yet allow a platform to host it. Choose another coding agent.",
       "nameTaken": "You already have an agent called {name} on this project.",

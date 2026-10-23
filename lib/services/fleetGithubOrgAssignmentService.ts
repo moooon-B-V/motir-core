@@ -1,5 +1,6 @@
 import type { FleetShard, Prisma } from '@/generated/prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { bindOrganizationContext } from '@/lib/organizations/context';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
 import { GITHUB_SECONDARY_LIMITS, tenantsPerShard } from '@/lib/ciFleet/shardTargets';
 import type { GithubAppRole } from '@/lib/github/appAuth';
@@ -236,6 +237,11 @@ export const fleetGithubOrgAssignmentService = {
     organizationId: string,
     now: Date = new Date(),
   ): Promise<HostedGithubOrgOutcome> {
-    return withSystemContext((tx) => ensureInTx(organizationId, now, tx));
+    return withSystemContext(async (tx) => {
+      // Bound here, not only inside `lockByIdForUpdate`, so the tenant reads that
+      // follow (`project_repository` has no system arm) are visibly bound.
+      await bindOrganizationContext(tx, organizationId);
+      return ensureInTx(organizationId, now, tx);
+    });
   },
 };

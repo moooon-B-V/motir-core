@@ -567,3 +567,10 @@ it to 26 would throttle Motir's own CI the day this lands. The pool is read with
 the platform monitor's per-org rows show the same number admission enforces. Per-plan caps across
 every account (MOTIR-9363) are that story's; changing a production org's `fleetPoolCap` and flipping
 any kind's switch are the epic's production turn-on (MOTIR-9369).
+
+**Superseded before it shipped.** MOTIR-9363 (MOTIR-9375 and MOTIR-9377, under the fleet-capacity
+decision record MOTIR-9357) removed the organisation's pool from admission and from the monitor while
+this story was open: every workload is now held to its own plan figure (`lib/billing/planCaps.ts`),
+and `Organization.fleetPoolCap` overrides the plan's CI burst cap alone. So `DEFAULT_ORG_POOL_CAP`,
+`META_ORG_POOL_CAP` and `resolveOrgPool` were dropped when `main` was merged into this story; the
+rest of AMENDMENT 1 (the accounts, the switch, `shard_capacity`, the headroom alert) stands.

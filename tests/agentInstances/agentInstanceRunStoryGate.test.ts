@@ -27,6 +27,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { createTestLink } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { capAgentsAt } from '../helpers/agentPlanCaps';
 import { truncateJobRuns } from '../helpers/db';
 import {
   AI,
@@ -680,7 +681,7 @@ const REFUSALS: RefusalCase[] = [
     arrange: async () => {
       const agentId = await sleepingAgent();
       await agent('holds-the-only-slot');
-      vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '1');
+      capAgentsAt({ running: 1 });
       return { ...(await freshCard()), agentId };
     },
     status: 429,

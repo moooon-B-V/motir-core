@@ -10301,34 +10301,41 @@
       "fleet": {
         "orgs": {
           "title": "플릿 · 컨테이너를 실행 중인 조직",
-          "subtitle": "현재 컨테이너를 보유한 각 조직과, 최근 {minutes}분(차감 주기 두 번) 동안 CI 차감 결과를 나란히 표시합니다. 불일치 항목이 먼저 표시됩니다.",
+          "subtitle": "현재 컨테이너를 보유한 각 조직을 플랜의 한도와 비교하고, 최근 {minutes}분(차감 주기 두 번) 동안 CI 차감 결과를 나란히 표시합니다. 불일치 항목이 먼저 표시됩니다.",
           "mismatchedCount": "{count}개 불일치",
           "runningCount": "{count, plural, other {조직 #개 실행 중}}",
           "noMismatch": "불일치 없음",
           "stat": {
             "orgs": "컨테이너를 실행 중인 조직",
-            "pooled": "조직별 풀의 컨테이너(CI · 호스팅 · 인덱스)",
-            "instances": "에이전트 인스턴스 · 자체 풀이며 위 집계에 포함되지 않음",
+            "ciRunners": "CI 러너 · 각 조직은 플랜의 버스트 한도까지",
+            "hostedAgents": "호스팅 에이전트 실행 · 각 조직은 플랜의 동시 실행 수까지",
+            "instances": "실행 중인 에이전트 인스턴스 · 각 조직은 플랜의 한도까지",
             "mismatched": "불일치 · 실행 상태와 차감이 맞지 않음"
           },
           "group": {
-            "pool": "{pool}개 컨테이너 풀",
-            "own": "자체 풀"
+            "plan": "플랜 한도 적용",
+            "uncapped": "플랜 한도 없음"
           },
           "col": {
             "org": "조직",
+            "plan": "플랜",
             "ciRunner": "CI 러너",
             "hostedAgent": "호스팅 에이전트 실행",
             "index": "인덱스 컨테이너",
-            "poolUsed": "풀 사용량",
             "agentInstance": "에이전트 인스턴스",
-            "agentInstanceNote": "풀에 포함되지 않음",
             "accrued": "CI 시간(분) · 최근 {minutes}분",
             "credits": "이번 달 크레딧 · 확정",
             "verdict": "판정"
           },
-          "poolOf": "{used} / {pool}",
-          "poolUnknown": "풀을 읽을 수 없음",
+          "plan": {
+            "named": "{plan}<pp> · 1인당 {perUser}</pp>",
+            "exempt": "플랜 한도 없음",
+            "unknown": "플랜 알 수 없음 · {key}",
+            "unknownNoKey": "플랜 알 수 없음",
+            "unknownNote": "새 컨테이너 거부"
+          },
+          "usedOf": "{figure} 중 <b>{used}</b>",
+          "override": "재정의",
           "metaTag": "메타 조직 · isMeta",
           "unnamed": "조직 {id}",
           "accrued": {
@@ -10346,7 +10353,7 @@
           "foot": "{total}개 중 {from}–{to} 표시 · 불일치 먼저, 그다음 컨테이너가 많은 순 · CI만 판정합니다 — 실행 중에 차감되는 유일한 워크로드입니다",
           "empty": {
             "title": "플릿 컨테이너를 실행 중인 조직이 없습니다",
-            "body": "현재 모든 조직별 풀이 비어 있어 차감과 비교할 것이 없습니다. 결함이 아니라 정상적인 상태입니다."
+            "body": "현재 CI 러너, 호스팅 에이전트 실행, 에이전트 인스턴스, 인덱스 컨테이너를 보유한 조직이 없어 차감과 비교할 것이 없습니다. 결함이 아니라 정상적인 상태입니다."
           },
           "error": {
             "title": "플릿을 읽을 수 없습니다",
@@ -11442,12 +11449,20 @@
         "charge": {
           "ciRunner": "실행 중에 청구됨",
           "hostedAgent": "실행이 끝날 때 청구됨",
-          "agentInstance": "실행 구간별 청구 · 풀 외부",
+          "agentInstance": "실행 구간별 청구",
           "index": "Motir 부담 비용 — 청구되지 않음"
         },
+        "tile": {
+          "of": " / {figure}",
+          "override": "재정의"
+        },
         "facts": {
-          "pool": "풀 <strong>{pool}개 중 {used}개</strong>",
-          "poolUnknown": "풀 <strong>—개 중 {used}개</strong>",
+          "plan": "플랜 <strong>{plan}</strong> · 호스팅 실행 동시 {runs}개 · 1인당 에이전트 {perUser}개 · 실행 중 에이전트 {running}개 · CI 작업 동시 {ci}개",
+          "planCiUnreadable": "플랜 <strong>{plan}</strong> · 호스팅 실행 동시 {runs}개 · 1인당 에이전트 {perUser}개 · 실행 중 에이전트 {running}개 · CI 한도를 읽을 수 없음",
+          "planExempt": "플랜 <strong>플랜 한도 없음</strong>",
+          "planExemptOverride": "플랜 <strong>플랜 한도 없음</strong> · CI 작업 동시 {ci}개(재정의)",
+          "planUnknown": "플랜 <strong>알 수 없음 · {key}</strong> · 새 컨테이너 거부",
+          "planUnknownNoKey": "플랜 <strong>알 수 없음</strong> · 새 컨테이너 거부",
           "accrued": "최근 {minutes}분 누적 <strong>{value}분</strong>",
           "debited": "이번 달 차감 <strong>{credits} 크레딧</strong>",
           "pending": "확인 대기 <strong>{credits} 크레딧</strong>"
@@ -12309,8 +12324,10 @@
       "aiPlanUnknown": "지금은 Motir가 조직의 AI 플랜을 확인할 수 없습니다. 잠시 후 다시 시도하세요.",
       "credits": "조직의 크레딧이 소진되었습니다. 에이전트는 실행 중에, 그리고 절전 여부와 관계없이 매일 스토리지에 크레딧을 사용합니다. 에이전트를 만들거나 깨우려면 <link>크레딧을 추가하세요</link>.",
       "creditsUnknown": "지금은 Motir가 조직의 크레딧을 확인할 수 없습니다. 잠시 후 다시 시도하세요.",
-      "userCap": "이미 에이전트가 {count}개 있습니다. 각 에이전트는 절전 중에도 매일 스토리지 요금이 청구됩니다. 새로 만들려면 하나를 삭제하세요.",
-      "orgRunningLimit": "조직에서 에이전트 {limit}개 중 {limit}개가 실행 중입니다. 새로 시작하려면 하나를 절전 상태로 전환하세요.",
+      "userCap": "조직의 {plan} 플랜은 사용자당 에이전트를 {limit, plural, other {#}}개까지 허용합니다. 각 에이전트는 절전 중에도 매일 스토리지 요금이 청구됩니다. 새로 만들려면 하나를 삭제하세요.",
+      "userCapNoFigure": "조직의 플랜이 사용자당 허용하는 만큼 이미 에이전트가 있습니다. 각 에이전트는 절전 중에도 매일 스토리지 요금이 청구됩니다. 새로 만들려면 하나를 삭제하세요.",
+      "orgRunningLimit": "조직의 {plan} 플랜은 에이전트를 동시에 {limit, plural, other {#}}개까지 실행하며, 모두 실행 중입니다. 새로 시작하려면 하나를 절전 상태로 전환하세요.",
+      "orgRunningLimitNoFigure": "조직에서 이미 플랜이 허용하는 만큼 에이전트가 동시에 실행 중입니다. 새로 시작하려면 하나를 절전 상태로 전환하세요.",
       "busy": "Motir가 현재 최대한 많은 머신을 실행하고 있습니다. 몇 분 후에 다시 시도하세요.",
       "notOffered": "해당 코딩 에이전트는 제공되지 않습니다. 해당 약관이 아직 플랫폼에서의 호스팅을 허용하지 않습니다. 다른 코딩 에이전트를 선택하세요.",
       "nameTaken": "이 프로젝트에 {name}(이)라는 에이전트가 이미 있습니다.",

@@ -52,7 +52,7 @@ const STOP_REASON = 'CI ran 30 min with no debit reaching Northwind — stopping
 
 const MIN = 60_000;
 // The Fleet table is 64rem wide and scrolls inside its own box; at the lane's
-// default 1280px, beside the 240px admin sidebar, its Own pool, accrual,
+// default 1280px, beside the 240px admin sidebar, its index, accrual,
 // credits and verdict columns sat past the box's edge in the video.
 const WIDE = { width: 1440, height: 810 };
 
@@ -122,10 +122,12 @@ test('a platform admin reads the fleet, stops one org’s containers, and the ot
       await expect(northwindRow.getByText(fm.verdict.running_not_debited)).toBeVisible();
       await expect(northwindRow.getByText(fm.orgs.accrued.none)).toBeVisible();
       await expect(halcyonRow.getByText(fm.verdict.ok)).toBeVisible();
-      await expect(halcyonRow.getByRole('cell').nth(1)).toHaveText('2');
-      // Every column is ON SCREEN, not merely in the DOM: the Own pool group and
-      // the last column are inside the table's scroll box, not past its edge.
-      const ownPool = fleetOrgs.getByRole('columnheader', { name: fm.orgs.group.own });
+      // Halcyon is on Standard (MOTIR-9377): its plan named, its CI against 5.
+      await expect(halcyonRow.getByRole('cell').nth(1)).toContainText('Standard');
+      await expect(halcyonRow.getByRole('cell').nth(2)).toHaveText('2 of 5');
+      // Every column is ON SCREEN, not merely in the DOM: the No plan figure group
+      // and the last column are inside the table's scroll box, not past its edge.
+      const ownPool = fleetOrgs.getByRole('columnheader', { name: fm.orgs.group.uncapped });
       const verdictCol = fleetOrgs.getByRole('columnheader', { name: fm.orgs.col.verdict });
       await expect(ownPool).toBeInViewport({ ratio: 1 });
       await expect(verdictCol).toBeInViewport({ ratio: 1 });
@@ -216,7 +218,7 @@ test('a platform admin reads the fleet, stops one org’s containers, and the ot
     await expect(main.getByRole('heading', { name: fm.orgs.title })).toBeVisible();
     await fleetOrgs.scrollIntoViewIfNeeded();
     await expect(halcyonRow.getByText(fm.verdict.ok)).toBeVisible();
-    await expect(halcyonRow.getByRole('cell').nth(1)).toHaveText('2');
+    await expect(halcyonRow.getByRole('cell').nth(2)).toHaveText('2 of 5');
     await expect(northwindRow).toHaveCount(0);
     await expect(fleetOrgs.getByText(fm.orgs.noMismatch)).toBeVisible();
     expect(await inFlightCi(halcyon.organizationId)).toBe(2);

@@ -182,11 +182,8 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_FALLBACK_ORG', MOTIR_ORG);
   vi.stubEnv('MOTIR_AI_URL', 'https://ai.test');
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
-  // The kill switch disengaged and the org pool at its default (`DEFAULT_ORG_POOL_CAP`), so an
-  // org_pool refusal never masks the branch a case is actually about. The pool
-  // gets its own cases below.
+  // The kill switch disengaged. Indexing is held to no org pool (MOTIR-9375).
   vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '');
-  vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '');
 });
 
 afterEach(async () => {
@@ -368,50 +365,33 @@ describe('the GLOBAL cap and the PER-ORG cap', () => {
   });
 });
 
-// ── The org's pool binds indexing too (fleet-per-org-pool.md §2) ─────────
+// ── Indexing is held to no org pool (MOTIR-9375) ───────────────────────────
 
-describe("the org's POOL binds indexing too — a cap that only counted index containers is not a bound", () => {
-  // ⚠️ THE CASE A PER-WORKLOAD CAP STRUCTURALLY CANNOT CATCH. Indexing is nowhere
-  // near its own cap; the org's pool is full of its OWN CI runners.
-  it("refuses an index container when the org's CI RUNNERS filled its pool", async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '2');
+describe('indexing is held to its index caps alone — no org pool, no plan figure', () => {
+  // The retired pool used to refuse an index container when the org's own CI
+  // runners filled it. Indexing now counts against no plan figure.
+  it('admits an index container however many CI runners the org runs', async () => {
     vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '10');
     const fx = await seedTenant();
     await seedIntent(fx, { status: 'running' });
     await seedIntent(fx, { status: 'provisioning' });
 
-    const verdict = await admit(fx);
-
-    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'org_pool' });
-    expect((verdict as { detail: string }).detail).toContain('2 of its 2');
-    expect((verdict as { detail: string }).detail).toContain('CI runners 2');
-    expect(await indexInFlight()).toBe(0);
+    expect((await admit(fx)).outcome).toBe('admitted');
+    expect(await indexInFlight()).toBe(1);
   });
 
-  // …and never because ANOTHER org filled its own.
-  it("admits an index container while ANOTHER org's pool is full", async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '2');
-    const busy = await seedTenant();
-    await seedIntent(busy, { status: 'running' });
-    await seedIntent(busy, { status: 'running' });
-
-    expect((await admit(await seedTenant())).outcome).toBe('admitted');
-  });
-
-  // And the mirror — an admitted index container is COUNTED in its org's pool,
-  // which is the whole reason the dispatcher must take a slot at all (§7.2).
-  it('makes an admitted index container visible to the CI gate', async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
+  // …and the mirror: an admitted index container takes none of CI's room.
+  it("an admitted index container takes none of the org's CI room", async () => {
     stubMotirAi();
     const fx = await seedTenant();
+    await adminDb.organization.update({
+      where: { id: fx.organizationId },
+      data: { fleetPoolCap: 1 },
+    });
 
     expect((await admit(fx)).outcome).toBe('admitted');
 
-    expect(await ciRunnerAdmissionService.admit(await seedIntent(fx))).toMatchObject({
-      outcome: 'deferred',
-      reason: 'org_pool',
-      detail: expect.stringContaining('code-graph index 1'),
-    });
+    expect((await ciRunnerAdmissionService.admit(await seedIntent(fx))).outcome).toBe('admitted');
   });
 
   it('the kill switch stops indexing too', async () => {
@@ -538,24 +518,28 @@ describe('the caps hold under REAL concurrency', () => {
   // ⚠️ RACED AGAINST THE OTHER WORKLOADS, not just against itself. A same-workload
   // race would pass against an implementation that took a per-workload lock —
   // which is exactly the shape MOTIR-1997 exists to replace.
-  it("never exceeds the org's POOL when its index and CI dispatches race", async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '3');
-    vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '10');
+  // Since MOTIR-9375 each gate holds its OWN workload: the CI figure and the
+  // per-org index share each hold exactly, in the same racing instant.
+  it('holds CI at its figure and indexing at its share when the two race', async () => {
+    vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '6');
     stubMotirAi();
     const fx = await seedTenant();
-    const intents = await Promise.all([1, 2, 3].map(() => seedIntent(fx)));
+    await adminDb.organization.update({
+      where: { id: fx.organizationId },
+      data: { fleetPoolCap: 2 },
+    });
+    const intents = await Promise.all([1, 2, 3, 4].map(() => seedIntent(fx)));
 
-    const results = await Promise.all([
+    await Promise.all([
       ...intents.map((intent) => ciRunnerAdmissionService.admit(intent)),
-      ...[1, 2, 3].map((i) => admit(fx, `moooon/race-${i}`)),
+      ...[1, 2, 3, 4, 5].map((i) => admit(fx, `moooon/race-${i}`)),
     ]);
 
-    const won = results.filter((r) => r.outcome === 'admitted');
-    expect(won).toHaveLength(3);
     const census = await withSystemContext((tx) =>
       fleetCeilingService.orgCensus(fx.organizationId, NOW, tx),
     );
-    expect(census.total).toBe(3);
+    expect(census.byWorkload.ci_runner).toBe(2);
+    expect(census.byWorkload.code_graph_index).toBe(3);
   });
 
   // A redelivered job / replayed step must occupy ONE slot, not two — the

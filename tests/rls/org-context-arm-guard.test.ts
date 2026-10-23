@@ -202,7 +202,7 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
     source: 'scan',
     why: 'the org row read for the plan-lapse banner date (MOTIR-6921) — organization_active',
   },
-  'lib/services/aiPlanGateService.ts#hasPaidAiPlan': {
+  'lib/services/orgPlanReader.ts#readExemption': {
     tables: ['organization'],
     source: 'scan',
     why: 'organization_active',
@@ -222,7 +222,7 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
     source: 'scan',
     why: 'organization_active / ci_period_charge_org_or_system',
   },
-  'lib/services/fleetCeilingService.ts#resolveOrgPool': {
+  'lib/services/fleetCeilingService.ts#resolveCiBurstCap': {
     tables: ['organization'],
     source: 'scan',
     why: 'organization_active',

@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { AGENT_LIST_LIMIT } from '@/lib/agentInstances/config';
 import type { WorkspaceContext } from '@/lib/workspaces';
 import { agentInstanceIdleCheck } from '@/lib/jobs/definitions/agentInstanceIdleCheck';
 import {
@@ -88,7 +89,8 @@ describe('the routes', () => {
 
   it('clamps the page size and defaults a bad page, and refuses a malformed create body', async () => {
     const res = await collection.GET(new Request(`${base()}?page=-3&limit=100000`), keyParams());
-    expect(await res.json()).toMatchObject({ page: 1, pageSize: 100 });
+    // The route's ceiling is the shared list size, never a plan figure (MOTIR-9376).
+    expect(await res.json()).toMatchObject({ page: 1, pageSize: AGENT_LIST_LIMIT });
     const bad = await collection.POST(post(base(), { name: 7 }), keyParams());
     expect(bad.status).toBe(400);
     const notJson = await collection.POST(

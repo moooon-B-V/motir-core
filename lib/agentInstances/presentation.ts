@@ -1,4 +1,4 @@
-import { INSTANCE_MAX_PER_USER } from '@/lib/agentInstances/config';
+import { AGENT_LIST_LIMIT } from '@/lib/agentInstances/config';
 import { isLegalTransition } from '@/lib/agentInstances/stateMachine';
 import type { AgentInstanceState } from '@/lib/dto/agentInstances';
 import type { RunTone } from '@/lib/runs/timeline';
@@ -27,14 +27,15 @@ export const AGENT_STATE_TONE: Record<AgentInstanceState, RunTone> = {
 };
 
 /**
- * How many agents the list reads — all of them. The page is NOT paginated (a
- * person keeps at most `INSTANCE_MAX_PER_USER` agents, so the whole list always
- * fits); this is that cap, spelled here so the client island and the server page
+ * How many agents the list reads. The page is NOT paginated, so this is the
+ * instances route's own ceiling, `AGENT_LIST_LIMIT` — a page size, not the
+ * per-person limit, which is the plan's and which a person can be over (an exempt
+ * org, or a downgrade). Spelled here so the client island and the server page
  * share it. Lives here, not in the client island: a constant exported from a
  * `'use client'` module is a client REFERENCE on the server, so the page's first
  * read would hand Prisma a function for `take`.
  */
-export const MY_AGENTS_LIST_LIMIT = INSTANCE_MAX_PER_USER;
+export const MY_AGENTS_LIST_LIMIT = AGENT_LIST_LIMIT;
 
 /** The states still moving on their own — the page polls while any row is in one. */
 export const AGENT_STATES_IN_MOTION: ReadonlySet<AgentInstanceState> = new Set([

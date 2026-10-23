@@ -10307,34 +10307,41 @@
       "fleet": {
         "orgs": {
           "title": "Flota · organizaciones que ejecutan contenedores",
-          "subtitle": "Cada organización que tiene un contenedor ahora, junto a lo que el débito de CI hizo por ella en los últimos {minutes} minutos (dos periodos de débito). Las discrepancias primero.",
+          "subtitle": "Cada organización que tiene un contenedor ahora, frente a las cifras de su plan, junto a lo que el débito de CI hizo por ella en los últimos {minutes} minutos (dos periodos de débito). Las discrepancias primero.",
           "mismatchedCount": "{count} con discrepancias",
           "runningCount": "{count, plural, one {# organización en ejecución} other {# organizaciones en ejecución}}",
           "noMismatch": "Sin discrepancias",
           "stat": {
             "orgs": "organizaciones que ejecutan un contenedor",
-            "pooled": "contenedores en fondos por organización (CI · alojado · indexación)",
-            "instances": "instancias de agentes · su propio fondo, no contado arriba",
+            "ciRunners": "runners de CI · cada organización limitada al pico de CI de su plan",
+            "hostedAgents": "ejecuciones del Agente alojado · cada organización limitada a las ejecuciones paralelas de su plan",
+            "instances": "instancias de agentes en ejecución · cada organización limitada a la cifra de su plan",
             "mismatched": "con discrepancias · lo que se ejecuta y lo que se debita no coinciden"
           },
           "group": {
-            "pool": "En el fondo de {pool} contenedores",
-            "own": "Fondo propio"
+            "plan": "Limitado por el plan",
+            "uncapped": "Sin cifra del plan"
           },
           "col": {
             "org": "Organización",
+            "plan": "Plan",
             "ciRunner": "Runners de CI",
             "hostedAgent": "Ejecuciones del Agente alojado",
             "index": "Contenedores de indexación",
-            "poolUsed": "Fondo usado",
             "agentInstance": "Instancias de agentes",
-            "agentInstanceNote": "fuera del fondo",
             "accrued": "Minutos de CI · últimos {minutes} min",
             "credits": "Créditos este mes · confirmados",
             "verdict": "Veredicto"
           },
-          "poolOf": "{used} / {pool}",
-          "poolUnknown": "fondo ilegible",
+          "plan": {
+            "named": "{plan}<pp> · {perUser} por persona</pp>",
+            "exempt": "Sin límite de plan",
+            "unknown": "Plan desconocido · {key}",
+            "unknownNoKey": "Plan desconocido",
+            "unknownNote": "se rechazan contenedores nuevos"
+          },
+          "usedOf": "<b>{used}</b> de {figure}",
+          "override": "anulación",
           "metaTag": "organización meta · isMeta",
           "unnamed": "Organización {id}",
           "accrued": {
@@ -10352,7 +10359,7 @@
           "foot": "Mostrando {from}–{to} de {total} · primero las discrepancias, luego las que tienen más contenedores · solo se evalúa CI: es la única carga que se debita mientras se ejecuta",
           "empty": {
             "title": "Ninguna organización está ejecutando un contenedor de la flota",
-            "body": "Todos los fondos por organización están vacíos ahora mismo, así que no hay nada que comparar con el débito. Es una lectura sana, no un fallo."
+            "body": "Ninguna organización tiene ahora un runner de CI, una ejecución del Agente alojado, una instancia de agente ni un contenedor de indexación, así que no hay nada que comparar con el débito. Es una lectura sana, no un fallo."
           },
           "error": {
             "title": "No se pudo leer la flota",
@@ -11448,12 +11455,20 @@
         "charge": {
           "ciRunner": "Se cobra mientras se ejecuta",
           "hostedAgent": "Se cobra cuando termina la Ejecución",
-          "agentInstance": "Se cobra por intervalo en ejecución · fuera del fondo",
+          "agentInstance": "Se cobra por intervalo en ejecución",
           "index": "Costo de Motir: nunca se cobra"
         },
+        "tile": {
+          "of": " de {figure}",
+          "override": "anulación"
+        },
         "facts": {
-          "pool": "Fondo <strong>{used} de {pool}</strong>",
-          "poolUnknown": "Fondo <strong>{used} de —</strong>",
+          "plan": "Plan <strong>{plan}</strong> · {runs} ejecuciones alojadas a la vez · {perUser} agentes por persona · {running} agentes en ejecución · {ci} trabajos de CI a la vez",
+          "planCiUnreadable": "Plan <strong>{plan}</strong> · {runs} ejecuciones alojadas a la vez · {perUser} agentes por persona · {running} agentes en ejecución · límite de CI ilegible",
+          "planExempt": "Plan <strong>Sin límite de plan</strong>",
+          "planExemptOverride": "Plan <strong>Sin límite de plan</strong> · {ci} trabajos de CI a la vez (anulación)",
+          "planUnknown": "Plan <strong>desconocido · {key}</strong> · se rechazan contenedores nuevos",
+          "planUnknownNoKey": "Plan <strong>desconocido</strong> · se rechazan contenedores nuevos",
           "accrued": "Acumulado, últimos {minutes} min <strong>{value} min</strong>",
           "debited": "Debitado este mes <strong>{credits} créditos</strong>",
           "pending": "Pendiente de confirmación <strong>{credits} créditos</strong>"
@@ -12315,8 +12330,10 @@
       "aiPlanUnknown": "Motir no pudo comprobar el plan de IA de tu organización en este momento. Vuelve a intentarlo en un momento.",
       "credits": "Tu organización se quedó sin créditos. Los agentes usan créditos mientras se ejecutan y por su almacenamiento cada día, estén dormidos o no. <link>Añade créditos</link> para crear o despertar un Agente.",
       "creditsUnknown": "Motir no pudo comprobar los créditos de tu organización en este momento. Vuelve a intentarlo en un momento.",
-      "userCap": "Ya tienes {count} agentes. A cada uno se le cobra su almacenamiento cada día, aunque esté dormido. Elimina uno para crear otro.",
-      "orgRunningLimit": "Tu organización está ejecutando {limit} de sus {limit} agentes. Hiberna uno para iniciar otro.",
+      "userCap": "El plan {plan} de tu organización permite {limit, plural, one {# agente} other {# agentes}} por persona. A cada uno se le cobra su almacenamiento cada día, aunque esté dormido. Elimina uno para crear otro.",
+      "userCapNoFigure": "Ya tienes tantos agentes como permite por persona el plan de tu organización. A cada uno se le cobra su almacenamiento cada día, aunque esté dormido. Elimina uno para crear otro.",
+      "orgRunningLimit": "El plan {plan} de tu organización ejecuta {limit, plural, one {# agente} other {# agentes}} a la vez, y ya están todos en marcha. Hiberna uno para iniciar otro.",
+      "orgRunningLimitNoFigure": "Tu organización ya está ejecutando tantos agentes a la vez como permite su plan. Hiberna uno para iniciar otro.",
       "busy": "Motir está ejecutando tantas máquinas como puede ahora mismo. Vuelve a intentarlo en unos minutos.",
       "notOffered": "Ese Agente de código no se ofrece: sus términos aún no permiten que una plataforma lo aloje. Elige otro Agente de código.",
       "nameTaken": "Ya tienes un Agente llamado {name} en este proyecto.",

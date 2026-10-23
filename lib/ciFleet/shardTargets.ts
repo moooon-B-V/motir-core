@@ -13,8 +13,6 @@
 //     number of tenants that org can carry.
 //   * `shardAdmissionCeiling` — an account's concurrent-container ceiling, from its
 //     own granted vCPU quota and the container size.
-//   * `DEFAULT_ORG_POOL_CAP` (`limits.ts`) — the per-org pool default, which is
-//     `TENANT_TARGET.peakRunners`.
 //
 // ⚠️ DERIVED, NEVER SEPARATELY CONFIGURED — the rule `orgIndexInFlightCap` states
 // in `limits.ts`. There is deliberately no `MOTIR_*` env var for a target or for

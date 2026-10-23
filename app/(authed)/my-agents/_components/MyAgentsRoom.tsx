@@ -84,7 +84,6 @@ export function MyAgentsRoom({
   projectName,
   initial,
   profiles,
-  maxPerUser,
   storageCreditsPerDay = null,
   openAgentId = null,
   openTab = 'terminal',
@@ -94,7 +93,6 @@ export function MyAgentsRoom({
   /** The server's first read; `null` when it failed (panel 7's failure face). */
   initial: AgentInstanceListPageDto | null;
   profiles: readonly OfferedProfile[];
-  maxPerUser: number;
   /** The daily storage rate on a cloud build, `null` where storage is free (self-hosted). */
   storageCreditsPerDay?: number | null;
   /** The agent the address names (`?agent=`), read by the page; null when none. */
@@ -103,7 +101,7 @@ export function MyAgentsRoom({
   openTab?: AgentPanelTab;
 }) {
   const t = useTranslations('myAgents');
-  const refusalFor = useAgentRefusal(maxPerUser);
+  const refusalFor = useAgentRefusal();
   const [data, setData] = useState<AgentInstanceListPageDto | null>(initial);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AgentInstanceListItemDto | null>(null);

@@ -2,6 +2,7 @@ import type { FleetShard, FleetShardMoveReason, Prisma } from '@/generated/prism
 import { FLEET_CONTAINER_SIZE } from '@motir/orchestrator';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import {
   GITHUB_SECONDARY_LIMITS,
   HEADROOM_ALERT_FRACTION,
@@ -342,8 +343,6 @@ export const fleetShardHeadroomService = {
     const registrations =
       smallest(naming.map((shard) => shard.githubRegistrationsPer5Min)) ??
       GITHUB_RUNNER_REGISTRATIONS_PER_5_MIN;
-    const fallback = provisioningOrgLogin()?.trim().toLowerCase();
-
     const { minted, secondary, contributors } = await withSystemContext(async (tx) => {
       const minted = await ledger.countSince(
         org,
@@ -402,7 +401,8 @@ export const fleetShardHeadroomService = {
     if (!target) {
       // A tenant's own org with no Motir App on it: nothing to read with. The
       // fallback org always has one, so its absence is a failure.
-      if (org === fallback) throw new Error('no installation to read the REST budget with');
+      if (isMotirHostedOwner(org, provisioningOrgLogin()))
+        throw new Error('no installation to read the REST budget with');
       return;
     }
     const budget = await readInstallationRateLimit(target);

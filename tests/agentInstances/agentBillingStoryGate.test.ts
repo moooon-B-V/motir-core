@@ -275,7 +275,6 @@ describe('GUARD · nothing deletes an agent before its scheduledDeletionAt', () 
 describe('GUARD · an internal org is never refused and never scheduled — and still charged', () => {
   it('past every cap, at zero credits, through a seat-off push and 40 days of sweeps', async () => {
     await adminDb.organization.update({ where: { id: orgId() }, data: { internalBilling: true } });
-    vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '1');
     planIs('unanswerable');
     stub.mayRun = false;
 
