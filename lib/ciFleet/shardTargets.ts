@@ -22,7 +22,7 @@
 // matters — *one tenant takes at most what it was sized for* — is only
 // expressible as a relation between them.
 
-import { FLEET_CONTAINER_SIZE } from '@motir/orchestrator';
+import { FLEET_CONTAINER_SIZE, type FleetWorkloadKind } from '@motir/orchestrator';
 import { GITHUB_RUNNER_REGISTRATIONS_PER_5_MIN } from '@/lib/github/runnerJitConfig';
 
 const FIVE_MINUTES_SECONDS = 5 * 60;
@@ -232,3 +232,40 @@ export const TARGET_SHARD_LIMITS: ShardLimits = {
 
 /** How many target tenants the target account carries — computed, never typed. */
 export const DERIVED_TENANTS_PER_SHARD_TARGET = tenantsPerShard(TARGET_SHARD_LIMITS).tenants;
+
+/**
+ * How long admission skips an account after it refused a provision for capacity
+ * or was unreachable (ADR AMENDMENT 1, *The admission order*; MOTIR-8968). A pause,
+ * not a probe: for this long every job goes elsewhere instead of paying a create
+ * timeout first, and the first job after it ends re-tests the account.
+ */
+export const SHARD_PAUSE_SECONDS = 120;
+
+/** Reads one fleet kind's Fly↔AWS switch: true = the kind boots on its pool. */
+export type FleetKindSwitchReader = () => boolean | Promise<boolean>;
+
+const kindSwitches = new Map<FleetWorkloadKind, FleetKindSwitchReader>();
+
+/**
+ * Wire a fleet kind's Fly↔AWS switch. Each kind's own story owns its switch
+ * (CI's is MOTIR-9270) and wires its reader here; `null` unwires it. Until then
+ * the kind reads Fly.
+ */
+export function wireFleetKindSwitch(
+  kind: FleetWorkloadKind,
+  reader: FleetKindSwitchReader | null,
+): void {
+  if (reader === null) kindSwitches.delete(kind);
+  else kindSwitches.set(kind, reader);
+}
+
+/**
+ * IS THIS FLEET KIND ON ITS POOL? — the one read of a kind's Fly↔AWS switch.
+ * Read on every job, never cached, so flipping one kind takes effect on its next
+ * job and touches no other kind. A kind whose switch is not wired reads Fly:
+ * today's path, the process-wide fleet.
+ */
+export async function fleetKindOnPool(kind: FleetWorkloadKind): Promise<boolean> {
+  const reader = kindSwitches.get(kind);
+  return reader ? (await reader()) === true : false;
+}

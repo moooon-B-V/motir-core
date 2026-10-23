@@ -1,5 +1,6 @@
 import type {
   FleetShard,
+  FleetShardPauseReason,
   FleetShardRole,
   FleetShardState,
   Prisma,
@@ -71,5 +72,31 @@ export const fleetShardRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<FleetShard> {
     return tx.fleetShard.update({ where: { id }, data: { state } });
+  },
+
+  /** The ACTIVE accounts of one fleet kind's shared pool, with their pause and
+   *  override columns — admission's candidates (MOTIR-8968). Read uncached on
+   *  every admission, so an override or a pause takes effect on the next job. */
+  async listActiveForKindInTx(
+    fleetKind: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetShard[]> {
+    return tx.fleetShard.findMany({
+      where: { fleetKind, role: 'primary', state: 'active' },
+      orderBy: { id: 'asc' },
+    });
+  },
+
+  /** Skip this account in admission until `until` (MOTIR-8968). */
+  async pauseInTx(
+    id: string,
+    until: Date,
+    reason: FleetShardPauseReason,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.fleetShard.update({
+      where: { id },
+      data: { admissionPausedUntil: until, admissionPausedReason: reason },
+    });
   },
 };

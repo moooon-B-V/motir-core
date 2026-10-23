@@ -9,6 +9,10 @@ import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { resolveAdmissionCoverage } from '@/lib/ciMetering/allowance';
 import { fleetKillSwitchEngaged } from '@/lib/ciFleet/limits';
 import {
+  fleetShardAdmissionService,
+  SHARD_CAPACITY_DETAIL,
+} from '@/lib/services/fleetShardAdmissionService';
+import {
   fleetCeilingService,
   describeFleetCensus,
   FLEET_KILL_SWITCH_DETAIL,
@@ -32,6 +36,12 @@ import {
 //      and never because another org's did. It replaces MOTIR-1922's per-project
 //      tier caps, which are retired (§6): how an org shares its pool between its
 //      own projects is its own business.
+//   2b. THE ACCOUNT (AMENDMENT 1, MOTIR-8968) — which account of the job's fleet
+//      kind its machine boots on: none (the process-wide Fly fleet) while the
+//      kind's switch is Fly, else the kind's shared account with the most
+//      headroom. Every account full defers `shard_capacity`. Chosen and written
+//      at the claim, in the same locked transaction, so the per-account count
+//      is exact.
 //   3. ADMISSION BY COVERAGE (§3, MOTIR-6911) — the org's remaining included
 //      minutes plus its balance must pay for every charged container it runs
 //      AND this one, for one debit period (`resolveAdmissionCoverage`). The
@@ -92,13 +102,17 @@ export type AdmissionDeferralReason =
   | 'balance_unavailable'
   /** The gate itself could not decide. FAIL-CLOSED: an unestablished count is
    *  treated as a full pool, not an empty one. */
-  | 'gate_unavailable';
+  | 'gate_unavailable'
+  /** Every account of the job's fleet kind is full (AMENDMENT 1, MOTIR-8968):
+   *  Motir's capacity, not the org's, is used up. */
+  | 'shard_capacity';
 
 export type AdmissionVerdict =
   /** Admitted AND CLAIMED — the intent is now `provisioning` and the caller owns
    *  it. `orgInFlight` is the org's pool count at the decision (runners + index
-   *  + hosted runs), for the caller's log. */
-  | { outcome: 'admitted'; orgInFlight: number; orgPool: number }
+   *  + hosted runs), for the caller's log. `fleetShardId` is the account its
+   *  machine boots on; null = the process-wide fleet. */
+  | { outcome: 'admitted'; orgInFlight: number; orgPool: number; fleetShardId: string | null }
   /** Another provisioner claimed it first. Not an error; the compare-and-set
    *  worked. */
   | { outcome: 'already_claimed' }
@@ -203,14 +217,36 @@ export const ciRunnerAdmissionService = {
           };
         }
 
+        // WHICH ACCOUNT (MOTIR-8968), chosen under the same lock the claim takes.
+        const placement = await fleetShardAdmissionService.chooseInTx(
+          { fleetKind: 'ci_runner', organizationId: intent.organizationId },
+          now,
+          tx,
+        );
+        if ('deferred' in placement) {
+          await intents.markShardCapacityDeferredInTx(intent.id, now, tx);
+          return {
+            outcome: 'deferred' as const,
+            reason: 'shard_capacity' as const,
+            detail: SHARD_CAPACITY_DETAIL,
+          };
+        }
+
         // TAKE THE SLOT. The compare-and-set on `pending` is what makes the
         // count above true of the world the moment this transaction commits.
-        const took = await intents.claimPending(intent.id, tx);
+        const took = await intents.claimPending(intent.id, tx, {
+          fleetShardId: placement.shardId,
+        });
         if (!took) return { outcome: 'already_claimed' as const };
 
         chargedRunning = census.byWorkload.ci_runner + census.byWorkload.hosted_agent;
 
-        return { outcome: 'admitted' as const, orgInFlight: census.total, orgPool: pool };
+        return {
+          outcome: 'admitted' as const,
+          orgInFlight: census.total,
+          orgPool: pool,
+          fleetShardId: placement.shardId,
+        };
       });
     } catch (err) {
       // FAIL CLOSED. The transaction rolled back, so nothing was claimed and the
@@ -318,6 +354,23 @@ export const ciRunnerAdmissionService = {
       await withSystemContext((tx) => intents.releaseClaim(intentId, tx));
     } catch (err) {
       console.error('[ciRunnerAdmissionService] could not release a claim', {
+        intentId,
+        detail: detailOf(err),
+      });
+    }
+  },
+
+  /** {@link releaseClaim} for a boot whose every account refused (MOTIR-8968):
+   *  the claim goes back, and the intent's first `shard_capacity` deferral is
+   *  stamped. Best-effort for the same reason. */
+  async releaseClaimForShardCapacity(intentId: string, at: Date): Promise<void> {
+    try {
+      await withSystemContext(async (tx) => {
+        await intents.releaseClaim(intentId, tx);
+        await intents.markShardCapacityDeferredInTx(intentId, at, tx);
+      });
+    } catch (err) {
+      console.error('[ciRunnerAdmissionService] could not release a claim for shard capacity', {
         intentId,
         detail: detailOf(err),
       });

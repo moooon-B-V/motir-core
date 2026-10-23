@@ -208,13 +208,6 @@ describe('fleetShardOrchestratorService', () => {
     );
     expect(await fleetShardOrchestratorService.forShard(account.id)).not.toBe(first);
   });
-
-  it('chooses no account for a new boot until admission fills the seam', async () => {
-    await createAccount({ state: 'active' });
-    expect(
-      await fleetShardOrchestratorService.chooseBootShard({ id: 'i', organizationId: 'o' }),
-    ).toBeNull();
-  });
 });
 
 // ── against an intent ───────────────────────────────────────────────────────

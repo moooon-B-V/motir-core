@@ -54,6 +54,16 @@ import {
 } from '@/lib/orchestrator';
 import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
+import { fleetShardService } from '@/lib/services/fleetShardService';
+import {
+  classifyProvisionRefusal,
+  fleetShardAdmissionService,
+  SHARD_CAPACITY_DETAIL,
+} from '@/lib/services/fleetShardAdmissionService';
+import {
+  ciFleetAdmissionLockRepository as locks,
+  FLEET_ADMISSION_SCOPE,
+} from '@/lib/repositories/ciFleetAdmissionLockRepository';
 import {
   FLEET_CONTAINER_SIZE,
   type ContainerHandle,
@@ -1184,23 +1194,33 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
     return terminal({ outcome: 'no_runner_group', detail });
   }
 
-  // WHICH ACCOUNT boots it (MOTIR-8964) — `null`, the process-wide fleet, until
-  // admission (MOTIR-8968) fills the seam. An account that cannot be reached is
-  // handled exactly as a process with no orchestrator: claim released.
-  let orchestrator: ContainerOrchestrator;
-  let bootShard: FleetShardDTO | null;
-  try {
-    bootShard = await fleetShardOrchestratorService.chooseBootShard(intent);
-    orchestrator = bootShard
-      ? fleetShardOrchestratorService.forShardRow(bootShard)
-      : getOrchestrator();
-  } catch (err) {
-    await releaseClaim(intentId);
-    console.warn('[ciRunnerBootService] no orchestrator is configured — claim released', {
-      intentId,
-      detail: detailOf(err),
-    });
-    return terminal({ outcome: 'not_configured' });
+  // WHICH ACCOUNT boots it — the one admission chose and wrote at the claim
+  // (MOTIR-8968); `null` = the process-wide fleet, today's path for a kind whose
+  // switch is Fly. On the Fly path an unconfigured orchestrator is handled as a
+  // process with none: claim released. An ACCOUNT that cannot be reached is a
+  // provider outage and moves the job (below).
+  let bootShardId: string | null = verdict.fleetShardId;
+  let bootShard: FleetShardDTO | null = null;
+  let orchestrator: ContainerOrchestrator | null = null;
+  let accountUnreachable: unknown = null;
+  if (bootShardId === null) {
+    try {
+      orchestrator = getOrchestrator();
+    } catch (err) {
+      await releaseClaim(intentId);
+      console.warn('[ciRunnerBootService] no orchestrator is configured — claim released', {
+        intentId,
+        detail: detailOf(err),
+      });
+      return terminal({ outcome: 'not_configured' });
+    }
+  } else {
+    try {
+      bootShard = await fleetShardService.getShard(bootShardId);
+      orchestrator = fleetShardOrchestratorService.forShardRow(bootShard);
+    } catch (err) {
+      accountUnreachable = err;
+    }
   }
 
   // ── 1 · Mint the JIT config ───────────────────────────────────────────────
@@ -1210,7 +1230,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
   // The org the runner is registered in — the job repository's own, through the
   // installation the delivery arrived on; `undefined` for the provisioning org.
   const runnerTarget = fleetRunnerTargetFor(intent);
-  let jit;
+  let jit: Awaited<ReturnType<typeof runnerJitConfigClient.mint>>;
   try {
     jit = await runnerJitConfigClient.mint(
       {
@@ -1294,20 +1314,90 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
   );
 
   // ── 2 · Boot exactly one container ────────────────────────────────────────
-  const spec = ciRunnerBootService.buildSpec({
-    intent,
-    workflowJobId,
-    projectId: intent.projectId,
-    encodedJitConfig: jit.encodedJitConfig,
-    timeoutSeconds: Math.ceil(jobTimeoutMs / 1000),
-    orchestrator,
-    ...(bootShard ? { region: bootShard.fly?.region ?? '' } : {}),
-  });
+  const specFor = (shard: FleetShardDTO | null, through: ContainerOrchestrator) =>
+    ciRunnerBootService.buildSpec({
+      intent,
+      workflowJobId,
+      projectId: intent.projectId!,
+      encodedJitConfig: jit.encodedJitConfig,
+      timeoutSeconds: Math.ceil(jobTimeoutMs / 1000),
+      orchestrator: through,
+      ...(shard ? { region: shard.fly?.region ?? '' } : {}),
+    });
 
-  let handle: ContainerHandle;
-  try {
-    handle = await orchestrator.provision(spec);
-  } catch (err) {
+  // THE IN-BOOT MOVE (AMENDMENT 1, MOTIR-8968). An account that refuses for
+  // capacity or is down is paused, and the SAME boot moves to the next account
+  // of the kind with the SAME JIT config — the runner's GitHub org is the repo's
+  // whichever account boots it, so nothing is re-minted. With no account left
+  // the job defers `shard_capacity`; it is never `provision_failed` for a
+  // capacity reason and never sent to Fly.
+  const tried = new Set<string>();
+  let spec: ContainerSpec | null = null;
+  let handle: ContainerHandle | null = null;
+  for (;;) {
+    let refusal: unknown = accountUnreachable;
+    if (refusal === null) {
+      spec = specFor(bootShard, orchestrator!);
+      try {
+        handle = await orchestrator!.provision(spec);
+        break;
+      } catch (err) {
+        refusal = err;
+      }
+    }
+    accountUnreachable = null;
+
+    const reason = bootShardId === null ? 'job_fault' : classifyProvisionRefusal(refusal);
+    if (bootShardId === null || reason === 'job_fault') {
+      return failedProvision(refusal);
+    }
+
+    const refusedId = bootShardId;
+    tried.add(refusedId);
+    console.warn('[ciRunnerBootService] an account refused the provision — moving the job', {
+      intentId,
+      shardId: refusedId,
+      reason,
+      detail: detailOf(refusal),
+    });
+    const nextId = await withSystemContext(async (tx) => {
+      await locks.ensureScope(FLEET_ADMISSION_SCOPE, tx);
+      if (!(await locks.lockScope(FLEET_ADMISSION_SCOPE, tx))) {
+        throw new Error('the fleet admission lock could not be taken');
+      }
+      return fleetShardAdmissionService.moveAfterRefusalInTx(
+        intent,
+        refusedId,
+        reason,
+        tried,
+        now(),
+        tx,
+      );
+    });
+    if (nextId === null) {
+      await deregisterQuietly(jit.runnerId, intentId, runnerTarget);
+      await ciRunnerAdmissionService.releaseClaimForShardCapacity(intentId, now());
+      console.warn('[ciRunnerBootService] every account of the kind refused — deferred', {
+        intentId,
+        tried: [...tried],
+      });
+      return terminal({
+        outcome: 'gate_deferred',
+        reason: 'shard_capacity',
+        detail: SHARD_CAPACITY_DETAIL,
+      });
+    }
+    bootShardId = nextId;
+    bootShard = null;
+    try {
+      bootShard = await fleetShardService.getShard(nextId);
+      orchestrator = fleetShardOrchestratorService.forShardRow(bootShard);
+    } catch (err) {
+      accountUnreachable = err;
+    }
+  }
+
+  async function failedProvision(err: unknown): Promise<BootResult> {
     // A MINTED-BUT-UNUSED JIT CONFIG. The runner is registered at GitHub and no
     // container will ever claim it, so it is de-registered here rather than
     // left to GitHub — which does not clean it up (§7.4, verified).
@@ -1330,7 +1420,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
         image: err.imageReference,
         detail: detailOf(err),
       });
-      await settleFailed(intentId, intent.projectId, 'provision_failed', detail);
+      await settleFailed(intentId, intent!.projectId, 'provision_failed', detail);
       return terminal({ outcome: 'image_unpullable', detail });
     }
 
@@ -1338,7 +1428,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
     // A provider refusal or a blown deadline is transient until it repeats: the
     // intent goes back to the pool rather than taking a runner away from the jobs
     // queued at GitHub (MOTIR-8941).
-    const attempt = intent.bootAttempts + 1;
+    const attempt = intent!.bootAttempts + 1;
     if (attempt < MAX_BOOT_ATTEMPTS) {
       await ciRunnerAdmissionService.releaseClaimForRetry(intentId);
       console.warn('[ciRunnerBootService] the boot failed — claim released for another attempt', {
@@ -1348,10 +1438,11 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
       });
       return terminal({ outcome: 'rate_limited', retryAfterSeconds: null });
     }
-    await settleFailed(intentId, intent.projectId, 'provision_failed', detail);
+    await settleFailed(intentId, intent!.projectId, 'provision_failed', detail);
     return terminal({ outcome: 'provision_failed', detail });
   }
 
+  if (!handle || !spec) throw new Error('unreachable: the boot loop exits only with a handle');
   const bootedAt = now();
   await withSystemContext((tx) =>
     intents.recordBoot(
@@ -1363,7 +1454,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
         githubRunnerId: jit.runnerId,
         runnerName: jit.runnerName,
         bootedAt,
-        fleetShardId: bootShard?.id ?? null,
+        fleetShardId: bootShardId,
       },
       tx,
     ),
@@ -1380,7 +1471,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
         region: handle.region,
         createdAt: handle.createdAt.toISOString(),
         ...(handle.volumeId ? { volumeId: handle.volumeId } : {}),
-        ...(bootShard ? { shardId: bootShard.id } : {}),
+        ...(bootShardId ? { shardId: bootShardId } : {}),
       },
       githubRunnerId: jit.runnerId,
       runnerTarget: runnerTarget ?? null,

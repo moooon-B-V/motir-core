@@ -10786,15 +10786,23 @@ model CiRunnerProvisioningIntent {
   /// between provision and teardown, so the handle has to survive somewhere that
   /// is not this process. Provider-agnostic by construction — a Fly Machine id
   /// and an EC2 instance id are both just `container_id` (ADR §4's rule 1).
-  containerProvider String? @map("container_provider")
-  containerId       String? @map("container_id")
-  containerRegion   String? @map("container_region")
+  containerProvider       String?               @map("container_provider")
+  containerId             String?               @map("container_id")
+  containerRegion         String?               @map("container_region")
   /// The FLEET ACCOUNT the container was booted in (MOTIR-8964), so poll, settle,
   /// stop and reap reach the same provider account after a restart. NULL = the
   /// process-wide fleet — every row written before accounts existed, and every
-  /// boot while `chooseBootShard` answers none. RESTRICT: an account with a
-  /// container recorded against it cannot vanish from under it.
-  fleetShardId      String? @map("fleet_shard_id")
+  /// job of a kind whose switch is Fly. Written at the CLAIM, under the admission
+  /// lock (MOTIR-8968), so the per-account count is exact. RESTRICT: an account
+  /// with a container recorded against it cannot vanish from under it.
+  fleetShardId            String?               @map("fleet_shard_id")
+  /// Why the job left the account admission first chose for it (MOTIR-8968).
+  /// NULL when it booted on its first choice, or on Fly. The headroom reading
+  /// (MOTIR-8969) counts moves from it.
+  fleetShardMoveReason    FleetShardMoveReason? @map("fleet_shard_move_reason")
+  /// The intent's FIRST `shard_capacity` deferral (MOTIR-8968), at admission or
+  /// at boot; never cleared. The headroom reading counts sustained deferral from it.
+  shardCapacityDeferredAt DateTime?             @map("shard_capacity_deferred_at")
 
   /// GitHub's numeric runner id, from the JIT-config mint. Stored because
   /// `generate-jitconfig` REGISTERS the runner before any container exists
@@ -11481,6 +11489,22 @@ enum FleetShardRole {
   @@map("fleet_shard_role")
 }
 
+/// Why admission skips an account for a while (MOTIR-8968).
+enum FleetShardPauseReason {
+  capacity_refused
+  provider_unavailable
+
+  @@map("fleet_shard_pause_reason")
+}
+
+/// Why a CI job left the account admission first chose for it (MOTIR-8968).
+enum FleetShardMoveReason {
+  capacity_refused
+  provider_unavailable
+
+  @@map("fleet_shard_move_reason")
+}
+
 /// `provisioning` while add-shard is still setting the account up; `active` is
 /// admissible; `disabled` is kept but takes no new job.
 enum FleetShardState {
@@ -11553,6 +11577,15 @@ model FleetShard {
   /// Where each limit was read: `{ "<limit>": "provider_read" | "documented" | "raised" }`.
   limitsSource               Json      @default("{}") @map("limits_source")
   limitsVerifiedAt           DateTime? @map("limits_verified_at")
+
+  /// The platform admin's admission ceiling for this account (MOTIR-8968 reads it,
+  /// MOTIR-8972 writes it). NULL = derived from the limits
+  /// (`shardAdmissionCeiling`); > 0 when set (CHECK).
+  admissionCeilingOverride Int?                   @map("admission_ceiling_override")
+  /// Skipped by admission until then, after the account refused a provision for
+  /// capacity or was unreachable (MOTIR-8968). Expires by itself.
+  admissionPausedUntil     DateTime?              @map("admission_paused_until")
+  admissionPausedReason    FleetShardPauseReason? @map("admission_paused_reason")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

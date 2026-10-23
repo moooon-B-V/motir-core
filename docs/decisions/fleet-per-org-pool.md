@@ -436,6 +436,11 @@ Built by MOTIR-8968. For one job of kind _K_:
 A job is **never lost** and **never marked `provision_failed`** for a capacity reason (MOTIR-8941's
 rule). The per-org pool (§2, A1.11) stays the fairness limit, counted **across** every account.
 
+Two config lines carry it (MOTIR-8968): **`fleetKindOnPool(kind)`** is the one read of a kind's
+Fly↔AWS switch, read uncached on every job (a kind whose story has not wired its switch reads Fly), and
+**`SHARD_PAUSE_SECONDS`** (120 s) is how long an account that refused is skipped before the next job
+re-tests it.
+
 GitHub's per-org mint limit (A1.7) is a pacing rule on the same path: admission counts per-minute mints
 per GitHub org beside the per-5-minute count, and defers rather than mint past
 `GITHUB_SECONDARY_LIMITS.jitconfigMintsPerMinute`.

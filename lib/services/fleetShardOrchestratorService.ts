@@ -14,8 +14,8 @@ import { fleetShardService } from '@/lib/services/fleetShardService';
 // `null` is a first-class account: "the process-wide fleet". It is what every
 // intent and memoised session from before accounts existed resolves to, what
 // every non-CI workload keeps using, and what a fleet kind whose switch is Fly
-// boots on. Production stays exactly as it was until a row is written AND
-// `chooseBootShard` answers it.
+// boots on. Which account a NEW boot goes to is admission's choice, written at
+// the claim (`fleetShardAdmissionService`, MOTIR-8968); this only resolves it.
 
 interface CachedOrchestrator {
   updatedAt: string;
@@ -49,18 +49,6 @@ export const fleetShardOrchestratorService = {
     intent: Pick<CiRunnerProvisioningIntent, 'fleetShardId'>,
   ): Promise<ContainerOrchestrator> {
     return this.forShard(intent.fleetShardId);
-  },
-
-  /**
-   * Which account a NEW boot goes to. `null` = the process-wide fleet, today's
-   * only answer. Admission (MOTIR-8968) replaces this body with the per-job
-   * choice, and keeps its contract: it NEVER answers a `disabled` or
-   * `provisioning` account.
-   */
-  async chooseBootShard(
-    _intent: Pick<CiRunnerProvisioningIntent, 'id' | 'organizationId'>,
-  ): Promise<FleetShardDTO | null> {
-    return null;
   },
 
   /** Forget every cached account orchestrator — for tests. */

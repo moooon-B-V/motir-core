@@ -11,7 +11,13 @@ import {
   pollWaitMs,
   type PollResult,
 } from '@/lib/services/ciRunnerBootService';
-import { OrchestratorNotConfiguredError, fakeOrchestrator } from '@motir/orchestrator';
+import {
+  OrchestratorApiError,
+  OrchestratorImageUnpullableError,
+  OrchestratorNotConfiguredError,
+  OrchestratorTimeoutError,
+  fakeOrchestrator,
+} from '@motir/orchestrator';
 import * as orchestrator from '@/lib/orchestrator';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { hostedRunChargeService } from '@/lib/services/hostedRunChargeService';
@@ -28,6 +34,7 @@ import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
 import { fleetShardService } from '@/lib/services/fleetShardService';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
+import { SHARD_PAUSE_SECONDS, wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';
@@ -1644,9 +1651,10 @@ describe('the fleet account a container boots in (MOTIR-8964)', () => {
     await adminDb.fleetShard.deleteMany({});
     orchestrator.resetShardFakes();
     fleetShardOrchestratorService.resetCache();
+    wireFleetKindSwitch('ci_runner', null);
   });
 
-  async function createAccount() {
+  async function createAccount(machineLimit = 50) {
     return fleetShardService.createShard({
       name: `ci-runner-${randomToken(4)}`,
       fleetKind: 'ci_runner',
@@ -1658,7 +1666,7 @@ describe('the fleet account a container boots in (MOTIR-8964)', () => {
       flyApp: `motir-ci-${randomToken(4)}`,
       flyRegion: 'ams',
       credentialRef: 'FLEET_SHARD_TEST_TOKEN',
-      limits: { machineLimit: 50 },
+      limits: { machineLimit },
     });
   }
 
@@ -1679,7 +1687,8 @@ describe('the fleet account a container boots in (MOTIR-8964)', () => {
   it('boots in the CHOSEN account, in its region, and every later step reaches it — even once it is disabled', async () => {
     const fx = await seedTenant();
     const account = await createAccount();
-    vi.spyOn(fleetShardOrchestratorService, 'chooseBootShard').mockResolvedValue(account);
+    // The CI kind on its pool: admission chooses the one account (MOTIR-8968).
+    wireFleetKindSwitch('ci_runner', () => true);
     const fake = orchestrator.fakeOrchestratorForShard(account.id);
     const intent = await seedIntent(fx);
 
@@ -1705,6 +1714,152 @@ describe('the fleet account a container boots in (MOTIR-8964)', () => {
     expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_completed' });
     expect(fake.liveContainerIds()).toEqual([]);
     expect(fakeOrchestrator.teardowns).toEqual([]);
+  });
+
+  // ── THE IN-BOOT MOVE (MOTIR-8968, AMENDMENT 1 §A1.5) ───────────────────────
+  async function twoAccounts() {
+    wireFleetKindSwitch('ci_runner', () => true);
+    const a = await createAccount(10);
+    const b = await createAccount(50); // most headroom: chosen first
+    return {
+      a,
+      b,
+      fakeA: orchestrator.fakeOrchestratorForShard(a.id),
+      fakeB: orchestrator.fakeOrchestratorForShard(b.id),
+    };
+  }
+
+  it.each(['quota_exceeded', 'out_of_stock', 'throttled'] as const)(
+    'a capacity refusal (%s) moves the same boot to the next account with the same runner, and pauses the refuser',
+    async (reason) => {
+      const fx = await seedTenant();
+      const { a, b, fakeA, fakeB } = await twoAccounts();
+      fakeB.failNextProvisionForCapacity(reason);
+      const intent = await seedIntent(fx);
+      const before = Date.now();
+
+      const booted = await ciRunnerBootService.bootIntent(intent.id, FAST);
+      if (booted.phase !== 'supervising') throw new Error(`unreachable: ${booted.phase}`);
+
+      expect(fakeB.provisioned).toEqual([]);
+      expect(fakeA.provisioned).toHaveLength(1);
+      expect(fakeOrchestrator.provisioned).toEqual([]);
+      expect(booted.session.handle.shardId).toBe(a.id);
+      // ONE mint, in the repo's own org; the move re-used it and deregistered nothing.
+      expect(mintCalls()).toHaveLength(1);
+      expect(mintCalls()[0]!.url).toContain(`/orgs/${MOTIR_ORG}/`);
+      expect(deleteRunnerCalls()).toEqual([]);
+      const row = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+        where: { id: intent.id },
+      });
+      expect(row).toMatchObject({
+        status: 'running',
+        fleetShardId: a.id,
+        fleetShardMoveReason: 'capacity_refused',
+      });
+      const paused = await adminDb.fleetShard.findUniqueOrThrow({ where: { id: b.id } });
+      expect(paused.admissionPausedReason).toBe('capacity_refused');
+      expect(paused.admissionPausedUntil!.getTime()).toBeGreaterThanOrEqual(
+        before + SHARD_PAUSE_SECONDS * 1000,
+      );
+    },
+  );
+
+  it.each([
+    ['a timeout', () => new OrchestratorTimeoutError('fly', 1)],
+    ['a 503', () => new OrchestratorApiError('fly', 503, 'down')],
+    ['no status', () => new OrchestratorApiError('fly', null, 'unreachable')],
+  ])(
+    'a provider outage (%s) moves the job too, and the next job skips the paused account',
+    async (_label, error) => {
+      const fx = await seedTenant();
+      const { a, b, fakeA, fakeB } = await twoAccounts();
+      vi.spyOn(fakeB, 'provision').mockRejectedValueOnce(error());
+      const first = await seedIntent(fx);
+
+      const booted = await ciRunnerBootService.bootIntent(first.id, FAST);
+      if (booted.phase !== 'supervising') throw new Error('unreachable');
+      expect(booted.session.handle.shardId).toBe(a.id);
+      expect(
+        await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({ where: { id: first.id } }),
+      ).toMatchObject({ fleetShardId: a.id, fleetShardMoveReason: 'provider_unavailable' });
+      expect(
+        (await adminDb.fleetShard.findUniqueOrThrow({ where: { id: b.id } })).admissionPausedReason,
+      ).toBe('provider_unavailable');
+
+      // While the pause holds, the next job is claimed on A directly.
+      const second = await seedIntent(fx);
+      const next = await ciRunnerBootService.bootIntent(second.id, FAST);
+      if (next.phase !== 'supervising') throw new Error('unreachable');
+      expect(next.session.handle.shardId).toBe(a.id);
+      expect(
+        await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({ where: { id: second.id } }),
+      ).toMatchObject({ fleetShardId: a.id, fleetShardMoveReason: null });
+      expect(fakeB.provision).toHaveBeenCalledTimes(1);
+      expect(fakeA.provisioned).toHaveLength(2);
+    },
+  );
+
+  it('every account refusing defers shard_capacity: runner deregistered, claim released, never Fly, never provision_failed', async () => {
+    const fx = await seedTenant();
+    const { fakeA, fakeB } = await twoAccounts();
+    fakeA.failNextProvisionForCapacity('quota_exceeded');
+    fakeB.failNextProvisionForCapacity('out_of_stock');
+    const intent = await seedIntent(fx);
+
+    const result = await ciRunnerBootService.bootIntent(intent.id, FAST);
+
+    expect(result).toMatchObject({
+      phase: 'terminal',
+      outcome: { outcome: 'gate_deferred', reason: 'shard_capacity' },
+    });
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+    expect(mintCalls()).toHaveLength(1);
+    expect(deleteRunnerCalls()).toHaveLength(1);
+    const row = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(row).toMatchObject({
+      status: 'pending',
+      fleetShardId: null,
+      fleetShardMoveReason: null,
+      teardownReason: null,
+    });
+    expect(row.shardCapacityDeferredAt).not.toBeNull();
+  });
+
+  it.each([
+    ['a 400', () => new OrchestratorApiError('fly', 400, 'bad spec')],
+    ['an unpullable image', () => new OrchestratorImageUnpullableError('fly', 422, 'img', 'no')],
+  ])('%s on an account does not move or defer — today’s path', async (_label, error) => {
+    const fx = await seedTenant();
+    const { fakeA, fakeB } = await twoAccounts();
+    vi.spyOn(fakeB, 'provision').mockRejectedValueOnce(error());
+    const intent = await seedIntent(fx);
+
+    const result = await ciRunnerBootService.bootIntent(intent.id, FAST);
+
+    expect(result.phase).toBe('terminal');
+    expect(result).not.toMatchObject({ outcome: { reason: 'shard_capacity' } });
+    expect(fakeA.provisioned).toEqual([]);
+    expect(deleteRunnerCalls()).toHaveLength(1);
+    const row = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(row.fleetShardMoveReason).toBeNull();
+  });
+
+  it('a kind on Fly with accounts present boots on the process-wide fleet, no account touched', async () => {
+    const fx = await seedTenant();
+    const a = await createAccount();
+    const fake = orchestrator.fakeOrchestratorForShard(a.id);
+    const intent = await seedIntent(fx);
+
+    const booted = await ciRunnerBootService.bootIntent(intent.id, FAST);
+    if (booted.phase !== 'supervising') throw new Error('unreachable');
+
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+    expect(fake.provisioned).toEqual([]);
   });
 
   it('a session memoised before accounts existed resolves to the process-wide fleet', async () => {
