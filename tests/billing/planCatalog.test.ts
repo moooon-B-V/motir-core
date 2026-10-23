@@ -540,7 +540,7 @@ describe('the Host band (MOTIR-9398)', () => {
       includedTrackerSeats: 1,
       band: 'host',
     });
-    expect(hosts[0].includedTrackerSeats).toBe(INCLUDED_TRACKER_SEATS_PER_AI_PLAN);
+    expect(hosts[0]!.includedTrackerSeats).toBe(INCLUDED_TRACKER_SEATS_PER_AI_PLAN);
   });
 
   it("is priced at the ladder's per-credit basis on both cadences", () => {
