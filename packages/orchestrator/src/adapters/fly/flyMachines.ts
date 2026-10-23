@@ -1,6 +1,7 @@
 import {
   ORCHESTRATOR_REQUEST_TIMEOUT_MS,
   OrchestratorApiError,
+  OrchestratorCapacityError,
   OrchestratorImageUnpullableError,
   OrchestratorNotConfiguredError,
   OrchestratorTimeoutError,
@@ -217,6 +218,48 @@ export function isFlyImagePullRefusal(detail: string): boolean {
     /failed to pull image/i.test(detail) ||
     /image not found/i.test(detail)
   );
+}
+
+/**
+ * The part of Fly's machine-create refusal that means the ORG is full —
+ * `HTTP 422: Your organization has reached its machine limit` (MOTIR-8941's
+ * evidence, 2026-10-18). Matched as a substring, case-insensitively, and only on
+ * a 422: the Machines API answers 422 for many malformed requests, and reading
+ * any of those as "full" would hide a real misconfiguration behind moves and
+ * deferrals (MOTIR-8973).
+ */
+export const FLY_MACHINE_LIMIT_MESSAGE = 'reached its machine limit';
+
+/** Fly's own name for each capacity refusal, carried as `providerCode`. */
+export const FLY_CAPACITY_CODES = {
+  machineLimit: 'machine_limit',
+  rateLimited: 'rate_limited',
+} as const;
+
+/** The capacity refusal a machine-create answer is, or null when it is not one. */
+export function flyCapacityRefusal(
+  status: number,
+  detail: string,
+): OrchestratorCapacityError | null {
+  if (status === 422 && detail.toLowerCase().includes(FLY_MACHINE_LIMIT_MESSAGE)) {
+    return new OrchestratorCapacityError(
+      'fly',
+      status,
+      'quota_exceeded',
+      null,
+      FLY_CAPACITY_CODES.machineLimit,
+    );
+  }
+  if (status === 429) {
+    return new OrchestratorCapacityError(
+      'fly',
+      status,
+      'throttled',
+      null,
+      FLY_CAPACITY_CODES.rateLimited,
+    );
+  }
+  return null;
 }
 
 export function parseFlyDate(value: unknown): Date | null {
@@ -542,7 +585,10 @@ export const flyMachinesClient = {
       if (isFlyImagePullRefusal(detail)) {
         throw new OrchestratorImageUnpullableError('fly', res.status, input.image, detail);
       }
-      throw new OrchestratorApiError('fly', res.status, detail);
+      throw (
+        flyCapacityRefusal(res.status, detail) ??
+        new OrchestratorApiError('fly', res.status, detail)
+      );
     }
     const machine = toFlyMachine(body);
     if (!machine) {

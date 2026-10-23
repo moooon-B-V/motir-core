@@ -41,6 +41,8 @@ const machines = new Map<string, StoredMachine>();
 const volumes = new Map<string, StoredVolume>();
 let sequence = 0;
 let failCreate = false;
+/** An arranged capacity answer for the next machine create. */
+let refuseCreate: { status: number; error: string } | null = null;
 let failDestroy = false;
 let startNext = true;
 
@@ -66,6 +68,11 @@ export async function flyMachinesApi(input: string | URL, init?: RequestInit): P
     if (failCreate) {
       failCreate = false;
       return json(500, { error: 'machine create failed' });
+    }
+    if (refuseCreate) {
+      const { status, error } = refuseCreate;
+      refuseCreate = null;
+      return json(status, { error });
     }
     sequence += 1;
     const config = body['config'] as StoredMachine['config'];
@@ -173,6 +180,7 @@ export function flyHarness(): OrchestratorContractHarness {
       volumes.clear();
       sequence = 0;
       failCreate = false;
+      refuseCreate = null;
       failDestroy = false;
       startNext = true;
     },
@@ -180,6 +188,15 @@ export function flyHarness(): OrchestratorContractHarness {
     attribution: (overrides = {}) => ({ ...ATTRIBUTION, ...overrides }),
     failNextProvision: () => {
       failCreate = true;
+    },
+    // Fly has no "out of stock" answer on the Machines API, so the harness does
+    // not declare it.
+    capacityReasons: ['quota_exceeded', 'throttled'],
+    refuseNextProvisionForCapacity: (reason) => {
+      refuseCreate =
+        reason === 'quota_exceeded'
+          ? { status: 422, error: 'Your organization has reached its machine limit' }
+          : { status: 429, error: 'rate limit exceeded' };
     },
     failNextTeardown: () => {
       failDestroy = true;

@@ -2,7 +2,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { buildContainerUsage } from '../../usage';
 import { sparedByCaller } from '../../reap';
-import { OrchestratorApiError } from '../../errors';
+import {
+  OrchestratorApiError,
+  OrchestratorCapacityError,
+  type OrchestratorCapacityReason,
+} from '../../errors';
 import type {
   ContainerHandle,
   ContainerOrchestrator,
@@ -73,6 +77,9 @@ export interface FakeOrchestratorControls {
   setBootBehaviour(behaviour: FakeBootBehaviour): void;
   /** Make the next `provision` throw — the "the provider refused" path. */
   failNextProvision(detail?: string): void;
+  /** Make the next `provision` throw `OrchestratorCapacityError` — the "the
+   *  provider is full" path (MOTIR-8973). Leaves no container, like any refusal. */
+  failNextProvisionForCapacity(reason: OrchestratorCapacityReason, zone?: string | null): void;
   /** Make the next `teardown` throw — used to prove the caller still records the
    *  failure rather than losing the container silently. */
   failNextTeardown(detail?: string): void;
@@ -127,6 +134,7 @@ const teardowns: Array<{ handleId: string; reason: TeardownReason }> = [];
 
 let behaviour: FakeBootBehaviour = 'start';
 let nextProvisionFailure: string | null = null;
+let nextCapacityRefusal: { reason: OrchestratorCapacityReason; zone: string | null } | null = null;
 let nextTeardownFailure: string | null = null;
 let sequence = 0;
 
@@ -247,6 +255,7 @@ export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls 
     teardowns.length = 0;
     behaviour = 'start';
     nextProvisionFailure = null;
+    nextCapacityRefusal = null;
     nextTeardownFailure = null;
     sequence = 0;
   },
@@ -257,6 +266,10 @@ export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls 
 
   failNextProvision(detail = 'the fake refused to provision') {
     nextProvisionFailure = detail;
+  },
+
+  failNextProvisionForCapacity(reason, zone = null) {
+    nextCapacityRefusal = { reason, zone };
   },
 
   failNextTeardown(detail = 'the fake refused to tear down') {
@@ -324,6 +337,11 @@ export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls 
       // Nothing is recorded: a provision that throws must leave NO container, so
       // there is nothing for `liveContainerIds()` to report and nothing to reap.
       throw new OrchestratorApiError('fake', 500, detail);
+    }
+    if (nextCapacityRefusal !== null) {
+      const { reason, zone } = nextCapacityRefusal;
+      nextCapacityRefusal = null;
+      throw new OrchestratorCapacityError('fake', null, reason, zone, `fake_${reason}`);
     }
 
     const createdAt = new Date();

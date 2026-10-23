@@ -44,6 +44,9 @@ export function fakeHarness(): OrchestratorContractHarness {
     spec: (overrides = {}) => ({ ...SPEC, ...overrides }),
     attribution: (overrides = {}) => ({ ...ATTRIBUTION, ...overrides }),
     failNextProvision: () => fakeOrchestrator.failNextProvision(),
+    capacityReasons: ['quota_exceeded', 'out_of_stock', 'throttled'],
+    refuseNextProvisionForCapacity: (reason) =>
+      fakeOrchestrator.failNextProvisionForCapacity(reason),
     failNextTeardown: () => fakeOrchestrator.failNextTeardown(),
     neverStart: () => fakeOrchestrator.setBootBehaviour('never_start'),
     completeJob: (handle, options) => fakeOrchestrator.completeJob(handle.id, options),

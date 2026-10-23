@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type {
-  ContainerHandle,
-  ContainerOrchestrator,
-  ContainerSpec,
-  UsageAttribution,
+import {
+  OrchestratorApiError,
+  OrchestratorCapacityError,
+  type ContainerHandle,
+  type ContainerOrchestrator,
+  type ContainerSpec,
+  type OrchestratorCapacityReason,
+  type UsageAttribution,
 } from '../../src/index';
 
 // THE PORT'S CONTRACT, written once and run against every adapter (MOTIR-8960).
@@ -36,6 +39,9 @@ import type {
 //  12. A spec with no job id (the index workload) provisions and meters as itself.
 //  13. `sweepOrphanedVolumes`, where an adapter has it, takes only old
 //      unattached volumes.
+//  14. A provider that is FULL refuses with `OrchestratorCapacityError`, carrying
+//      the provider and the reason, and leaves no container and no volume — run
+//      once per reason the adapter's harness declares (MOTIR-8973).
 //
 // TWO PLACES THE ADAPTERS DIVERGE, and why the suite does not pin them:
 //   - A SECOND TEARDOWN. The fake memoises and returns the identical first row;
@@ -64,6 +70,11 @@ export interface OrchestratorContractHarness {
   attribution(overrides?: Partial<UsageAttribution>): UsageAttribution;
   /** The next provision fails at the provider. */
   failNextProvision(): void;
+  /** The capacity reasons this provider can actually give. A reason left out is
+   *  not run for this adapter — absent by declaration, never by failure. */
+  readonly capacityReasons: readonly OrchestratorCapacityReason[];
+  /** The next provision is refused because the provider is full, for `reason`. */
+  refuseNextProvisionForCapacity(reason: OrchestratorCapacityReason): void;
   /** The next teardown fails at the provider. */
   failNextTeardown(): void;
   /** The next provisioned container is created but never starts. */
@@ -301,6 +312,30 @@ export function describeOrchestratorContract(
 
       expect(usage.workload).toBe('code_graph_index');
       expect(usage.workflowJobId).toBeNull();
+    });
+
+    describe('14 · a capacity refusal', () => {
+      for (const reason of harness.capacityReasons) {
+        it(`${reason} throws OrchestratorCapacityError and leaves no container, nor its volume`, async () => {
+          harness.refuseNextProvisionForCapacity(reason);
+
+          const thrown = await orchestrator.provision(harness.spec({ dockerVolumeGb: 20 })).then(
+            () => null,
+            (err: unknown) => err,
+          );
+
+          expect(thrown).toBeInstanceOf(OrchestratorCapacityError);
+          // Still a provider refusal to every caller that does not care why.
+          expect(thrown).toBeInstanceOf(OrchestratorApiError);
+          expect(thrown).toMatchObject({
+            provider: orchestrator.provider,
+            reason,
+            retryable: true,
+          });
+          expect(harness.liveContainerIds()).toEqual([]);
+          if (harness.liveVolumeIds) expect(harness.liveVolumeIds()).toEqual([]);
+        });
+      }
     });
 
     it('13 · sweepOrphanedVolumes, where present, takes an old unattached volume and keeps a young one', async () => {

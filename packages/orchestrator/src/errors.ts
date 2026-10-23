@@ -63,6 +63,42 @@ export class OrchestratorImageUnpullableError extends OrchestratorApiError {
   }
 }
 
+/** Why a provider said it is FULL rather than that the request is wrong. */
+export type OrchestratorCapacityReason = 'quota_exceeded' | 'out_of_stock' | 'throttled';
+
+/**
+ * THE PROVIDER IS FULL (MOTIR-8973) — at its quota, out of stock in a zone, or
+ * throttling us. Not a broken request: the same spec can boot on another account
+ * of the fleet kind, or later.
+ *
+ * A subclass, as `OrchestratorImageUnpullableError` is, so every existing
+ * `catch (OrchestratorApiError)` keeps catching it and only the caller that
+ * moves or defers a job tells it apart. Fly's machine-limit 422 arrived as a
+ * plain `OrchestratorApiError(422)` on 2026-10-18 and those jobs were lost
+ * (MOTIR-8941) — the port could not say "full".
+ *
+ * `providerCode` is the provider's own class of refusal, for the log. Never the
+ * raw body, per this file's header.
+ */
+export class OrchestratorCapacityError extends OrchestratorApiError {
+  readonly retryable = true as const;
+
+  constructor(
+    provider: OrchestratorProvider,
+    status: number | null,
+    readonly reason: OrchestratorCapacityReason,
+    readonly zone: string | null = null,
+    readonly providerCode: string | null = null,
+  ) {
+    super(provider, status, providerCode ?? reason);
+    this.name = 'OrchestratorCapacityError';
+    this.message =
+      `The ${provider} orchestrator has no capacity (${reason}` +
+      `${zone ? ` in ${zone}` : ''}` +
+      `${status === null ? '' : `, HTTP ${status}`}${providerCode ? `: ${providerCode}` : ''}).`;
+  }
+}
+
 /**
  * THE DEADLINE ON EVERY ADAPTER CALL (`docs/jobs.md` rule 3, MOTIR-2011).
  *
