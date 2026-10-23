@@ -25,7 +25,7 @@ import type { ApprovalGateStateDTO, PlanGateHeldDTO } from '@/lib/dto/approvalGa
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { PlanNarrationReadDto, PlanStepDto } from '@/lib/dto/plans';
 import type { PlanProgressSnapshot } from '@/lib/plans/planProgress';
-import type { ExecutorDto, WorkItemDifficultyDto } from '@/lib/dto/workItems';
+import type { ExecutorDto, WorkItemDifficultyDto, WorkItemRefMap } from '@/lib/dto/workItems';
 import type {
   PlanItemOpDto,
   PlanItemPatch,
@@ -771,6 +771,23 @@ export interface PlanReviewItemDto {
    * proposal and not to this model while the card to fix that was in the backlog.
    */
   explanationMd: string | null;
+  /**
+   * The LIVE summaries of the work items this proposal's title, `descriptionMd`
+   * and `explanationMd` link to with `[KEY](motir:<id>)` (bug MOTIR-9355) — the
+   * map the peek's body renderer looks each chip up in, keyed by work-item id.
+   *
+   * Resolved from the bodies ABOVE, which are the PROPOSED ones, in ONE batched
+   * read for the whole plan (`planReviewService.getPlanReview`), never per
+   * proposal and never on open. Before it, an `add`'s peek rendered with an empty
+   * map and a `modify`'s with its TARGET's map, resolved from the target's stored
+   * description only — so every link a proposed body carried was drawn as a
+   * deleted card. An id that resolves to nothing is absent, which is exactly the
+   * struck-through state a link to a genuinely deleted card owes.
+   *
+   * Optional only for the hand-built review items tests and the sprint planner
+   * construct; the plan-review read always sets it.
+   */
+  workItemRefs?: WorkItemRefMap;
   /**
    * ⚠️ The one field that stays `add`-ONLY on purpose (bug MOTIR-4134), while
    * the body directly above it moved to every op.
