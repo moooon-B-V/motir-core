@@ -212,7 +212,6 @@ async function mount() {
       projectName="motir"
       initial={{ instances: [agent()], total: 1, planLapse: null }}
       profiles={[{ id: 'claude', name: 'Claude Code' }]}
-      maxPerUser={10}
       openAgentId="a1"
       openTab="chat"
     />,

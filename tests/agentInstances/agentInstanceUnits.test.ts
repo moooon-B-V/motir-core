@@ -73,6 +73,30 @@ describe('mapAgentInstanceError — every typed refusal is a status, never a 500
     expect(
       await mapAgentInstanceError(new AgentInstanceStartRefusedError('user_cap', 'full'))!.json(),
     ).not.toHaveProperty('limit');
+    // MOTIR-9376: the plan's figure and name ride on both caps' 429s, beside each other.
+    const userPlanCap = mapAgentInstanceError(
+      new AgentInstanceStartRefusedError('user_cap', 'full', 1, 'Standard'),
+    )!;
+    expect(userPlanCap.status).toBe(429);
+    expect(await userPlanCap.json()).toMatchObject({
+      reason: 'user_cap',
+      limit: 1,
+      planName: 'Standard',
+    });
+    const orgPlanCap = mapAgentInstanceError(
+      new AgentInstanceStartRefusedError('org_running_cap', 'full', 30, 'Pro'),
+    )!;
+    expect(orgPlanCap.status).toBe(429);
+    expect(await orgPlanCap.json()).toMatchObject({
+      reason: 'org_running_cap',
+      limit: 30,
+      planName: 'Pro',
+    });
+    expect(
+      await mapAgentInstanceError(
+        new AgentInstanceStartRefusedError('org_running_cap', 'full', 50),
+      )!.json(),
+    ).not.toHaveProperty('planName');
     expect(statusOf(new AgentInstancesUnavailableError('x'))).toBe(503);
     expect(statusOf(new Error('anything else'))).toBeNull();
   });

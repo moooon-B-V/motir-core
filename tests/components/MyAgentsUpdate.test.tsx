@@ -75,7 +75,6 @@ const mount = (rows: AgentInstanceListItemDto[], openAgentId: string | null = nu
       projectName="motir"
       initial={page(rows)}
       profiles={PROFILES}
-      maxPerUser={10}
       openAgentId={openAgentId}
     />,
   );

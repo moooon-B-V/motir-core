@@ -256,7 +256,6 @@ async function mount(
       projectName="motir"
       initial={initial}
       profiles={PROFILES}
-      maxPerUser={10}
       openAgentId={opts.openAgentId ?? null}
     />,
     opts.messages ? { messages: opts.messages, locale: 'zh' } : {},

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentInstance } from '@/generated/prisma/client';
 import { assertWorkspaceFeatureEnabled } from '@/lib/featureFlags/evaluate';
-import { INSTANCE_MAX_PER_USER } from '@/lib/agentInstances/config';
+import { AGENT_LIST_LIMIT } from '@/lib/agentInstances/config';
 import {
   AgentInstanceImageTooOldError,
   AgentInstanceNotFoundError,
@@ -1088,7 +1088,7 @@ export const agentInstanceRunService = {
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id },
       async (tx) => {
         const rows = await agentInstanceRepository.listLiveForOwner(
-          { ownerId: ctx.userId, projectId: project.id, take: INSTANCE_MAX_PER_USER, skip: 0 },
+          { ownerId: ctx.userId, projectId: project.id, take: AGENT_LIST_LIMIT, skip: 0 },
           tx,
         );
         const running = await dispatchRunRepository.findRunningByAgentInstances(

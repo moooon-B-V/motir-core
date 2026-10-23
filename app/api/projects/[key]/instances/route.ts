@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
+import { AGENT_LIST_LIMIT } from '@/lib/agentInstances/config';
 import { mapAgentInstanceError } from '@/lib/agentInstances/errorResponse';
 import { agentInstanceLifecycleService } from '@/lib/services/agentInstanceLifecycleService';
 
@@ -8,7 +9,8 @@ import { agentInstanceLifecycleService } from '@/lib/services/agentInstanceLifec
 // parse, one service call, map the typed error.
 
 const DEFAULT_TAKE = 25;
-const MAX_TAKE = 100;
+/** The list's ceiling — a page size, no limit on how many agents a person holds. */
+const MAX_TAKE = AGENT_LIST_LIMIT;
 
 /** GET — one page of the caller's live instances, with the total. */
 export async function GET(

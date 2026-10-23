@@ -37,12 +37,15 @@ export const INSTANCE_SLOT_TTL_SECONDS = 12 * 60 * 60 + 45 * 60;
 export const INSTANCE_STORAGE_CREDITS_PER_DAY = 10;
 
 /**
- * A DISPLAY value only (MOTIR-9374): no limit reads it. The per-person agent limit
- * is the org's plan figure, `agentsPerUser` (`lib/billing/planCaps.ts`, the
- * fleet-capacity decision record MOTIR-9357), judged at create. My agents and the
- * start bar still print this until MOTIR-9376 shows the plan's figure and deletes it.
+ * How many agents one read of a person's agents returns — a LIST PAGE SIZE, and no
+ * limit on how many they may hold (MOTIR-9376). The per-person limit is the org's
+ * plan figure, `agentsPerUser` (`lib/billing/planCaps.ts`), judged at create, and a
+ * person can legitimately hold more than it: an exempt org has no figure, and a
+ * downgrade keeps the agents already made. So no list is sized to the plan, or it
+ * would hide real agents. The instances route's `MAX_TAKE`, My agents' read and the
+ * start bar's picker all read this one value, so the three cannot drift.
  */
-export const INSTANCE_MAX_PER_USER = 10;
+export const AGENT_LIST_LIMIT = 100;
 
 /**
  * How long an UPDATE (and a wake that applies a pinned one) waits in the REQUEST

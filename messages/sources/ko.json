@@ -9686,8 +9686,8 @@
   "myAgents.refusal.aiPlanUnknown": "Motir could not check your organization’s AI plan just now. Try again in a moment.",
   "myAgents.refusal.credits": "Your organization is out of credits. Agents use credits while they run and for their storage every day, asleep or not. <link>Add credits</link> to create or wake an agent.",
   "myAgents.refusal.creditsUnknown": "Motir could not check your organization’s credits just now. Try again in a moment.",
-  "myAgents.refusal.userCap": "You already have {count} agents. Each one is charged for its storage every day, even asleep. Delete one to create another.",
-  "myAgents.refusal.orgRunningLimit": "Your organization is running {limit} of its {limit} agents. Hibernate one to start another.",
+  "myAgents.refusal.userCap": "Your organization’s {plan} plan allows {limit, plural, one {# agent} other {# agents}} per person. Each one is charged for its storage every day, even asleep. Delete one to create another.",
+  "myAgents.refusal.orgRunningLimit": "Your organization’s {plan} plan runs {limit, plural, one {# agent} other {# agents}} at once, and all of them are running. Hibernate one to start another.",
   "myAgents.refusal.busy": "Motir is running as many machines as it can right now. Try again in a few minutes.",
   "myAgents.refusal.notOffered": "That coding agent isn’t offered: its terms don’t yet allow a platform to host it. Choose another coding agent.",
   "myAgents.refusal.nameTaken": "You already have an agent called {name} on this project.",
@@ -11660,5 +11660,7 @@
   "titleTranslation.noCredit": "Titles stay in their original language because your organization has no credit left.",
   "titleTranslation.pendingMark": "Translating",
   "titleTranslation.showOriginal": "Show original",
-  "titleTranslation.showTranslation": "Show translation"
+  "titleTranslation.showTranslation": "Show translation",
+  "myAgents.refusal.userCapNoFigure": "You already have as many agents as your organization’s plan allows per person. Each one is charged for its storage every day, even asleep. Delete one to create another.",
+  "myAgents.refusal.orgRunningLimitNoFigure": "Your organization is already running as many agents at once as its plan allows. Hibernate one to start another."
 }
