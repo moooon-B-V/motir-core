@@ -1590,8 +1590,10 @@ function PlansView({
   // plan has no card (Enterprise is gone — MOTIR-7592).
   // The standing rungs only: a larger pool is offered and sold from the Calculator's
   // answer, never in this row (MOTIR-8997, design/billing § "Amendment 2026-10-21 —
-  // the larger credit pool plan", approved 2026-10-22).
-  const paidPlans = aiPlans.filter((p) => p.key !== 'free' && p.prices && p.band !== 'larger_pool');
+  // the larger credit pool plan", approved 2026-10-22). The row is the standing
+  // LADDER, said positively: a Host card is drawn by its own card (MOTIR-9403), so
+  // the `host` band stays off the row until then (MOTIR-9398).
+  const paidPlans = aiPlans.filter((p) => p.key !== 'free' && p.prices && p.band === 'ladder');
   // An org that HOLDS a larger pool sees that one plan, with the regular plans folded
   // behind a toggle (design panels 9–10).
   const heldPool =
