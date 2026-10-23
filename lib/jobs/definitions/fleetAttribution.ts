@@ -38,6 +38,12 @@ export const fleetAttribution = defineJob(
     const staleClaims = await ctx.step.run('sweep-stale-claims', () =>
       services.ciRunnerBoot.sweepStaleClaims(),
     );
-    return { reconciled, staleClaims };
+    // The reconciler reaches an intent only through a listed machine, so one
+    // whose machine destroyed itself before supervision settled it is found
+    // from the intent side instead (MOTIR-9347).
+    const vanishedInFlight = await ctx.step.run('sweep-vanished-in-flight', () =>
+      services.ciRunnerBoot.sweepVanishedInFlight(),
+    );
+    return { reconciled, staleClaims, vanishedInFlight };
   },
 );
