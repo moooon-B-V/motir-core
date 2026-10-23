@@ -1404,6 +1404,16 @@ model Organization {
   /// means the org boots nothing. Read by `lib/ciFleet/limits.ts` `orgPoolCap`.
   fleetPoolCap Int? @map("fleet_pool_cap")
 
+  /// THE MOTIR-OWNED GITHUB ORG this organisation's hosted repositories, runner
+  /// groups and `MOTIR_RUNNER` variable live in (Story MOTIR-8953 · MOTIR-8966).
+  /// Assigned once, by `fleetGithubOrgAssignmentService`, when its first hosted
+  /// repository is about to be created: the GitHub org with the most headroom
+  /// among the active fleet accounts. NULL = never assigned, so its repositories
+  /// are created in `GITHUB_FALLBACK_ORG` as before. A GitHub org, not a machine
+  /// account: admission never reads it.
+  hostedGithubOrg           String?   @map("hosted_github_org")
+  hostedGithubOrgAssignedAt DateTime? @map("hosted_github_org_assigned_at")
+
   /// The git CONNECTIONS this organisation holds, and the REPOSITORIES behind
   /// them (Story MOTIR-4669 · MOTIR-4649) — a repository is connected ONCE, to
   /// the organisation, and which projects use it is visibility configuration.
@@ -1538,6 +1548,7 @@ model Organization {
   /// across the organisation. Cascade.
   workItemTranslations   WorkItemTranslation[]
 
+  @@index([hostedGithubOrg])
   @@map("organization")
 }
 

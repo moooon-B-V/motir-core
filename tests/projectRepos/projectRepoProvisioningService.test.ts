@@ -951,3 +951,204 @@ describe('the paid-AI-plan gate at establish', () => {
     expect(result.rows[0]).toMatchObject({ rowId, outcome: 'created' });
   });
 });
+
+// THE TENANT'S ASSIGNED GITHUB ORG (Story MOTIR-8953 · MOTIR-8966). A GitHub that
+// serves TWO orgs — the fallback org and a second Motir-owned org named by an
+// active fleet account — so where each call lands can be asserted, and the
+// installation every token was minted for.
+describe('an organisation hosted in its assigned GitHub org (MOTIR-8966)', () => {
+  const HOST_ORG = 'motir-host-a';
+  const HOST_INSTALLATION = '7788';
+  let hostGroups: RunnerGroupFake;
+  let hostVariables: ActionsVariableFake;
+  let mintedFor: string[];
+  let failingInstallations: Set<string>;
+  let createdIn: Map<string, Map<string, number>>;
+
+  function installTwoOrgGitHub(): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit): Promise<Response> => {
+        const u = String(url);
+        const method = init?.method ?? 'GET';
+        const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
+        calls.push({ url: u, method, body });
+
+        if (u.endsWith(`/orgs/${MOTIR_ORG}/installation`)) {
+          return json(200, { id: Number(INSTALLATION_ID) });
+        }
+        const token = /\/app\/installations\/([^/]+)\/access_tokens$/.exec(u);
+        if (token) {
+          mintedFor.push(token[1]!);
+          if (failingInstallations.has(token[1]!)) return json(401, { message: 'Bad credentials' });
+          return json(200, {
+            token: `ghs_${token[1]}`,
+            expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+          });
+        }
+        for (const fake of [runnerGroups, hostGroups]) {
+          const group = await fake.handle(u, method, body);
+          if (group) return group;
+        }
+        for (const fake of [actionsVariables, hostVariables]) {
+          const variable = fake.handle(u, method, body);
+          if (variable) return variable;
+        }
+        const create = /\/orgs\/([^/]+)\/repos$/.exec(u);
+        if (method === 'POST' && (create || u.includes('/generate'))) {
+          const org = create ? create[1]! : String(body?.['owner']);
+          const name = String(body?.['name']);
+          const id = nextRepoId++;
+          const repos = createdIn.get(org) ?? new Map<string, number>();
+          repos.set(name, id);
+          createdIn.set(org, repos);
+          return json(201, { id, name, owner: { login: org } });
+        }
+        const read = /\/repos\/([^/]+)\/([^/]+)$/.exec(u);
+        if (method === 'GET' && read) {
+          const id = createdIn.get(read[1]!)?.get(read[2]!);
+          if (!id) return json(404, { message: 'Not Found' });
+          return json(200, {
+            id,
+            name: read[2],
+            owner: { login: read[1] },
+            default_branch: 'main',
+            private: true,
+          });
+        }
+        if (method === 'PUT') return json(201, { content: {} });
+        throw new Error(`unexpected fetch: ${method} ${u}`);
+      }),
+    );
+  }
+
+  async function hostAccount(): Promise<void> {
+    await adminDb.fleetShard.create({
+      data: {
+        name: `acct-${HOST_ORG}`,
+        fleetKind: 'ci_runner',
+        provider: 'fly',
+        state: 'active',
+        githubOrg: HOST_ORG,
+        githubInstallationId: HOST_INSTALLATION,
+        flyOrg: 'motir',
+        flyApp: 'motir-ci-host-a',
+        flyRegion: 'iad',
+        machineLimit: 10,
+        credentialRef: 'FLEET_SHARD_TEST_TOKEN',
+        githubRegistrationsPer5Min: 3_100,
+      },
+    });
+  }
+
+  async function hostedOf(fx: WorkItemFixture): Promise<string | null> {
+    const org = await adminDb.organization.findUniqueOrThrow({
+      where: { id: fx.workspace.organizationId },
+    });
+    return org.hostedGithubOrg;
+  }
+
+  beforeEach(async () => {
+    await adminDb.fleetShard.deleteMany({});
+    hostGroups = createRunnerGroupFake(HOST_ORG);
+    hostVariables = createActionsVariableFake(HOST_ORG);
+    mintedFor = [];
+    failingInstallations = new Set();
+    createdIn = new Map();
+    installTwoOrgGitHub();
+  });
+
+  it('with no account naming a GitHub org, everything lands in the fallback org as before', async () => {
+    const fx = await makeWorkItemFixture();
+    await addRow(fx, 'api', 'acme-api');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(result.rows[0]).toMatchObject({ outcome: 'created' });
+    expect(createdIn.get(MOTIR_ORG)?.has('acme-api')).toBe(true);
+    expect(await hostedOf(fx)).toBeNull();
+    expect(hostGroups.groups.size).toBe(0);
+    expect(hostVariables.calls).toHaveLength(0);
+  });
+
+  it('the first establish assigns the org and makes the group, the variable and the repo THERE', async () => {
+    await hostAccount();
+    const fx = await makeWorkItemFixture();
+    await addRow(fx, 'api', 'acme-api');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(result.rows[0]).toMatchObject({ outcome: 'created' });
+    expect(await hostedOf(fx)).toBe(HOST_ORG);
+
+    // The repo: created through the assigned org's endpoint and installation.
+    const create = calls.findIndex(
+      (c) => c.method === 'POST' && c.url.endsWith(`/orgs/${HOST_ORG}/repos`),
+    );
+    expect(create).toBeGreaterThanOrEqual(0);
+    expect(createdIn.get(MOTIR_ORG)).toBeUndefined();
+    expect(mintedFor).toContain(HOST_INSTALLATION);
+    expect(result.rows[0]!.row?.realizedRepo).toMatchObject({ owner: HOST_ORG, name: 'acme-api' });
+    const installation = await adminDb.githubInstallation.findFirstOrThrow({
+      where: { accountLogin: HOST_ORG },
+    });
+    expect(installation.installationId).toBe(HOST_INSTALLATION);
+
+    // The group: in the assigned org BEFORE the first repository, stored keyed by
+    // that org; and no group made in the fallback org for this project.
+    const groupCreate = calls.findIndex(
+      (c) => c.method === 'POST' && c.url.endsWith(`/orgs/${HOST_ORG}/actions/runner-groups`),
+    );
+    expect(groupCreate).toBeGreaterThanOrEqual(0);
+    expect(groupCreate).toBeLessThan(create);
+    const stored = await adminDb.projectRunnerGroup.findFirstOrThrow({
+      where: { projectId: fx.projectId },
+    });
+    expect(stored).toMatchObject({ org: HOST_ORG, installationId: HOST_INSTALLATION });
+    expect(runnerGroups.groups.size).toBe(0);
+    expect(
+      (await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } })).runnerGroupId,
+    ).toBeNull();
+
+    // The variable: the fleet label, in the assigned org, before the repository.
+    expect(hostVariables.variables.get(MOTIR_RUNNER_VARIABLE)?.value).toBe(MOTIR_RUNNER_LABEL);
+    const variableCall = calls.findIndex((c) =>
+      c.url.includes(`/orgs/${HOST_ORG}/actions/variables`),
+    );
+    expect(variableCall).toBeLessThan(create);
+    expect(actionsVariables.calls).toHaveLength(0);
+  });
+
+  it('an organisation already hosted in the fallback org stays there (existing_hosting)', async () => {
+    const fx = await makeWorkItemFixture();
+    await addRow(fx, 'api', 'acme-api');
+    await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+    await hostAccount();
+    await addRow(fx, 'infra', 'acme-infra');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(result.rows.find((r) => r.name === 'acme-infra')).toMatchObject({ outcome: 'created' });
+    expect(createdIn.get(MOTIR_ORG)?.has('acme-infra')).toBe(true);
+    expect(createdIn.get(HOST_ORG)).toBeUndefined();
+    expect(await hostedOf(fx)).toBeNull();
+  });
+
+  it('a failed mint for the assigned org fails the row, and nothing reaches the fallback org', async () => {
+    await hostAccount();
+    failingInstallations.add(HOST_INSTALLATION);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fx = await makeWorkItemFixture();
+    await addRow(fx, 'api', 'acme-api');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(result.rows[0]).toMatchObject({
+      outcome: 'failed',
+      failureCode: 'REPO_HOST_ORG_UNAVAILABLE',
+    });
+    expect(result.rows[0]!.row?.state).toBe('failed');
+    expect(createdIn.size).toBe(0);
+    expect(calls.filter((c) => c.method !== 'GET' && c.url.includes(`/${MOTIR_ORG}/`))).toEqual([]);
+  });
+});

@@ -99,4 +99,36 @@ export const fleetShardRepository = {
       data: { admissionPausedUntil: until, admissionPausedReason: reason },
     });
   },
+
+  /**
+   * Lock and return the ACTIVE accounts that name a GitHub org, of every fleet
+   * kind, in id order (MOTIR-8966) — the GitHub orgs a tenant may be hosted in.
+   * `FOR UPDATE` because the per-org tenant count read after it is
+   * read-derived; id order so two assignments cannot deadlock.
+   */
+  async lockActiveWithGithubOrgInTx(tx: Prisma.TransactionClient): Promise<FleetShard[]> {
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "fleet_shard"
+       WHERE "state" = 'active' AND btrim("github_org") <> ''
+       ORDER BY "id"
+       FOR UPDATE
+    `;
+    if (locked.length === 0) return [];
+    return tx.fleetShard.findMany({
+      where: { id: { in: locked.map((row) => row.id) } },
+      orderBy: { id: 'asc' },
+    });
+  },
+
+  /** Every account row that names a GitHub org, in any state, case-insensitive
+   *  (MOTIR-8966) — where an assigned org's installation is read from. */
+  async listByGithubOrgInTx(
+    githubOrg: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetShard[]> {
+    return tx.fleetShard.findMany({
+      where: { githubOrg: { equals: githubOrg.trim(), mode: 'insensitive' } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
 };

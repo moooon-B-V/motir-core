@@ -1,5 +1,6 @@
 import { createAppJwt, mintInstallationToken } from '@/lib/github/appAuth';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { OrgTargetAuthError, resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 
@@ -138,6 +139,23 @@ export class RepoProvisioningApiError extends RepoProvisioningError {
       status === null
         ? `GitHub could not be reached while creating the repository (${detail}).`
         : `GitHub refused to create the repository (HTTP ${status}${detail ? `: ${detail}` : ''}).`,
+    );
+  }
+}
+
+/** The installation of the tenant's ASSIGNED GitHub org (MOTIR-8966) could not
+ *  be authenticated. The repository is NOT created anywhere else instead: a
+ *  repository in the wrong org would be a real artifact under the wrong
+ *  installation that cannot be rolled back. */
+export class RepoHostOrgUnavailableError extends RepoProvisioningError {
+  readonly code = 'REPO_HOST_ORG_UNAVAILABLE' as const;
+  constructor(
+    readonly org: string,
+    readonly status: number | null,
+  ) {
+    super(
+      `Motir could not reach its GitHub organisation "${org}" to create the repository` +
+        `${status === null ? '' : ` (HTTP ${status})`}. Nothing was created — retry this row.`,
     );
   }
 }
@@ -496,9 +514,20 @@ export const repoProvisioningClient = {
    * decidable here (this module knows nothing about rows); the caller checks it
    * against the set before attaching, and `attachRealizedRepo`'s unique index is
    * the backstop. Nothing is ever renamed.
+   *
+   * `target` (MOTIR-8966) is the tenant's ASSIGNED Motir-owned GitHub org: the
+   * create, the collision read-back and the readiness poll all act on
+   * `target.org`, through its installation, and the result carries that
+   * installation. A failed mint is {@link RepoHostOrgUnavailableError} — never a
+   * create in the fallback org. No target is today's path, unchanged.
    */
-  async provisionRepository(input: ProvisionRepoInput): Promise<ProvisionedRepo> {
-    const { org, installationId, token } = await provisioningAuth();
+  async provisionRepository(
+    input: ProvisionRepoInput,
+    target?: GithubOrgTarget,
+  ): Promise<ProvisionedRepo> {
+    const { org, installationId, token } = target
+      ? await targetAuth(target)
+      : await provisioningAuth();
     const auth = { authorization: `Bearer ${token}` };
 
     const templated = input.seedSource === SEED_SOURCE_PLATFORM_STARTER;
@@ -557,6 +586,20 @@ export const repoProvisioningClient = {
     return { installationId, ...ready, adopted: false };
   },
 };
+
+/** The assigned org's auth (MOTIR-8966): its installation, never the fallback
+ *  org's. A failed mint is the row's typed failure. */
+async function targetAuth(
+  target: GithubOrgTarget,
+): Promise<{ org: string; installationId: string; token: string }> {
+  try {
+    return await resolveOrgAuth(target);
+  } catch (err) {
+    if (err instanceof OrgTargetAuthError)
+      throw new RepoHostOrgUnavailableError(err.org, err.status);
+    throw err;
+  }
+}
 
 /** Mint the provisioning installation token, translating an unwired Studio App
  *  into the typed not-configured error rather than leaking `appAuth`'s. */

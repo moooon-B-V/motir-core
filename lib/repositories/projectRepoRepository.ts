@@ -871,4 +871,27 @@ export const projectRepoRepository = {
       .filter((repo): repo is { owner: string; name: string; repoId: string } => repo !== null)
       .map((repo) => ({ owner: repo.owner, name: repo.name, providerRepoId: repo.repoId }));
   },
+
+  /**
+   * Whether ANY project in ANY of the organisation's workspaces has an
+   * established row whose realized repository `hostOwner` owns (MOTIR-8966) —
+   * "is this organisation already hosted in that org?". Case-insensitive on the
+   * owner, because GitHub logins are. Spans the organisation's workspaces, so the
+   * caller binds the org GUC (`project_repository_org_read`).
+   */
+  async hasEstablishedHostedRepoForOrganizationInTx(
+    organizationId: string,
+    hostOwner: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const row = await tx.projectRepo.findFirst({
+      where: {
+        workspace: { organizationId },
+        state: { in: [...ESTABLISHED_PROJECT_REPO_STATES] },
+        githubRepo: { owner: { equals: hostOwner.trim(), mode: 'insensitive' } },
+      },
+      select: { id: true },
+    });
+    return row !== null;
+  },
 };

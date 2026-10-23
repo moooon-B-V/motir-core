@@ -342,6 +342,57 @@ export const organizationRepository = {
   },
 
   /**
+   * The Motir-owned GitHub org the organisation is hosted in (MOTIR-8966), or
+   * null when it has none. Read under the org row's lock by the assignment.
+   */
+  async findHostedGithubOrgInTx(id: string, tx: Prisma.TransactionClient): Promise<string | null> {
+    const org = await tx.organization.findUnique({
+      where: { id },
+      select: { hostedGithubOrg: true },
+    });
+    return org?.hostedGithubOrg ?? null;
+  },
+
+  /** Record the organisation's hosted GitHub org (MOTIR-8966). The caller holds
+   *  the row's lock ({@link lockByIdForUpdate}), which also binds the GUC the
+   *  UPDATE policy needs. */
+  async setHostedGithubOrgInTx(
+    id: string,
+    githubOrg: string,
+    at: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.organization.update({
+      where: { id },
+      data: { hostedGithubOrg: githubOrg, hostedGithubOrgAssignedAt: at },
+    });
+  },
+
+  /**
+   * How many organisations are hosted in each of `orgLogins`, keyed by the
+   * lower-cased login (MOTIR-8966). Case-insensitive, because GitHub logins are.
+   * Spans EVERY tenant, so the caller holds a `withSystemContext` transaction
+   * (`organization_system_read`): a narrower context would return a smaller,
+   * believable number.
+   */
+  async countByHostedGithubOrgInTx(
+    orgLogins: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, number>> {
+    const wanted = [...new Set(orgLogins.map((login) => login.trim().toLowerCase()))];
+    const counts = new Map<string, number>(wanted.map((login) => [login, 0]));
+    if (wanted.length === 0) return counts;
+    const rows = await tx.$queryRaw<Array<{ login: string; tenants: bigint }>>`
+      SELECT lower("hosted_github_org") AS "login", count(*) AS "tenants"
+        FROM "organization"
+       WHERE lower("hosted_github_org") = ANY(${wanted})
+       GROUP BY lower("hosted_github_org")
+    `;
+    for (const row of rows) counts.set(row.login, Number(row.tenants));
+    return counts;
+  },
+
+  /**
    * Read-only (db-singleton) variant of {@link findCapContextInTx} for the §4
    * upload path (8.1.11), which checks the per-file + total-storage caps as a
    * standalone read BEFORE the blob round-trip — no create transaction to thread.
