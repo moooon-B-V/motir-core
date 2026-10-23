@@ -30,7 +30,8 @@ import {
 import { workflowsService } from '@/lib/services/workflowsService';
 import { CLEARED_FAILURE_COLUMNS, sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
-import { planOfferService } from '@/lib/services/planOfferService';
+import { offerTurns, planOfferService } from '@/lib/services/planOfferService';
+import { pendingPlanOfferOf } from '@/lib/planChange/planOffer';
 import {
   clearWithin as clearPlanningSessionGate,
   raiseWithin as raisePlanningSessionGate,
@@ -95,6 +96,7 @@ import {
   PlanAgainNotAvailableError,
   PlanChangeJobNotRunningError,
   PlanChangeMailboxJobMismatchError,
+  PlanOfferStartRefusedError,
   type StalePlanFinishedCard,
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
@@ -2676,11 +2678,14 @@ export const planChangeSessionsService = {
   },
 
   /**
-   * CLAIM the ONE write a `debug` turn may make (MOTIR-7049; ADR AMENDMENT 1 ·
-   * A1.4) — a compare-and-set of the turn's `debugLandingClaimedAt` under the
-   * session's row lock, the serialisation every turn write takes. Returns `true` when THIS call claimed it; `false` when an
-   * earlier or concurrent settle of the same job already had — the loser's cue to
-   * write nothing. Only a `user` turn that ran as `debug` can be claimed.
+   * CLAIM the ONE write a confirmed `log_bug` offer makes (MOTIR-7049's claim, fed by
+   * the stored offer since MOTIR-9323) — a compare-and-set of the OFFER turn's
+   * `debugLandingClaimedAt` under the session's row lock, the serialisation every
+   * turn write takes. `true` when THIS call claimed it; `false` when an earlier or
+   * concurrent confirm already had — the loser's cue to write nothing and read the
+   * winner's landing. Only the thread's PENDING `log_bug` offer can be claimed: a
+   * declined or superseded one refuses `offer_not_open`, and a turn holding no such
+   * offer is the shipped 404.
    */
   async claimDebugLanding(
     turnId: string,
@@ -2693,17 +2698,73 @@ export const planChangeSessionsService = {
       async (tx) => {
         const locked = await planChangeSessionRepository.lockById(session.id, tx);
         if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
-        const turn = await planChangeTurnRepository.findByIdInSession(
+        const rows = await planChangeTurnRepository.listBySessionId(
+          session.id,
+          pctx.workspaceId,
+          tx,
+        );
+        // Only the person whose conversation it is may confirm its offer.
+        if (session.createdById !== pctx.userId) throw new PlanChangeTurnNotFoundError(turnId);
+        const turns = offerTurns(rows);
+        const turn = turns.find((t) => t.id === turnId);
+        if (!turn || turn.role !== 'assistant' || turn.offer?.kind !== 'log_bug') {
+          throw new PlanChangeTurnNotFoundError(turnId);
+        }
+        if (rows.find((r) => r.id === turnId)!.debugLandingClaimedAt !== null) return false;
+        if (pendingPlanOfferOf(turns)?.turnId !== turnId) {
+          throw new PlanOfferStartRefusedError('offer_not_open');
+        }
+        return planChangeTurnRepository.claimDebugLanding(turnId, pctx.workspaceId, tx);
+      },
+    );
+  },
+
+  /**
+   * STAMP a claimed `log_bug` offer's landing (MOTIR-9323): the offer is marked
+   * confirmed by the caller and the landing recorded as `debugLanding` on the offer's
+   * OWN answer turn, in one locked write — no new turn, so the outcome line the rail
+   * draws from that turn and a reloaded thread agree.
+   */
+  async recordDebugLanding(
+    turnId: string,
+    landing: DebugLandingDto,
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<PlanChangeSessionDto> {
+    const session = await requireSession(pctx, address);
+    await withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        const row = await planChangeTurnRepository.findByIdInSession(
           turnId,
           session.id,
           pctx.workspaceId,
           tx,
         );
-        if (!turn || turn.role !== 'user') throw new PlanChangeTurnNotFoundError(turnId);
-        if (turn.intent !== 'debug') return false;
-        return planChangeTurnRepository.claimDebugLanding(turn.id, pctx.workspaceId, tx);
+        if (!row?.answerOffer || row.debugLandingClaimedAt === null) {
+          throw new PlanChangeTurnNotFoundError(turnId);
+        }
+        await planChangeTurnRepository.confirmDebugLanding(
+          row.id,
+          pctx.workspaceId,
+          {
+            ...(row.answerOffer as Record<string, unknown>),
+            confirmedAt: new Date().toISOString(),
+            confirmedById: pctx.userId,
+          } as Prisma.InputJsonValue,
+          {
+            outcome: landing.outcome,
+            workItemKey: landing.workItemKey,
+            title: landing.title,
+            createdInTriage: landing.createdInTriage,
+          },
+          tx,
+        );
       },
     );
+    return planChangeSessionsService.getById(pctx, session.id);
   },
 
   /**
@@ -2839,7 +2900,7 @@ export const planChangeSessionsService = {
   /**
    * RELEASE a debug landing's claim (MOTIR-7049). The caller does this ONLY when
    * the write was refused inside its own transaction — so nothing committed — and
-   * a later settle may try again. A claim is never released after a write that
+   * a later confirm may try again. A claim is never released after a write that
    * may have committed: the landing fails closed rather than writing twice.
    */
   async releaseDebugLanding(

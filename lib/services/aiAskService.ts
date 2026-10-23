@@ -16,6 +16,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { readAskOutcome } from '@/lib/planning/askResult';
 import { planOfferService, type PendingPlanOfferStatement } from '@/lib/services/planOfferService';
 import { logBugOfferService } from '@/lib/services/logBugOfferService';
+import { debugLandingService } from '@/lib/services/debugLandingService';
 import { readCodeUnreadable } from '@/lib/planning/codeUnreadable';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import {
@@ -32,6 +33,9 @@ import {
 } from '@/lib/services/planOfferStartService';
 import {
   AskAnchorNotAvailableError,
+  DebugAnchorNotTriageBugError,
+  DebugTargetChangedError,
+  DebugTargetNotAvailableError,
   EmptyPlanChangeTurnError,
   PlanChangeSessionNotFoundError,
   PlanChangeFlipNotOfferedError,
@@ -320,11 +324,37 @@ function repliedOffer(
   session: PlanChangeSessionDto,
   turn: PlanChangeTurnDto,
   reply: AskOfferReply | undefined,
-): { turnId: string; decision: AskOfferReply['decision'] } | null {
+): { turnId: string; kind: string; decision: AskOfferReply['decision'] } | null {
   if (!reply) return null;
   const pending = pendingPlanOfferOf(session.turns.filter((t) => t.seq < turn.seq));
   if (!pending || pending.seq !== reply.seq || pending.offer.kind !== reply.kind) return null;
-  return { turnId: pending.turnId, decision: reply.decision };
+  return { turnId: pending.turnId, kind: pending.offer.kind, decision: reply.decision };
+}
+
+/**
+ * A typed yes to a `log_bug` offer (MOTIR-9323): the SAME landing the Confirm press
+ * runs, through the same claim. A refusal (a stale or unreadable target, a declined
+ * offer) leaves the offer as the landing found it — still confirmable on the rail —
+ * and the answer lands either way.
+ */
+async function landOrNothing(
+  ctx: ProjectContext,
+  input: { conversationId: string; offerTurnId: string },
+): Promise<void> {
+  try {
+    await debugLandingService.confirmLogBugOffer(ctx, input);
+  } catch (err) {
+    if (
+      err instanceof PlanOfferStartRefusedError ||
+      err instanceof DebugTargetChangedError ||
+      err instanceof DebugTargetNotAvailableError ||
+      err instanceof DebugAnchorNotTriageBugError ||
+      err instanceof PermissionDeniedError
+    ) {
+      return;
+    }
+    throw err;
+  }
 }
 
 /**
@@ -925,8 +955,11 @@ export const aiAskService = {
         if (!(err instanceof PlanOfferNotOpenError)) throw err;
       });
     }
+    if (replied?.decision === 'agree' && replied.kind === 'log_bug') {
+      await landOrNothing(ctx, { conversationId: session.id, offerTurnId: replied.turnId });
+    }
     let started =
-      replied?.decision === 'agree'
+      replied?.decision === 'agree' && replied.kind === 'plan'
         ? await startOrNothing(() =>
             planOfferStartService.confirmPlanOffer(ctx, {
               conversationId: session.id,

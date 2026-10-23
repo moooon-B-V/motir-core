@@ -11,11 +11,14 @@ import {
 } from '../../../_errors';
 import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 
-// POST /api/ai/plan-change/session/offer/confirm — the Confirm button on a plan offer
-// (Story MOTIR-9219 · MOTIR-9291). Starts the plan the offer on `offerTurnId`
-// describes, exactly once: a second press answers the first one's session and job.
+// POST /api/ai/plan-change/session/offer/confirm — the Confirm button on an offer
+// (Story MOTIR-9219 · MOTIR-9291; the `log_bug` arm, MOTIR-9220 · MOTIR-9323). A plan
+// offer starts the plan the offer on `offerTurnId` describes, exactly once: a second
+// press answers the first one's session and job. A `log_bug` offer makes its ONE
+// write, exactly once, and answers `{ kind: 'log_bug', sessionId, landing, session }`;
+// a stale or unreadable target is the typed Debug* refusal.
 //
-// The answer is `{ sessionId, jobId, planId, session }`. `sessionId` may name a
+// A plan offer's answer is `{ kind: 'plan', sessionId, jobId, planId, session }`. `sessionId` may name a
 // conversation other than the one on screen — an offer with a target plans on the
 // caller's session for that card — and the client switches to it. A refusal is 409
 // `{ code, error, reason }`; the rail turns `reason` into its cannot-start line.
@@ -52,7 +55,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    const result = await planOfferStartService.confirmPlanOffer(ctx, {
+    const result = await planOfferStartService.confirmOffer(ctx, {
       conversationId: sessionId,
       offerTurnId,
     });

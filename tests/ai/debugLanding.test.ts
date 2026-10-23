@@ -1,200 +1,208 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
-import type { DebugLandingDto, PlanChangeSessionDto } from '@/lib/dto/planChange';
-import { triageService } from '@/lib/services/triageService';
-import { workspacesService } from '@/lib/services/workspacesService';
-import { createTestUser } from '../fixtures';
-import {
-  createTestWorkItem,
-  makeWorkItemFixture,
-  type WorkItemFixture,
-} from '../fixtures/workItemFixtures';
+import type { PlanChangeTurnDto } from '@/lib/dto/planChange';
+import { createTestUser } from '../fixtures/userFixtures';
+import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { BUG_REF, logBugOffer } from '../fixtures/logBugOfferFixtures';
 import { adminDb } from '../helpers/adminDb';
-import { truncateAuthTables } from '../helpers/db';
-import { openTestSession } from '../helpers/planSession';
+import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import {
   addToProjectAs,
   createCustomRoleAs,
   setProjectRoleAs,
 } from '../helpers/workspaceRoleFixtures';
 
-// LANDING a debug turn (Story MOTIR-7042 · MOTIR-7049), route-level against a
-// REAL Postgres — `docs/decisions/conversation-turn-intent.md` AMENDMENT 1 · A1.4.
-// Only `getSession` / `getActiveProject` and the motir-ai client (the HTTP
-// boundary: `submitJob` / `getJob`) are mocked, as `askDebugIntent.test.ts` does;
-// the settle route → aiAskService → debugLandingService → the comment / update /
-// triage-intake authorities → the database run for real.
-//
-// Since AMENDMENT 5 (MOTIR-9231) nothing in core dispatches a `debug_bug` job and
-// the ask settle no longer lands one, but `debugLandingService` stays for the
-// bug-offer story. So each case seeds a turn already recorded `debug` with its
-// debug job, then calls the KEPT landing service the way the retired settle arm
-// did — and reads the database to check that exactly the one card A1.4 names
-// changed, and nothing else did.
-
-const session = { current: null as { user: { id: string; email: string; name: string } } | null };
-const activeCtx = { current: null as ProjectContext | null };
-
-vi.mock('@/lib/auth', () => ({ getSession: async () => session.current }));
-vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.current }));
+// LANDING a confirmed `log_bug` offer (Story MOTIR-9220 · MOTIR-9323), against a REAL
+// Postgres. The kept debug landing (MOTIR-7049) is fed by the stored offer instead of
+// a `debug_bug` job result: the Confirm press and a typed yes reach ONE claimed write,
+// made BY Motir, and record it as `debugLanding` on the offer's own answer turn.
+// Mocked: only the motir-ai boundary (`submitJob` captured, `getJob` from a map) — the
+// settle, the confirm seam, the comment / update / create authorities and the database
+// run for real. Each case reads the database to check that exactly the one card the
+// offer names changed, and nothing else did.
 
 const submitJobMock = vi.fn();
 const getJobMock = vi.fn();
+const jobs = new Map<string, unknown>();
 vi.mock('@/lib/ai/motirAiClient', () => ({
   submitJob: (...args: unknown[]) => submitJobMock(...args),
-  getJob: (...args: unknown[]) => getJobMock(...(args as [])),
+  getJob: (jobId: string) => getJobMock(jobId),
   streamJob: vi.fn(),
-  getConvention: vi.fn(),
-  getCodeAudit: vi.fn(),
-  refreshCodeAudit: vi.fn(),
-  saveDesignChoice: vi.fn(),
-  getPreplanState: vi.fn(),
-  getOrgUsage: vi.fn(),
-  getOrgSubscription: vi.fn(),
-  createCheckoutSession: vi.fn(),
-  createPortalSession: vi.fn(),
-  setSeatQuantity: vi.fn(),
-  parseSseFrame: vi.fn(),
 }));
 
-const { POST: ask } = await import('@/app/api/ai/ask/route');
-const { POST: settle } = await import('@/app/api/ai/ask/settle/route');
-const { DEBUG_DIAGNOSIS_DIVIDER, DEBUG_UNGROUNDED_REPLY, debugLandingService } =
-  await import('@/lib/services/debugLandingService');
+const { aiAskService } = await import('@/lib/services/aiAskService');
 const { planChangeSessionsService } = await import('@/lib/services/planChangeSessionsService');
+const { planOfferService } = await import('@/lib/services/planOfferService');
+const { planOfferStartService } = await import('@/lib/services/planOfferStartService');
+const { DEBUG_DIAGNOSIS_DIVIDER } = await import('@/lib/services/debugLandingService');
+const { workItemsService } = await import('@/lib/services/workItemsService');
+const { triageService } = await import('@/lib/services/triageService');
+const { workspacesService } = await import('@/lib/services/workspacesService');
+const { projectsService } = await import('@/lib/services/projectsService');
+const { seedSystemPrincipal } = await import('@/scripts/plan-seed/systemPrincipal');
 const { mapPlanChangeError } = await import('@/app/api/ai/plan-change/_errors');
-const { NextResponse } = await import('next/server');
 
-const BASE = 'http://localhost:3000';
-const post = (path: string, body: unknown) =>
-  new Request(`${BASE}${path}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
+const T = { timeout: 120_000 };
+
+let fx: WorkItemFixture;
+let motirId: string;
+let jobSeq = 0;
+
+beforeEach(async () => {
+  await truncateAuthTables();
+  await truncateJobRuns();
+  jobs.clear();
+  jobSeq = 0;
+  submitJobMock.mockReset();
+  submitJobMock.mockImplementation(async () => ({ jobId: `job-${++jobSeq}` }));
+  getJobMock.mockReset();
+  getJobMock.mockImplementation(
+    async (jobId: string) =>
+      jobs.get(jobId) ?? { jobId, status: 'running', result: null, error: null },
+  );
+  vi.stubEnv('MOTIR_AI_URL', 'http://motir-ai.test');
+  vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'token');
+  fx = await makeWorkItemFixture();
+  // The Motir account, provisioned into its OWN meta tenant the way the seed does:
+  // it is no member of the fixture's workspace.
+  const metaOwner = await createTestUser({ name: 'Meta owner' });
+  const { workspace: metaWs } = await workspacesService.createWorkspace({
+    name: 'moooon',
+    ownerUserId: metaOwner.id,
   });
-
-// ── The motir-ai side ─────────────────────────────────────────────────────────
-
-/** Job results by id — `getJob` answers from here. */
-const jobs = new Map<string, unknown>();
-
-const DESCRIPTION = [
-  'Saving a comment strips every `@mention` token before the body is stored.',
-  '',
-  '## Acceptance criteria',
-  '',
-  '- A saved comment keeps its mention chips.',
-  '',
-  '## Candidate mechanisms',
-  '',
-  'None of these is established.',
-  '',
-  '- The sanitizer drops the `mention:` scheme.',
-  '- The editor serializes before the picker commits.',
-  '',
-  '## Context refs',
-  '',
-  '- `lib/services/commentsService.ts`',
-].join('\n');
-
-const DIAGNOSIS = {
-  descriptionMd: DESCRIPTION,
-  explanationMd: 'Mentions are how people get pulled into a thread; losing them silences it.',
-  type: 'code',
-  executor: 'coding_agent',
-  storyPoints: 2,
-  estimateMinutes: 60,
-  difficulty: 'medium',
-  contextRefs: ['lib/services/commentsService.ts'],
-  candidateMechanisms: [
-    'The sanitizer drops the `mention:` scheme.',
-    'The editor serializes before the picker commits.',
-  ],
-  grounded: true,
-  groundingReason: 'indexed',
-  title: 'Saving a comment drops its @mentions',
-  acceptanceCriteria: ['A saved comment keeps its mention chips.'],
-};
-
-const diagnose = (anchorKey: string | null, extra: Record<string, unknown> = {}) => ({
-  ...DIAGNOSIS,
-  outcome: 'diagnose',
-  anchorKey,
-  replyMd: 'No existing card covers this, so the diagnosis goes on a new bug in Triage.',
-  ...extra,
-});
-const enrich = (workItemKey: string, anchorKey: string | null) => ({
-  ...DIAGNOSIS,
-  outcome: 'enrich_existing',
-  workItemKey,
-  matchReason: 'It already describes mentions vanishing on save.',
-  anchorKey,
-  replyMd: `${workItemKey} already covers this defect, so the diagnosis goes there.`,
+  const metaProject = await projectsService.createProject({
+    name: 'motir',
+    identifier: 'MOTIR',
+    workspaceId: metaWs.id,
+    actorUserId: metaOwner.id,
+  });
+  ({ userId: motirId } = await seedSystemPrincipal({
+    workspaceId: metaWs.id,
+    projectId: metaProject.id,
+  }));
 });
 
-// ── The loop ──────────────────────────────────────────────────────────────────
+afterEach(async () => {
+  vi.unstubAllEnvs();
+  await truncateJobRuns();
+});
 
-/** Send a turn and record it `debug`, bound to a fresh `debug_bug` job id whose
- *  result is `debugBug` — the state the retired dispatch left a turn in. */
-async function debugTurn(debugBug: unknown, anchorKey?: string): Promise<string> {
-  const askRes = await ask(
-    post('/api/ai/ask', { body: 'Saving a comment drops the mention', anchorKey }),
-  );
-  expect(askRes.status).toBe(200);
-  const { turnId, session } = (await askRes.json()) as {
-    turnId: string;
-    session: PlanChangeSessionDto;
-  };
-  const debugJobId = `job-debug_bug-${turnId}`;
-  await planChangeSessionsService.recordTurnIntent(
-    turnId,
-    'debug',
-    activeCtx.current!,
-    { jobId: debugJobId },
-    { sessionId: session.id },
-  );
-  jobs.set(debugJobId, { status: 'succeeded', result: { debugBug } });
-  return debugJobId;
-}
+afterAll(async () => {
+  await db.$disconnect();
+  await adminDb.$disconnect();
+});
 
-interface Debugged {
-  outcome: 'debugged';
-  landing: DebugLandingDto;
-  session: PlanChangeSessionDto;
+function ctxOf(userId: string): ProjectContext {
+  return { userId, workspaceId: fx.workspaceId, projectId: fx.projectId, project: fx.project };
 }
-/** Land a debug job's result as the caller, exactly as the retired settle arm did,
- *  answering with the route's own error mapping. */
-async function settleDebug(jobId: string): Promise<Response> {
-  const turn = await adminDb.planChangeTurn.findFirstOrThrow({
-    where: { jobId, role: 'user' },
-    select: { id: true, sessionId: true },
+const owner = () => ctxOf(fx.ownerId);
+
+/** A member seated in the project with a custom role of `permissions`. */
+async function member(label: string, permissions: string[]): Promise<ProjectContext> {
+  const u = await createTestUser({ name: `Member ${label}` });
+  await adminDb.workspaceMembership.create({
+    data: { userId: u.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
   });
-  const ctx = activeCtx.current!;
+  await addToProjectAs({
+    key: fx.project.identifier,
+    actorUserId: fx.ownerId,
+    ctx: fx.ctx,
+    targetUserId: u.id,
+    role: 'member',
+  });
+  const role = await createCustomRoleAs({
+    projectId: fx.projectId,
+    ctx: fx.ctx,
+    name: `Role ${label}`,
+    permissions,
+  });
+  await setProjectRoleAs({
+    key: fx.project.identifier,
+    actorUserId: fx.ownerId,
+    ctx: fx.ctx,
+    targetUserId: u.id,
+    role: role.id,
+  });
+  return ctxOf(u.id);
+}
+
+async function task(title = 'Comment save path') {
+  return workItemsService.createWorkItem({ projectId: fx.projectId, kind: 'task', title }, fx.ctx);
+}
+
+/** The triage bug the report widget files — the anchored path's card. */
+async function triageBug(descriptionMd = 'Type @someone, save — the mention is gone.') {
+  return triageService.createSubmission(
+    { projectKey: fx.project.identifier, title: 'Mention disappears', kind: 'bug', descriptionMd },
+    fx.ctx,
+  );
+}
+
+/** Type a turn and settle its job with `ask`; the thread's last answer comes back. */
+async function turn(
+  pctx: ProjectContext,
+  ask: Record<string, unknown>,
+  opts: { sessionId?: string; anchorKey?: string; body?: string } = {},
+) {
+  const submitted = await aiAskService.submitTurn(
+    opts.body ?? 'Mentions vanish when I save',
+    pctx,
+    opts,
+  );
+  if (!('jobId' in submitted) || !submitted.jobId) throw new Error('not an ask');
+  const jobId = submitted.jobId;
+  jobs.set(jobId, { jobId, status: 'succeeded', result: { ask }, error: null });
+  const settled = await aiAskService.settle(jobId, pctx, { sessionId: submitted.session.id });
+  const answers = settled.session.turns.filter((t) => t.role === 'assistant');
+  return { sessionId: submitted.session.id, answer: answers.at(-1)!, session: settled.session };
+}
+
+/** An answer offering to log the bug at `target`. */
+async function offered(
+  pctx: ProjectContext,
+  target: Record<string, unknown> = { kind: 'new', key: null },
+  anchorKey?: string,
+) {
+  const { sessionId, answer } = await turn(
+    pctx,
+    {
+      intent: 'ask',
+      answer: `Saving strips the mention in ${BUG_REF}.`,
+      citations: [],
+      offer: logBugOffer({ target }),
+    },
+    anchorKey ? { anchorKey } : {},
+  );
+  expect(answer.offer?.kind).toBe('log_bug');
+  return { sessionId, offerTurnId: answer.id, answer };
+}
+
+/** Press Confirm, answered with the route's own error mapping. */
+async function press(pctx: ProjectContext, sessionId: string, offerTurnId: string) {
   try {
-    const job = (await getJobMock(jobId)) as { result: unknown };
-    const address = { sessionId: turn.sessionId };
-    const landed = await debugLandingService.land(
-      { jobId, turnId: turn.id, result: job.result },
-      ctx,
-      address,
-    );
-    if (!landed) {
-      const session = await planChangeSessionsService.getById(ctx, turn.sessionId);
-      return NextResponse.json({ outcome: 'silent', session });
-    }
-    return NextResponse.json({ outcome: 'debugged', ...landed });
+    const body = await planOfferStartService.confirmOffer(pctx, {
+      conversationId: sessionId,
+      offerTurnId,
+    });
+    return { status: 200, body };
   } catch (err) {
     const mapped = mapPlanChangeError(err);
-    if (mapped) return mapped;
-    throw err;
+    if (!mapped) throw err;
+    return { status: mapped.status, body: (await mapped.json()) as Record<string, unknown> };
   }
 }
 
-// ── Reading the database ──────────────────────────────────────────────────────
+async function offerTurn(sessionId: string, offerTurnId: string): Promise<PlanChangeTurnDto> {
+  const thread = await planChangeSessionsService.getById(owner(), sessionId);
+  return thread.turns.find((t) => t.id === offerTurnId)!;
+}
 
-/** Everything A1.4 says a debug turn may NEVER move — status, kind, parent,
- *  sprint, the triage marker — for every card in the project, plus every edge. */
+const claimOf = async (id: string) =>
+  (await adminDb.planChangeTurn.findUniqueOrThrow({ where: { id } })).debugLandingClaimedAt;
+
+/** Everything a landing may NEVER move — status, kind, parent, sprint, the triage
+ *  marker — for every card in the project, plus every edge. */
 async function frozenFacts() {
   const items = await adminDb.workItem.findMany({
     where: { projectId: fx.projectId },
@@ -220,501 +228,409 @@ const itemCount = () => adminDb.workItem.count({ where: { projectId: fx.projectI
 const commentCount = () =>
   adminDb.comment.count({ where: { workItem: { projectId: fx.projectId } } });
 
-async function thread() {
-  return openTestSession(activeCtx.current!);
-}
-const assistantTurns = async () => (await thread()).turns.filter((t) => t.role === 'assistant');
+// ── The three write shapes ────────────────────────────────────────────────────
 
-// ── Fixtures ──────────────────────────────────────────────────────────────────
+describe('a new bug', () => {
+  it(
+    'is created ONCE by Motir in the bug destination, born with the diagnosis — not in Triage',
+    T,
+    async () => {
+      const other = await task('Unrelated');
+      const { sessionId, offerTurnId } = await offered(owner());
+      const before = await frozenFacts();
+      const turnsBefore = (await planChangeSessionsService.getById(owner(), sessionId)).turns
+        .length;
 
-let fx: WorkItemFixture;
+      const res = await press(owner(), sessionId, offerTurnId);
+      expect(res.status).toBe(200);
+      const body = res.body as { kind: string; landing: Record<string, unknown> };
+      expect(body.kind).toBe('log_bug');
 
-beforeEach(async () => {
-  await truncateAuthTables();
-  jobs.clear();
-  let n = 0;
-  submitJobMock.mockReset();
-  submitJobMock.mockImplementation(async (kind: unknown) => ({
-    jobId: `job-${String(kind)}-${++n}`,
-  }));
-  getJobMock.mockReset();
-  getJobMock.mockImplementation(async (jobId: string) => {
-    const view = jobs.get(jobId);
-    if (!view) throw new Error(`unknown job ${jobId}`);
-    return { jobId, error: null, ...(view as object) };
-  });
-  vi.stubEnv('MOTIR_AI_URL', 'http://motir-ai.test');
-  vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'test-service-token');
-  fx = await makeWorkItemFixture();
-  session.current = { user: { id: fx.ownerId, email: 'owner@example.com', name: 'Owner' } };
-  activeCtx.current = {
-    userId: fx.ownerId,
-    workspaceId: fx.workspaceId,
-    projectId: fx.projectId,
-    project: fx.project,
-  };
-});
+      const created = await adminDb.workItem.findMany({
+        where: { projectId: fx.projectId, id: { not: other.id } },
+      });
+      expect(created).toHaveLength(1);
+      const bug = created[0]!;
+      expect(body.landing).toEqual({
+        outcome: 'diagnose',
+        workItemKey: bug.identifier,
+        title: 'Saving a comment drops the @mention',
+        createdInTriage: false,
+      });
+      expect(bug.kind).toBe('bug');
+      expect(bug.parentId).toBeNull();
+      expect(bug.triagedAt).toBeNull();
+      expect(bug.submittedByUserId).toBeNull();
+      expect(bug.reporterId).toBe(motirId);
+      expect(bug.title).toBe('Saving a comment drops the @mention');
+      expect(bug.descriptionMd).toContain(`\`${BUG_REF}\``);
+      expect(bug.explanationMd).toBe('Mentioned people are never notified.');
+      expect(bug.explanationSource).toBe('ai_draft');
+      expect(bug.type).toBe('code');
+      expect(bug.estimateMinutes).toBe(45);
+      expect(bug.difficulty).toBe('low');
 
-afterEach(() => {
-  vi.unstubAllEnvs();
-});
-
-afterAll(async () => {
-  await db.$disconnect();
-  await adminDb.$disconnect();
-});
-
-/** The triage bug the report widget files — the widget path's anchor. */
-function fileTriageBug(descriptionMd = 'Type @someone, save — the mention is gone.') {
-  return triageService.createSubmission(
-    {
-      projectKey: fx.projectIdentifier,
-      kind: 'bug',
-      title: 'Mention disappears',
-      descriptionMd,
+      // Nothing else moved; the landing rides the offer's own turn, which is confirmed;
+      // no turn was appended.
+      const after = await frozenFacts();
+      expect(after.items.filter((i) => i.id !== bug.id)).toEqual(before.items);
+      expect(after.edges).toEqual(before.edges);
+      const landed = await offerTurn(sessionId, offerTurnId);
+      expect(landed.debugLanding).toEqual(body.landing);
+      expect(landed.offer?.state).toBe('confirmed');
+      expect(landed.offer?.confirmedById).toBe(fx.ownerId);
+      const thread = await planChangeSessionsService.getById(owner(), sessionId);
+      expect(thread.turns).toHaveLength(turnsBefore);
     },
-    fx.ctx,
   );
-}
+});
 
-// ── A1.4, row by row ──────────────────────────────────────────────────────────
+describe('an anchored triage bug', () => {
+  it(
+    "adds the diagnosis BENEATH the person's own text, filling only empty fields, as Motir",
+    T,
+    async () => {
+      const triaged = await triageBug();
+      // A field the person set is theirs — it must survive the diagnosis.
+      await workItemsService.updateWorkItem(triaged.id, { estimateMinutes: 15 }, fx.ctx);
+      const { sessionId, offerTurnId } = await offered(
+        owner(),
+        { kind: 'anchored', key: triaged.identifier },
+        triaged.identifier,
+      );
+      const before = await frozenFacts();
+      const itemsBefore = await itemCount();
 
-describe('enrich_existing — an existing card covers the defect', () => {
-  it('adds ONE comment to that card and relates it to the anchored triage bug — nothing else', async () => {
-    const existing = await createTestWorkItem(fx, { kind: 'bug', title: 'Mentions vanish' });
-    const triaged = await fileTriageBug();
-    const jobId = await debugTurn(
-      enrich(existing.identifier, triaged.identifier),
+      const res = await press(owner(), sessionId, offerTurnId);
+      expect(res.status).toBe(200);
+      expect((res.body as { landing: unknown }).landing).toEqual({
+        outcome: 'diagnose',
+        workItemKey: triaged.identifier,
+        title: 'Mention disappears',
+        createdInTriage: false,
+      });
+
+      const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: triaged.id } });
+      expect(
+        row.descriptionMd!.startsWith('Type @someone, save — the mention is gone.\n\n---\n\n'),
+      ).toBe(true);
+      expect(row.descriptionMd).toContain(DEBUG_DIAGNOSIS_DIVIDER);
+      expect(row.descriptionMd).toContain(`\`${BUG_REF}\``);
+      expect(row.title).toBe('Mention disappears');
+      expect(row.explanationMd).toBe('Mentioned people are never notified.');
+      expect(row.type).toBe('code');
+      expect(row.estimateMinutes).toBe(15);
+      expect(row.triagedAt).not.toBeNull();
+
+      // The diagnosis is Motir's revision; nothing else was filed or moved.
+      const revisions = await adminDb.workItemRevision.findMany({
+        where: { workItemId: triaged.id, changedById: motirId },
+      });
+      expect(revisions.length).toBeGreaterThan(0);
+      expect(await itemCount()).toBe(itemsBefore);
+      expect(await commentCount()).toBe(0);
+      expect(await frozenFacts()).toEqual(before);
+    },
+  );
+});
+
+describe('an existing card that covers it', () => {
+  it('gets exactly ONE comment by Motir, related to the anchor — nothing else', T, async () => {
+    const covering = await task();
+    const triaged = await triageBug();
+    const { sessionId, offerTurnId } = await offered(
+      owner(),
+      { kind: 'existing', key: covering.identifier },
       triaged.identifier,
     );
-
     const before = await frozenFacts();
     const itemsBefore = await itemCount();
-    const triagedBefore = await adminDb.workItem.findUniqueOrThrow({ where: { id: triaged.id } });
-    const existingBefore = await adminDb.workItem.findUniqueOrThrow({ where: { id: existing.id } });
 
-    const res = await settleDebug(jobId);
+    const res = await press(owner(), sessionId, offerTurnId);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Debugged;
-    expect(body.outcome).toBe('debugged');
-    expect(body.landing).toEqual({
+    expect((res.body as { landing: unknown }).landing).toEqual({
       outcome: 'enrich_existing',
-      workItemKey: existing.identifier,
-      title: 'Mentions vanish',
+      workItemKey: covering.identifier,
+      title: 'Comment save path',
       createdInTriage: false,
     });
 
-    // The ONE write: a comment by the sender, carrying the diagnosis.
     const comments = await adminDb.comment.findMany({
       where: { workItem: { projectId: fx.projectId } },
     });
     expect(comments).toHaveLength(1);
-    expect(comments[0]!.workItemId).toBe(existing.id);
-    expect(comments[0]!.authorId).toBe(fx.ownerId);
-    expect(comments[0]!.bodyMd).toContain('The sanitizer drops the `mention:` scheme.');
-    expect(comments[0]!.bodyMd).toContain('`lib/services/commentsService.ts`');
+    expect(comments[0]!.workItemId).toBe(covering.id);
+    expect(comments[0]!.authorId).toBe(motirId);
+    expect(comments[0]!.bodyMd).toContain(`\`${BUG_REF}\``);
     expect(comments[0]!.bodyMd).toContain(`[${triaged.identifier}](motir:${triaged.id})`);
-
-    // …which relates the two, both halves of the pair.
     const links = await adminDb.workItemLink.findMany({ where: { kind: 'relates_to' } });
     expect(links.map((l) => [l.fromId, l.toId]).sort()).toEqual(
       [
-        [existing.id, triaged.id],
-        [triaged.id, existing.id],
+        [covering.id, triaged.id],
+        [triaged.id, covering.id],
       ].sort(),
     );
-
-    // Nothing new filed; neither card's fields touched; no status or edge moved.
     expect(await itemCount()).toBe(itemsBefore);
-    const triagedAfter = await adminDb.workItem.findUniqueOrThrow({ where: { id: triaged.id } });
-    expect(triagedAfter.descriptionMd).toBe(triagedBefore.descriptionMd);
-    const existingAfter = await adminDb.workItem.findUniqueOrThrow({ where: { id: existing.id } });
-    expect(existingAfter.descriptionMd).toBe(existingBefore.descriptionMd);
-    expect(existingAfter.explanationMd).toBe(existingBefore.explanationMd);
     expect(await frozenFacts()).toEqual(before);
-
-    // The reply is on the thread, citing the ONE card touched.
-    const replies = await assistantTurns();
-    expect(replies).toHaveLength(1);
-    expect(replies[0]!.body).toBe(
-      `${existing.identifier} already covers this defect, so the diagnosis goes there.`,
-    );
-    expect(replies[0]!.citations).toEqual([existing.identifier]);
-    expect(replies[0]!.jobId).toBe(jobId);
-  });
-
-  it('a named card that does not resolve in the active project is a 404 — and writes nothing', async () => {
-    const jobId = await debugTurn(enrich('PROD-9999', null));
-    const before = { items: await itemCount(), comments: await commentCount() };
-
-    const res = await settleDebug(jobId);
-    expect(res.status).toBe(404);
-    await expect(res.json()).resolves.toMatchObject({ code: 'NOT_FOUND' });
-
-    expect({ items: await itemCount(), comments: await commentCount() }).toEqual(before);
-    expect(await assistantTurns()).toHaveLength(0);
   });
 });
 
-describe('diagnose, anchored on a triage bug — the widget path', () => {
-  it("writes the diagnosis onto that bug BENEATH the reporter's own text, filling only empty fields", async () => {
-    const triaged = await fileTriageBug();
-    // A field the person set is theirs — it must survive the diagnosis.
-    await adminDb.workItem.update({ where: { id: triaged.id }, data: { estimateMinutes: 15 } });
-    const jobId = await debugTurn(diagnose(triaged.identifier), triaged.identifier);
-    const before = await frozenFacts();
-    const itemsBefore = await itemCount();
+// ── Both doors, exactly once ──────────────────────────────────────────────────
 
-    const res = await settleDebug(jobId);
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as Debugged;
-    expect(body.landing).toEqual({
-      outcome: 'diagnose',
-      workItemKey: triaged.identifier,
-      title: 'Mention disappears',
-      createdInTriage: false,
+/** A typed agreement to the latest pending offer. */
+async function typedYes(sessionId: string, seq: number, pctx = owner()) {
+  return turn(
+    pctx,
+    {
+      intent: 'ask',
+      answer: 'Done — I logged it.',
+      citations: [],
+      offerReply: { seq, kind: 'log_bug', decision: 'agree' },
+    },
+    { sessionId, body: 'yes, log it' },
+  );
+}
+
+describe('a typed yes', () => {
+  it('states the pending offer by its write and lands the identical write', T, async () => {
+    const { sessionId, offerTurnId, answer } = await offered(owner());
+    const calls = submitJobMock.mock.calls.length;
+
+    await typedYes(sessionId, answer.seq);
+    // The yes was sent with the pending offer stated by the write it agrees to.
+    const context = submitJobMock.mock.calls[calls]![2] as Record<string, unknown>;
+    expect(context['pendingPlanOffer']).toEqual({
+      kind: 'log_bug',
+      requestText: 'Log a new bug: Saving a comment drops the @mention',
+      targetKey: null,
+      seq: answer.seq,
     });
-
-    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: triaged.id } });
-    // ADDED, never replaced: the report as filed, a rule, then the diagnosis.
-    expect(
-      row.descriptionMd!.startsWith('Type @someone, save — the mention is gone.\n\n---\n\n'),
-    ).toBe(true);
-    expect(row.descriptionMd).toContain(DEBUG_DIAGNOSIS_DIVIDER);
-    expect(row.descriptionMd).toContain('## Acceptance criteria');
-    expect(row.descriptionMd).toContain('## Candidate mechanisms');
-    expect(row.descriptionMd).toContain('`lib/services/commentsService.ts`');
-    expect(row.title).toBe('Mention disappears');
-    expect(row.explanationMd).toBe(DIAGNOSIS.explanationMd);
-    expect(row.explanationSource).toBe('ai_draft');
-    expect(row.type).toBe('code');
-    expect(row.executor).toBe('coding_agent');
-    expect(Number(row.storyPoints)).toBe(2);
-    expect(row.difficulty).toBe('medium');
-    expect(row.estimateMinutes).toBe(15);
-
-    // Still in Triage, never promoted; no second bug, no comment, nothing moved.
-    expect(row.triagedAt).not.toBeNull();
-    expect(await itemCount()).toBe(itemsBefore);
-    expect(await commentCount()).toBe(0);
-    expect(await frozenFacts()).toEqual(before);
-
-    const replies = await assistantTurns();
-    expect(replies.map((t) => t.citations)).toEqual([[triaged.identifier]]);
-  });
-
-  it('refuses an anchor that is not a bug in Triage (422) and writes nothing', async () => {
-    const promoted = await createTestWorkItem(fx, { kind: 'bug', title: 'Already planned' });
-    const jobId = await debugTurn(diagnose(promoted.identifier), promoted.identifier);
-    const rowBefore = await adminDb.workItem.findUniqueOrThrow({ where: { id: promoted.id } });
-
-    const res = await settleDebug(jobId);
-    expect(res.status).toBe(422);
-    await expect(res.json()).resolves.toMatchObject({ code: 'DEBUG_ANCHOR_NOT_TRIAGE_BUG' });
-    const rowAfter = await adminDb.workItem.findUniqueOrThrow({ where: { id: promoted.id } });
-    expect(rowAfter.updatedAt).toEqual(rowBefore.updatedAt);
-    expect(await assistantTurns()).toHaveLength(0);
-  });
-});
-
-describe('diagnose, no anchor — the orb path', () => {
-  it('files ONE bug into Triage through the intake, born with the diagnosis', async () => {
-    const other = await createTestWorkItem(fx, { kind: 'task', title: 'Unrelated' });
-    const jobId = await debugTurn(diagnose(null));
-    const before = await frozenFacts();
-
-    const res = await settleDebug(jobId);
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as Debugged;
-    expect(body.landing).toMatchObject({
-      outcome: 'diagnose',
-      title: DIAGNOSIS.title,
-      createdInTriage: true,
-    });
-
-    const created = await adminDb.workItem.findMany({
-      where: { projectId: fx.projectId, id: { not: other.id } },
-    });
-    expect(created).toHaveLength(1);
-    const bug = created[0]!;
-    expect(body.landing.workItemKey).toBe(bug.identifier);
-    expect(bug.kind).toBe('bug');
-    expect(bug.parentId).toBeNull();
-    expect(bug.triagedAt).not.toBeNull();
-    expect(bug.submittedByUserId).toBe(fx.ownerId);
-    expect(bug.reporterId).toBe(fx.ownerId);
-    expect(bug.title).toBe(DIAGNOSIS.title);
-    expect(bug.descriptionMd).toBe(DESCRIPTION);
-    expect(bug.explanationMd).toBe(DIAGNOSIS.explanationMd);
-    expect(bug.explanationSource).toBe('ai_draft');
-    expect(bug.type).toBe('code');
-    expect(bug.estimateMinutes).toBe(60);
-
-    // The card that was already there is exactly as it stood.
-    const after = await frozenFacts();
-    expect(after.items.filter((i) => i.id !== bug.id)).toEqual(before.items);
-    expect(after.edges).toEqual(before.edges);
-
-    expect((await assistantTurns()).map((t) => t.citations)).toEqual([[bug.identifier]]);
-  });
-});
-
-describe('an ungrounded report', () => {
-  it.each([
-    [
-      'diagnose',
-      () => diagnose(null, { grounded: false, groundingReason: 'no_match', contextRefs: [] }),
-    ],
-    ['enrich_existing', () => ({ ...enrich('PROD-1', null), grounded: false, contextRefs: [] })],
-  ])('(%s) writes NO card and answers that it could not ground it', async (_label, make) => {
-    await createTestWorkItem(fx, { kind: 'bug', title: 'Mentions vanish' });
-    const jobId = await debugTurn(make());
-    const before = {
-      items: await itemCount(),
-      comments: await commentCount(),
-      facts: await frozenFacts(),
-    };
-
-    const res = await settleDebug(jobId);
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as Debugged;
-    expect(body.landing).toEqual({
-      outcome: 'ungrounded',
-      workItemKey: null,
-      title: null,
-      createdInTriage: false,
-    });
-    expect({
-      items: await itemCount(),
-      comments: await commentCount(),
-      facts: await frozenFacts(),
-    }).toEqual(before);
-    const replies = await assistantTurns();
-    expect(replies).toHaveLength(1);
-    expect(replies[0]!.body).toBe(DEBUG_UNGROUNDED_REPLY);
-    expect(replies[0]!.citations).toEqual([]);
-  });
-});
-
-// ── Exactly once ──────────────────────────────────────────────────────────────
-
-describe('a replayed settle', () => {
-  it('returns the SAME DTO and writes nothing — no second bug, no second reply', async () => {
-    const jobId = await debugTurn(diagnose(null));
-    const first = (await (await settleDebug(jobId)).json()) as Debugged;
-    const itemsAfterFirst = await itemCount();
-
-    const replay = await settleDebug(jobId);
-    expect(replay.status).toBe(200);
-    const second = (await replay.json()) as Debugged;
-    expect(second.outcome).toBe('debugged');
-    expect(second.landing).toEqual(first.landing);
-
-    expect(await itemCount()).toBe(itemsAfterFirst);
-    expect(await assistantTurns()).toHaveLength(1);
-  });
-
-  it('two CONCURRENT settles of one job file one bug', async () => {
-    const jobId = await debugTurn(diagnose(null));
-    const results = await Promise.all([settleDebug(jobId), settleDebug(jobId)]);
-    expect(results.map((r) => r.status)).toEqual([200, 200]);
 
     const bugs = await adminDb.workItem.findMany({ where: { projectId: fx.projectId } });
     expect(bugs).toHaveLength(1);
-    expect(await assistantTurns()).toHaveLength(1);
+    expect(bugs[0]!.reporterId).toBe(motirId);
+    const landed = await offerTurn(sessionId, offerTurnId);
+    expect(landed.debugLanding).toMatchObject({
+      outcome: 'diagnose',
+      workItemKey: bugs[0]!.identifier,
+    });
+    expect(landed.offer?.state).toBe('confirmed');
   });
 
-  it('an enrichment replayed adds no second comment', async () => {
-    const existing = await createTestWorkItem(fx, { kind: 'bug', title: 'Mentions vanish' });
-    const jobId = await debugTurn(enrich(existing.identifier, null));
-    await settleDebug(jobId);
-    const replay = (await (await settleDebug(jobId)).json()) as Debugged;
-    expect(replay.landing.workItemKey).toBe(existing.identifier);
+  it(
+    'a decline typed back writes nothing and the offer can no longer be confirmed',
+    T,
+    async () => {
+      const { sessionId, offerTurnId, answer } = await offered(owner());
+      await turn(
+        owner(),
+        {
+          intent: 'ask',
+          answer: 'Fine, I will not log it.',
+          citations: [],
+          offerReply: { seq: answer.seq, kind: 'log_bug', decision: 'decline' },
+        },
+        { sessionId, body: 'no' },
+      );
+      expect((await offerTurn(sessionId, offerTurnId)).offer?.state).toBe('declined');
+      expect((await press(owner(), sessionId, offerTurnId)).status).toBe(409);
+      expect(await itemCount()).toBe(0);
+    },
+  );
+});
+
+describe('exactly once', () => {
+  it('Confirm twice answers the same landing and writes once', T, async () => {
+    const { sessionId, offerTurnId } = await offered(owner());
+    const first = await press(owner(), sessionId, offerTurnId);
+    const second = await press(owner(), sessionId, offerTurnId);
+    expect(second.status).toBe(200);
+    expect((second.body as { landing: unknown }).landing).toEqual(
+      (first.body as { landing: unknown }).landing,
+    );
+    expect(await itemCount()).toBe(1);
+  });
+
+  it('Confirm from two tabs at once files one bug', T, async () => {
+    const { sessionId, offerTurnId } = await offered(owner());
+    const results = await Promise.all([
+      press(owner(), sessionId, offerTurnId),
+      press(owner(), sessionId, offerTurnId),
+    ]);
+    expect(results.map((r) => r.status)).toEqual([200, 200]);
+    expect(await itemCount()).toBe(1);
+    expect((results[0]!.body as { landing: unknown }).landing).toEqual(
+      (results[1]!.body as { landing: unknown }).landing,
+    );
+  });
+
+  it('Confirm then a typed yes writes once', T, async () => {
+    const covering = await task();
+    const { sessionId, offerTurnId, answer } = await offered(owner(), {
+      kind: 'existing',
+      key: covering.identifier,
+    });
+    expect((await press(owner(), sessionId, offerTurnId)).status).toBe(200);
+    await typedYes(sessionId, answer.seq);
     expect(await commentCount()).toBe(1);
   });
 });
 
-// ── A malformed result ────────────────────────────────────────────────────────
+// ── Refusals ──────────────────────────────────────────────────────────────────
 
-describe('a malformed result', () => {
-  it.each([
-    ['descriptionMd', diagnose(null, { descriptionMd: 'No sections at all.' })],
-    ['candidateMechanisms', diagnose(null, { candidateMechanisms: ['only one'] })],
-    ['storyPoints', diagnose(null, { storyPoints: 4 })],
-    ['title', diagnose(null, { title: '' })],
-    ['outcome', diagnose(null, { outcome: 'file_two_bugs' })],
-  ])('is refused at %s with a typed 502 and writes nothing', async (field, bad) => {
-    const jobId = await debugTurn(bad);
+describe('a target that changed is refused, nothing written, the claim released', () => {
+  it('an existing card edited after the offer', T, async () => {
+    const covering = await task();
+    const { sessionId, offerTurnId } = await offered(owner(), {
+      kind: 'existing',
+      key: covering.identifier,
+    });
+    await workItemsService.updateWorkItem(covering.id, { title: 'Comment save path (v2)' }, fx.ctx);
 
-    const res = await settleDebug(jobId);
-    expect(res.status).toBe(502);
-    await expect(res.json()).resolves.toMatchObject({ code: 'INVALID_AUTHORED_BUG', field });
-    expect(await itemCount()).toBe(0);
-    expect(await assistantTurns()).toHaveLength(0);
+    const res = await press(owner(), sessionId, offerTurnId);
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ code: 'DEBUG_TARGET_CHANGED' });
+    expect(await commentCount()).toBe(0);
+    expect(await claimOf(offerTurnId)).toBeNull();
+    expect((await offerTurn(sessionId, offerTurnId)).offer?.state).toBe('undecided');
   });
 
-  it('claims nothing — the same turn lands once a valid result is read', async () => {
-    const jobId = await debugTurn(diagnose(null, { storyPoints: 4 }));
-    expect((await settleDebug(jobId)).status).toBe(502);
+  it('an anchored triage bug edited after the offer', T, async () => {
+    const triaged = await triageBug();
+    const { sessionId, offerTurnId } = await offered(
+      owner(),
+      { kind: 'anchored', key: triaged.identifier },
+      triaged.identifier,
+    );
+    await workItemsService.updateWorkItem(triaged.id, { descriptionMd: 'Edited.' }, fx.ctx);
+    const rowBefore = await adminDb.workItem.findUniqueOrThrow({ where: { id: triaged.id } });
 
-    jobs.set(jobId, { status: 'succeeded', result: { debugBug: diagnose(null) } });
-    const res = await settleDebug(jobId);
-    expect(res.status).toBe(200);
-    expect(await itemCount()).toBe(1);
+    const res = await press(owner(), sessionId, offerTurnId);
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ code: 'DEBUG_TARGET_CHANGED' });
+    const rowAfter = await adminDb.workItem.findUniqueOrThrow({ where: { id: triaged.id } });
+    expect(rowAfter.descriptionMd).toBe('Edited.');
+    expect(rowAfter.updatedAt).toEqual(rowBefore.updatedAt);
+    expect(await claimOf(offerTurnId)).toBeNull();
+  });
+
+  it('an anchor that is no longer a triage bug', T, async () => {
+    const triaged = await triageBug();
+    const { sessionId, offerTurnId } = await offered(
+      owner(),
+      { kind: 'anchored', key: triaged.identifier },
+      triaged.identifier,
+    );
+    await adminDb.workItem.update({ where: { id: triaged.id }, data: { triagedAt: null } });
+
+    const res = await press(owner(), sessionId, offerTurnId);
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ code: 'DEBUG_ANCHOR_NOT_TRIAGE_BUG' });
+    expect(await claimOf(offerTurnId)).toBeNull();
+  });
+
+  it('a card the sender can no longer read', T, async () => {
+    const covering = await task();
+    const { sessionId, offerTurnId } = await offered(owner(), {
+      kind: 'existing',
+      key: covering.identifier,
+    });
+    await workItemsService.deleteWorkItem(covering.id, fx.ctx);
+
+    const res = await press(owner(), sessionId, offerTurnId);
+    expect(res.status).toBe(404);
+    expect(await commentCount()).toBe(0);
+    expect(await claimOf(offerTurnId)).toBeNull();
+    expect((await offerTurn(sessionId, offerTurnId)).offer?.state).toBe('undecided');
+  });
+
+  it('an archived card is refused and nothing is written', T, async () => {
+    const covering = await task();
+    const { sessionId, offerTurnId } = await offered(owner(), {
+      kind: 'existing',
+      key: covering.identifier,
+    });
+    await workItemsService.archiveWorkItem(covering.id, fx.ctx);
+
+    expect((await press(owner(), sessionId, offerTurnId)).status).toBe(409);
+    expect(await commentCount()).toBe(0);
+    expect(await claimOf(offerTurnId)).toBeNull();
   });
 });
 
-// ── As the sender ─────────────────────────────────────────────────────────────
+describe('an offer that is no longer open writes nothing', () => {
+  it('declined on the rail', T, async () => {
+    const { sessionId, offerTurnId } = await offered(owner());
+    await planOfferService.declinePlanOffer(offerTurnId, owner(), { sessionId });
+    const res = await press(owner(), sessionId, offerTurnId);
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ reason: 'offer_not_open' });
+    expect(await itemCount()).toBe(0);
+  });
 
-describe('every write runs as the sender', () => {
-  it('a member who lost `work_item:edit` after the dispatch gets a 403 and nothing is written', async () => {
-    const user = await createTestUser({ name: 'Reporter' });
-    await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
-    const role = await createCustomRoleAs({
+  it('replaced by a newer answer', T, async () => {
+    const { sessionId, offerTurnId } = await offered(owner());
+    await turn(
+      owner(),
+      { intent: 'ask', answer: 'Something else entirely.', citations: [] },
+      { sessionId, body: 'what about the sprint?' },
+    );
+    const res = await press(owner(), sessionId, offerTurnId);
+    expect(res.status).toBe(409);
+    expect(await itemCount()).toBe(0);
+  });
+});
+
+// ── Who writes ────────────────────────────────────────────────────────────────
+
+describe('the write is Motir’s, never the person’s', () => {
+  it('a sender without work_item:edit still lands it', T, async () => {
+    const asker = await member('asker', ['project:browse', 'ai:plan']);
+    const { sessionId, offerTurnId } = await offered(asker);
+    const res = await press(asker, sessionId, offerTurnId);
+    expect(res.status).toBe(200);
+    const bugs = await adminDb.workItem.findMany({ where: { projectId: fx.projectId } });
+    expect(bugs).toHaveLength(1);
+    expect(bugs[0]!.reporterId).toBe(motirId);
+  });
+
+  it('a sender who lost ai:plan is refused with a 403 and nothing is written', T, async () => {
+    const asker = await member('narrowed', ['project:browse', 'ai:plan']);
+    const { sessionId, offerTurnId } = await offered(asker);
+    const browseOnly = await createCustomRoleAs({
       projectId: fx.projectId,
       ctx: fx.ctx,
-      name: 'Debugger',
-      permissions: ['project:browse', 'ai:plan', 'work_item:edit'],
-    });
-    const key = fx.projectIdentifier;
-    await addToProjectAs({
-      key,
-      actorUserId: fx.ownerId,
-      ctx: fx.ctx,
-      targetUserId: user.id,
-      role: 'member',
+      name: 'Browse only',
+      permissions: ['project:browse'],
     });
     await setProjectRoleAs({
-      key,
+      key: fx.project.identifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
-      targetUserId: user.id,
-      role: role.id,
+      targetUserId: asker.userId,
+      role: browseOnly.id,
     });
-    session.current = { user: { id: user.id, email: user.email, name: user.name } };
-    activeCtx.current = { ...activeCtx.current!, userId: user.id };
-
-    const jobId = await debugTurn(diagnose(null));
-    // The role narrows while the diagnosis runs.
-    const askOnly = await createCustomRoleAs({
-      projectId: fx.projectId,
-      ctx: fx.ctx,
-      name: 'Ask only',
-      permissions: ['project:browse', 'ai:plan'],
-    });
-    await setProjectRoleAs({
-      key,
-      actorUserId: fx.ownerId,
-      ctx: fx.ctx,
-      targetUserId: user.id,
-      role: askOnly.id,
-    });
-
-    const res = await settleDebug(jobId);
+    const res = await press(asker, sessionId, offerTurnId);
     expect(res.status).toBe(403);
     expect(await itemCount()).toBe(0);
-    expect(await assistantTurns()).toHaveLength(0);
+  });
+
+  it('another member cannot confirm someone else’s offer', T, async () => {
+    const { sessionId, offerTurnId } = await offered(owner());
+    const other = await member('other', ['project:browse', 'ai:plan']);
+    const res = await press(other, sessionId, offerTurnId);
+    expect(res.status).toBe(404);
+    expect(await itemCount()).toBe(0);
   });
 });
 
-// ── After a reload (MOTIR-7064) ───────────────────────────────────────────────
-//
-// A reload reads the thread back from the database (`openForScope` → the turn
-// mapper) and has nothing else: no send-time anchor seed, no settle response. So
-// what the rail needs to redraw the anchor chip and the outcome line must be ON
-// the persisted turns — the `user` turn's anchor, the reply's landing.
-
-describe('a settled debug turn, read back after a reload', () => {
-  /** The thread exactly as a reload reads it, and its debug pair. */
-  async function reloaded(jobId: string) {
-    const turns = (await thread()).turns;
-    const user = turns.find((t) => t.role === 'user' && t.jobId === jobId);
-    const reply = turns.find((t) => t.role === 'assistant' && t.jobId === jobId);
-    return { turns, user: user!, reply: reply! };
-  }
-
-  it('diagnose onto the anchored triage bug: the anchor and the landing survive', async () => {
-    const triaged = await fileTriageBug();
-    const jobId = await debugTurn(diagnose(triaged.identifier), triaged.identifier);
-    const body = (await (await settleDebug(jobId)).json()) as Debugged;
-
-    const { user, reply } = await reloaded(jobId);
-    expect(user.anchorKey).toBe(triaged.identifier);
-    expect(reply.debugLanding).toEqual(body.landing);
-    expect(reply.debugLanding).toEqual({
-      outcome: 'diagnose',
-      workItemKey: triaged.identifier,
-      title: 'Mention disappears',
-      createdInTriage: false,
-    });
-  });
-
-  it('enrich_existing on the widget path: the anchor and the covering card survive', async () => {
-    const existing = await createTestWorkItem(fx, { kind: 'bug', title: 'Mentions vanish' });
-    const triaged = await fileTriageBug();
-    const jobId = await debugTurn(
-      enrich(existing.identifier, triaged.identifier),
-      triaged.identifier,
-    );
-    const body = (await (await settleDebug(jobId)).json()) as Debugged;
-
-    const { user, reply } = await reloaded(jobId);
-    expect(user.anchorKey).toBe(triaged.identifier);
-    expect(reply.debugLanding).toEqual(body.landing);
-    expect(reply.debugLanding?.workItemKey).toBe(existing.identifier);
-  });
-
-  it('diagnose from the orb: no anchor, and the bug it FILED in Triage survives', async () => {
-    const jobId = await debugTurn(diagnose(null));
-    const body = (await (await settleDebug(jobId)).json()) as Debugged;
-
-    const { user, reply } = await reloaded(jobId);
-    expect(user.anchorKey).toBeNull();
-    expect(reply.debugLanding).toEqual(body.landing);
-    expect(reply.debugLanding).toMatchObject({ outcome: 'diagnose', createdInTriage: true });
-  });
-
-  it('ungrounded: the "nothing was written" landing survives', async () => {
-    const triaged = await fileTriageBug();
-    const jobId = await debugTurn(
-      diagnose(triaged.identifier, { grounded: false, groundingReason: 'no_match' }),
-      triaged.identifier,
-    );
-    await settleDebug(jobId);
-
-    const { user, reply } = await reloaded(jobId);
-    expect(user.anchorKey).toBe(triaged.identifier);
-    expect(reply.debugLanding).toEqual({
-      outcome: 'ungrounded',
-      workItemKey: null,
-      title: null,
-      createdInTriage: false,
-    });
-  });
-
-  it('a replayed settle leaves the persisted landing as it was', async () => {
-    const jobId = await debugTurn(diagnose(null));
-    const first = (await (await settleDebug(jobId)).json()) as Debugged;
-    await settleDebug(jobId);
-
-    const { reply } = await reloaded(jobId);
-    expect(reply.debugLanding).toEqual(first.landing);
-  });
-
-  it('an ordinary answered ask carries neither — it renders exactly as before', async () => {
-    const askRes = await ask(post('/api/ai/ask', { body: 'What is in the sprint?' }));
-    const { jobId } = (await askRes.json()) as { jobId: string };
-    jobs.set(jobId, {
-      status: 'succeeded',
-      result: { ask: { intent: 'ask', answer: 'Two cards.', citations: [] } },
-    });
-    expect((await settle(post('/api/ai/ask/settle', { jobId }))).status).toBe(200);
-
-    const { user, reply } = await reloaded(jobId);
-    expect(user.anchorKey).toBeNull();
-    expect(user.debugLanding).toBeNull();
-    expect(reply.body).toBe('Two cards.');
-    expect(reply.anchorKey).toBeNull();
-    expect(reply.debugLanding).toBeNull();
+describe('the confirm reads no code and calls no model', () => {
+  it('submits no job and reads no job', T, async () => {
+    const { sessionId, offerTurnId } = await offered(owner());
+    submitJobMock.mockClear();
+    getJobMock.mockClear();
+    expect((await press(owner(), sessionId, offerTurnId)).status).toBe(200);
+    expect(submitJobMock).not.toHaveBeenCalled();
+    expect(getJobMock).not.toHaveBeenCalled();
   });
 });

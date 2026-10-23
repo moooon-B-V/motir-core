@@ -5,11 +5,11 @@ import { DEBUG_CRITERIA_MAX, DEBUG_TITLE_MAX } from '@/lib/ai/debugBug';
 // motir-core accepts it — the mirror of motir-ai's `AskLogBugOffer`
 // (`src/envelope.ts`, MOTIR-9321).
 //
-// The posture of `debugBug.ts`, for the same reason: the offer is model output from a
+// The posture of `authoredBug.ts`, for the same reason: the offer is model output from a
 // separately deployed service, and every field of it becomes a write on somebody's
 // card once a person agrees. So this PARSES; it never casts. The draft is
 // `authoredBug`'s exact shape and goes through `parseAuthoredBug` unchanged; the
-// fields around it are bounded here the way `parseDebugBug` bounds a diagnosis. One
+// fields around it are bounded here by `debugBug.ts`'s limits. One
 // failed field refuses the WHOLE offer with `InvalidAuthoredBugError` naming it, and
 // the settle drops a refused offer while the answer still lands.
 //

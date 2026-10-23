@@ -19,6 +19,7 @@ import {
   planOfferStateOf,
   recordedRefusalOf,
   type PlanOfferCannotStart,
+  type PlanOfferRecord,
   type PlanOfferState,
   type PlanOfferTurn,
 } from '@/lib/planChange/planOffer';
@@ -57,7 +58,7 @@ export interface PlanOfferResolution {
 
 /** What an ask submit states about the live offer (`JobContextBag.pendingPlanOffer`). */
 export interface PendingPlanOfferStatement {
-  kind: 'plan';
+  kind: 'plan' | 'log_bug';
   requestText: string;
   targetKey: string | null;
   seq: number;
@@ -131,7 +132,20 @@ async function resolveTarget(
 }
 
 /** The thread's turns as the pure rule reads them, from the raw rows. */
-function offerTurns(rows: readonly PlanChangeTurn[]): PlanOfferTurn[] {
+/** The one line a pending `log_bug` offer is stated by: the write a yes makes. */
+export function logBugWriteLine(offer: PlanOfferRecord): string {
+  const target = offer.bug?.target;
+  if (target?.kind === 'anchored' && target.key) {
+    return `Add the diagnosis to ${target.key}: ${offer.requestMd}`;
+  }
+  if (target?.kind === 'existing' && target.key) {
+    return `Add a note on ${target.key}, which already covers it: ${offer.requestMd}`;
+  }
+  return `Log a new bug: ${offer.requestMd}`;
+}
+
+/** A thread's stored rows as the pure lifecycle reads them. */
+export function offerTurns(rows: readonly PlanChangeTurn[]): PlanOfferTurn[] {
   return rows.map((row) => {
     const dto = toPlanChangeTurnDto(row);
     return { id: dto.id, seq: dto.seq, role: dto.role, offer: dto.offer ?? null };
@@ -236,6 +250,9 @@ export const planOfferService = {
           throw new PlanOfferNotOpenError(turnId);
         }
         const row = rows.find((t) => t.id === turnId)!;
+        // A `log_bug` offer whose write is in flight (MOTIR-9323) is claimed before it
+        // is stamped confirmed: it can no longer be declined either.
+        if (row.debugLandingClaimedAt !== null) throw new PlanOfferNotOpenError(turnId);
         await planChangeTurnRepository.setAnswerOffer(
           row.id,
           pctx.workspaceId,
@@ -386,7 +403,18 @@ export const planOfferService = {
    */
   statingPending(turns: readonly PlanOfferTurn[]): PendingPlanOfferStatement | undefined {
     const pending = pendingPlanOfferOf(turns);
-    if (!pending || pending.offer.kind !== 'plan') return undefined;
+    if (!pending) return undefined;
+    if (pending.offer.kind === 'log_bug') {
+      // A bug offer (MOTIR-9323) is stated by the write it would make, so a typed yes
+      // agrees to that write; motir-ai reads a blank `requestText` as no offer.
+      return {
+        kind: 'log_bug',
+        requestText: logBugWriteLine(pending.offer),
+        targetKey: pending.offer.targetKey,
+        seq: pending.seq,
+      };
+    }
+    if (pending.offer.kind !== 'plan') return undefined;
     return {
       kind: 'plan',
       requestText: pending.offer.requestMd,
