@@ -1,3 +1,4 @@
+import type { Prisma } from '@/generated/prisma/client';
 import { userRepository } from '@/lib/repositories/userRepository';
 
 // The Motir SYSTEM PRINCIPAL — the service identity the AI self-learning loop
@@ -54,10 +55,15 @@ export function metaProjectKey(): string {
 const knownSystemUserIds = new Set<string>();
 
 /** Whether `userId` is the Motir system account. One primary-key read on a
- *  non-member branch; free after the first positive answer. */
-export async function isMotirSystemUser(userId: string): Promise<boolean> {
+ *  non-member branch; free after the first positive answer. A caller holding a
+ *  transaction passes it: a second pooled connection taken while one is held
+ *  starves the pool under parallel reads (every non-member page read asks). */
+export async function isMotirSystemUser(
+  userId: string,
+  tx?: Prisma.TransactionClient,
+): Promise<boolean> {
   if (knownSystemUserIds.has(userId)) return true;
-  const user = await userRepository.findById(userId);
+  const user = await userRepository.findById(userId, tx);
   if (user?.email !== MOTIR_SYSTEM_USER_EMAIL) return false;
   knownSystemUserIds.add(userId);
   return true;

@@ -129,7 +129,7 @@ export async function composeOwnerReach(
   // THE MOTIR SYSTEM ACCOUNT (MOTIR-9329) holds no membership anywhere and enters
   // every workspace as a Manager, by identity — asked only on the non-member branch,
   // so a member never pays the read.
-  if (stored === null && (await isMotirSystemUser(userId))) return 'manager';
+  if (stored === null && (await isMotirSystemUser(userId, tx))) return 'manager';
   const reachesAsManager = await organizationMembershipRepository.isOrgManagerOfWorkspaceOrg(
     userId,
     workspaceId,

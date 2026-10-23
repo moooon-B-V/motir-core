@@ -508,7 +508,7 @@ async function assertReporterMember(
   // The Motir system account reports into any workspace by identity, with no
   // membership row (MOTIR-9329). Called with the ACTOR only, so it never lets a
   // person attribute their write to Motir.
-  if (!m && !(await isMotirSystemUser(userId))) throw new ReporterNotInWorkspaceError();
+  if (!m && !(await isMotirSystemUser(userId, tx))) throw new ReporterNotInWorkspaceError();
 }
 
 async function assertAssigneeMember(
