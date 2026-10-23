@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { Modal } from '@/components/ui/Modal';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { PlanningWorkspaceHost } from '@/components/planning/PlanningWorkspaceHost';
+import { PlanHistoryProvider } from '@/components/planning/PlanHistorySection';
 import { PlanningWorkspaceSkeleton } from '@/components/planning/PlanningWorkspaceSkeleton';
 import { PlanningReadingState } from '@/components/planning/PlanningReadingState';
 import { PlanningHandOff } from '@/components/planning/PlanningHandOff';
@@ -384,6 +385,8 @@ export function PlanningWorkspaceOverlay({
    * scroll position and the client islands this story exists to preserve
    * (`CLAUDE.md` § *URL state the CLIENT reads is written with `shallowPush`*).
    */
+  // A History open the close guard held (MOTIR-9308) — see `openSession`.
+  const pendingSwitchRef = useRef<PlanningLaunchContext | null>(null);
   const requestClose = useCallback(() => {
     // ⚠️ THE HOST MAY VETO (MOTIR-4731). It writes a predicate into this ref: a
     // `false` means it has raised the close-with-pending guard and the workspace
@@ -391,8 +394,42 @@ export function PlanningWorkspaceOverlay({
     // once per close attempt and there is no vector it can miss.
     if (closeGuardRef.current && !closeGuardRef.current()) return;
     setHeldLaunch(null);
-    shallowPush(withoutPlanningOverlay(currentHref));
+    // A HISTORY OPEN the guard held (MOTIR-9308): the guard's own answer closes
+    // through here, and what was asked for was the other conversation, not a close.
+    const switchTo = pendingSwitchRef.current;
+    pendingSwitchRef.current = null;
+    shallowPush(
+      switchTo ? withPlanningOverlay(currentHref, switchTo) : withoutPlanningOverlay(currentHref),
+    );
   }, [currentHref]);
+
+  /**
+   * OPEN A PAST CONVERSATION from the rail's History (Story MOTIR-9218 · MOTIR-9308)
+   * — the shipped named reopen, `planSession=<id>`, written the way Close writes:
+   * one `shallowPush`, so the overlay stays mounted and Back returns to the
+   * conversation it came from. An anchored session opens on its first key (the two
+   * origins that carry `planSession` are `work-item` and `project`), and no
+   * `planVia` is written: the reopened line's default.
+   *
+   * It leaves the conversation on screen, so it asks the SAME guard a close asks.
+   * A veto parks the switch; the guard's Discard or Confirm then completes it
+   * through `requestClose`, and Keep planning drops it.
+   */
+  const openSession = useCallback(
+    (sessionId: string, targetKeys: readonly string[]) => {
+      const itemKey = targetKeys[0];
+      const target: PlanningLaunchContext = itemKey
+        ? { kind: 'work-item', itemKey, sessionId }
+        : { kind: 'project', sessionId };
+      if (closeGuardRef.current && !closeGuardRef.current()) {
+        pendingSwitchRef.current = target;
+        return;
+      }
+      pendingSwitchRef.current = null;
+      shallowPush(withPlanningOverlay(currentHref, target));
+    },
+    [currentHref],
+  );
 
   // ⚠️ THE POP HOLD. `popstate` fires AFTER the browser has already navigated,
   // so this reads the address as it now stands: if the overlay has left it and
@@ -423,6 +460,8 @@ export function PlanningWorkspaceOverlay({
    * so Back means what it says again, and release the hold.
    */
   const keepPlanningAfterBack = useCallback(() => {
+    // *Keep planning* also answers a guard a History open raised: nothing switches.
+    pendingSwitchRef.current = null;
     const held = heldLaunch;
     if (!held) return;
     setHeldLaunch(null);
@@ -694,141 +733,145 @@ export function PlanningWorkspaceOverlay({
       : null;
 
   return (
-    <Modal
-      open
-      onOpenChange={(next) => {
-        // Escape and the scrim both arrive here. Radix has not closed anything
-        // yet — the dialog is controlled — so this IS the interception point.
-        if (!next) requestClose();
-      }}
-      size="full"
-      srTitle={t('canvasAria', { project: projectName })}
-      // At full size the dialog IS the surface, so the panel chrome comes off —
-      // the run modal's line, and the design's measured decision: edge to edge,
-      // 0px radius, 0px border.
-      className="flex flex-col rounded-none border-0 p-0"
-      // The workspace carries its own Close, top-left. See the header note.
-      hideClose
-    >
-      {/* modal-scroll-container: measured 1280x700, tallest = the HOST with a full conversation in the rail and a drilled canvas; the full-size panel IS the viewport and the canvas, the rail and the host's exit bar each own their scroll (min-h-0 flex-1 overflow-auto), panel 700px */}
-      {gate === 'no-access' ? (
-        // The run modal's `missing` shape: say so, and get out of the way. Never
-        // a 404 — there is no route to 404, and the page underneath is still
-        // perfectly usable.
-        <div className="flex flex-1 items-center justify-center p-(--spacing-card-padding)">
-          <NoAccessState
-            title={ta('noAccessTitle')}
-            description={ta('noAccessDescription')}
-            backHref="/dashboard"
-            backLabel={ta('backToProjects')}
+    // History's expanded flag and rows outlive a host remount (MOTIR-9308).
+    <PlanHistoryProvider>
+      <Modal
+        open
+        onOpenChange={(next) => {
+          // Escape and the scrim both arrive here. Radix has not closed anything
+          // yet — the dialog is controlled — so this IS the interception point.
+          if (!next) requestClose();
+        }}
+        size="full"
+        srTitle={t('canvasAria', { project: projectName })}
+        // At full size the dialog IS the surface, so the panel chrome comes off —
+        // the run modal's line, and the design's measured decision: edge to edge,
+        // 0px radius, 0px border.
+        className="flex flex-col rounded-none border-0 p-0"
+        // The workspace carries its own Close, top-left. See the header note.
+        hideClose
+      >
+        {/* modal-scroll-container: measured 1280x700, tallest = the HOST with a full conversation in the rail and a drilled canvas; the full-size panel IS the viewport and the canvas, the rail and the host's exit bar each own their scroll (min-h-0 flex-1 overflow-auto), panel 700px */}
+        {gate === 'no-access' ? (
+          // The run modal's `missing` shape: say so, and get out of the way. Never
+          // a 404 — there is no route to 404, and the page underneath is still
+          // perfectly usable.
+          <div className="flex flex-1 items-center justify-center p-(--spacing-card-padding)">
+            <NoAccessState
+              title={ta('noAccessTitle')}
+              description={ta('noAccessDescription')}
+              backHref="/dashboard"
+              backLabel={ta('backToProjects')}
+            />
+          </div>
+        ) : substrate !== null && waiting ? (
+          // THE WAIT (MOTIR-4829) — the repository is connected and its code graph
+          // is being built. TWO ELEMENTS, and they are not the same sentence twice
+          // (Yue: *"with the banner and say it"*): the BANNER carries the durable
+          // state, the TURN carries the planner's own reason. This branch sits
+          // BEFORE the hand-off's, because `wait_for_index` has no destination and
+          // `handoffDestination` refuses it outright rather than defaulting.
+          <PlanningIndexingWait
+            repositories={substrate.repositories.filter((r) => !r.indexed).map((r) => r.ref)}
+            message={waitVerdict?.message ?? ''}
+            phase={waitPhase}
+            // ⚠️ RE-ENQUEUE BY RE-ASKING. The routing dispatch is what triggers a
+            // first index (MOTIR-4826), so *Try again* is the same call this
+            // window already makes — no second door, and no client-side opinion
+            // about whether an index is warranted.
+            onRetry={() => {
+              setWaitPhase('queued');
+              routingAskedRef.current = false;
+              setRouted(null);
+              setRoutingAttempt((n) => n + 1);
+            }}
+            // ⚠️ PLAN ANYWAY OPENS THE WORKSPACE, and that is the honest meaning of
+            // the button: the person has said they would rather plan without the
+            // code than keep waiting. The session is an ordinary one from here.
+            onPlanAnyway={() => {
+              setWaitCleared(true);
+              setRouted('clear');
+            }}
           />
-        </div>
-      ) : substrate !== null && waiting ? (
-        // THE WAIT (MOTIR-4829) — the repository is connected and its code graph
-        // is being built. TWO ELEMENTS, and they are not the same sentence twice
-        // (Yue: *"with the banner and say it"*): the BANNER carries the durable
-        // state, the TURN carries the planner's own reason. This branch sits
-        // BEFORE the hand-off's, because `wait_for_index` has no destination and
-        // `handoffDestination` refuses it outright rather than defaulting.
-        <PlanningIndexingWait
-          repositories={substrate.repositories.filter((r) => !r.indexed).map((r) => r.ref)}
-          message={waitVerdict?.message ?? ''}
-          phase={waitPhase}
-          // ⚠️ RE-ENQUEUE BY RE-ASKING. The routing dispatch is what triggers a
-          // first index (MOTIR-4826), so *Try again* is the same call this
-          // window already makes — no second door, and no client-side opinion
-          // about whether an index is warranted.
-          onRetry={() => {
-            setWaitPhase('queued');
-            routingAskedRef.current = false;
-            setRouted(null);
-            setRoutingAttempt((n) => n + 1);
-          }}
-          // ⚠️ PLAN ANYWAY OPENS THE WORKSPACE, and that is the honest meaning of
-          // the button: the person has said they would rather plan without the
-          // code than keep waiting. The session is an ordinary one from here.
-          onPlanAnyway={() => {
-            setWaitCleared(true);
-            setRouted('clear');
-          }}
-        />
-      ) : substrate !== null && routed !== 'clear' && routed !== null ? (
-        // THE HAND-OFF (MOTIR-4769) — SHOWN before the move happens, never a
-        // silent redirect out from under somebody who pressed *Plan with AI*.
-        <PlanningHandOff
-          verdict={routed}
-          sources={readSources}
-          onGo={() => router.push(handoffDestination(routed, launchContext(launch)))}
-          onDismiss={requestClose}
-        />
-      ) : substrate !== null && routed === null && !justReturned ? (
-        // ⚠️ BEFORE THE ANCHOR READ, DELIBERATELY (MOTIR-4768). A never-onboarded
-        // project has no plan to anchor to and nothing on the canvas to scope,
-        // so waiting on `fetchPlanningAnchor` to draw the reading state would
-        // put a skeleton in front of the one moment the user most needs a
-        // sentence. What Motir is reading does not depend on which card the
-        // reader launched from.
-        //
-        // It comes down when the verdict lands, above: either the user is being
-        // moved, or `routed === 'clear'` and this is an ordinary workspace.
-        <PlanningReadingState substrate={substrate} />
-      ) : waitingForSeed || waitingForAnchor ? (
-        <PlanningWorkspaceSkeleton />
-      ) : (
-        <PlanningWorkspaceHost
-          // A DIFFERENT ANCHOR IS A DIFFERENT WORKSPACE — so remount on it. The
-          // host seeds three things from its props ONCE, in `useState`
-          // initializers: the canvas's arrival level, the pre-filled
-          // `@`-mention target set, and the conversation the anchor scopes.
+        ) : substrate !== null && routed !== 'clear' && routed !== null ? (
+          // THE HAND-OFF (MOTIR-4769) — SHOWN before the move happens, never a
+          // silent redirect out from under somebody who pressed *Plan with AI*.
+          <PlanningHandOff
+            verdict={routed}
+            sources={readSources}
+            onGo={() => router.push(handoffDestination(routed, launchContext(launch)))}
+            onDismiss={requestClose}
+          />
+        ) : substrate !== null && routed === null && !justReturned ? (
+          // ⚠️ BEFORE THE ANCHOR READ, DELIBERATELY (MOTIR-4768). A never-onboarded
+          // project has no plan to anchor to and nothing on the canvas to scope,
+          // so waiting on `fetchPlanningAnchor` to draw the reading state would
+          // put a skeleton in front of the one moment the user most needs a
+          // sentence. What Motir is reading does not depend on which card the
+          // reader launched from.
           //
-          // Keyed on the anchor ALONE, deliberately: the seeds derive from
-          // nothing else, so an approve's `router.refresh()` — same anchor —
-          // must NOT remount and throw away the conversation and the canvas's
-          // drill state. The workspace contains a door back into itself (the
-          // canvas's own quick-view carries the per-item Plan / Re-plan
-          // entrance), so a re-target is a same-address change that React would
-          // otherwise reconcile in place, leaving the chrome saying one item
-          // while the canvas sat on the level it happened to be on.
-          // A GUIDE on a card is a different room from planning on it
-          // (MOTIR-7466), so the mode joins the key there and only there.
-          key={`${workspaceLaunch?.mode === 'guide' ? 'guide:' : ''}${anchorKey ?? 'project'}`}
-          projectKey={projectKey}
-          projectName={projectName}
-          launch={workspaceLaunch ?? launch}
-          anchorId={settled?.target?.id ?? null}
-          onClose={requestClose}
-          closeGuardRef={closeGuardRef}
-          onKeepPlanningAfterBack={keepPlanningAfterBack}
-          // Named by the permission its own server gate asserts, not by a rank:
-          // `auditCoverageService.getCoverage` asserts `ai:configure`, so that is
-          // what decides whether the banner is an invitation or a 403.
-          canManage={can('ai:configure')}
-          initialTarget={settled?.target ?? null}
-          {...(justReturned ? { justReturnedFromOnboarding: true } : {})}
-          {...(seededDraft
-            ? { initialDraft: seededDraft.firstTurn, seedGateId: seededDraft.gateId }
-            : {})}
-          {...(seededSend
-            ? { autoSendTurn: seededSend.firstTurn, seedGateId: seededSend.gateId }
-            : {})}
-          {...(startSend ? { autoSendTurn: startSend.turn, autoSendKey: startSend.key } : {})}
-          {...(guideSend
-            ? {
-                autoSendTurn: guideSend.firstTurn,
-                autoSendKey: `${GUIDE_AUTO_SEND_PREFIX}${guideSend.offerId}`,
-                seedGuideTurnId: guideSend.offerId,
-                guideOrigin: guideSend.guide,
-                extraInitialTargets: guideSend.extraTargets,
-                onGuideOfferConfirmed: reopenConfirmedOffer,
-              }
-            : {})}
-          {...(guideResume ? { guideOrigin: guideResume.guide } : {})}
-          {...(followUp ? { followUp } : {})}
-          {...(resumedSeed || guideResume ? { sessionIsResume: true } : {})}
-          initialCanvasTrail={settled?.trail}
-        />
-      )}
-    </Modal>
+          // It comes down when the verdict lands, above: either the user is being
+          // moved, or `routed === 'clear'` and this is an ordinary workspace.
+          <PlanningReadingState substrate={substrate} />
+        ) : waitingForSeed || waitingForAnchor ? (
+          <PlanningWorkspaceSkeleton />
+        ) : (
+          <PlanningWorkspaceHost
+            // A DIFFERENT ANCHOR IS A DIFFERENT WORKSPACE — so remount on it. The
+            // host seeds three things from its props ONCE, in `useState`
+            // initializers: the canvas's arrival level, the pre-filled
+            // `@`-mention target set, and the conversation the anchor scopes.
+            //
+            // Keyed on the anchor ALONE, deliberately: the seeds derive from
+            // nothing else, so an approve's `router.refresh()` — same anchor —
+            // must NOT remount and throw away the conversation and the canvas's
+            // drill state. The workspace contains a door back into itself (the
+            // canvas's own quick-view carries the per-item Plan / Re-plan
+            // entrance), so a re-target is a same-address change that React would
+            // otherwise reconcile in place, leaving the chrome saying one item
+            // while the canvas sat on the level it happened to be on.
+            // A GUIDE on a card is a different room from planning on it
+            // (MOTIR-7466), so the mode joins the key there and only there.
+            key={`${workspaceLaunch?.mode === 'guide' ? 'guide:' : ''}${anchorKey ?? 'project'}`}
+            projectKey={projectKey}
+            projectName={projectName}
+            launch={workspaceLaunch ?? launch}
+            anchorId={settled?.target?.id ?? null}
+            onClose={requestClose}
+            closeGuardRef={closeGuardRef}
+            onOpenSession={openSession}
+            onKeepPlanningAfterBack={keepPlanningAfterBack}
+            // Named by the permission its own server gate asserts, not by a rank:
+            // `auditCoverageService.getCoverage` asserts `ai:configure`, so that is
+            // what decides whether the banner is an invitation or a 403.
+            canManage={can('ai:configure')}
+            initialTarget={settled?.target ?? null}
+            {...(justReturned ? { justReturnedFromOnboarding: true } : {})}
+            {...(seededDraft
+              ? { initialDraft: seededDraft.firstTurn, seedGateId: seededDraft.gateId }
+              : {})}
+            {...(seededSend
+              ? { autoSendTurn: seededSend.firstTurn, seedGateId: seededSend.gateId }
+              : {})}
+            {...(startSend ? { autoSendTurn: startSend.turn, autoSendKey: startSend.key } : {})}
+            {...(guideSend
+              ? {
+                  autoSendTurn: guideSend.firstTurn,
+                  autoSendKey: `${GUIDE_AUTO_SEND_PREFIX}${guideSend.offerId}`,
+                  seedGuideTurnId: guideSend.offerId,
+                  guideOrigin: guideSend.guide,
+                  extraInitialTargets: guideSend.extraTargets,
+                  onGuideOfferConfirmed: reopenConfirmedOffer,
+                }
+              : {})}
+            {...(guideResume ? { guideOrigin: guideResume.guide } : {})}
+            {...(followUp ? { followUp } : {})}
+            {...(resumedSeed || guideResume ? { sessionIsResume: true } : {})}
+            initialCanvasTrail={settled?.trail}
+          />
+        )}
+      </Modal>
+    </PlanHistoryProvider>
   );
 }
 

@@ -119,6 +119,7 @@ import {
 } from '@/components/planning/SessionWaitingParts';
 import { workbenchTabHref } from '@/lib/workbench/tab';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
+import { PlanHistorySection } from '@/components/planning/PlanHistorySection';
 
 // The planning workspace's CHAT RAIL on an established project (Subtask
 // MOTIR-1730; design `plan-change-conversation.mock.html` panels 3 + 6). Changing
@@ -348,6 +349,14 @@ export interface PlanChangeRailProps {
   /** "N earlier notes" (MOTIR-8064): page earlier narration sentences in. */
   onShowEarlierNarration?: () => void;
   /**
+   * OPEN one of the viewer's past conversations from the History section (Story
+   * MOTIR-9218 · MOTIR-9307 / MOTIR-9308; design MOTIR-9305), with its anchor set.
+   * Optional: a host that offers no History draws no section. A Visitor never gets
+   * one, whatever the host passes. The row of the conversation already shown opens
+   * nothing.
+   */
+  onOpenSession?: (sessionId: string, targetKeys: readonly string[]) => void;
+  /**
    * THE PLAN OFFER's two answers (Story MOTIR-9219 · MOTIR-9294), each with the
    * offer's turn id. Optional: a host that offers neither draws the offer as a
    * record with no controls.
@@ -401,12 +410,14 @@ export function PlanChangeRail({
   onSelectProposal,
   onAnswerRunPause,
   onShowEarlierNarration,
+  onOpenSession,
   onConfirmPlanOffer,
   onDeclinePlanOffer,
   offerAnsweringTurnId = null,
   offerRefusal = null,
 }: PlanChangeRailProps) {
   const t = useTranslations('planningWorkspace');
+  const readerRoutes = useReaderRoutes();
   const tp = useTranslations('approvalGate.planApproval');
   const tRefusal = useTranslations('approvalGate.refusal.alreadyDecided');
   // An ASKED plan (MOTIR-6037): its gate is awaiting, so the review block is the gate's
@@ -639,12 +650,13 @@ export function PlanChangeRail({
   // THE ENDED SESSION (AMENDMENT 23 §1): read from the server's row, so a reload
   // draws the same end. It accepts no turn — the composer slot says so instead.
   const ended = Boolean(state.session?.endedAt);
-  // The plan offer's MID-PLANNING variant (MOTIR-9294): a PLANNING run in flight, or
-  // a plan still waiting for its decision. An ask streaming carries no plan id, and
-  // plans nothing.
+  // The plan offer's MID-PLANNING variant (MOTIR-9294): a PLANNING run in flight, a
+  // plan still being written (a reopened one is the live review), or a plan still
+  // waiting for its decision. An ask streaming carries no plan id, and plans nothing.
   const offerMidPlanning = alreadyPlanning({
     phase: state.planId ? state.phase : 'idle',
     hasUndecidedPlan: Boolean(state.review) && !state.decided,
+    writingPlan: Boolean(state.liveReview),
   });
   // A FAILED HOSTED ATTEMPT WAITS TO BE RESUMED (Story MOTIR-7905 · MOTIR-7918): the session
   // is OPEN, so there is no end marker, no *Start a new session* and no Try again — the
@@ -948,6 +960,18 @@ export function PlanChangeRail({
           />
         ) : null}
       </div>
+
+      {/* HISTORY (MOTIR-9307; design MOTIR-9305 panel 1): the viewer's own past
+          conversations, collapsed, between the head and the thread. A member's
+          alone — a Visitor's reader routes carry the project identifier. */}
+      {onOpenSession && readerRoutes.identifier === null ? (
+        <PlanHistorySection
+          currentSessionId={state.session?.id ?? null}
+          onOpenSession={(sessionId, targetKeys) => {
+            if (sessionId !== state.session?.id) onOpenSession(sessionId, targetKeys);
+          }}
+        />
+      ) : null}
 
       <div
         ref={logRef}

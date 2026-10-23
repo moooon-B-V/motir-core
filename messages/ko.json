@@ -8496,6 +8496,21 @@
       "following": "계획 도구를 따라가는 중",
       "resume": "계획 도구 따라가기",
       "resumedAnnouncement": "계획 도구를 다시 따라가는 중"
+    },
+    "history": {
+      "header": "기록",
+      "regionAria": "이 프로젝트에서 내가 나눈 지난 대화",
+      "status": {
+        "open": "진행 중",
+        "ended": "종료됨"
+      },
+      "loading": "대화를 불러오는 중…",
+      "loadingMore": "더 불러오는 중…",
+      "end": "이전 대화가 없습니다",
+      "emptyTitle": "아직 대화가 없습니다",
+      "emptyBody": "이 프로젝트에서 한 질문과 시작한 계획이 여기에 표시됩니다.",
+      "error": "대화를 불러올 수 없습니다.",
+      "rowAria": "{title} · {status} · {when} 활동"
     }
   },
   "codeHealth": {

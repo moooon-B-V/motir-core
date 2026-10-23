@@ -1010,9 +1010,12 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     { specs: 3, legs: 3 },
     { specs: 4, legs: 4 },
     { specs: 6, legs: 6 },
-    { specs: 9, legs: 6 },
-    { specs: 26, legs: 6 },
-    { specs: 87, legs: 6 },
+    { specs: 9, legs: 9 },
+    { specs: 10, legs: 10 },
+    { specs: 11, legs: 10 },
+    { specs: 26, legs: 10 },
+    { specs: 87, legs: 10 },
+    { specs: 156, legs: 10 },
   ])('sizes a $specs-spec lane to $legs leg(s)', ({ specs, legs }) => {
     const out = runGate(specs, 'pull_request');
     expect(out.count).toBe(String(specs));
@@ -1023,18 +1026,20 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     expect(JSON.parse(out.shards!)).toEqual(Array.from({ length: legs }, (_, i) => i + 1));
   });
 
-  it('gives a grown lane the full six legs at the cap (MOTIR-7054)', () => {
+  it('gives a grown lane the full ten legs at the cap (MOTIR-7054 · MOTIR-9352)', () => {
     // THE regression this cap exists to prevent: a lane that fills up must get
     // its full parallelism back, not a serial run. MOTIR-2600 sized four legs
     // for 26 specs. At 87 specs those four ran into the shard job's then 40-minute
     // timeout, and a green leg was cancelled out of the merge queue, so the cap
-    // is six.
-    expect(runGate(87, 'pull_request').shards).toBe('[1,2,3,4,5,6]');
+    // became six. At 156 specs the sixth of six legs ran 51 min of tests and was
+    // cancelled at the 55-minute timeout, so the cap is ten.
+    expect(runGate(156, 'pull_request').shards).toBe('[1,2,3,4,5,6,7,8,9,10]');
+    expect(runGate(10, 'push').shards).toBe('[1,2,3,4,5,6,7,8,9,10]');
     expect(runGate(6, 'push').shards).toBe('[1,2,3,4,5,6]');
     expect(runGate(4, 'push').shards).toBe('[1,2,3,4]');
   });
 
-  it.each([1, 2, 4, 6])(
+  it.each([1, 2, 4, 6, 10])(
     'emits a valid %i-leg shard list under BSD `seq` too — no trailing separator (MOTIR-5364)',
     (legs) => {
       // The gate used `seq -s,`, which on macOS prints `1,` — so the list was

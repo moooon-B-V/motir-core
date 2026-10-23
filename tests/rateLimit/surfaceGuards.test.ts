@@ -921,6 +921,9 @@ describe('the routes are actually WIRED to the guards', () => {
     // is a mailbox turn on a job already running — no model job (MOTIR-8007).
     'app/api/ai/plan-change/session/run-pause/route.ts',
     'app/api/ai/plan-change/session/turns/route.ts',
+    // The overlay's History (MOTIR-9306): a page of the caller's own sessions —
+    // a database read, no model job.
+    'app/api/ai/plan-change/sessions/history/route.ts',
     'app/api/ai/plan/generate/[jobId]/stream/route.ts',
     'app/api/ai/plan/sprint/[jobId]/review/route.ts',
     'app/api/ai/plan/sprint/[jobId]/stream/route.ts',
