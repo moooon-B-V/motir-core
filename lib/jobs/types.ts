@@ -427,6 +427,38 @@ export interface HostedRunSuperviseData {
 }
 
 /**
+ * The `hosted-run/admit` event payload (Story MOTIR-9363 · MOTIR-9381) — one per
+ * hosted run that was held at admission for a reason that clears by itself (its
+ * org at its plan's agent-run figure, or its plan unreadable). Each pass of the
+ * job asks for a fleet slot once and, when admitted, boots the run.
+ *
+ * ⚠️ IT CARRIES NO SECRET, for {@link HostedRunSuperviseData}'s reason: it is a
+ * `job_queue` row. It holds only the NON-SECRET inputs the boot is rebuilt from;
+ * the run key and the run credential are minted at admission, inside the pass
+ * that boots, and only ever reach the container's env.
+ */
+export interface HostedRunAdmitData {
+  workspaceId: string;
+  /** The run — `DispatchRun.id`. */
+  dispatchRunId: string;
+  /** Who started it: the run credential is minted for them. */
+  dispatcherUserId: string;
+  organizationId: string;
+  projectId: string;
+  /** The card (or parent) the container runs `motir run` on. */
+  identifier: string;
+  repoFullName: string;
+  /** The BARE gateway model id the run key is minted for. */
+  model: string;
+  /** The same model as OpenCode spells it (`MOTIR_MODEL`). */
+  openCodeModel: string;
+  /** The mode-specific, non-secret launcher inputs (`MOTIR_RUN_MODE`, …). */
+  extraEnv: Record<string, string>;
+  /** `hosted-run-admit:<dispatchRunId>` — one admission job per run. */
+  idempotencyKey: string;
+}
+
+/**
  * The `agent-instance-run/launch` payload (Story MOTIR-6864 · MOTIR-7026,
  * `docs/decisions/agent-instance-run.md` §4) — one per run started in a
  * developer's agent, emitted by the start once the run is open and its cards
@@ -640,6 +672,8 @@ export interface JobEventDataMap {
   'account/data-export.requested': DataExportRequestedData;
   /** A booted hosted run's supervision (Story MOTIR-683 · MOTIR-690). */
   'hosted-run/supervise': HostedRunSuperviseData;
+  /** A held hosted run's admission, retried until it boots (Story MOTIR-9363 · MOTIR-9381). */
+  'hosted-run/admit': HostedRunAdmitData;
   /** One agent instance's idle timer (Story MOTIR-6860 · MOTIR-6873). */
   'agent-instance/idle-check': AgentInstanceIdleCheckData;
   /** One boot attempt of an agent, driven step by step (Story MOTIR-7393 · MOTIR-7398). */
