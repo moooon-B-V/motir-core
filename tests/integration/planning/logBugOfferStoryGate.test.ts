@@ -49,7 +49,8 @@ const { aiAskService } = await import('@/lib/services/aiAskService');
 const { planChangeSessionsService } = await import('@/lib/services/planChangeSessionsService');
 const { planOfferService, bugLoggingAvailable } = await import('@/lib/services/planOfferService');
 const { planOfferStartService } = await import('@/lib/services/planOfferStartService');
-const { DEBUG_DIAGNOSIS_DIVIDER } = await import('@/lib/services/debugLandingService');
+const { DEBUG_DIAGNOSIS_DIVIDER, debugLandingService } =
+  await import('@/lib/services/debugLandingService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { triageService } = await import('@/lib/services/triageService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
@@ -57,6 +58,13 @@ const { projectsService } = await import('@/lib/services/projectsService');
 const { seedSystemPrincipal } = await import('@/scripts/plan-seed/systemPrincipal');
 const { mapPlanChangeError } = await import('@/app/api/ai/plan-change/_errors');
 const { MotirAiOutOfCreditsError } = await import('@/lib/ai/errors');
+const {
+  DebugAnchorNotTriageBugError,
+  DebugTargetChangedError,
+  DebugTargetNotAvailableError,
+  PlanOfferStartRefusedError,
+} = await import('@/lib/planChange/errors');
+const { PermissionDeniedError } = await import('@/lib/projects/errors');
 
 const T = { timeout: 120_000 };
 
@@ -546,6 +554,62 @@ describe('a target that changed is refused, untouched, and the claim released', 
     expect(res.body).toMatchObject({ code: 'DEBUG_ANCHOR_NOT_TRIAGE_BUG' });
     expect(await writes()).toEqual(before);
     expect(await claimOf(setup.offerTurnId)).toBeNull();
+  });
+
+  it(
+    'a typed yes to a stale target: refused, the answer still lands, nothing written',
+    T,
+    async () => {
+      const setup = await offeredShape(owner(), 'anchored');
+      await workItemsService.updateWorkItem(
+        setup.anchor!.id,
+        { descriptionMd: 'Edited by the reporter.' },
+        fx.ctx,
+      );
+      const before = await writes();
+
+      const { answer } = await typedYes(owner(), setup.sessionId, setup.seq);
+      expect(answer.body).toBe('Done — I logged it.');
+      expect(await writes()).toEqual(before);
+      expect(await claimOf(setup.offerTurnId)).toBeNull();
+      // Still confirmable on the rail: the refusal left the offer as it found it.
+      const offer = await offerTurn(owner(), setup.sessionId, setup.offerTurnId);
+      expect(offer.debugLanding ?? null).toBeNull();
+    },
+  );
+
+  // Every refusal the landing can raise is swallowed on the typed-yes path, so the
+  // answer always lands; anything else is a real failure and reaches the settle.
+  it.each([
+    ['target changed', () => new DebugTargetChangedError('MOTIR-1')],
+    ['target not available', () => new DebugTargetNotAvailableError()],
+    ['anchor not a triage bug', () => new DebugAnchorNotTriageBugError('MOTIR-1')],
+    ['offer not open', () => new PlanOfferStartRefusedError('offer_not_open')],
+    ['permission denied', () => new PermissionDeniedError(fx.projectId, 'ai:plan')],
+  ])('a typed yes the landing refuses (%s): the answer lands', T, async (_label, refusal) => {
+    const setup = await offeredShape(owner(), 'new');
+    const spy = vi
+      .spyOn(debugLandingService, 'confirmLogBugOffer')
+      .mockRejectedValueOnce(refusal());
+    try {
+      const { answer } = await typedYes(owner(), setup.sessionId, setup.seq);
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(answer.body).toBe('Done — I logged it.');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('a typed yes whose landing fails for any other reason fails the settle', T, async () => {
+    const setup = await offeredShape(owner(), 'new');
+    const spy = vi
+      .spyOn(debugLandingService, 'confirmLogBugOffer')
+      .mockRejectedValueOnce(new Error('database down'));
+    try {
+      await expect(typedYes(owner(), setup.sessionId, setup.seq)).rejects.toThrow('database down');
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
