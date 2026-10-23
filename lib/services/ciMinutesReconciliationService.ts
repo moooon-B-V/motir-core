@@ -7,6 +7,7 @@ import {
   type RepoContainerTotal,
 } from '@/lib/repositories/ciContainerUsageRepository';
 import { periodEndFor } from '@/lib/ciMetering/period';
+import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
 import { MOTIR_FLEET_RUNNER_FAMILY } from '@/lib/ciMetering/runnerRates';
 import {
   billingUsageToken,
@@ -65,6 +66,13 @@ import {
 // first fleet job onward.
 
 const PROVIDER: GitProviderId = 'github';
+
+/** The provisioning org alone — what GitHub's billing report and its one
+ *  org-billing credential cover. Empty when none is configured. */
+function fallbackOrgs(): string[] {
+  const org = provisioningOrgLogin();
+  return org ? [org] : [];
+}
 
 /** One repository's meter-vs-report comparison for a period. */
 export interface RepoReconciliation {
@@ -314,33 +322,47 @@ export const ciMinutesReconciliationService = {
    * the compute — the one read both halves of the audit are derived from, so
    * they can never disagree about which minutes belong to which population.
    */
-  async hostingSplitForMonth(periodStart: Date) {
-    const org = provisioningOrgLogin();
-    if (!org) return [];
-    return withSystemContext((tx) =>
-      ciWorkflowRunUsageRepository.sumByRunnerHostingForOwnerPeriod(
-        org,
-        periodStart,
-        periodEndFor(periodStart),
-        MOTIR_FLEET_RUNNER_FAMILY,
-        tx,
-      ),
-    );
+  async hostingSplitForMonth(periodStart: Date, owners?: readonly string[]) {
+    const orgs = owners ?? fallbackOrgs();
+    const perOrg = await withSystemContext(async (tx) => {
+      const out = [];
+      for (const org of orgs) {
+        out.push(
+          await ciWorkflowRunUsageRepository.sumByRunnerHostingForOwnerPeriod(
+            org,
+            periodStart,
+            periodEndFor(periodStart),
+            MOTIR_FLEET_RUNNER_FAMILY,
+            tx,
+          ),
+        );
+      }
+      return out;
+    });
+    return perOrg.flat();
   },
 
   /** The orchestrator's own record for the month, per repository — the fleet
    *  audit's second source (§Q.2). Empty when metering is not configured. */
-  async containerTotalsForMonth(periodStart: Date): Promise<RepoContainerTotal[]> {
-    const org = provisioningOrgLogin();
-    if (!org) return [];
-    return withSystemContext((tx) =>
-      ciContainerUsageRepository.sumByRepoForOwnerPeriod(
-        org,
-        periodStart,
-        periodEndFor(periodStart),
-        tx,
-      ),
-    );
+  async containerTotalsForMonth(
+    periodStart: Date,
+    owners?: readonly string[],
+  ): Promise<RepoContainerTotal[]> {
+    const orgs = owners ?? fallbackOrgs();
+    return withSystemContext(async (tx) => {
+      const out: RepoContainerTotal[] = [];
+      for (const org of orgs) {
+        out.push(
+          ...(await ciContainerUsageRepository.sumByRepoForOwnerPeriod(
+            org,
+            periodStart,
+            periodEndFor(periodStart),
+            tx,
+          )),
+        );
+      }
+      return out;
+    });
   },
 
   /**
@@ -363,9 +385,12 @@ export const ciMinutesReconciliationService = {
     const org = provisioningOrgLogin();
     if (!org) return { outcome: 'skipped', reason: 'metering_disabled' };
 
+    // Every org Motir owns (MOTIR-8974): a fleet account's org runs on the same
+    // fleet, and both sides of this audit are Motir's own tables.
+    const owners = await motirOwnedOrgLogins();
     const [split, containers] = await Promise.all([
-      this.hostingSplitForMonth(periodStart),
-      this.containerTotalsForMonth(periodStart),
+      this.hostingSplitForMonth(periodStart, owners),
+      this.containerTotalsForMonth(periodStart, owners),
     ]);
     const repos = reconcileFleetTotals(split, containers);
     const discrepancies = repos.filter((row) => row.exceedsTolerance);

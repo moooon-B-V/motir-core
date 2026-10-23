@@ -9,6 +9,8 @@ import { ciMinutesMeterService } from '@/lib/services/ciMinutesMeterService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
+import { fleetShardService } from '@/lib/services/fleetShardService';
+import { resetOwnedOrgCache } from '@/lib/ciMetering/ownedOrgs';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { ciPeriodUsageRepository } from '@/lib/repositories/ciPeriodUsageRepository';
 import { ciWorkflowRunUsageRepository } from '@/lib/repositories/ciWorkflowRunUsageRepository';
@@ -973,5 +975,66 @@ describe('the webhook seam — githubWebhookService.handleWorkflowRun', () => {
     expect(
       await githubWebhookService.handleEvent('workflow_run', delivery({ installation: undefined })),
     ).toEqual({ event: 'workflow_run', outcome: 'unknown_installation' });
+  });
+});
+
+describe("a hosted repo in a fleet account's GitHub org (MOTIR-8974)", () => {
+  const SHARD_ORG = 'motir-shard-1';
+
+  beforeEach(async () => {
+    await adminDb.fleetShard.deleteMany({});
+    resetOwnedOrgCache();
+    await fleetShardService.createShard({
+      name: 'ci-runner-shard-1',
+      fleetKind: 'ci_runner',
+      provider: 'fly',
+      state: 'active',
+      githubOrg: SHARD_ORG,
+      githubInstallationId: '77001',
+      flyOrg: 'motir',
+      flyApp: 'motir-ci-shard-1',
+      flyRegion: 'iad',
+      credentialRef: 'FLEET_SHARD_TEST_TOKEN',
+      limits: { machineLimit: 50 },
+    });
+  });
+
+  afterEach(async () => {
+    await adminDb.fleetShard.deleteMany({});
+    resetOwnedOrgCache();
+  });
+
+  it('is metered and rolled into the month exactly as one in the provisioning org', async () => {
+    const fx = await seedTenant({ repoOwner: SHARD_ORG });
+    stubGithub();
+
+    const result = await ciMinutesMeterService.meterWorkflowRun(
+      runEvent({ repoOwner: SHARD_ORG }),
+      INSTALLATION_ID,
+    );
+
+    expect(result).toMatchObject({
+      outcome: 'metered',
+      organizationId: fx.organizationId,
+      billableMinutes: STARTER_BILLABLE_MINUTES,
+    });
+    const rollup = await adminDb.ciPeriodUsage.findFirstOrThrow({
+      where: { workspaceId: fx.workspaceId },
+    });
+    expect(rollup.billableMinutes).toBe(STARTER_BILLABLE_MINUTES);
+  });
+
+  it('is NOT metered once the account is disabled — the org leaves the set', async () => {
+    const [account] = await fleetShardService.listShards();
+    await fleetShardService.setState(account!.id, 'disabled');
+    resetOwnedOrgCache();
+    await seedTenant({ repoOwner: SHARD_ORG });
+    stubGithub();
+
+    const result = await ciMinutesMeterService.meterWorkflowRun(
+      runEvent({ repoOwner: SHARD_ORG }),
+      INSTALLATION_ID,
+    );
+    expect(result).toEqual({ outcome: 'not_metered', reason: 'foreign_owner' });
   });
 });

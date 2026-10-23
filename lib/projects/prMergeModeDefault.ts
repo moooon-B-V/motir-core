@@ -1,5 +1,5 @@
 import type { PrMergeMode, ProjectRepoState } from '@/generated/prisma/client';
-import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
+import { isMotirHostedOwner, type HostOwners } from '@/lib/git/hostOwnership';
 import { isSettledState } from '@/lib/projectRepos/transitions';
 
 // THE PROVENANCE DEFAULT for a project's merge mode (Story MOTIR-4880 · MOTIR-5178,
@@ -43,11 +43,11 @@ export function isEstablishedSet(rows: readonly Pick<PrMergeModeSetRow, 'state'>
  */
 export function derivePrMergeModeDefault(
   rows: readonly PrMergeModeSetRow[],
-  hostOwner: string | null,
+  hostOwners: HostOwners,
 ): PrMergeMode {
   const owners = rows
     .filter((row) => row.state !== 'skipped')
     .map((row) => row.githubRepo?.owner ?? null);
   if (owners.length === 0) return 'manual';
-  return owners.every((owner) => isMotirHostedOwner(owner, hostOwner)) ? 'auto' : 'manual';
+  return owners.every((owner) => isMotirHostedOwner(owner, hostOwners)) ? 'auto' : 'manual';
 }

@@ -50,6 +50,8 @@ afterEach(() => {
 });
 
 afterAll(async () => {
+  // No account row outlives this file: the owned-org set reads them (MOTIR-8974).
+  await adminDb.fleetShard.deleteMany({});
   await db.$disconnect();
   await adminDb.$disconnect();
 });

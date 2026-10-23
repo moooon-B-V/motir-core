@@ -9,6 +9,8 @@ import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
 import { actionsRunsClient, type ActionsRepoRef } from '@/lib/github/actionsRuns';
 import { runnerJitConfigClient } from '@/lib/github/runnerJitConfig';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
+import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
@@ -142,9 +144,10 @@ export const fleetStopService = {
    * repository handed off out of Motir's org is the user's.
    */
   async listHostedRepos(organizationId: string): Promise<ActionsRepoRef[]> {
-    const owner = provisioningOrgLogin();
-    if (!owner) return [];
-    const workspaceIds = await ciActionsGateService.listOwnedWorkspaceIds(organizationId, owner);
+    if (!provisioningOrgLogin()) return [];
+    // Every org Motir owns — a fleet account's too (MOTIR-8974).
+    const owners = await motirOwnedOrgLogins();
+    const workspaceIds = await ciActionsGateService.listOwnedWorkspaceIds(organizationId, owners);
     const repos: ActionsRepoRef[] = [];
     for (const workspaceId of workspaceIds) {
       const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
@@ -152,7 +155,7 @@ export const fleetStopService = {
       );
       for (const row of rows) {
         const repo = row.githubRepo;
-        if (!repo || repo.owner.trim().toLowerCase() !== owner.trim().toLowerCase()) continue;
+        if (!repo || !isMotirHostedOwner(repo.owner, owners)) continue;
         repos.push({ installationId: repo.installationId, owner: repo.owner, repo: repo.name });
       }
     }
