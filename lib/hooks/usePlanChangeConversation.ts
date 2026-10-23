@@ -4,7 +4,6 @@ import { GUIDE_OFFER_CLOSED } from '@/lib/planning/guideOfferClosed';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   CopyableSessionDto,
-  DebugLandingDto,
   EarlierSessionDto,
   PlanChangeRunPauseDto,
   PlanChangeSessionDto,
@@ -404,7 +403,7 @@ export interface PlanChangeConversationState {
   targetHeld?: PlanTargetHeldByDto | null;
   /**
    * The work item each ask turn SENT FROM HERE was anchored on, by user-turn id
-   * (MOTIR-7050) — the report widget's triage bug on its seeded debug turn. The
+   * (MOTIR-7050) — the report widget's triage bug on its seeded turn. The
    * rail draws it as the turn's target row. The send-time SEED only: the turn
    * DTO carries the persisted anchor (`anchorKey`, MOTIR-7064) and the rail reads
    * that first, so a reloaded thread keeps the chip; this covers a turn whose DTO
@@ -412,15 +411,6 @@ export interface PlanChangeConversationState {
    * test) needs no change.
    */
   turnAnchors?: Readonly<Record<string, string>>;
-  /**
-   * What each DEBUG turn landed, by its `debug_bug` job id (MOTIR-7049's settle,
-   * rendered by MOTIR-7050) — the one card written, or none. The assistant turn
-   * carrying the diagnosis shares that job id, so the rail finds its OUTCOME LINE
-   * here as the FALLBACK: the reply turn's DTO carries the persisted landing
-   * (`debugLanding`, MOTIR-7064), which the rail reads first and a reload keeps.
-   * Kept as the fallback for a state built without it (every rail test).
-   */
-  debugLandings?: Readonly<Record<string, DebugLandingDto>>;
   /**
    * THE PLANNER'S NARRATION (Story MOTIR-8060 · MOTIR-8064) — the stored read
    * (`PlanReviewDto.narration`) of the plan this surface last read, replaced WHOLE
@@ -568,7 +558,6 @@ const INITIAL: PlanChangeConversationState = {
   copyable: null,
   targetHeld: null,
   turnAnchors: {},
-  debugLandings: {},
   ...NO_NARRATION,
 };
 
@@ -2553,7 +2542,7 @@ export function usePlanChangeConversation({
       targets?: readonly PlanningTarget[],
       /**
        * `anchorKey` — the ONE work item a PROJECT-thread turn is about
-       * (MOTIR-7047 · MOTIR-7050): the report widget's seeded debug turn names
+       * (MOTIR-7047 · MOTIR-7050): the report widget's seeded turn names
        * the triage bug it just filed. It is data for the ask door, not a target
        * set — the turn stays on the project thread — and it is ignored on an
        * anchored (item) thread, which has no ask door.

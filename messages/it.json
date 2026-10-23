@@ -1382,7 +1382,7 @@
         },
         "debug": {
           "title": "Esegui il debug con Motir AI",
-          "description": "Risali alla causa probabile di un bug e registralo in Smistamento",
+          "description": "Risali alla causa probabile di un bug, poi registralo se sei d’accordo",
           "prefill": "Qualcosa non funziona. Cosa succede: \nCosa dovrebbe succedere invece: "
         }
       }
@@ -5907,7 +5907,7 @@
       "error": "Impossibile inviare il tuo report. Riprova.",
       "debugOffer": {
         "action": "Esegui il debug con Motir AI",
-        "hint": "<b>Esegui il debug con Motir AI</b> avvia il debug appena lo premi e consuma crediti Motir AI. Motir AI legge il codice, individua la causa probabile e verifica se un elemento di lavoro copre già questo bug."
+        "hint": "<b>Esegui il debug con Motir AI</b> invia la tua descrizione a Motir AI appena lo premi e consuma crediti Motir AI. Motir AI legge il codice, individua la causa probabile e propone di aggiungere la diagnosi a questo bug. Non viene scritto nulla finché non confermi."
       }
     }
   },

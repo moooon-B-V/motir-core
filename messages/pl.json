@@ -1382,7 +1382,7 @@
         },
         "debug": {
           "title": "Debuguj z Motir AI",
-          "description": "Prześledź błąd do jego prawdopodobnej przyczyny i dodaj go do Selekcji",
+          "description": "Prześledź błąd do jego prawdopodobnej przyczyny, a potem zapisz go, jeśli się zgadzasz",
           "prefill": "Coś nie działa. Co się dzieje: \nCo powinno się dziać: "
         }
       }
@@ -5907,7 +5907,7 @@
       "error": "Nie udało się wysłać raportu. Spróbuj ponownie.",
       "debugOffer": {
         "action": "Debuguj z Motir AI",
-        "hint": "<b>Debuguj z Motir AI</b> rozpoczyna debugowanie od razu po naciśnięciu i zużywa kredyty Motir AI. Motir AI czyta kod, wskazuje prawdopodobną przyczynę i sprawdza, czy jakiś element roboczy już obejmuje ten błąd."
+        "hint": "<b>Debuguj z Motir AI</b> od razu po naciśnięciu wysyła Twój opis do Motir AI i zużywa kredyty Motir AI. Motir AI czyta kod, wskazuje prawdopodobną przyczynę i proponuje dodanie diagnozy do tego błędu. Nic nie zostanie zapisane, dopóki nie potwierdzisz."
       }
     }
   },

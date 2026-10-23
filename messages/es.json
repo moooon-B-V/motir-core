@@ -1382,7 +1382,7 @@
         },
         "debug": {
           "title": "Depurar con Motir AI",
-          "description": "Rastrear un error hasta su causa probable y registrarlo en Clasificación",
+          "description": "Rastrear un error hasta su causa probable y registrarlo si estás de acuerdo",
           "prefill": "Algo no funciona. Qué ocurre: \nQué debería ocurrir: "
         }
       }
@@ -5907,7 +5907,7 @@
       "error": "No se pudo enviar tu informe. Vuelve a intentarlo.",
       "debugOffer": {
         "action": "Depurar con Motir AI",
-        "hint": "<b>Depurar con Motir AI</b> inicia la depuración en cuanto lo pulsas y gasta créditos de Motir AI. Motir AI lee el código, señala la causa probable y comprueba si algún elemento de trabajo ya cubre este error."
+        "hint": "<b>Depurar con Motir AI</b> envía tu informe a Motir AI en cuanto lo pulsas y gasta créditos de Motir AI. Motir AI lee el código, señala la causa probable y ofrece añadir el diagnóstico a este error. No se escribe nada hasta que lo confirmes."
       }
     }
   },

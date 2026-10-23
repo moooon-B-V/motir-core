@@ -1382,7 +1382,7 @@
         },
         "debug": {
           "title": "Mit Motir AI debuggen",
-          "description": "Einen Bug bis zu seiner wahrscheinlichen Ursache verfolgen und in der Triage erfassen",
+          "description": "Einen Bug bis zu seiner wahrscheinlichen Ursache verfolgen und ihn erfassen, wenn Sie zustimmen",
           "prefill": "Etwas funktioniert nicht. Was passiert: \nWas stattdessen passieren sollte: "
         }
       }
@@ -5907,7 +5907,7 @@
       "error": "Ihre Meldung konnte nicht gesendet werden. Bitte versuchen Sie es erneut.",
       "debugOffer": {
         "action": "Mit Motir AI debuggen",
-        "hint": "<b>Mit Motir AI debuggen</b> startet das Debugging, sobald Sie darauf klicken, und verbraucht Motir AI-Guthaben. Motir AI liest den Code, benennt die wahrscheinliche Ursache und prüft, ob ein Arbeitselement diesen Bug bereits abdeckt."
+        "hint": "<b>Mit Motir AI debuggen</b> sendet Ihren Bericht sofort an Motir AI und verbraucht Motir AI-Guthaben. Motir AI liest den Code, benennt die wahrscheinliche Ursache und bietet an, die Diagnose zu diesem Bug hinzuzufügen. Nichts wird geschrieben, bevor Sie bestätigen."
       }
     }
   },

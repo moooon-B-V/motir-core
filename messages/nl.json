@@ -1382,7 +1382,7 @@
         },
         "debug": {
           "title": "Debuggen met Motir AI",
-          "description": "Een bug herleiden tot de waarschijnlijke oorzaak en hem in Triage zetten",
+          "description": "Een bug herleiden tot de waarschijnlijke oorzaak en hem vastleggen als je akkoord gaat",
           "prefill": "Er is iets kapot. Wat er gebeurt: \nWat er in plaats daarvan zou moeten gebeuren: "
         }
       }
@@ -5907,7 +5907,7 @@
       "error": "Je rapport kon niet worden verstuurd. Probeer het opnieuw.",
       "debugOffer": {
         "action": "Debuggen met Motir AI",
-        "hint": "<b>Debuggen met Motir AI</b> start het debuggen zodra je erop drukt en verbruikt Motir AI-tegoed. Motir AI leest de code, benoemt de waarschijnlijke oorzaak en controleert of er al een werkitem voor deze bug bestaat."
+        "hint": "<b>Debuggen met Motir AI</b> stuurt je beschrijving direct naar Motir AI en verbruikt Motir AI-tegoed. Motir AI leest de code, benoemt de waarschijnlijke oorzaak en biedt aan de diagnose aan deze bug toe te voegen. Er wordt niets geschreven totdat je bevestigt."
       }
     }
   },

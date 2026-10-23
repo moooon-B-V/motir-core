@@ -1382,7 +1382,7 @@
         },
         "debug": {
           "title": "Debug with Motir AI",
-          "description": "Trace a bug to its likely cause and file it in Triage",
+          "description": "Trace a bug to its likely cause, then log it if you agree",
           "prefill": "Something is broken. What happens: \nWhat should happen instead: "
         }
       }
@@ -5907,7 +5907,7 @@
       "error": "Couldn’t submit your report. Please try again.",
       "debugOffer": {
         "action": "Debug with Motir AI",
-        "hint": "<b>Debug with Motir AI</b> starts the debug as soon as you press it and spends Motir AI credits. Motir AI reads the code, names the likely cause, and checks whether a work item already covers this bug."
+        "hint": "<b>Debug with Motir AI</b> sends your report to Motir AI as soon as you press it and spends Motir AI credits. Motir AI reads the code, names the likely cause, and offers to add the diagnosis to this bug. Nothing is written until you confirm."
       }
     }
   },

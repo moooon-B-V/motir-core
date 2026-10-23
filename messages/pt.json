@@ -1382,7 +1382,7 @@
         },
         "debug": {
           "title": "Depurar com o Motir AI",
-          "description": "Rastrear um Bug até a causa provável e registrá-lo na Triagem",
+          "description": "Rastrear um Bug até a causa provável e registrá-lo se você concordar",
           "prefill": "Algo está quebrado. O que acontece: \nO que deveria acontecer: "
         }
       }
@@ -5907,7 +5907,7 @@
       "error": "Não foi possível enviar seu relato. Tente novamente.",
       "debugOffer": {
         "action": "Depurar com o Motir AI",
-        "hint": "<b>Depurar com o Motir AI</b> inicia a depuração assim que você clica e consome créditos do Motir AI. O Motir AI lê o código, aponta a causa provável e verifica se algum item de trabalho já cobre este Bug."
+        "hint": "<b>Depurar com o Motir AI</b> envia seu relato ao Motir AI assim que você clica e consome créditos do Motir AI. O Motir AI lê o código, aponta a causa provável e se oferece para adicionar o diagnóstico a este Bug. Nada é gravado até você confirmar."
       }
     }
   },

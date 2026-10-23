@@ -1382,7 +1382,7 @@
         },
         "debug": {
           "title": "用 Motir AI 排查缺陷",
-          "description": "追查缺陷的可能原因，并记入分诊",
+          "description": "追查缺陷的可能原因，经你同意后再记录",
           "prefill": "有东西坏了。实际发生的情况： \n应该发生的情况： "
         }
       }
@@ -5907,7 +5907,7 @@
       "error": "反馈提交失败，请重试。",
       "debugOffer": {
         "action": "用 Motir AI 排查缺陷",
-        "hint": "按下<b>用 Motir AI 排查缺陷</b>即开始排查，并会消耗 Motir AI 额度。Motir AI 会阅读代码、指出可能的原因，并检查是否已有工作项覆盖这个缺陷。"
+        "hint": "按下<b>用 Motir AI 排查缺陷</b>会立即把你的报告发给 Motir AI，并消耗 Motir AI 额度。Motir AI 会阅读代码、指出可能的原因，并提议把诊断记到这个缺陷上。在你确认之前，不会写入任何内容。"
       }
     }
   },

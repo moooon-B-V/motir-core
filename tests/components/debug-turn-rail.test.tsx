@@ -76,18 +76,18 @@ const REPORT =
   'Board drag drops the card one column short\n\nDragging a card into the rightmost column puts it in the column to its left.';
 
 /** The widget path's thread: the person's report, anchored on PROD-412, and the
- *  diagnosis the debug job's settle appended — joined by the debug job's id. */
-function debugged(landing: DebugLandingDto, opts: { anchored?: boolean } = {}) {
+ *  answer turn carrying the landing its confirmed offer recorded. */
+function debugged(landing: DebugLandingDto, opts: { anchored?: boolean; landed?: boolean } = {}) {
   const anchored = opts.anchored ?? true;
   const user = turn('user', REPORT, { jobId: 'debug-1', intent: 'debug' });
   const reply = turn('assistant', '**Likely cause:** the drop handler clamps the column index.', {
     jobId: 'debug-1',
     citations: landing.workItemKey ? [landing.workItemKey] : [],
+    debugLanding: (opts.landed ?? true) ? landing : null,
   });
   return {
     session: session([user, reply]),
     turnAnchors: anchored ? { [user.id]: 'PROD-412' } : {},
-    debugLandings: { 'debug-1': landing },
   };
 }
 
@@ -381,15 +381,18 @@ describe('the debug turn, FINISHED — the outcome line (panels 2–4)', () => {
   });
 
   it('draws the ordinary answer foot for a debug reply the rail holds no landing for', () => {
-    // Neither the turn DTO nor the hook carries a landing (a reply written before
-    // MOTIR-7064 persisted one), so the reply reads as an ordinary cited answer
-    // rather than inventing an outcome.
-    const state = debugged({
-      outcome: 'diagnose',
-      workItemKey: 'PROD-412',
-      title: 'Board drag drops the card one column short',
-      createdInTriage: false,
-    });
+    // The turn DTO carries no landing (a reply written before MOTIR-7064
+    // persisted one, or an offer not yet confirmed), so the reply reads as an
+    // ordinary cited answer rather than inventing an outcome.
+    const state = debugged(
+      {
+        outcome: 'diagnose',
+        workItemKey: 'PROD-412',
+        title: 'Board drag drops the card one column short',
+        createdInTriage: false,
+      },
+      { landed: false },
+    );
     renderRail({ session: state.session });
 
     expect(screen.queryByTestId('plan-change-debug-outcome')).toBeNull();
@@ -399,8 +402,8 @@ describe('the debug turn, FINISHED — the outcome line (panels 2–4)', () => {
   });
 });
 
-// MOTIR-7064 — a RELOADED thread. The hook's in-memory seed (`turnAnchors`) and
-// the settle's landing (`debugLandings`) are gone; only the session DTO the
+// MOTIR-7064 — a RELOADED thread. The hook's in-memory seed (`turnAnchors`) is
+// gone; only the session DTO the
 // reload read is left, so the chip and the outcome line must come from the turns.
 describe('the debug turn after a RELOAD — drawn from the turn DTOs alone', () => {
   /** The thread as the server returns it: the anchor on the user turn, the

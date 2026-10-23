@@ -1382,7 +1382,7 @@
         },
         "debug": {
           "title": "Déboguer avec Motir AI",
-          "description": "Remonter un bug jusqu’à sa cause probable et le classer dans le Tri",
+          "description": "Remonter un bug jusqu’à sa cause probable, puis l’enregistrer si vous êtes d’accord",
           "prefill": "Quelque chose ne fonctionne pas. Ce qui se passe : \nCe qui devrait se passer : "
         }
       }
@@ -5907,7 +5907,7 @@
       "error": "Impossible d’envoyer votre signalement. Veuillez réessayer.",
       "debugOffer": {
         "action": "Déboguer avec Motir AI",
-        "hint": "<b>Déboguer avec Motir AI</b> lance le débogage dès que vous appuyez dessus et consomme des crédits Motir AI. Motir AI lit le code, identifie la cause probable et vérifie si un élément de travail couvre déjà ce bug."
+        "hint": "<b>Déboguer avec Motir AI</b> envoie votre signalement à Motir AI dès que vous appuyez dessus et consomme des crédits Motir AI. Motir AI lit le code, identifie la cause probable et propose d’ajouter le diagnostic à ce bug. Rien n’est écrit tant que vous n’avez pas confirmé."
       }
     }
   },

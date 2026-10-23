@@ -208,7 +208,6 @@ describe('a report is READ: the rail goes straight to reading (MOTIR-9232)', () 
       expect(result.current.state.planId).toBeNull();
       expect(streamAsk.mock.calls.map((c) => c[0])).toEqual(['ask-1']);
       expect(streamAugment).not.toHaveBeenCalled();
-      expect(result.current.state.debugLandings).toEqual({});
     },
   );
 });
