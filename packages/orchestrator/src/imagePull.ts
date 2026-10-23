@@ -61,7 +61,7 @@ const DOCKER_HUB_REGISTRY = 'registry-1.docker.io';
 
 /** The manifest media types a v2 registry may answer with. All four, because a
  *  digest-pinned multi-arch reference resolves to an INDEX (`…index.v1+json` is
- *  what `ghcr.io/moooon-b-v/motir-ci-runner@sha256:446c692d…` returns, measured
+ *  what `ghcr.io/motir-co/motir-ci-runner@sha256:446c692d…` returns, measured
  *  2026-08-02) while a single-arch one resolves to a plain manifest — and a
  *  registry answers 404 for a media type the client did not accept. */
 const MANIFEST_ACCEPT = [
@@ -148,7 +148,7 @@ function detailOf(err: unknown): string {
 
 /** Does this first path segment name a HOST rather than a Docker Hub namespace?
  *  The standard rule, and the only one there is: a host has a dot or a port, or
- *  is literally `localhost`. `moooon-b-v/motir-ci-runner` has neither, which is
+ *  is literally `localhost`. `motir-co/motir-ci-runner` has neither, which is
  *  why an unqualified reference means Hub. */
 function looksLikeRegistryHost(segment: string): boolean {
   return segment === 'localhost' || segment.includes('.') || segment.includes(':');
@@ -322,9 +322,9 @@ function credentialFor(
  * The exact question Fly answers at machine-create time, asked before any job
  * depends on the answer. Measured against the real thing on 2026-08-02: the flow
  * below returns `pullable: true` for
- * `ghcr.io/moooon-b-v/motir-ci-runner@sha256:446c692d…` (public since
+ * `ghcr.io/motir-co/motir-ci-runner@sha256:446c692d…` (public since
  * MOTIR-2009) and `pullable: false, reason: 'unauthorized'` for
- * `ghcr.io/moooon-b-v/motir-sandbox:claude`, which is still private — the same
+ * `ghcr.io/motir-co/motir-sandbox:claude`, which is still private — the same
  * pair of states Fly itself reports as HTTP 201 and HTTP 400 `failed to get
  * manifest …: unauthorized`.
  *
@@ -490,7 +490,7 @@ export type ImageTagListing =
  * Every tag of a PUBLIC repository, read ANONYMOUSLY — `GET /v2/<name>/tags/list`
  * behind the same challenge → anonymous-token dance {@link probeImagePull} makes
  * (`docs/decisions/agent-image-update.md` Q1, MOTIR-6949). Measured 2026-10-01
- * against `ghcr.io/moooon-b-v/motir-sandbox`: 117 tags, `claude` … `claude-0.10.0`.
+ * against `ghcr.io/motir-co/motir-sandbox`: 117 tags, `claude` … `claude-0.10.0`.
  *
  * `repository` is a reference WITHOUT a tag or digest (`ghcr.io/owner/name`); a
  * tag on it is ignored. NEVER THROWS: a registry that cannot be read is an answer

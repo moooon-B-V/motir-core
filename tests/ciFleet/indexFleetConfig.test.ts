@@ -36,7 +36,7 @@ function configureCloudFleet(): void {
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
   vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly-token');
   vi.stubEnv('FLY_FLEET_APP', 'motir-fleet-app');
-  vi.stubEnv('MOTIR_RUNNER_IMAGE', 'ghcr.io/moooon-b-v/motir-ci-runner@sha256:' + 'a'.repeat(64));
+  vi.stubEnv('MOTIR_RUNNER_IMAGE', 'ghcr.io/motir-co/motir-ci-runner@sha256:' + 'a'.repeat(64));
   vi.stubEnv(INDEXER_IMAGE_ENV_VAR, 'registry.fly.io/motir-fleet-app@sha256:' + 'b'.repeat(64));
 }
 

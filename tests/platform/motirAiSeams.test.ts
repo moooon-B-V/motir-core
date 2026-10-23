@@ -310,7 +310,7 @@ describe('2 · outgoing bodies match motir-ai’s contract', () => {
         ownerId: owner.userId,
         name: 'agent-1',
         profileId: 'claude',
-        imageTag: 'ghcr.io/moooon-b-v/motir-sandbox:claude',
+        imageTag: 'ghcr.io/motir-co/motir-sandbox:claude',
         imageDigest: 'sha256:0',
         region: 'iad',
         state: 'running',

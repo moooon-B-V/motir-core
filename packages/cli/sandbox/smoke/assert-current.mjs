@@ -222,7 +222,7 @@ export function assessRelease({
       verdict: 'stale',
       exitCode: 1,
       maxDriftDays,
-      summary: `the published image is ${drift.commitCount} commit${drift.commitCount === 1 ? '' : 's'} behind and the oldest has been unreleased for ${drift.oldestAgeDays} days (limit ${maxDriftDays}) — everyone pulling ghcr.io/moooon-b-v/motir-sandbox is getting ${latest.version.raw}, not what main documents. Cut a release: bump packages/cli/package.json, merge, then tag the merge commit`,
+      summary: `the published image is ${drift.commitCount} commit${drift.commitCount === 1 ? '' : 's'} behind and the oldest has been unreleased for ${drift.oldestAgeDays} days (limit ${maxDriftDays}) — everyone pulling ghcr.io/motir-co/motir-sandbox is getting ${latest.version.raw}, not what main documents. Cut a release: bump packages/cli/package.json, merge, then tag the merge commit`,
     };
   }
   return {

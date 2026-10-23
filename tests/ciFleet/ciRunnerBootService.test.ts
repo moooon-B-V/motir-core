@@ -1175,7 +1175,7 @@ describe('the boot’s defensive paths', () => {
     vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
     vi.stubEnv(
       'MOTIR_RUNNER_IMAGE',
-      'ghcr.io/moooon-b-v/motir-ci-runner@sha256:446c692df68c80367876c65082c60ec3b1c667f32a98811ac53f0dfa8a0e6d1d',
+      'ghcr.io/motir-co/motir-ci-runner@sha256:446c692df68c80367876c65082c60ec3b1c667f32a98811ac53f0dfa8a0e6d1d',
     );
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
@@ -1191,7 +1191,7 @@ describe('the boot’s defensive paths', () => {
       if (call.url.includes('api.machines.dev')) {
         return json(400, {
           error:
-            'failed to get manifest ghcr.io/moooon-b-v/motir-ci-runner@sha256:446c692d…: unauthorized',
+            'failed to get manifest ghcr.io/motir-co/motir-ci-runner@sha256:446c692d…: unauthorized',
         });
       }
       if (call.url.includes('generate-jitconfig')) {

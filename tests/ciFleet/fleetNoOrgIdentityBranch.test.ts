@@ -94,9 +94,7 @@ function motirOrgLiteralHits(source: string): string[] {
  * header. None is a fleet file; deleting the literal deletes the entry.
  */
 const PRE_STORY_LITERAL_DEBT = [
-  'lib/agentInstances/profiles.ts',
   'lib/apiDocs/mcp.ts',
-  'lib/apiDocs/sandbox.ts',
   'lib/export/personalDataSections.ts',
   'lib/github/repoProvisioning.ts',
   'lib/health/credentialRegistry.ts',

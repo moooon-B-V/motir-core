@@ -344,7 +344,7 @@ test.describe('The agent terminal', () => {
       projectId: seed.projectId,
       ownerId: seed.userId,
       profileId: 'claude',
-      imageTag: 'ghcr.io/moooon-b-v/motir-sandbox:claude',
+      imageTag: 'ghcr.io/motir-co/motir-sandbox:claude',
       imageDigest: 'sha256:seed',
       region: 'iad',
     };

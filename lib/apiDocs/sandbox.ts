@@ -38,7 +38,7 @@ import type { GuideBlock } from '@/lib/apiDocs/guide';
 // inside a localization file. The page CHROME is localized in the catalogs.
 
 /** The published image, without a tag. Tags are per profile. */
-export const SANDBOX_IMAGE = 'ghcr.io/moooon-b-v/motir-sandbox';
+export const SANDBOX_IMAGE = 'ghcr.io/motir-co/motir-sandbox';
 
 /** The agent-less tag — an IMAGE, not a profile, and drawn beside the table. */
 export const SANDBOX_BASE_TAG = 'base';

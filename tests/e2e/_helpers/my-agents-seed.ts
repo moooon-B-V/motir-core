@@ -112,7 +112,7 @@ export async function seedAgents(seed: MyAgentsSeed, count: number): Promise<voi
         ownerId: seed.userId,
         name: `seeded-${i}`,
         profileId: 'claude',
-        imageTag: 'ghcr.io/moooon-b-v/motir-sandbox:claude',
+        imageTag: 'ghcr.io/motir-co/motir-sandbox:claude',
         imageDigest: 'sha256:seed',
         region: 'iad',
         state: 'hibernated',

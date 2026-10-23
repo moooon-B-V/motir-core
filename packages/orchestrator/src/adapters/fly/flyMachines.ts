@@ -199,7 +199,7 @@ export function flyErrorDetail(body: unknown): string {
  * 2026-08-02 against a real app, that a machine-create with an unpullable
  * reference returns **HTTP 400** with the body:
  *
- *   {"error":"failed to get manifest ghcr.io/moooon-b-v/motir-sandbox:claude: unauthorized"}
+ *   {"error":"failed to get manifest ghcr.io/motir-co/motir-sandbox:claude: unauthorized"}
  *
  * and creates NO machine — Fly resolves the manifest before it allocates
  * anything. The other three phrasings are the neighbouring shapes of the same
