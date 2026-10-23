@@ -15,6 +15,7 @@ import { planChangeSessionsService } from '@/lib/services/planChangeSessionsServ
 import { workItemsService } from '@/lib/services/workItemsService';
 import { readAskOutcome } from '@/lib/planning/askResult';
 import { planOfferService, type PendingPlanOfferStatement } from '@/lib/services/planOfferService';
+import { logBugOfferService } from '@/lib/services/logBugOfferService';
 import { readCodeUnreadable } from '@/lib/planning/codeUnreadable';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import {
@@ -938,7 +939,12 @@ export const aiAskService = {
     // SAME append: it can never precede its answer or outlive a failed write, and a
     // failed gate stores no offer while the answer still lands. Nothing on this arm
     // submits or records a `plan_change` / `new_session` intent.
-    const answerOffer = await planOfferService.land(outcome.offer, ctx);
+    // A `log_bug` offer (MOTIR-9322) lands through its own door, with its target
+    // re-resolved against the RESOLVED anchor of the turn it answers.
+    const answerOffer =
+      outcome.offer?.kind === 'log_bug'
+        ? await logBugOfferService.land(outcome.offer, ctx, turn.anchorKey ?? null)
+        : await planOfferService.land(outcome.offer, ctx);
     const updated = await planChangeSessionsService.appendAnswerTurn(
       {
         jobId,
@@ -953,7 +959,12 @@ export const aiAskService = {
     );
     // "Plan this" with a grounded target (`immediate`): no offer was stored, and the
     // plan starts at once, claimed on the person's turn so a replay starts nothing.
-    if (!started && outcome.offer?.immediate && outcome.offer.targetKey) {
+    if (
+      !started &&
+      outcome.offer?.kind === 'plan' &&
+      outcome.offer.immediate &&
+      outcome.offer.targetKey
+    ) {
       const anchorKey = outcome.offer.targetKey;
       started = await startOrNothing(() =>
         planOfferStartService.startTargetedPlan(ctx, {

@@ -1,3 +1,5 @@
+import type { AuthoredBug } from '@/lib/ai/authoredBug';
+import type { LogBugTargetKind } from '@/lib/ai/logBugOffer';
 import type { AttachmentDTO } from '@/lib/dto/attachments';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { GuideTurnRecord } from '@/lib/ai/guideWorkItem';
@@ -527,11 +529,41 @@ export interface CopyableSessionDto {
 }
 
 /**
- * What an answer turn can OFFER (MOTIR-9288). A closed union: `'plan'` only today;
- * the bug offer adds `'log_bug'` HERE, so the compiler finds every switch on it. A
- * stored kind outside the union reads as no offer, never as a `plan` one.
+ * What an answer turn can OFFER (MOTIR-9288). A closed union: `'plan'`, and the bug
+ * offer's `'log_bug'` (MOTIR-9322). A stored kind outside the union reads as no
+ * offer, never as a `plan` one.
  */
-export type AnswerOfferKindDto = 'plan';
+export type AnswerOfferKindDto = 'plan' | 'log_bug';
+
+/**
+ * Where a bug offer's ONE write goes (MOTIR-9322), re-resolved under the sender's
+ * access when the answer landed: a NEW bug, the diagnosis ADDED to the anchored triage
+ * bug, or a note on an EXISTING work item that already covers the defect. `title` is
+ * the target's title at that read, for the rail's label; null on `new`.
+ */
+export interface LogBugOfferTargetDto {
+  kind: LogBugTargetKind;
+  key: string | null;
+  title: string | null;
+}
+
+/**
+ * The bug a `log_bug` offer would write (MOTIR-9322) — checked at settle against the
+ * authored-bug shape, so a confirm writes exactly this and nothing the model sends
+ * later.
+ */
+export interface LogBugOfferDto {
+  /** The title a NEW bug would carry. */
+  title: string;
+  acceptanceCriteria: string[];
+  draft: AuthoredBug;
+  target: LogBugOfferTargetDto;
+  /** The target's `updatedAt` read at settle; a confirm refuses a target edited since.
+   *  Null on a `new` target. */
+  targetUpdatedAt: string | null;
+  /** The code files the answer read and cited. */
+  contextRefs: string[];
+}
 
 /**
  * The offer stored on an answer turn (MOTIR-9288) — the shape the guide's
@@ -542,8 +574,12 @@ export interface PlanAnswerOfferDto {
   kind: AnswerOfferKindDto;
   /** The request the answering session wrote — model output, never empty. */
   requestMd: string;
-  /** The work item the offer would plan, or null when it carried none. */
+  /** The work item the offer would plan, or null when it carried none. On a
+   *  `log_bug` offer, the key its write targets (null on a new bug). */
   targetKey: string | null;
+  /** The bug a `log_bug` offer would write (MOTIR-9322); absent on a `plan` offer.
+   *  On a `log_bug` offer, `requestMd` is the new bug's title. */
+  bug?: LogBugOfferDto;
   declinedAt: string | null;
   declinedById: string | null;
   confirmedAt: string | null;
@@ -570,6 +606,8 @@ export interface AnswerOfferInput {
   kind: AnswerOfferKindDto;
   requestMd: string;
   targetKey: string | null;
+  /** Present exactly on a `log_bug` offer. */
+  bug?: LogBugOfferDto;
 }
 
 /**

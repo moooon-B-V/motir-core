@@ -472,6 +472,8 @@ async function confirm(
   const thread = await planChangeSessionsService.getById(pctx, input.conversationId);
   const offer = thread.turns.find((t) => t.id === input.offerTurnId)?.offer;
   if (!offer) throw new PlanChangeTurnNotFoundError(input.offerTurnId);
+  // A bug offer (MOTIR-9322) is never a plan to start: its confirm is its own door.
+  if (offer.kind !== 'plan') throw new PlanOfferStartRefusedError('offer_not_open');
   if (offer.state === 'declined' || offer.state === 'superseded') {
     throw new PlanOfferStartRefusedError('offer_not_open');
   }

@@ -1102,7 +1102,7 @@ export function PlanChangeRail({
                   : null
               }
               planOffer={
-                turn.role === 'assistant' && turn.offer
+                turn.role === 'assistant' && turn.offer?.kind === 'plan'
                   ? {
                       answerable: offerAnswerable(turns, i, {
                         canContinue: !ended && !state.readOnly,

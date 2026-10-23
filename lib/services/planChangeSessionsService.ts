@@ -572,6 +572,15 @@ export async function appendWithin(
                 kind: turn.answerOffer.kind,
                 requestMd: turn.answerOffer.requestMd,
                 targetKey: turn.answerOffer.targetKey,
+                // The bug a `log_bug` offer would write (MOTIR-9322), stored whole so
+                // a confirm writes exactly what was checked here.
+                ...(turn.answerOffer.bug
+                  ? {
+                      bug: JSON.parse(
+                        JSON.stringify(turn.answerOffer.bug),
+                      ) as Prisma.InputJsonObject,
+                    }
+                  : {}),
                 declinedAt: null,
                 declinedById: null,
                 confirmedAt: null,

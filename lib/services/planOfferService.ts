@@ -83,6 +83,23 @@ async function planningAvailable(
   }
 }
 
+/** Whether the caller may confirm a `log_bug` offer right now (MOTIR-9322): `ai:plan`
+ *  and Motir AI configured. NOT `work_item:edit` — the bug is written by Motir, the
+ *  system account, not by the person. Never throws. */
+export async function bugLoggingAvailable(
+  pctx: ProjectContext,
+  tx?: Prisma.TransactionClient,
+): Promise<boolean> {
+  if (!isMotirAiConfigured()) return false;
+  try {
+    const held = await projectAccessService.getPermissions(pctx.projectId, actorOf(pctx), tx);
+    return held.has('ai:plan');
+  } catch (err) {
+    if (err instanceof ProjectNotFoundError) return false;
+    throw err;
+  }
+}
+
 /**
  * The offer's target, resolved through the KEYED read pinned to the active project
  * and browse-gated for the caller — the read `resolveAnchor` uses. Another project's
@@ -289,8 +306,27 @@ export const planOfferService = {
     tx?: Prisma.TransactionClient,
   ): Promise<Map<string, PlanOfferResolution>> {
     const turns = offerTurns(rows);
-    const offered = turns.filter((t) => t.role === 'assistant' && t.offer);
+    const all = turns.filter((t) => t.role === 'assistant' && t.offer);
     const out = new Map<string, PlanOfferResolution>();
+    // A `log_bug` offer (MOTIR-9322) shares the four states; its one reason is
+    // `planning_unavailable` (no `ai:plan`, or Motir AI not configured) — its target
+    // is not a plan's, so the lock and closed reads are a plan's alone.
+    const bugs = all.filter((t) => t.offer!.kind === 'log_bug');
+    if (bugs.length > 0) {
+      const bugAvailable = await bugLoggingAvailable(pctx, tx);
+      for (const turn of bugs) {
+        const raw = rows.find((r) => r.id === turn.id)!.answerOffer;
+        out.set(turn.id, {
+          state: planOfferStateOf(turns, turn.id)!,
+          cannotStart: !bugAvailable
+            ? 'planning_unavailable'
+            : recordedRefusalOf(raw) !== null
+              ? 'out_of_credits'
+              : null,
+        });
+      }
+    }
+    const offered = all.filter((t) => t.offer!.kind === 'plan');
     if (offered.length === 0) return out;
 
     const keys = [
