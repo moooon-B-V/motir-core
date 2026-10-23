@@ -26,6 +26,7 @@ import { DesignResultPanel } from '../[key]/_components/DesignResultPanel';
 import { RepositorySetField } from '@/components/workItems/RepositorySetField';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { TypeInText } from '@/components/planning/TypeInText';
+import { ProposalRef } from '@/components/planning/ProposalRef';
 import { usePrefersReducedMotion } from '@/lib/hooks/usePrefersReducedMotion';
 import {
   finishTypeIn,
@@ -397,6 +398,22 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   // order), and `null` on every committed host (Part XIV §16.1, MOTIR-4472).
   const proposalOutcome: PlanItemOutcome | null =
     props.state === 'ready' ? (props.proposalOutcome ?? null) : null;
+  // A PROPOSED body's `[label](motir-ref:planItem:<id>)` links name SIBLING
+  // proposals of the same plan (bug MOTIR-9355): drawn as the rail's proposal
+  // chip and, where the host can open another proposal, a button that does. A
+  // committed card's body has no such links, so its hosts get no renderer.
+  const onOpenProposal = props.state === 'ready' ? props.onOpenProposal : undefined;
+  const proposalRefs = proposal
+    ? {
+        renderProposalRef: (planItemId: string, label: ReactNode) => (
+          <ProposalRef
+            planItemId={planItemId}
+            label={label}
+            {...(onOpenProposal ? { onSelect: onOpenProposal } : {})}
+          />
+        ),
+      }
+    : {};
   const tFolders = useTranslations('folders');
   const folderCommands = useFolderCommands();
   const edit = useQuickViewRailEdit(
@@ -937,6 +954,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                 aria-label={t('issueDescriptionAria')}
                 workItemRefs={data.workItemRefs}
                 pageRefs={data.pageRefs}
+                {...proposalRefs}
               />
             ) : (
               <p className="text-sm text-(--el-text-secondary) italic">{t('noDescription')}</p>
@@ -963,6 +981,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                     aria-label={t('issueExplanationAria')}
                     workItemRefs={data.workItemRefs}
                     pageRefs={data.pageRefs}
+                    {...proposalRefs}
                   />
                 ) : (
                   <p className="text-sm text-(--el-text-secondary) italic">
