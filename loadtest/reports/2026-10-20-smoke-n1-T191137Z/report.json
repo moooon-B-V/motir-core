@@ -1,0 +1,899 @@
+{
+  "verdict": "FAIL",
+  "verdictReasons": [
+    "throughput FAIL",
+    "reads p95 FAIL",
+    "reads p99 FAIL",
+    "writes, claims and runs p95 FAIL",
+    "writes, claims and runs p99 FAIL"
+  ],
+  "exitCode": 1,
+  "servedRps": 6,
+  "header": {
+    "instances": 1,
+    "sha": "f8e7d68996e0c9de87ad09f4fdc5eb70728fafd0",
+    "shaReadFrom": "image_ref tag",
+    "neon": {
+      "project": "snowy-truth-13928044",
+      "branchId": "br-blue-sea-aup5noib",
+      "copiedAt": "2026-10-19T23:31:14Z",
+      "copiedAtField": "refresh.json",
+      "endpointHost": "ep-jolly-dawn-aumdpqm0.c-10.us-east-1.aws.neon.tech"
+    },
+    "app": {
+      "name": "motir-core-staging",
+      "size": "performance-1x-2048MB",
+      "machines": [
+        {
+          "id": "82ddd09f047508",
+          "region": "iad",
+          "cpus": 1,
+          "memoryMb": 2048,
+          "imageRef": "registry.fly.io/motir-core:f8e7d68996e0c9de87ad09f4fdc5eb70728fafd0"
+        }
+      ]
+    },
+    "production": {
+      "cpuKind": "performance",
+      "cpus": 1,
+      "memoryMb": 2048
+    },
+    "candidateSize": false,
+    "instancesHeld": true,
+    "pinEnforced": true,
+    "profile": {
+      "name": "smoke",
+      "path": "loadtest/profiles/smoke.json",
+      "loadHash": "371d0a8fa6eccb3dc60ebf8081372243127505764f287a1d1305779a20f61ab5"
+    },
+    "traceRate": 0.1,
+    "concurrency": {
+      "type": "requests",
+      "softLimit": 960,
+      "hardLimit": 1200
+    },
+    "requiredConcurrency": {
+      "hard": 82,
+      "soft": 66
+    },
+    "rateLimits": {
+      "apiV1": 6000,
+      "mcp": "default",
+      "agentWorkspace": "default"
+    },
+    "offered": {
+      "rpsUpperBound": 34.41,
+      "perWorkspaceRps": 16.91,
+      "perTokenRps": {
+        "mcp": 2,
+        "apiV1": 0.45
+      },
+      "readerStreamsPerInstance": 6
+    },
+    "generator": {
+      "machineId": "85777d7a271148",
+      "region": "iad",
+      "cpus": 2,
+      "cpuMean": 0.012535416845539623,
+      "cpuMax": 0.015658837248042644
+    },
+    "k6": {
+      "version": "v1.2.1",
+      "extensions": ["github.com/phymbert/xk6-sse v0.1.12"]
+    },
+    "window": {
+      "startedAt": "2026-10-20T19:20:22.000Z",
+      "rampEndedAt": "2026-10-20T19:21:22.000Z",
+      "steadyEndedAt": "2026-10-20T19:24:22.000Z",
+      "endedAt": "2026-10-20T19:25:34Z"
+    },
+    "prometheus": {
+      "endpoint": "https://api.fly.io/prometheus/moooon",
+      "app": "motir-core-staging",
+      "queriedAt": "2026-10-23T08:10:17.650Z",
+      "settleSeconds": 60
+    },
+    "pgStatStatements": {
+      "before": {
+        "host": "ep-jolly-dawn-aumdpqm0.c-10.us-east-1.aws.neon.tech",
+        "computeStartedAt": "2026-10-19T23:31:20.328Z",
+        "statsReset": "2026-10-19T23:31:20.325Z"
+      },
+      "after": {
+        "host": "ep-jolly-dawn-aumdpqm0.c-10.us-east-1.aws.neon.tech",
+        "computeStartedAt": "2026-10-19T23:31:20.328Z",
+        "statsReset": "2026-10-19T23:31:20.325Z"
+      }
+    },
+    "baseline": "none (N = 1)"
+  },
+  "comparable": {
+    "sha": "f8e7d68996e0c9de87ad09f4fdc5eb70728fafd0",
+    "neonBranchId": "br-blue-sea-aup5noib",
+    "neonCopiedAt": "2026-10-19T23:31:14Z",
+    "app": "motir-core-staging",
+    "machineIds": ["82ddd09f047508"],
+    "size": "performance-1x-2048MB",
+    "instances": 1,
+    "profile": "smoke",
+    "loadHash": "371d0a8fa6eccb3dc60ebf8081372243127505764f287a1d1305779a20f61ab5",
+    "concurrency": {
+      "type": "requests",
+      "softLimit": 960,
+      "hardLimit": 1200
+    },
+    "requiredConcurrency": {
+      "hard": 82,
+      "soft": 66
+    },
+    "rateLimits": {
+      "apiV1": 6000,
+      "mcp": "default",
+      "agentWorkspace": "default"
+    },
+    "traceRate": 0.1,
+    "generatorMachineId": "85777d7a271148",
+    "generatorCpus": 2,
+    "k6Version": "v1.2.1",
+    "baseline": null
+  },
+  "lines": [
+    {
+      "key": "perInstance.targetRps",
+      "name": "throughput",
+      "status": "FAIL",
+      "value": "6 rps served",
+      "limit": "≥ 13 rps",
+      "reason": null,
+      "annotation": "closed model: a miss can come from a slow server or from latency lengthening each VU cycle — read it beside the latency lines"
+    },
+    {
+      "key": "perInstance.readP95Ms",
+      "name": "reads p95",
+      "status": "FAIL",
+      "value": "10359.23 ms",
+      "limit": "≤ 500 ms",
+      "reason": null
+    },
+    {
+      "key": "perInstance.readP99Ms",
+      "name": "reads p99",
+      "status": "FAIL",
+      "value": "11885.08 ms",
+      "limit": "≤ 1500 ms",
+      "reason": null
+    },
+    {
+      "key": "perInstance.mutateP95Ms",
+      "name": "writes, claims and runs p95",
+      "status": "FAIL",
+      "value": "8656.21 ms",
+      "limit": "≤ 2000 ms",
+      "reason": null
+    },
+    {
+      "key": "perInstance.mutateP99Ms",
+      "name": "writes, claims and runs p99",
+      "status": "FAIL",
+      "value": "9220.24 ms",
+      "limit": "≤ 5000 ms",
+      "reason": null
+    },
+    {
+      "key": "perInstance.errorRate",
+      "name": "error rate",
+      "status": "PASS",
+      "value": "0 % (0 of 1092)",
+      "limit": "< 0.1 %",
+      "reason": null
+    },
+    {
+      "key": "perInstance.p2028",
+      "name": "P2028",
+      "status": "PASS",
+      "value": "0",
+      "limit": "≤ 0",
+      "reason": null,
+      "annotation": "Blind spot: p2028_* counts only failures before the transaction body ran (lib/monitoring/transactionSpan.ts failedOutcome); a mid-body expiry is labelled rolled_back and shows as an error outcome in the latency lines, not here."
+    },
+    {
+      "key": "perInstance.streamLost",
+      "name": "held streams lost",
+      "status": "PASS",
+      "value": "0 (opened 22, open at end 22, reconnected 0)",
+      "limit": "≤ 0",
+      "reason": null
+    },
+    {
+      "key": "perInstance.rateLimitedMax",
+      "name": "rate-limit refusals",
+      "status": "PASS",
+      "value": "0 % (0 refused of 1106; retry_after p95 none)",
+      "limit": "≤ 1 %",
+      "reason": null
+    },
+    {
+      "key": "scaleOut.efficiency",
+      "name": "scale-out",
+      "limit": "≥ 0.8 × N × baseline",
+      "status": "n/a",
+      "value": "N = 1",
+      "reason": null
+    }
+  ],
+  "measures": {
+    "servedRps": 6,
+    "perInstanceRps": 6,
+    "refusals": {
+      "limited": 0,
+      "denominator": 1106,
+      "retryAfterP95": null
+    }
+  },
+  "p2028": {
+    "status": "PASS",
+    "total": 0,
+    "limit": 0,
+    "instances": [
+      {
+        "instance": "82ddd09f047508",
+        "p2028_wait": 0,
+        "p2028_timeout": 0,
+        "committedRise": 20497,
+        "measured": true,
+        "reason": null
+      }
+    ],
+    "reason": null,
+    "logs": {
+      "state": "complete",
+      "reason": null,
+      "total": 0,
+      "byInstance": {},
+      "disagrees": false
+    },
+    "blindSpot": "Blind spot: p2028_* counts only failures before the transaction body ran (lib/monitoring/transactionSpan.ts failedOutcome); a mid-body expiry is labelled rolled_back and shows as an error outcome in the latency lines, not here."
+  },
+  "proxyShed": {
+    "platform": {
+      "state": "ok",
+      "value": {
+        "82ddd09f047508": 0
+      }
+    },
+    "logCodes": {
+      "state": "ok",
+      "value": {
+        "PL01": 0,
+        "PL02": 0,
+        "PR01": 0
+      }
+    },
+    "client503": {
+      "state": "ok",
+      "value": 0
+    }
+  },
+  "generator": {
+    "status": "ok",
+    "mean": 0.012535416845539623,
+    "peak": 0.015658837248042644,
+    "reason": null
+  },
+  "bottleneck": {
+    "first": {
+      "kind": "candidate",
+      "name": "cpu",
+      "onset": "2026-10-20T19:21:07.000Z"
+    },
+    "candidates": [
+      {
+        "name": "proxy",
+        "state": "not reached",
+        "onset": null,
+        "peak": "42 concurrent (hard limit 1200)",
+        "reason": null,
+        "beside": ["proxy_shed: platform 503 0, log codes 0, client http_503 0"]
+      },
+      {
+        "name": "cpu",
+        "state": "saturated",
+        "onset": 1792524067000,
+        "peak": "1 of the machine's CPUs busy",
+        "reason": null,
+        "beside": ["steal peak 0.93 CPU-s/s", "throttle peak 0 CPU-s/s (limit 0.05)"]
+      },
+      {
+        "name": "memory",
+        "state": "not reached",
+        "onset": null,
+        "peak": "available down to 31.86 % of total",
+        "reason": null,
+        "beside": []
+      },
+      {
+        "name": "pool",
+        "state": "saturated",
+        "onset": 1792524082000,
+        "peak": "mean waiting 29.5, wait p95 0.81 s",
+        "reason": null,
+        "beside": [
+          "the app pg.Pool (default max 10 per runtime) is the likelier first limit than the database"
+        ]
+      },
+      {
+        "name": "database",
+        "state": "not reached",
+        "onset": null,
+        "peak": "active 0.44 % of max_connections, 0 waiting on Lock",
+        "reason": null,
+        "beside": [
+          "reads the DIRECT endpoint only, so it cannot see pooler saturation",
+          "readerStreamsPerInstance 6 (each held stream is one watermark read per second of background load)",
+          "endpoint at start: ep-jolly-dawn-aumdpqm0 active 0.25–2 CU; at end: ep-jolly-dawn-aumdpqm0 active 0.25–2 CU",
+          "compute at its autoscaling maximum: unmeasured (the endpoint record carries the range, not the current size)"
+        ]
+      }
+    ],
+    "caveats": [
+      "The database candidate reads the DIRECT endpoint only, so it cannot see pooler saturation; the app’s pg.Pool (default max 10 per runtime) is the likelier first limit.",
+      "Every held stream costs one workbench watermark read per second: readerStreamsPerInstance 6 is background database load named here, not lost inside a req/s figure."
+    ]
+  },
+  "tables": {
+    "mix": {
+      "state": "ok",
+      "value": {
+        "rows": [
+          {
+            "class": "read",
+            "label": "read",
+            "of": null,
+            "offeredVus": 16,
+            "servedRps": 2.0444444444444443,
+            "share": 0.34074074074074073,
+            "ok": 368,
+            "empty": 0,
+            "error": 0,
+            "limited": 0,
+            "p95Ms": 10809.481388,
+            "p99Ms": 11978.789365
+          },
+          {
+            "class": "write",
+            "label": "write",
+            "of": null,
+            "offeredVus": 8,
+            "servedRps": 1.2666666666666666,
+            "share": 0.2111111111111111,
+            "ok": 228,
+            "empty": 0,
+            "error": 0,
+            "limited": 0,
+            "p95Ms": 8591.135293,
+            "p99Ms": 9246.949514
+          },
+          {
+            "class": "claim",
+            "label": "claim",
+            "of": null,
+            "offeredVus": 5,
+            "servedRps": 0.7111111111111111,
+            "share": 0.11851851851851852,
+            "ok": 128,
+            "empty": 0,
+            "error": 0,
+            "limited": 0,
+            "p95Ms": 8784.900915,
+            "p99Ms": 9161.553308
+          },
+          {
+            "class": "burst",
+            "label": "burst",
+            "of": null,
+            "offeredVus": 2,
+            "servedRps": 0.13333333333333333,
+            "share": 0.022222222222222223,
+            "ok": 24,
+            "empty": 0,
+            "error": 0,
+            "limited": 0,
+            "p95Ms": 7362.811528,
+            "p99Ms": 7400.211274
+          },
+          {
+            "class": "run",
+            "label": "run",
+            "of": null,
+            "offeredVus": 3,
+            "servedRps": 0.4888888888888889,
+            "share": 0.08148148148148147,
+            "ok": 88,
+            "empty": 0,
+            "error": 0,
+            "limited": 0,
+            "p95Ms": 7936.994146,
+            "p99Ms": 8645.071503
+          },
+          {
+            "class": "readers",
+            "label": "readers",
+            "of": null,
+            "offeredVus": 8,
+            "servedRps": 1.3555555555555556,
+            "share": 0.22592592592592595,
+            "ok": 244,
+            "empty": 0,
+            "error": 0,
+            "limited": 0,
+            "p95Ms": 9063.057274,
+            "p99Ms": 11080.307638
+          },
+          {
+            "class": "readers.tab",
+            "label": "readers · tab",
+            "of": "readers",
+            "offeredVus": 6,
+            "servedRps": 1.1888888888888889,
+            "share": 0.19814814814814816,
+            "ok": 214,
+            "empty": 0,
+            "error": 0,
+            "limited": 0,
+            "p95Ms": 3619.589689,
+            "p99Ms": 3974.655374
+          },
+          {
+            "class": "readers.browse",
+            "label": "readers · browse",
+            "of": "readers",
+            "offeredVus": 2,
+            "servedRps": 0.16666666666666666,
+            "share": 0.027777777777777776,
+            "ok": 30,
+            "empty": 0,
+            "error": 0,
+            "limited": 0,
+            "p95Ms": 11417.826935,
+            "p99Ms": 12281.348602
+          }
+        ],
+        "total": {
+          "offeredVus": 42,
+          "servedRps": 6
+        },
+        "note": "Served is ok + empty over the steady window, as the throughput line counts it; the held workbench stream and the run recycle step are in no class, so the top-level rows sum to the served rps. readers · tab and readers · browse split the readers row by k6’s scenario tag."
+      }
+    },
+    "routes": {
+      "state": "ok",
+      "value": [
+        {
+          "route": "run recycle",
+          "rps": 0.06666666666666667,
+          "p95": 13357.584715,
+          "p99": 13357.584715
+        },
+        {
+          "route": "reader plan_poll",
+          "rps": 0.06111111111111111,
+          "p95": 12281.348602,
+          "p99": 12281.348602
+        },
+        {
+          "route": "mcp get_plan",
+          "rps": 0.37222222222222223,
+          "p95": 11978.789365,
+          "p99": 12202.981719
+        },
+        {
+          "route": "mcp get_work_item",
+          "rps": 0.85,
+          "p95": 9828.57884,
+          "p99": 10391.229596
+        },
+        {
+          "route": "reader plan_get",
+          "rps": 0.05,
+          "p95": 9800.228623,
+          "p99": 9800.228623
+        },
+        {
+          "route": "mcp transition_status",
+          "rps": 0.46111111111111114,
+          "p95": 9220.237603,
+          "p99": 9961.682924
+        },
+        {
+          "route": "mcp claim_work_item",
+          "rps": 0.22777777777777777,
+          "p95": 8933.464882,
+          "p99": 9161.553308
+        },
+        {
+          "route": "run claim",
+          "rps": 0.03333333333333333,
+          "p95": 8645.071503,
+          "p99": 8645.071503
+        },
+        {
+          "route": "mcp move_to_parent",
+          "rps": 0.13333333333333333,
+          "p95": 7362.811528,
+          "p99": 7400.211274
+        },
+        {
+          "route": "run read",
+          "rps": 0.18888888888888888,
+          "p95": 7132.622662,
+          "p99": 7883.036113
+        },
+        {
+          "route": "mcp add_comment",
+          "rps": 0.4,
+          "p95": 6898.318489,
+          "p99": 7154.560763
+        },
+        {
+          "route": "mcp update_work_item",
+          "rps": 0.7444444444444445,
+          "p95": 5409.339695,
+          "p99": 5821.378716
+        },
+        {
+          "route": "mcp add_plan_items",
+          "rps": 0.14444444444444443,
+          "p95": 5394.156076,
+          "p99": 5515.410543
+        },
+        {
+          "route": "mcp search_work_items",
+          "rps": 0.5833333333333334,
+          "p95": 5237.623973,
+          "p99": 5374.865164
+        },
+        {
+          "route": "mcp skeleton",
+          "rps": 0.2388888888888889,
+          "p95": 4957.359069,
+          "p99": 5311.31391
+        },
+        {
+          "route": "run prompt",
+          "rps": 0.03333333333333333,
+          "p95": 4912.21918,
+          "p99": 4912.21918
+        },
+        {
+          "route": "reader workbench_window",
+          "rps": 1.0222222222222221,
+          "p95": 3669.166978,
+          "p99": 4006.212396
+        },
+        {
+          "route": "run open",
+          "rps": 0.03888888888888889,
+          "p95": 3274.326141,
+          "p99": 3274.326141
+        },
+        {
+          "route": "reader items",
+          "rps": 0.03333333333333333,
+          "p95": 3158.721222,
+          "p99": 3158.721222
+        },
+        {
+          "route": "reader workbench",
+          "rps": 0.16666666666666666,
+          "p95": 2468.743783,
+          "p99": 2507.142483
+        },
+        {
+          "route": "run close",
+          "rps": 0.03888888888888889,
+          "p95": 2235.329105,
+          "p99": 2235.329105
+        },
+        {
+          "route": "run events",
+          "rps": 0.11666666666666667,
+          "p95": 1794.87938,
+          "p99": 2242.906333
+        },
+        {
+          "route": "reader boards",
+          "rps": 0.022222222222222223,
+          "p95": 1778.187442,
+          "p99": 1778.187442
+        },
+        {
+          "route": "run heartbeat",
+          "rps": 0.03888888888888889,
+          "p95": 1721.195229,
+          "p99": 1721.195229
+        },
+        {
+          "route": "reader workbench_stream",
+          "rps": 0.07777777777777778,
+          "p95": null,
+          "p99": null
+        }
+      ]
+    },
+    "waitHold": {
+      "state": "ok",
+      "value": [
+        {
+          "by": "route",
+          "name": "mcp",
+          "waitP95": 0.7076253838280445,
+          "waitP99": 1.0382666666666651,
+          "holdP95": 0.2216034155597722,
+          "holdP99": 0.8486144578313246
+        },
+        {
+          "by": "route",
+          "name": "plan_get",
+          "waitP95": 0.7505681818181813,
+          "waitP99": 0.995568181818182,
+          "holdP95": 0.2060999999999999,
+          "holdP99": 0.24922000000000002
+        },
+        {
+          "by": "route",
+          "name": "unlabelled",
+          "waitP95": 0.6258838383838381,
+          "waitP99": 0.9938636363636368,
+          "holdP95": 0.41343220338983044,
+          "holdP99": 0.8513709677419368
+        },
+        {
+          "by": "route",
+          "name": "workbench",
+          "waitP95": 0.17078124999999983,
+          "waitP99": 0.24165624999999985,
+          "holdP95": 0.49687499999999984,
+          "holdP99": 1.0549999999999926
+        },
+        {
+          "by": "route",
+          "name": "workbench_stream",
+          "waitP95": 0.7844117647058818,
+          "waitP99": 1.133636363636366,
+          "holdP95": 0.49462598425196846,
+          "holdP99": 0.9894000000000005
+        },
+        {
+          "by": "tool",
+          "name": "unknown",
+          "waitP95": 0.7408783783783782,
+          "waitP99": 1.1608333333333292,
+          "holdP95": 0.17129999999999995,
+          "holdP99": 0.32749999999999585
+        },
+        {
+          "by": "tool",
+          "name": "add_comment",
+          "waitP95": 0.7574999999999996,
+          "waitP99": 1.3473333333333357,
+          "holdP95": 0.2157678571428571,
+          "holdP99": 0.40020833333333405
+        },
+        {
+          "by": "tool",
+          "name": "add_plan_items",
+          "waitP95": 0.7559999999999997,
+          "waitP99": 0.9672000000000003,
+          "holdP95": 0.2049999999999999,
+          "holdP99": 0.5600000000000023
+        },
+        {
+          "by": "tool",
+          "name": "claim_work_item",
+          "waitP95": 0.6362745098039213,
+          "waitP99": 1.058000000000004,
+          "holdP95": 0.86578947368421,
+          "holdP99": 1.8145000000000011
+        },
+        {
+          "by": "tool",
+          "name": "get_plan",
+          "waitP95": 0.7105095541401271,
+          "waitP99": 0.9879617834394898,
+          "holdP95": 0.19847826086956516,
+          "holdP99": 0.25611111111110557
+        },
+        {
+          "by": "tool",
+          "name": "get_work_item",
+          "waitP95": 0.6713362068965517,
+          "waitP99": 0.9894396551724136,
+          "holdP95": 0.22270992366412215,
+          "holdP99": 0.4820121951219509
+        },
+        {
+          "by": "tool",
+          "name": "move_to_parent",
+          "waitP95": 0.8874999999999993,
+          "waitP99": 1.6800000000000006,
+          "holdP95": 0.36874999999999947,
+          "holdP99": 0.7600000000000005
+        },
+        {
+          "by": "tool",
+          "name": "search_work_items",
+          "waitP95": 0.6777439024390235,
+          "waitP99": 0.9696951219512193,
+          "holdP95": 0.19203488372093008,
+          "holdP99": 0.24770930232558136
+        },
+        {
+          "by": "tool",
+          "name": "skeleton",
+          "waitP95": 0.7174999999999997,
+          "waitP99": 1.5488888888888885,
+          "holdP95": 0.21767605633802817,
+          "holdP99": 0.48499999999999943
+        },
+        {
+          "by": "tool",
+          "name": "transition_status",
+          "waitP95": 0.6776639344262292,
+          "waitP99": 0.9978278688524591,
+          "holdP95": 0.609426229508196,
+          "holdP99": 1.6623913043478267
+        },
+        {
+          "by": "tool",
+          "name": "update_work_item",
+          "waitP95": 0.7579166666666661,
+          "waitP99": 1.1544444444444428,
+          "holdP95": 0.2261881188118811,
+          "holdP99": 0.41815789473684173
+        }
+      ]
+    },
+    "statements": {
+      "state": "ok",
+      "top": [
+        {
+          "query": "SELECT \"id\" FROM \"work_item\" WHERE \"id\" = $1 FOR UPDATE",
+          "callsDelta": 1076,
+          "totalMsDelta": 3305.7601900000027
+        },
+        {
+          "query": "INSERT INTO \"public\".\"job_step\" (\"id\",\"run_id\",\"step_id\",\"kind\",\"result\",\"workspace_id\",\"created_at\") VALUES ($1,$2,$3,CAST($4::text AS \"public\".\"job_step_kind\"),$5,$6,$7) RETURNING \"public\".\"job_step\".\"id\", \"public\".\"job_step\".\"run_id\", \"public\".\"job_step\".\"step_id\", \"public\".\"job_step\".\"kind\"::text, \"public\".\"job_step\".\"result\", \"public\".\"job_step\".\"sleep_until\", \"public\".\"job_step\".\"workspace_id\", \"public\".\"job_step\".\"created_at\"",
+          "callsDelta": 2040,
+          "totalMsDelta": 906.6129679999985
+        },
+        {
+          "query": "SELECT o.\"closing_since\" AS \"closingSince\" FROM \"workspace\" w JOIN \"organization\" o ON o.\"id\" = w.\"organizationId\" WHERE w.\"id\" = $1 LIMIT $2",
+          "callsDelta": 4331,
+          "totalMsDelta": 531.5719130000007
+        },
+        {
+          "query": "INSERT INTO \"public\".\"job_queue\" (\"id\",\"job_id\",\"event_id\",\"event_name\",\"workspace_id\",\"run_at\",\"attempts\",\"max_attempts\",\"state\",\"idempotency_key\",\"created_at\",\"updated_at\") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,CAST($9::text AS \"public\".\"job_run_state\"),$10,$11,$12) RETURNING \"public\".\"job_queue\".\"id\", \"public\".\"job_queue\".\"job_id\", \"public\".\"job_queue\".\"event_id\", \"public\".\"job_queue\".\"event_name\", \"public\".\"job_queue\".\"workspace_id\", \"public\".\"job_queue\".\"run_at\", \"public\".\"job_queue\".\"scheduled_for\", \"public\".\"job_queue\".\"attempts\", \"public\".\"job_queue\".\"max_attempts\", \"public\".\"job_queue\".\"state\"::text, \"public\".\"job_queue\".\"claimed_by\", \"public\".\"job_queue\".\"lease_expires_at\", \"public\".\"job_queue\".\"last_error\", \"public\".\"job_queue\".\"idempotency_key\", \"public\".\"job_queue\".\"debounce_key\", \"public\".\"job_queue\".\"debounce_first_seen_at\", \"public\".\"job_queue\".\"created_at\", \"public\".\"job_queue\".\"updated_at\"",
+          "callsDelta": 1930,
+          "totalMsDelta": 413.20969099999905
+        },
+        {
+          "query": "SELECT \"public\".\"project\".\"id\", \"public\".\"project\".\"workspaceId\", \"public\".\"project\".\"name\", \"public\".\"project\".\"slug\", \"public\".\"project\".\"identifier\", \"public\".\"project\".\"lastWorkItemNumber\", \"public\".\"project\".\"workflowPolicyMode\"::text, \"public\".\"project\".\"auto_rollup_parent_status\", \"public\".\"project\".\"auto_complete_children_on_parent_done\", \"public\".\"project\".\"acceptance_video_enabled\", \"public\".\"project\".\"design_approval_gate\", \"public\".\"project\".\"auto_translate_work_content\", \"public\".\"project\".\"pr_merge_mode\"::text, \"public\".\"project\".\"pr_merge_mode_decided_at\", \"public\".\"project\".\"review_agent_enabled\", \"public\".\"project\".\"access_mode\"::text, \"public\".\"project\".\"public_overview_md\", \"public\".\"project\".\"made_public_at\", \"public\".\"project\".\"public_tagline\", \"public\".\"project\".\"public_tags\", \"public\".\"project\".\"onboarding_ran_at\", \"public\".\"project\".\"estimationStatistic\"::text, \"public\".\"project\".\"pointScale\"::text, \"public\".\"project\".\"customScaleValues\", \"public\".\"project\".\"ai_generate_explanations\", \"public\".\"project\".\"ai_auto_plan_enabled\", \"public\".\"project\".\"ai_auto_plan_threshold\", \"public\".\"project\".\"ai_sprint_planning_enabled\", \"public\".\"project\".\"ai_sprint_length_days\", \"public\".\"project\".\"hosted_model_trivial\", \"public\".\"project\".\"hosted_model_low\", \"public\".\"project\".\"hosted_model_medium\", \"public\".\"project\".\"hosted_model_high\", \"public\".\"project\".\"ai_record_planning_mistakes\", \"public\".\"project\".\"repo_set_ownership\"::text, \"public\".\"project\".\"repo_set_target_account\", \"public\".\"project\".\"runner_group_id\", \"public\".\"project\".\"runner_group_name\", \"public\".\"project\".\"runner_group_synced_at\", \"public\".\"project\".\"runner_group_sync_pending\", \"public\".\"project\".\"image\", \"public\".\"project\".\"createdAt\", \"public\".\"project\".\"updatedAt\", \"public\".\"project\".\"archivedAt\", \"public\".\"project\".\"primary_address_id\", \"public\".\"project\".\"bug_destination_folder_id\", \"public\".\"project\".\"planner_bug_destination_folder_id\" FROM \"public\".\"project\" WHERE (\"public\".\"project\".\"id\" = $1 AND $4=$5) LIMIT $2 OFFSET $3",
+          "callsDelta": 7299,
+          "totalMsDelta": 326.2059840000006
+        },
+        {
+          "query": "INSERT INTO \"public\".\"job_run\" (\"id\",\"workspace_id\",\"function_id\",\"event_name\",\"event_id\",\"lane\",\"attempt\",\"status\",\"started_at\",\"idempotency_key\") VALUES ($1,$2,$3,$4,$5,CAST($6::text AS \"public\".\"job_run_lane\"),$7,CAST($8::text AS \"public\".\"job_run_status\"),$9,$10) RETURNING \"public\".\"job_run\".\"id\", \"public\".\"job_run\".\"workspace_id\", \"public\".\"job_run\".\"function_id\", \"public\".\"job_run\".\"event_name\", \"public\".\"job_run\".\"event_id\", \"public\".\"job_run\".\"lane\"::text, \"public\".\"job_run\".\"attempt\", \"public\".\"job_run\".\"status\"::text, \"public\".\"job_run\".\"started_at\", \"public\".\"job_run\".\"finished_at\", \"public\".\"job_run\".\"duration_ms\", \"public\".\"job_run\".\"failure\", \"public\".\"job_run\".\"output\", \"public\".\"job_run\".\"idempotency_key\"",
+          "callsDelta": 639,
+          "totalMsDelta": 240.33010899999454
+        },
+        {
+          "query": "SELECT set_config($2, $1, $3)",
+          "callsDelta": 34165,
+          "totalMsDelta": 213.51008599999608
+        },
+        {
+          "query": "INSERT INTO \"public\".\"work_item_revision\" (\"id\",\"workItemId\",\"changedById\",\"changedAt\",\"changeKind\",\"diff\") VALUES ($1,$2,$3,$4,$5,$6) RETURNING \"public\".\"work_item_revision\".\"id\", \"public\".\"work_item_revision\".\"workItemId\", \"public\".\"work_item_revision\".\"changedById\", \"public\".\"work_item_revision\".\"changedAt\", \"public\".\"work_item_revision\".\"changeKind\", \"public\".\"work_item_revision\".\"diff\"",
+          "callsDelta": 433,
+          "totalMsDelta": 191.11816800000014
+        },
+        {
+          "query": "SELECT \"public\".\"workspace_membership\".\"id\", \"public\".\"workspace_membership\".\"userId\", \"public\".\"workspace_membership\".\"workspaceId\", \"public\".\"workspace_membership\".\"activeProjectId\", \"public\".\"workspace_membership\".\"workspace_role\"::text, \"public\".\"workspace_membership\".\"role_definition_id\", \"public\".\"workspace_membership\".\"access_scope\"::text, \"public\".\"workspace_membership\".\"createdAt\", \"public\".\"workspace_membership\".\"updatedAt\" FROM \"public\".\"workspace_membership\" WHERE ((\"public\".\"workspace_membership\".\"userId\" = $1 AND \"public\".\"workspace_membership\".\"workspaceId\" = $2) AND $5=$6) LIMIT $3 OFFSET $4",
+          "callsDelta": 7713,
+          "totalMsDelta": 184.11889700000106
+        },
+        {
+          "query": "UPDATE \"public\".\"job_queue\" SET \"state\" = CAST($1::text AS \"public\".\"job_run_state\"), \"run_at\" = $2, \"claimed_by\" = $3, \"lease_expires_at\" = $4, \"last_error\" = $5, \"updated_at\" = $6 WHERE (\"public\".\"job_queue\".\"id\" = $7 AND $8=$9) RETURNING \"public\".\"job_queue\".\"id\", \"public\".\"job_queue\".\"job_id\", \"public\".\"job_queue\".\"event_id\", \"public\".\"job_queue\".\"event_name\", \"public\".\"job_queue\".\"workspace_id\", \"public\".\"job_queue\".\"run_at\", \"public\".\"job_queue\".\"scheduled_for\", \"public\".\"job_queue\".\"attempts\", \"public\".\"job_queue\".\"max_attempts\", \"public\".\"job_queue\".\"state\"::text, \"public\".\"job_queue\".\"claimed_by\", \"public\".\"job_queue\".\"lease_expires_at\", \"public\".\"job_queue\".\"last_error\", \"public\".\"job_queue\".\"idempotency_key\", \"public\".\"job_queue\".\"debounce_key\", \"public\".\"job_queue\".\"debounce_first_seen_at\", \"public\".\"job_queue\".\"created_at\", \"public\".\"job_queue\".\"updated_at\"",
+          "callsDelta": 7,
+          "totalMsDelta": 159.98712300000005
+        }
+      ],
+      "entered": [
+        "SELECT COUNT(*) AS \"_count$_all\" FROM (SELECT \"public\".\"watcher\".\"id\" FROM \"public\".\"watcher\" LEFT JOIN \"public\".\"work_item\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"watcher\".\"work_item_id\") WHERE (\"public\".\"watcher\".\"user_id\" = $1 AND (\"j0\".\"workspaceId\" = $2 AND \"j0\".\"archivedAt\" IS NULL AND \"j0\".\"triagedAt\" IS NULL AND \"j0\".\"projectId\" = $3 AND \"j0\".\"status\" NOT IN ($4 /*, ... */) AND (\"j0\".\"id\" IS NOT NULL))) OFFSET $5) AS \"sub\"",
+        "SELECT \"public\".\"watcher\".\"id\", \"public\".\"watcher\".\"work_item_id\" FROM \"public\".\"watcher\" LEFT JOIN \"public\".\"work_item\" AS \"orderby_1\" ON (\"orderby_1\".\"id\") = (\"public\".\"watcher\".\"work_item_id\") LEFT JOIN \"public\".\"work_item\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"watcher\".\"work_item_id\") WHERE (\"public\".\"watcher\".\"user_id\" = $1 AND (\"j0\".\"workspaceId\" = $2 AND \"j0\".\"archivedAt\" IS NULL AND \"j0\".\"triagedAt\" IS NULL AND \"j0\".\"projectId\" = $3 AND \"j0\".\"status\" NOT IN ($4 /*, ... */) AND (\"j0\".\"id\" IS NOT NULL))) ORDER BY \"orderby_1\".\"updatedAt\" DESC LIMIT $5 OFFSET $6",
+        "INSERT INTO \"public\".\"notification\" (\"id\",\"workspace_id\",\"recipient_user_id\",\"type\",\"category\",\"work_item_id\",\"actor_id\",\"data\",\"dedupe_key\",\"created_at\") VALUES ($1,$2,$3,$4,CAST($5::text AS \"public\".\"notification_category\"),$6,$7,$8,$9,$10) ON CONFLICT DO NOTHING",
+        "INSERT INTO \"rate_limit_counter\" (\"key\", \"window_start\", \"count\", \"expires_at\") VALUES ($1, $2, $4, $3) ON CONFLICT (\"key\", \"window_start\") DO UPDATE SET \"count\" = \"rate_limit_counter\".\"count\" + $5 RETURNING \"count\"",
+        "SELECT \"public\".\"plan\".\"id\", \"public\".\"plan\".\"project_id\", \"public\".\"plan\".\"title\", \"public\".\"plan\".\"origin\"::text, \"public\".\"plan\".\"author_source\"::text, \"public\".\"plan\".\"author_harness\", \"public\".\"plan\".\"session_id\", COALESCE(\"aggr_selection_0_PlanItem\".\"_aggr_count_items\", $1) AS \"_aggr_count_items\" FROM \"public\".\"plan\" LEFT JOIN (SELECT \"public\".\"plan_item\".\"plan_id\", COUNT(*) AS \"_aggr_count_items\" FROM \"public\".\"plan_item\" WHERE $2=$3 GROUP BY \"public\".\"plan_item\".\"plan_id\") AS \"aggr_selection_0_PlanItem\" ON (\"public\".\"plan\".\"id\" = \"aggr_selection_0_PlanItem\".\"plan_id\") WHERE \"public\".\"plan\".\"id\" IN ($4 /*, ... */) OFFSET $5",
+        "INSERT INTO \"public\".\"comment\" (\"id\",\"workspace_id\",\"work_item_id\",\"author_id\",\"parent_comment_id\",\"body_md\",\"is_public\",\"created_at\",\"updated_at\") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING \"public\".\"comment\".\"id\", \"public\".\"comment\".\"workspace_id\", \"public\".\"comment\".\"work_item_id\", \"public\".\"comment\".\"author_id\", \"public\".\"comment\".\"parent_comment_id\", \"public\".\"comment\".\"body_md\", \"public\".\"comment\".\"is_public\", \"public\".\"comment\".\"edited_at\", \"public\".\"comment\".\"created_at\", \"public\".\"comment\".\"updated_at\"",
+        "SELECT $1 AS one FROM \"workspace\" w JOIN \"organization_membership\" om ON om.\"organizationId\" = w.\"organizationId\" WHERE w.\"id\" = $2 AND om.\"userId\" = $3 AND om.\"role\" IN ($4 /*, ... */) LIMIT $5",
+        "SELECT p.\"status\"::text AS \"status\", concat_ws($2, p.\"status\"::text, coalesce(md5(p.\"title\"), $3), coalesce(md5(p.\"summary\"), $4), coalesce(md5(p.\"product_name\"), $5), p.\"last_activity_at\"::text, coalesce(p.\"planned_at\"::text, $6), coalesce(p.\"decided_at\"::text, $7), coalesce(p.\"decision_reason\"::text, $8), coalesce(p.\"session_id\", $9), (SELECT count(*) FROM \"plan_item\" i WHERE i.\"plan_id\" = p.\"id\")::text, (SELECT count(*) FROM \"plan_revision\" r WHERE r.\"plan_id\" = p.\"id\")::text, coalesce((SELECT max(r.\"changed_at\") FROM \"plan_revision\" r WHERE r.\"plan_id\" = p.\"id\")::text, $10), (SELECT count(*) FROM \"plan_step\" s WHERE s.\"plan_id\" = p.\"id\")::text, coalesce((SELECT max(s.\"started_at\") FROM \"plan_step\" s WHERE s.\"plan_id\" = p.\"id\")::text, $11), (SELECT count(*) FROM \"plan_narration\" n WHERE n.\"plan_id\" = p.\"id\")::text, coalesce((SELECT max(n.\"seq\") FROM \"plan_narration\" n WHERE n.\"plan_id\" = p.\"id\")::text, $12), (SELECT count(*) FROM \"plan_narration_session\" ns WHERE ns.\"plan_id\" = p.\"id\")::text, coalesce((SELECT max(ns.\"updated_at\") FROM \"plan_narration_session\" ns WHERE ns.\"plan_id\" = p.\"id\")::text, $13), (SELECT count(*) FROM \"approval_gate\" g WHERE g.\"work_item_id\" IS NULL AND g.\"kind\" = $14 AND g.\"subject_id\" = p.\"id\")::text, coalesce((SELECT max(g.\"updated_at\") FROM \"approval_gate\" g WHERE g.\"work_item_id\" IS NULL AND g.\"kind\" = $15 AND g.\"subject_id\" = p.\"id\")::text, $16), coalesce((SELECT cs.\"turn_count\" FROM \"plan_change_session\" cs WHERE cs.\"id\" = p.\"session_id\")::text, $17) ) AS \"parts\" FROM \"plan\" p WHERE p.\"id\" = $1",
+        "UPDATE \"public\".\"work_item\" SET \"status\" = $1, \"updatedAt\" = $2 WHERE (\"public\".\"work_item\".\"id\" = $3 AND $4=$5) RETURNING \"public\".\"work_item\".\"id\", \"public\".\"work_item\".\"workspaceId\", \"public\".\"work_item\".\"projectId\", \"public\".\"work_item\".\"parentId\", \"public\".\"work_item\".\"folderId\", \"public\".\"work_item\".\"kind\"::text, \"public\".\"work_item\".\"key\", \"public\".\"work_item\".\"identifier\", \"public\".\"work_item\".\"title\", \"public\".\"work_item\".\"descriptionMd\", \"public\".\"work_item\".\"explanationMd\", \"public\".\"work_item\".\"title_language\", \"public\".\"work_item\".\"description_language\", \"public\".\"work_item\".\"explanation_language\", \"public\".\"work_item\".\"explanationSource\"::text, \"public\".\"work_item\".\"status\", \"public\".\"work_item\".\"priority\"::text, \"public\".\"work_item\".\"assigneeId\", \"public\".\"work_item\".\"reporterId\", \"public\".\"work_item\".\"dueDate\", \"public\".\"work_item\".\"estimateMinutes\", \"public\".\"work_item\".\"type\"::text, \"public\".\"work_item\".\"executor\"::text, \"public\".\"work_item\".\"difficulty\"::text, \"public\".\"work_item\".\"planningSource\"::text, \"public\".\"work_item\".\"planningHarness\", \"public\".\"work_item\".\"planningModel\", \"public\".\"work_item\".\"implementationSource\"::text, \"public\".\"work_item\".\"implementationHarness\", \"public\".\"work_item\".\"implementationModel\", \"public\".\"work_item\".\"subject\", \"public\".\"work_item\".\"storyPoints\", \"public\".\"work_item\".\"position\", \"public\".\"work_item\".\"sprintId\", \"public\".\"work_item\".\"backlogRank\", \"public\".\"work_item\".\"archivedAt\", \"public\".\"work_item\".\"obsolescence\"::text, \"public\".\"work_item\".\"obsolescenceNoteMd\", \"public\".\"work_item\".\"triagedAt\", \"public\".\"work_item\".\"snoozedUntil\", \"public\".\"work_item\".\"submittedByUserId\", \"public\".\"work_item\".\"publicChildrenHidden\", \"public\".\"work_item\".\"sessionBranch\", \"public\".\"work_item\".\"targetRepo\", \"public\".\"work_item\".\"targetRepos\", \"public\".\"work_item\".\"ciState\", \"public\".\"work_item\".\"fixReason\"::text, \"public\".\"work_item\".\"fixDetail\", \"public\".\"work_item\".\"resumeState\"::text, \"public\".\"work_item\".\"resume_run_id\", \"public\".\"work_item\".\"embedding_failed_hash\", \"public\".\"work_item\".\"embedding_failed_attempts\", \"public\".\"work_item\".\"completedAt\", \"public\".\"work_item\".\"createdAt\", \"public\".\"work_item\".\"updatedAt\"",
+        "SELECT \"public\".\"organization\".\"id\", \"public\".\"organization\".\"name\", \"public\".\"organization\".\"suspended_at\" FROM \"public\".\"organization\" WHERE \"public\".\"organization\".\"id\" = $1 OFFSET $2",
+        "SELECT COUNT(*) AS \"_count$_all\", MAX(\"updatedAt\") AS \"_max$updatedAt\" FROM (SELECT \"public\".\"work_item\".\"id\", \"public\".\"work_item\".\"updatedAt\" FROM \"public\".\"work_item\" WHERE (\"public\".\"work_item\".\"workspaceId\" = $1 AND \"public\".\"work_item\".\"archivedAt\" IS NULL AND \"public\".\"work_item\".\"triagedAt\" IS NULL AND (\"public\".\"work_item\".\"assigneeId\" = $2 OR \"public\".\"work_item\".\"reporterId\" = $3) AND \"public\".\"work_item\".\"projectId\" = $4 AND \"public\".\"work_item\".\"status\" IN ($5 /*, ... */) AND \"public\".\"work_item\".\"completedAt\" >= $6) OFFSET $7) AS \"sub\"",
+        "SELECT COUNT(*) AS \"_count$_all\", MAX(\"updatedAt\") AS \"_max$updatedAt\" FROM (SELECT \"public\".\"work_item\".\"id\", \"public\".\"work_item\".\"updatedAt\" FROM \"public\".\"work_item\" WHERE (\"public\".\"work_item\".\"workspaceId\" = $1 AND \"public\".\"work_item\".\"archivedAt\" IS NULL AND \"public\".\"work_item\".\"triagedAt\" IS NULL AND (\"public\".\"work_item\".\"assigneeId\" = $2 OR \"public\".\"work_item\".\"reporterId\" = $3) AND \"public\".\"work_item\".\"projectId\" = $4 AND \"public\".\"work_item\".\"status\" NOT IN ($5 /*, ... */)) OFFSET $6) AS \"sub\"",
+        "SELECT \"public\".\"plan\".\"id\" FROM \"public\".\"plan\" WHERE (\"public\".\"plan\".\"workspace_id\" = $1 AND \"public\".\"plan\".\"project_id\" IN ($2) AND \"public\".\"plan\".\"status\" IN ($3 /*, ... */) AND EXISTS(SELECT \"t0\".\"plan_id\" FROM \"public\".\"plan_revision\" AS \"t0\" WHERE (\"t0\".\"changed_at\" >= $4 AND (\"public\".\"plan\".\"id\") = (\"t0\".\"plan_id\") AND \"t0\".\"plan_id\" IS NOT NULL))) OFFSET $5",
+        "SELECT \"public\".\"dispatch_run\".\"id\" FROM \"public\".\"dispatch_run\" WHERE (\"public\".\"dispatch_run\".\"created_by_id\" = $1 AND \"public\".\"dispatch_run\".\"status\" = CAST($2::text AS \"public\".\"dispatch_run_status\") AND \"public\".\"dispatch_run\".\"origin\" = CAST($3::text AS \"public\".\"dispatch_run_origin\") AND \"public\".\"dispatch_run\".\"reported_by\" = CAST($4::text AS \"public\".\"dispatch_run_reporter\") AND (\"public\".\"dispatch_run\".\"last_heartbeat_at\" IS NULL OR \"public\".\"dispatch_run\".\"last_heartbeat_at\" < $5)) OFFSET $6",
+        "SELECT COUNT(*) AS \"_count$_all\", MAX(\"updatedAt\") AS \"_max$updatedAt\" FROM (SELECT \"public\".\"work_item\".\"id\", \"public\".\"work_item\".\"updatedAt\" FROM \"public\".\"work_item\" WHERE (\"public\".\"work_item\".\"workspaceId\" = $1 AND \"public\".\"work_item\".\"archivedAt\" IS NULL AND \"public\".\"work_item\".\"triagedAt\" IS NULL AND (\"public\".\"work_item\".\"assigneeId\" = $2 OR \"public\".\"work_item\".\"reporterId\" = $3) AND \"public\".\"work_item\".\"projectId\" = $4 AND \"public\".\"work_item\".\"status\" IN ($5 /*, ... */) AND \"public\".\"work_item\".\"fixReason\" IS NULL AND \"public\".\"work_item\".\"resumeState\" IS NOT NULL) OFFSET $6) AS \"sub\"",
+        "SELECT COUNT(*) AS \"_count$_all\", MAX(\"updatedAt\") AS \"_max$updatedAt\" FROM (SELECT \"public\".\"work_item\".\"id\", \"public\".\"work_item\".\"updatedAt\" FROM \"public\".\"work_item\" WHERE (\"public\".\"work_item\".\"workspaceId\" = $1 AND \"public\".\"work_item\".\"archivedAt\" IS NULL AND \"public\".\"work_item\".\"triagedAt\" IS NULL AND (\"public\".\"work_item\".\"assigneeId\" = $2 OR \"public\".\"work_item\".\"reporterId\" = $3) AND \"public\".\"work_item\".\"projectId\" = $4 AND \"public\".\"work_item\".\"status\" IN ($5 /*, ... */) AND \"public\".\"work_item\".\"fixReason\" IS NULL AND \"public\".\"work_item\".\"resumeState\" IS NULL) OFFSET $6) AS \"sub\"",
+        "UPDATE \"public\".\"work_item\" SET \"assigneeId\" = $1, \"updatedAt\" = $2 WHERE (\"public\".\"work_item\".\"id\" = $3 AND $4=$5) RETURNING \"public\".\"work_item\".\"id\", \"public\".\"work_item\".\"workspaceId\", \"public\".\"work_item\".\"projectId\", \"public\".\"work_item\".\"parentId\", \"public\".\"work_item\".\"folderId\", \"public\".\"work_item\".\"kind\"::text, \"public\".\"work_item\".\"key\", \"public\".\"work_item\".\"identifier\", \"public\".\"work_item\".\"title\", \"public\".\"work_item\".\"descriptionMd\", \"public\".\"work_item\".\"explanationMd\", \"public\".\"work_item\".\"title_language\", \"public\".\"work_item\".\"description_language\", \"public\".\"work_item\".\"explanation_language\", \"public\".\"work_item\".\"explanationSource\"::text, \"public\".\"work_item\".\"status\", \"public\".\"work_item\".\"priority\"::text, \"public\".\"work_item\".\"assigneeId\", \"public\".\"work_item\".\"reporterId\", \"public\".\"work_item\".\"dueDate\", \"public\".\"work_item\".\"estimateMinutes\", \"public\".\"work_item\".\"type\"::text, \"public\".\"work_item\".\"executor\"::text, \"public\".\"work_item\".\"difficulty\"::text, \"public\".\"work_item\".\"planningSource\"::text, \"public\".\"work_item\".\"planningHarness\", \"public\".\"work_item\".\"planningModel\", \"public\".\"work_item\".\"implementationSource\"::text, \"public\".\"work_item\".\"implementationHarness\", \"public\".\"work_item\".\"implementationModel\", \"public\".\"work_item\".\"subject\", \"public\".\"work_item\".\"storyPoints\", \"public\".\"work_item\".\"position\", \"public\".\"work_item\".\"sprintId\", \"public\".\"work_item\".\"backlogRank\", \"public\".\"work_item\".\"archivedAt\", \"public\".\"work_item\".\"obsolescence\"::text, \"public\".\"work_item\".\"obsolescenceNoteMd\", \"public\".\"work_item\".\"triagedAt\", \"public\".\"work_item\".\"snoozedUntil\", \"public\".\"work_item\".\"submittedByUserId\", \"public\".\"work_item\".\"publicChildrenHidden\", \"public\".\"work_item\".\"sessionBranch\", \"public\".\"work_item\".\"targetRepo\", \"public\".\"work_item\".\"targetRepos\", \"public\".\"work_item\".\"ciState\", \"public\".\"work_item\".\"fixReason\"::text, \"public\".\"work_item\".\"fixDetail\", \"public\".\"work_item\".\"resumeState\"::text, \"public\".\"work_item\".\"resume_run_id\", \"public\".\"work_item\".\"embedding_failed_hash\", \"public\".\"work_item\".\"embedding_failed_attempts\", \"public\".\"work_item\".\"completedAt\", \"public\".\"work_item\".\"createdAt\", \"public\".\"work_item\".\"updatedAt\"",
+        "SELECT \"public\".\"work_item\".\"id\", \"public\".\"work_item\".\"folderId\" FROM \"public\".\"work_item\" WHERE (\"public\".\"work_item\".\"id\" IN ($1 /*, ... */) AND \"public\".\"work_item\".\"folderId\" IS NOT NULL) OFFSET $2",
+        "SELECT \"public\".\"work_item\".\"id\", \"public\".\"work_item\".\"workspaceId\", \"public\".\"work_item\".\"projectId\", \"public\".\"work_item\".\"parentId\", \"public\".\"work_item\".\"folderId\", \"public\".\"work_item\".\"kind\"::text, \"public\".\"work_item\".\"key\", \"public\".\"work_item\".\"identifier\", \"public\".\"work_item\".\"title\", \"public\".\"work_item\".\"descriptionMd\", \"public\".\"work_item\".\"explanationMd\", \"public\".\"work_item\".\"title_language\", \"public\".\"work_item\".\"description_language\", \"public\".\"work_item\".\"explanation_language\", \"public\".\"work_item\".\"explanationSource\"::text, \"public\".\"work_item\".\"status\", \"public\".\"work_item\".\"priority\"::text, \"public\".\"work_item\".\"assigneeId\", \"public\".\"work_item\".\"reporterId\", \"public\".\"work_item\".\"dueDate\", \"public\".\"work_item\".\"estimateMinutes\", \"public\".\"work_item\".\"type\"::text, \"public\".\"work_item\".\"executor\"::text, \"public\".\"work_item\".\"difficulty\"::text, \"public\".\"work_item\".\"planningSource\"::text, \"public\".\"work_item\".\"planningHarness\", \"public\".\"work_item\".\"planningModel\", \"public\".\"work_item\".\"implementationSource\"::text, \"public\".\"work_item\".\"implementationHarness\", \"public\".\"work_item\".\"implementationModel\", \"public\".\"work_item\".\"subject\", \"public\".\"work_item\".\"storyPoints\", \"public\".\"work_item\".\"position\", \"public\".\"work_item\".\"sprintId\", \"public\".\"work_item\".\"backlogRank\", \"public\".\"work_item\".\"archivedAt\", \"public\".\"work_item\".\"obsolescence\"::text, \"public\".\"work_item\".\"obsolescenceNoteMd\", \"public\".\"work_item\".\"triagedAt\", \"public\".\"work_item\".\"snoozedUntil\", \"public\".\"work_item\".\"submittedByUserId\", \"public\".\"work_item\".\"publicChildrenHidden\", \"public\".\"work_item\".\"sessionBranch\", \"public\".\"work_item\".\"targetRepo\", \"public\".\"work_item\".\"targetRepos\", \"public\".\"work_item\".\"ciState\", \"public\".\"work_item\".\"fixReason\"::text, \"public\".\"work_item\".\"fixDetail\", \"public\".\"work_item\".\"resumeState\"::text, \"public\".\"work_item\".\"resume_run_id\", \"public\".\"work_item\".\"embedding_failed_hash\", \"public\".\"work_item\".\"embedding_failed_attempts\", \"public\".\"work_item\".\"completedAt\", \"public\".\"work_item\".\"createdAt\", \"public\".\"work_item\".\"updatedAt\" FROM \"public\".\"work_item\" WHERE ((\"public\".\"work_item\".\"projectId\" = $1 AND \"public\".\"work_item\".\"identifier\" = $2) AND $5=$6) LIMIT $3 OFFSET $4",
+        "SELECT \"public\".\"workspace\".\"id\", \"public\".\"workspace\".\"organizationId\", \"public\".\"workspace\".\"name\", \"public\".\"workspace\".\"slug\", \"public\".\"workspace\".\"requires_two_factor\", \"public\".\"workspace\".\"createdAt\", \"public\".\"workspace\".\"updatedAt\" FROM \"public\".\"workspace\" WHERE \"public\".\"workspace\".\"id\" = $1 OFFSET $2",
+        "SELECT COUNT(*) AS \"_count$_all\" FROM (SELECT \"public\".\"work_item\".\"id\" FROM \"public\".\"work_item\" WHERE (\"public\".\"work_item\".\"workspaceId\" = $1 AND \"public\".\"work_item\".\"archivedAt\" IS NULL AND \"public\".\"work_item\".\"triagedAt\" IS NULL AND (\"public\".\"work_item\".\"assigneeId\" = $2 OR \"public\".\"work_item\".\"reporterId\" = $3) AND \"public\".\"work_item\".\"projectId\" = $4 AND \"public\".\"work_item\".\"status\" NOT IN ($5 /*, ... */)) OFFSET $6) AS \"sub\"",
+        "SELECT DISTINCT ON (\"workItemId\") \"workItemId\", \"id\" FROM \"work_item_revision\" WHERE \"workItemId\" IN ($1 /*, ... */) -- A PURE STATUS MOVE IS NOT AN EDIT THIS ANCHOR IS ABOUT (MOTIR-5646). -- See the note above this method for why. AND NOT ( \"diff\" ?& ARRAY[$2] AND (SELECT count(*) FROM jsonb_object_keys(\"diff\")) = $3 ) ORDER BY \"workItemId\", \"changedAt\" DESC, \"id\" DESC",
+        "WITH RECURSIVE chain AS ( SELECT w.\"id\" AS \"seedId\", w.\"parentId\" AS \"ancestorId\" FROM \"work_item\" w WHERE w.\"id\" IN ($1) AND w.\"workspaceId\" = $2 AND w.\"parentId\" IS NOT NULL UNION ALL SELECT c.\"seedId\", p.\"parentId\" AS \"ancestorId\" FROM \"work_item\" p JOIN chain c ON p.\"id\" = c.\"ancestorId\" WHERE p.\"workspaceId\" = $3 AND p.\"parentId\" IS NOT NULL ) SELECT \"seedId\", \"ancestorId\" FROM chain",
+        "SELECT \"public\".\"plan_revision\".\"id\", \"public\".\"plan_revision\".\"plan_id\", \"public\".\"plan_revision\".\"change_kind\", \"public\".\"plan_revision\".\"changed_at\", \"public\".\"plan_revision\".\"actor_harness\", \"public\".\"plan_revision\".\"actor_model\" FROM \"public\".\"plan_revision\" WHERE (\"public\".\"plan_revision\".\"plan_id\" IN ($1 /*, ... */) AND \"public\".\"plan_revision\".\"change_kind\" NOT IN ($2)) ORDER BY \"public\".\"plan_revision\".\"plan_id\" ASC, \"public\".\"plan_revision\".\"changed_at\" ASC OFFSET $3",
+        "SELECT COUNT(*) AS \"_count$_all\" FROM (SELECT \"public\".\"watcher\".\"id\" FROM \"public\".\"watcher\" WHERE \"public\".\"watcher\".\"work_item_id\" = $1 OFFSET $2) AS \"sub\"",
+        "SELECT COUNT(*) AS \"_count$_all\" FROM (SELECT \"public\".\"work_item\".\"id\" FROM \"public\".\"work_item\" WHERE (\"public\".\"work_item\".\"workspaceId\" = $1 AND \"public\".\"work_item\".\"archivedAt\" IS NULL AND \"public\".\"work_item\".\"triagedAt\" IS NULL AND (\"public\".\"work_item\".\"assigneeId\" = $2 OR \"public\".\"work_item\".\"reporterId\" = $3) AND \"public\".\"work_item\".\"projectId\" = $4 AND \"public\".\"work_item\".\"status\" IN ($5 /*, ... */) AND \"public\".\"work_item\".\"fixReason\" IS NULL AND \"public\".\"work_item\".\"resumeState\" IS NULL) OFFSET $6) AS \"sub\"",
+        "WITH mandating_org AS ( SELECT o.id AS id, o.name AS name FROM organization_membership om JOIN organization o ON o.id = om.\"organizationId\" WHERE om.\"userId\" = $1 AND o.requires_two_factor ORDER BY o.name ASC, o.id ASC LIMIT $4 ), mandating_workspace AS ( SELECT w.id AS id, w.name AS name FROM workspace_membership wm JOIN workspace w ON w.id = wm.\"workspaceId\" WHERE wm.\"userId\" = $2 AND w.requires_two_factor ORDER BY w.name ASC, w.id ASC LIMIT $5 ) SELECT (SELECT id FROM mandating_org) AS org_id, (SELECT name FROM mandating_org) AS org_name, (SELECT id FROM mandating_workspace) AS workspace_id, (SELECT name FROM mandating_workspace) AS workspace_name, u.\"twoFactorEnabled\" AS enabled, (SELECT COUNT(*)::int FROM passkey p WHERE p.user_id = u.id) AS passkey_count FROM \"user\" u WHERE u.id = $3",
+        "UPDATE \"public\".\"work_item\" SET \"parentId\" = $1, \"position\" = $2, \"updatedAt\" = $3 WHERE (\"public\".\"work_item\".\"id\" = $4 AND $5=$6) RETURNING \"public\".\"work_item\".\"id\", \"public\".\"work_item\".\"workspaceId\", \"public\".\"work_item\".\"projectId\", \"public\".\"work_item\".\"parentId\", \"public\".\"work_item\".\"folderId\", \"public\".\"work_item\".\"kind\"::text, \"public\".\"work_item\".\"key\", \"public\".\"work_item\".\"identifier\", \"public\".\"work_item\".\"title\", \"public\".\"work_item\".\"descriptionMd\", \"public\".\"work_item\".\"explanationMd\", \"public\".\"work_item\".\"title_language\", \"public\".\"work_item\".\"description_language\", \"public\".\"work_item\".\"explanation_language\", \"public\".\"work_item\".\"explanationSource\"::text, \"public\".\"work_item\".\"status\", \"public\".\"work_item\".\"priority\"::text, \"public\".\"work_item\".\"assigneeId\", \"public\".\"work_item\".\"reporterId\", \"public\".\"work_item\".\"dueDate\", \"public\".\"work_item\".\"estimateMinutes\", \"public\".\"work_item\".\"type\"::text, \"public\".\"work_item\".\"executor\"::text, \"public\".\"work_item\".\"difficulty\"::text, \"public\".\"work_item\".\"planningSource\"::text, \"public\".\"work_item\".\"planningHarness\", \"public\".\"work_item\".\"planningModel\", \"public\".\"work_item\".\"implementationSource\"::text, \"public\".\"work_item\".\"implementationHarness\", \"public\".\"work_item\".\"implementationModel\", \"public\".\"work_item\".\"subject\", \"public\".\"work_item\".\"storyPoints\", \"public\".\"work_item\".\"position\", \"public\".\"work_item\".\"sprintId\", \"public\".\"work_item\".\"backlogRank\", \"public\".\"work_item\".\"archivedAt\", \"public\".\"work_item\".\"obsolescence\"::text, \"public\".\"work_item\".\"obsolescenceNoteMd\", \"public\".\"work_item\".\"triagedAt\", \"public\".\"work_item\".\"snoozedUntil\", \"public\".\"work_item\".\"submittedByUserId\", \"public\".\"work_item\".\"publicChildrenHidden\", \"public\".\"work_item\".\"sessionBranch\", \"public\".\"work_item\".\"targetRepo\", \"public\".\"work_item\".\"targetRepos\", \"public\".\"work_item\".\"ciState\", \"public\".\"work_item\".\"fixReason\"::text, \"public\".\"work_item\".\"fixDetail\", \"public\".\"work_item\".\"resumeState\"::text, \"public\".\"work_item\".\"resume_run_id\", \"public\".\"work_item\".\"embedding_failed_hash\", \"public\".\"work_item\".\"embedding_failed_attempts\", \"public\".\"work_item\".\"completedAt\", \"public\".\"work_item\".\"createdAt\", \"public\".\"work_item\".\"updatedAt\"",
+        "UPDATE \"public\".\"work_item\" SET \"title\" = $1, \"title_language\" = $2, \"updatedAt\" = $3 WHERE (\"public\".\"work_item\".\"id\" = $4 AND $5=$6) RETURNING \"public\".\"work_item\".\"id\", \"public\".\"work_item\".\"workspaceId\", \"public\".\"work_item\".\"projectId\", \"public\".\"work_item\".\"parentId\", \"public\".\"work_item\".\"folderId\", \"public\".\"work_item\".\"kind\"::text, \"public\".\"work_item\".\"key\", \"public\".\"work_item\".\"identifier\", \"public\".\"work_item\".\"title\", \"public\".\"work_item\".\"descriptionMd\", \"public\".\"work_item\".\"explanationMd\", \"public\".\"work_item\".\"title_language\", \"public\".\"work_item\".\"description_language\", \"public\".\"work_item\".\"explanation_language\", \"public\".\"work_item\".\"explanationSource\"::text, \"public\".\"work_item\".\"status\", \"public\".\"work_item\".\"priority\"::text, \"public\".\"work_item\".\"assigneeId\", \"public\".\"work_item\".\"reporterId\", \"public\".\"work_item\".\"dueDate\", \"public\".\"work_item\".\"estimateMinutes\", \"public\".\"work_item\".\"type\"::text, \"public\".\"work_item\".\"executor\"::text, \"public\".\"work_item\".\"difficulty\"::text, \"public\".\"work_item\".\"planningSource\"::text, \"public\".\"work_item\".\"planningHarness\", \"public\".\"work_item\".\"planningModel\", \"public\".\"work_item\".\"implementationSource\"::text, \"public\".\"work_item\".\"implementationHarness\", \"public\".\"work_item\".\"implementationModel\", \"public\".\"work_item\".\"subject\", \"public\".\"work_item\".\"storyPoints\", \"public\".\"work_item\".\"position\", \"public\".\"work_item\".\"sprintId\", \"public\".\"work_item\".\"backlogRank\", \"public\".\"work_item\".\"archivedAt\", \"public\".\"work_item\".\"obsolescence\"::text, \"public\".\"work_item\".\"obsolescenceNoteMd\", \"public\".\"work_item\".\"triagedAt\", \"public\".\"work_item\".\"snoozedUntil\", \"public\".\"work_item\".\"submittedByUserId\", \"public\".\"work_item\".\"publicChildrenHidden\", \"public\".\"work_item\".\"sessionBranch\", \"public\".\"work_item\".\"targetRepo\", \"public\".\"work_item\".\"targetRepos\", \"public\".\"work_item\".\"ciState\", \"public\".\"work_item\".\"fixReason\"::text, \"public\".\"work_item\".\"fixDetail\", \"public\".\"work_item\".\"resumeState\"::text, \"public\".\"work_item\".\"resume_run_id\", \"public\".\"work_item\".\"embedding_failed_hash\", \"public\".\"work_item\".\"embedding_failed_attempts\", \"public\".\"work_item\".\"completedAt\", \"public\".\"work_item\".\"createdAt\", \"public\".\"work_item\".\"updatedAt\"",
+        "SELECT COUNT(*) AS \"_count$_all\" FROM (SELECT \"public\".\"work_item\".\"id\" FROM \"public\".\"work_item\" WHERE (\"public\".\"work_item\".\"workspaceId\" = $1 AND \"public\".\"work_item\".\"archivedAt\" IS NULL AND \"public\".\"work_item\".\"triagedAt\" IS NULL AND (\"public\".\"work_item\".\"assigneeId\" = $2 OR \"public\".\"work_item\".\"reporterId\" = $3) AND \"public\".\"work_item\".\"projectId\" = $4 AND \"public\".\"work_item\".\"status\" IN ($5 /*, ... */) AND \"public\".\"work_item\".\"completedAt\" >= $6) OFFSET $7) AS \"sub\"",
+        "SELECT COUNT(*) AS \"_count$_all\", MAX(\"updated_at\") AS \"_max$updated_at\" FROM (SELECT \"public\".\"approval_gate\".\"id\", \"public\".\"approval_gate\".\"updated_at\" FROM \"public\".\"approval_gate\" LEFT JOIN \"public\".\"work_item\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"approval_gate\".\"work_item_id\") LEFT JOIN \"public\".\"work_item\" AS \"j1\" ON (\"j1\".\"id\") = (\"public\".\"approval_gate\".\"work_item_id\") WHERE (\"public\".\"approval_gate\".\"project_id\" IN ($1) AND \"public\".\"approval_gate\".\"state\" = CAST($2::text AS \"public\".\"approval_gate_state\") AND (((\"j0\".\"assigneeId\" = $3 OR (\"j0\".\"assigneeId\" IS NULL AND \"j0\".\"reporterId\" = $4)) AND (\"j0\".\"id\" IS NOT NULL)) OR (\"public\".\"approval_gate\".\"work_item_id\" IS NULL AND \"public\".\"approval_gate\".\"routed_to_id\" = $5)) AND \"public\".\"approval_gate\".\"kind\" <> CAST($6::text AS \"public\".\"approval_gate_kind\") AND (NOT (\"public\".\"approval_gate\".\"kind\" = CAST($7::text AS \"public\".\"approval_gate_kind\") AND (EXISTS(SELECT \"t2\".\"work_item_id\" FROM \"public\".\"approval_gate\" AS \"t2\" WHERE (\"t2\".\"kind\" IN ($8 /*, ... */) AND \"t2\".\"state\" = CAST($9::text AS \"public\".\"approval_gate_state\") AND (\"j1\".\"id\") = (\"t2\".\"work_item_id\") AND \"t2\".\"work_item_id\" IS NOT NULL)) AND (\"j1\".\"id\" IS NOT NULL)))) AND (\"public\".\"approval_gate\".\"kind\" <> CAST($10::text AS \"public\".\"approval_gate_kind\") OR (\"public\".\"approval_gate\".\"kind\" = CAST($11::text AS \"public\".\"approval_gate_kind\") AND $12=$13))) OFFSET $14) AS \"sub\"",
+        "SELECT \"public\".\"user\".\"id\", \"public\".\"user\".\"email\", \"public\".\"user\".\"emailVerified\", \"public\".\"user\".\"twoFactorEnabled\", \"public\".\"user\".\"name\", \"public\".\"user\".\"image\", \"public\".\"user\".\"lastActiveProjectId\", \"public\".\"user\".\"platform_role\"::text, \"public\".\"user\".\"suspended_at\", \"public\".\"user\".\"suspended_reason\", \"public\".\"user\".\"locale\", \"public\".\"user\".\"createdAt\", \"public\".\"user\".\"updatedAt\" FROM \"public\".\"user\" WHERE \"public\".\"user\".\"id\" = $1 OFFSET $2",
+        "SELECT \"public\".\"project\".\"id\", \"public\".\"project\".\"workspaceId\", \"public\".\"project\".\"name\", \"public\".\"project\".\"slug\", \"public\".\"project\".\"identifier\", \"public\".\"project\".\"lastWorkItemNumber\", \"public\".\"project\".\"workflowPolicyMode\"::text, \"public\".\"project\".\"auto_rollup_parent_status\", \"public\".\"project\".\"auto_complete_children_on_parent_done\", \"public\".\"project\".\"acceptance_video_enabled\", \"public\".\"project\".\"design_approval_gate\", \"public\".\"project\".\"auto_translate_work_content\", \"public\".\"project\".\"pr_merge_mode\"::text, \"public\".\"project\".\"pr_merge_mode_decided_at\", \"public\".\"project\".\"review_agent_enabled\", \"public\".\"project\".\"access_mode\"::text, \"public\".\"project\".\"public_overview_md\", \"public\".\"project\".\"made_public_at\", \"public\".\"project\".\"public_tagline\", \"public\".\"project\".\"public_tags\", \"public\".\"project\".\"onboarding_ran_at\", \"public\".\"project\".\"estimationStatistic\"::text, \"public\".\"project\".\"pointScale\"::text, \"public\".\"project\".\"customScaleValues\", \"public\".\"project\".\"ai_generate_explanations\", \"public\".\"project\".\"ai_auto_plan_enabled\", \"public\".\"project\".\"ai_auto_plan_threshold\", \"public\".\"project\".\"ai_sprint_planning_enabled\", \"public\".\"project\".\"ai_sprint_length_days\", \"public\".\"project\".\"hosted_model_trivial\", \"public\".\"project\".\"hosted_model_low\", \"public\".\"project\".\"hosted_model_medium\", \"public\".\"project\".\"hosted_model_high\", \"public\".\"project\".\"ai_record_planning_mistakes\", \"public\".\"project\".\"repo_set_ownership\"::text, \"public\".\"project\".\"repo_set_target_account\", \"public\".\"project\".\"runner_group_id\", \"public\".\"project\".\"runner_group_name\", \"public\".\"project\".\"runner_group_synced_at\", \"public\".\"project\".\"runner_group_sync_pending\", \"public\".\"project\".\"image\", \"public\".\"project\".\"createdAt\", \"public\".\"project\".\"updatedAt\", \"public\".\"project\".\"archivedAt\", \"public\".\"project\".\"primary_address_id\", \"public\".\"project\".\"bug_destination_folder_id\", \"public\".\"project\".\"planner_bug_destination_folder_id\" FROM \"public\".\"project\" WHERE ((\"public\".\"project\".\"workspaceId\" = $1 AND \"public\".\"project\".\"identifier\" = $2) AND $5=$6) LIMIT $3 OFFSET $4",
+        "SELECT \"public\".\"plan_change_session\".\"id\" FROM \"public\".\"plan_change_session\" WHERE (\"public\".\"plan_change_session\".\"project_id\" IN ($1) AND \"public\".\"plan_change_session\".\"ended_at\" IS NULL AND \"public\".\"plan_change_session\".\"awaiting_person_since\" IS NOT NULL) OFFSET $2",
+        "SELECT \"public\".\"work_item\".\"id\", \"public\".\"work_item\".\"resume_run_id\" FROM \"public\".\"work_item\" WHERE (\"public\".\"work_item\".\"workspaceId\" = $1 AND \"public\".\"work_item\".\"archivedAt\" IS NULL AND \"public\".\"work_item\".\"triagedAt\" IS NULL AND (\"public\".\"work_item\".\"assigneeId\" = $2 OR \"public\".\"work_item\".\"reporterId\" = $3) AND \"public\".\"work_item\".\"projectId\" = $4 AND \"public\".\"work_item\".\"status\" IN ($5 /*, ... */) AND \"public\".\"work_item\".\"fixReason\" IS NULL AND \"public\".\"work_item\".\"resumeState\" IS NOT NULL) ORDER BY \"public\".\"work_item\".\"kind\" DESC, \"public\".\"work_item\".\"id\" DESC OFFSET $6",
+        "SELECT \"public\".\"work_item\".\"id\", \"public\".\"work_item\".\"workspaceId\", \"public\".\"work_item\".\"projectId\", \"public\".\"work_item\".\"parentId\", \"public\".\"work_item\".\"folderId\", \"public\".\"work_item\".\"kind\"::text, \"public\".\"work_item\".\"key\", \"public\".\"work_item\".\"identifier\", \"public\".\"work_item\".\"title\", \"public\".\"work_item\".\"descriptionMd\", \"public\".\"work_item\".\"explanationMd\", \"public\".\"work_item\".\"title_language\", \"public\".\"work_item\".\"description_language\", \"public\".\"work_item\".\"explanation_language\", \"public\".\"work_item\".\"explanationSource\"::text, \"public\".\"work_item\".\"status\", \"public\".\"work_item\".\"priority\"::text, \"public\".\"work_item\".\"assigneeId\", \"public\".\"work_item\".\"reporterId\", \"public\".\"work_item\".\"dueDate\", \"public\".\"work_item\".\"estimateMinutes\", \"public\".\"work_item\".\"type\"::text, \"public\".\"work_item\".\"executor\"::text, \"public\".\"work_item\".\"difficulty\"::text, \"public\".\"work_item\".\"planningSource\"::text, \"public\".\"work_item\".\"planningHarness\", \"public\".\"work_item\".\"planningModel\", \"public\".\"work_item\".\"implementationSource\"::text, \"public\".\"work_item\".\"implementationHarness\", \"public\".\"work_item\".\"implementationModel\", \"public\".\"work_item\".\"subject\", \"public\".\"work_item\".\"storyPoints\", \"public\".\"work_item\".\"position\", \"public\".\"work_item\".\"sprintId\", \"public\".\"work_item\".\"backlogRank\", \"public\".\"work_item\".\"archivedAt\", \"public\".\"work_item\".\"obsolescence\"::text, \"public\".\"work_item\".\"obsolescenceNoteMd\", \"public\".\"work_item\".\"triagedAt\", \"public\".\"work_item\".\"snoozedUntil\", \"public\".\"work_item\".\"submittedByUserId\", \"public\".\"work_item\".\"publicChildrenHidden\", \"public\".\"work_item\".\"sessionBranch\", \"public\".\"work_item\".\"targetRepo\", \"public\".\"work_item\".\"targetRepos\", \"public\".\"work_item\".\"ciState\", \"public\".\"work_item\".\"fixReason\"::text, \"public\".\"work_item\".\"fixDetail\", \"public\".\"work_item\".\"resumeState\"::text, \"public\".\"work_item\".\"resume_run_id\", \"public\".\"work_item\".\"embedding_failed_hash\", \"public\".\"work_item\".\"embedding_failed_attempts\", \"public\".\"work_item\".\"completedAt\", \"public\".\"work_item\".\"createdAt\", \"public\".\"work_item\".\"updatedAt\" FROM \"public\".\"work_item\" WHERE (\"public\".\"work_item\".\"projectId\" = $1 AND \"public\".\"work_item\".\"archivedAt\" IS NULL AND \"public\".\"work_item\".\"triagedAt\" IS NULL) ORDER BY \"public\".\"work_item\".\"key\" ASC LIMIT $2 OFFSET $3",
+        "SELECT \"public\".\"work_item\".\"id\", \"public\".\"work_item\".\"workspaceId\", \"public\".\"work_item\".\"projectId\", \"public\".\"work_item\".\"parentId\", \"public\".\"work_item\".\"folderId\", \"public\".\"work_item\".\"kind\"::text, \"public\".\"work_item\".\"key\", \"public\".\"work_item\".\"identifier\", \"public\".\"work_item\".\"title\", \"public\".\"work_item\".\"descriptionMd\", \"public\".\"work_item\".\"explanationMd\", \"public\".\"work_item\".\"title_language\", \"public\".\"work_item\".\"description_language\", \"public\".\"work_item\".\"explanation_language\", \"public\".\"work_item\".\"explanationSource\"::text, \"public\".\"work_item\".\"status\", \"public\".\"work_item\".\"priority\"::text, \"public\".\"work_item\".\"assigneeId\", \"public\".\"work_item\".\"reporterId\", \"public\".\"work_item\".\"dueDate\", \"public\".\"work_item\".\"estimateMinutes\", \"public\".\"work_item\".\"type\"::text, \"public\".\"work_item\".\"executor\"::text, \"public\".\"work_item\".\"difficulty\"::text, \"public\".\"work_item\".\"planningSource\"::text, \"public\".\"work_item\".\"planningHarness\", \"public\".\"work_item\".\"planningModel\", \"public\".\"work_item\".\"implementationSource\"::text, \"public\".\"work_item\".\"implementationHarness\", \"public\".\"work_item\".\"implementationModel\", \"public\".\"work_item\".\"subject\", \"public\".\"work_item\".\"storyPoints\", \"public\".\"work_item\".\"position\", \"public\".\"work_item\".\"sprintId\", \"public\".\"work_item\".\"backlogRank\", \"public\".\"work_item\".\"archivedAt\", \"public\".\"work_item\".\"obsolescence\"::text, \"public\".\"work_item\".\"obsolescenceNoteMd\", \"public\".\"work_item\".\"triagedAt\", \"public\".\"work_item\".\"snoozedUntil\", \"public\".\"work_item\".\"submittedByUserId\", \"public\".\"work_item\".\"publicChildrenHidden\", \"public\".\"work_item\".\"sessionBranch\", \"public\".\"work_item\".\"targetRepo\", \"public\".\"work_item\".\"targetRepos\", \"public\".\"work_item\".\"ciState\", \"public\".\"work_item\".\"fixReason\"::text, \"public\".\"work_item\".\"fixDetail\", \"public\".\"work_item\".\"resumeState\"::text, \"public\".\"work_item\".\"resume_run_id\", \"public\".\"work_item\".\"embedding_failed_hash\", \"public\".\"work_item\".\"embedding_failed_attempts\", \"public\".\"work_item\".\"completedAt\", \"public\".\"work_item\".\"createdAt\", \"public\".\"work_item\".\"updatedAt\" FROM \"public\".\"work_item\" WHERE (\"public\".\"work_item\".\"projectId\" = $1 AND \"public\".\"work_item\".\"archivedAt\" IS NULL AND \"public\".\"work_item\".\"triagedAt\" IS NULL) ORDER BY \"public\".\"work_item\".\"key\" ASC OFFSET $2",
+        "SELECT \"public\".\"api_token\".\"id\", \"public\".\"api_token\".\"user_id\", \"public\".\"api_token\".\"workspace_id\", \"public\".\"api_token\".\"label\", \"public\".\"api_token\".\"token_hash\", \"public\".\"api_token\".\"token_prefix\", \"public\".\"api_token\".\"expires_at\", \"public\".\"api_token\".\"last_used_at\", \"public\".\"api_token\".\"revoked_at\", \"public\".\"api_token\".\"scopes\", \"public\".\"api_token\".\"project_id\", \"public\".\"api_token\".\"dispatch_run_id\", \"public\".\"api_token\".\"oauth_client_id\", \"public\".\"api_token\".\"created_at\" FROM \"public\".\"api_token\" WHERE (\"public\".\"api_token\".\"token_hash\" = $1 AND $4=$5) LIMIT $2 OFFSET $3",
+        "SELECT COUNT(*) AS \"_count$_all\", MAX(\"failed_at\") AS \"_max$failed_at\" FROM (SELECT \"public\".\"plan_change_session\".\"id\", \"public\".\"plan_change_session\".\"failed_at\" FROM \"public\".\"plan_change_session\" WHERE (\"public\".\"plan_change_session\".\"workspace_id\" = $1 AND \"public\".\"plan_change_session\".\"created_by_id\" = $2 AND \"public\".\"plan_change_session\".\"project_id\" IN ($3) AND \"public\".\"plan_change_session\".\"origin\" IN ($4 /*, ... */) AND \"public\".\"plan_change_session\".\"ended_at\" IS NULL AND \"public\".\"plan_change_session\".\"failed_at\" IS NOT NULL AND (\"public\".\"plan_change_session\".\"failure_resumable\" IS NULL OR \"public\".\"plan_change_session\".\"failure_resumable\" = $5 OR EXISTS(SELECT \"t0\".\"session_id\" FROM \"public\".\"plan\" AS \"t0\" WHERE (\"t0\".\"status\" IN ($6 /*, ... */) AND (\"public\".\"plan_change_session\".\"id\") = (\"t0\".\"session_id\") AND \"t0\".\"session_id\" IS NOT NULL)))) OFFSET $7) AS \"sub\"",
+        "SELECT \"public\".\"watcher\".\"id\", \"public\".\"watcher\".\"work_item_id\", \"public\".\"watcher\".\"user_id\", \"public\".\"watcher\".\"created_at\" FROM \"public\".\"watcher\" WHERE \"public\".\"watcher\".\"work_item_id\" = $1 ORDER BY \"public\".\"watcher\".\"created_at\" ASC, \"public\".\"watcher\".\"id\" ASC LIMIT $2 OFFSET $3",
+        "SELECT \"public\".\"plan_item\".\"id\", \"public\".\"plan_item\".\"workspace_id\", \"public\".\"plan_item\".\"plan_id\", \"public\".\"plan_item\".\"op\"::text, \"public\".\"plan_item\".\"work_item_id\", \"public\".\"plan_item\".\"proposed_fields\", \"public\".\"plan_item\".\"patch\", \"public\".\"plan_item\".\"parent_ref\", \"public\".\"plan_item\".\"blocked_by_refs\", \"public\".\"plan_item\".\"supersedes_refs\", \"public\".\"plan_item\".\"base_revision\", \"public\".\"plan_item\".\"reason\", \"public\".\"plan_item\".\"created_at\" FROM \"public\".\"plan_item\" WHERE \"public\".\"plan_item\".\"plan_id\" = $1 ORDER BY \"public\".\"plan_item\".\"created_at\" ASC, \"public\".\"plan_item\".\"id\" ASC OFFSET $2",
+        "SELECT \"public\".\"workspace\".\"id\", \"public\".\"workspace\".\"organizationId\" FROM \"public\".\"workspace\" WHERE \"public\".\"workspace\".\"id\" = $1 OFFSET $2",
+        "SELECT \"public\".\"workflow_status\".\"id\", \"public\".\"workflow_status\".\"workspace_id\", \"public\".\"workflow_status\".\"project_id\", \"public\".\"workflow_status\".\"key\", \"public\".\"workflow_status\".\"label\", \"public\".\"workflow_status\".\"category\"::text, \"public\".\"workflow_status\".\"color\", \"public\".\"workflow_status\".\"position\", \"public\".\"workflow_status\".\"is_initial\", \"public\".\"workflow_status\".\"created_at\", \"public\".\"workflow_status\".\"updated_at\" FROM \"public\".\"workflow_status\" WHERE (\"public\".\"workflow_status\".\"project_id\" = $1 AND \"public\".\"workflow_status\".\"workspace_id\" = $2 AND \"public\".\"workflow_status\".\"key\" = $3) LIMIT $4 OFFSET $5",
+        "SELECT \"public\".\"plan\".\"id\", \"public\".\"plan\".\"workspace_id\", \"public\".\"plan\".\"project_id\", \"public\".\"plan\".\"status\"::text, \"public\".\"plan\".\"title\", \"public\".\"plan\".\"summary\", \"public\".\"plan\".\"product_name\", \"public\".\"plan\".\"source_job_id\", \"public\".\"plan\".\"origin\"::text, \"public\".\"plan\".\"created_by_id\", \"public\".\"plan\".\"author_source\"::text, \"public\".\"plan\".\"author_harness\", \"public\".\"plan\".\"author_model\", \"public\".\"plan\".\"created_at\", \"public\".\"plan\".\"planned_at\", \"public\".\"plan\".\"decided_at\", \"public\".\"plan\".\"decided_by_id\", \"public\".\"plan\".\"decision_reason\"::text, \"public\".\"plan\".\"session_id\", \"public\".\"plan\".\"last_activity_at\", \"public\".\"plan\".\"sharpened_requirement\" FROM \"public\".\"plan\" WHERE (\"public\".\"plan\".\"id\" = $1 AND \"public\".\"plan\".\"workspace_id\" = $2) LIMIT $3 OFFSET $4",
+        "SELECT \"public\".\"workflow_transition\".\"id\", \"public\".\"workflow_transition\".\"workspace_id\", \"public\".\"workflow_transition\".\"project_id\", \"public\".\"workflow_transition\".\"from_status_id\", \"public\".\"workflow_transition\".\"to_status_id\", \"public\".\"workflow_transition\".\"created_at\" FROM \"public\".\"workflow_transition\" WHERE (\"public\".\"workflow_transition\".\"project_id\" = $1 AND \"public\".\"workflow_transition\".\"workspace_id\" = $2) OFFSET $3"
+      ],
+      "left": [
+        "WITH doomed AS ( SELECT \"key\", \"window_start\" FROM \"rate_limit_counter\" WHERE \"expires_at\" < $1 LIMIT $2 ) DELETE FROM \"rate_limit_counter\" t USING doomed d WHERE t.\"key\" = d.\"key\" AND t.\"window_start\" = d.\"window_start\" RETURNING $3 AS deleted",
+        "INSERT INTO \"public\".\"board_column\" (\"id\",\"workspace_id\",\"project_id\",\"board_id\",\"name\",\"position\",\"created_at\",\"updated_at\") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING \"public\".\"board_column\".\"id\", \"public\".\"board_column\".\"workspace_id\", \"public\".\"board_column\".\"project_id\", \"public\".\"board_column\".\"board_id\", \"public\".\"board_column\".\"name\", \"public\".\"board_column\".\"position\", \"public\".\"board_column\".\"wip_limit\", \"public\".\"board_column\".\"created_at\", \"public\".\"board_column\".\"updated_at\"",
+        "SELECT \"public\".\"migrate_onboarding\".\"id\", \"public\".\"migrate_onboarding\".\"workspace_id\", \"public\".\"migrate_onboarding\".\"project_id\", \"public\".\"migrate_onboarding\".\"kind\"::text, \"public\".\"migrate_onboarding\".\"step\"::text, \"public\".\"migrate_onboarding\".\"status\"::text, \"public\".\"migrate_onboarding\".\"connected_repo_ref\", \"public\".\"migrate_onboarding\".\"code_graph_ready\", \"public\".\"migrate_onboarding\".\"convention_approved_at\", \"public\".\"migrate_onboarding\".\"discovery_job_id\", \"public\".\"migrate_onboarding\".\"generate_job_id\", \"public\".\"migrate_onboarding\".\"import_skipped\", \"public\".\"migrate_onboarding\".\"import_completed\", \"public\".\"migrate_onboarding\".\"reconciled_at\", \"public\".\"migrate_onboarding\".\"reconciled_from_step\"::text, \"public\".\"migrate_onboarding\".\"kept_steps\"::text[], \"public\".\"migrate_onboarding\".\"created_at\", \"public\".\"migrate_onboarding\".\"updated_at\" FROM \"public\".\"migrate_onboarding\" LEFT JOIN \"public\".\"project\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"migrate_onboarding\".\"project_id\") WHERE (\"public\".\"migrate_onboarding\".\"status\" = CAST($1::text AS \"public\".\"migrate_onboarding_status\") AND (\"j0\".\"onboarding_ran_at\" IS NOT NULL AND (\"j0\".\"id\" IS NOT NULL))) ORDER BY \"public\".\"migrate_onboarding\".\"id\" ASC LIMIT $2 OFFSET $3",
+        "UPDATE \"public\".\"job_run\" SET \"status\" = CAST($1::text AS \"public\".\"job_run_status\"), \"finished_at\" = $2, \"failure\" = $3 WHERE (\"public\".\"job_run\".\"id\" = $4 AND \"public\".\"job_run\".\"status\" = CAST($5::text AS \"public\".\"job_run_status\"))",
+        "INSERT INTO \"public\".\"organization_membership\" (\"id\",\"organizationId\",\"userId\",\"role\",\"createdAt\",\"updatedAt\") VALUES ($1,$2,$3,CAST($4::text AS \"public\".\"organization_role\"),$5,$6) RETURNING \"public\".\"organization_membership\".\"id\", \"public\".\"organization_membership\".\"organizationId\", \"public\".\"organization_membership\".\"userId\", \"public\".\"organization_membership\".\"role\"::text, \"public\".\"organization_membership\".\"createdAt\", \"public\".\"organization_membership\".\"updatedAt\"",
+        "SELECT \"public\".\"plan_change_session\".\"id\", \"public\".\"plan_change_session\".\"workspace_id\", \"public\".\"plan_change_session\".\"project_id\", \"public\".\"plan_change_session\".\"created_by_id\", \"public\".\"plan_change_session\".\"turn_count\", \"public\".\"plan_change_session\".\"scope_key\", \"public\".\"plan_change_session\".\"target_keys\", \"public\".\"plan_change_session\".\"last_job_id\", \"public\".\"plan_change_session\".\"last_submitted_at\", \"public\".\"plan_change_session\".\"last_activity_at\", \"public\".\"plan_change_session\".\"origin\"::text, \"public\".\"plan_change_session\".\"seed_gate_id\", \"public\".\"plan_change_session\".\"seed_guide_turn_id\", \"public\".\"plan_change_session\".\"ended_at\", \"public\".\"plan_change_session\".\"end_reason\"::text, \"public\".\"plan_change_session\".\"ended_by_id\", \"public\".\"plan_change_session\".\"copied_from_session_id\", \"public\".\"plan_change_session\".\"failed_at\", \"public\".\"plan_change_session\".\"failed_job_id\", \"public\".\"plan_change_session\".\"failure_reason\"::text, \"public\".\"plan_change_session\".\"failure_detail\", \"public\".\"plan_change_session\".\"failure_stop_phase\"::text, \"public\".\"plan_change_session\".\"failure_stop_ref\", \"public\".\"plan_change_session\".\"failure_stop_title\", \"public\".\"plan_change_session\".\"awaiting_person_since\", \"public\".\"plan_change_session\".\"awaiting_person_cause\"::text, \"public\".\"plan_change_session\".\"guide_bugs_filed\", \"public\".\"plan_change_session\".\"auto_resume_count\", \"public\".\"plan_change_session\".\"last_auto_resumed_at\", \"public\".\"plan_change_session\".\"created_at\", \"public\".\"plan_change_session\".\"updated_at\" FROM \"public\".\"plan_change_session\" WHERE (\"public\".\"plan_change_session\".\"id\" = $1 AND \"public\".\"plan_change_session\".\"workspace_id\" = $2) LIMIT $3 OFFSET $4",
+        "SELECT COUNT(*) AS \"_count$_all\" FROM (SELECT \"public\".\"ci_runner_provisioning_intent\".\"id\" FROM \"public\".\"ci_runner_provisioning_intent\" WHERE (\"public\".\"ci_runner_provisioning_intent\".\"organization_id\" = $1 AND \"public\".\"ci_runner_provisioning_intent\".\"status\" IN ($2 /*, ... */)) OFFSET $3) AS \"sub\"",
+        "SELECT \"public\".\"job_run\".\"id\", \"public\".\"job_run\".\"output\" FROM \"public\".\"job_run\" WHERE (\"public\".\"job_run\".\"workspace_id\" = $1 AND \"public\".\"job_run\".\"function_id\" = $2 AND \"public\".\"job_run\".\"status\" = CAST($3::text AS \"public\".\"job_run_status\")) OFFSET $4",
+        "INSERT INTO \"public\".\"folder\" (\"id\",\"workspace_id\",\"project_id\",\"parent_folder_id\",\"name\",\"position\",\"created_by_id\",\"created_at\",\"updated_at\") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING \"public\".\"folder\".\"id\", \"public\".\"folder\".\"workspace_id\", \"public\".\"folder\".\"project_id\", \"public\".\"folder\".\"parent_folder_id\", \"public\".\"folder\".\"name\", \"public\".\"folder\".\"position\", \"public\".\"folder\".\"created_by_id\", \"public\".\"folder\".\"created_at\", \"public\".\"folder\".\"updated_at\"",
+        "SELECT \"public\".\"plan_change_session\".\"id\", \"public\".\"plan_change_session\".\"ended_at\", \"public\".\"plan_change_session\".\"end_reason\"::text, \"public\".\"plan_change_session\".\"last_job_id\", \"public\".\"plan_change_session\".\"failed_at\", \"public\".\"plan_change_session\".\"failed_job_id\", \"public\".\"plan_change_session\".\"failure_reason\"::text, \"public\".\"plan_change_session\".\"failure_detail\", \"public\".\"plan_change_session\".\"failure_stop_phase\"::text, \"public\".\"plan_change_session\".\"failure_stop_ref\", \"public\".\"plan_change_session\".\"failure_stop_title\", \"public\".\"plan_change_session\".\"awaiting_person_since\", \"public\".\"plan_change_session\".\"awaiting_person_cause\"::text, \"public\".\"plan_change_session\".\"auto_resume_count\", \"public\".\"plan_change_session\".\"last_auto_resumed_at\" FROM \"public\".\"plan_change_session\" WHERE (\"public\".\"plan_change_session\".\"id\" = $1 AND \"public\".\"plan_change_session\".\"workspace_id\" = $2) LIMIT $3 OFFSET $4",
+        "UPDATE \"public\".\"dispatch_run\" SET \"status\" = CAST($1::text AS \"public\".\"dispatch_run_status\"), \"stop_reason\" = CAST($2::text AS \"public\".\"dispatch_stop_reason\"), \"ended_at\" = $3, \"updated_at\" = $4 WHERE (\"public\".\"dispatch_run\".\"id\" = $5 AND $6=$7) RETURNING \"public\".\"dispatch_run\".\"id\", \"public\".\"dispatch_run\".\"workspace_id\", \"public\".\"dispatch_run\".\"project_id\", \"public\".\"dispatch_run\".\"command\"::text, \"public\".\"dispatch_run\".\"origin\"::text, \"public\".\"dispatch_run\".\"scope_work_item_id\", \"public\".\"dispatch_run\".\"scope_label\", \"public\".\"dispatch_run\".\"status\"::text, \"public\".\"dispatch_run\".\"stop_reason\"::text, \"public\".\"dispatch_run\".\"agent\", \"public\".\"dispatch_run\".\"model\", \"public\".\"dispatch_run\".\"started_at\", \"public\".\"dispatch_run\".\"ended_at\", \"public\".\"dispatch_run\".\"last_heartbeat_at\", \"public\".\"dispatch_run\".\"reported_by\"::text, \"public\".\"dispatch_run\".\"created_by_id\", \"public\".\"dispatch_run\".\"idempotency_key\", \"public\".\"dispatch_run\".\"agent_instance_id\", \"public\".\"dispatch_run\".\"created_at\", \"public\".\"dispatch_run\".\"updated_at\"",
+        "SELECT \"public\".\"plan\".\"id\" FROM \"public\".\"plan\" WHERE \"public\".\"plan\".\"session_id\" = $1 ORDER BY \"public\".\"plan\".\"created_at\" DESC, \"public\".\"plan\".\"id\" DESC LIMIT $2 OFFSET $3",
+        "DELETE FROM \"oauth_refresh_token\" WHERE \"id\" IN ( SELECT \"id\" FROM \"oauth_refresh_token\" WHERE \"expires_at\" < $1 OR \"reference_id\" IS NULL LIMIT $2 )",
+        "SELECT \"public\".\"ci_runner_provisioning_intent\".\"id\", \"public\".\"ci_runner_provisioning_intent\".\"provider\", \"public\".\"ci_runner_provisioning_intent\".\"workspace_id\", \"public\".\"ci_runner_provisioning_intent\".\"organization_id\", \"public\".\"ci_runner_provisioning_intent\".\"project_id\", \"public\".\"ci_runner_provisioning_intent\".\"github_repo_id\", \"public\".\"ci_runner_provisioning_intent\".\"installation_id\", \"public\".\"ci_runner_provisioning_intent\".\"run_id\", \"public\".\"ci_runner_provisioning_intent\".\"run_attempt\", \"public\".\"ci_runner_provisioning_intent\".\"job_id\", \"public\".\"ci_runner_provisioning_intent\".\"job_name\", \"public\".\"ci_runner_provisioning_intent\".\"workflow_name\", \"public\".\"ci_runner_provisioning_intent\".\"repo_owner\", \"public\".\"ci_runner_provisioning_intent\".\"repo_name\", \"public\".\"ci_runner_provisioning_intent\".\"requested_labels\", \"public\".\"ci_runner_provisioning_intent\".\"queued_at\", \"public\".\"ci_runner_provisioning_intent\".\"status\", \"public\".\"ci_runner_provisioning_intent\".\"container_provider\", \"public\".\"ci_runner_provisioning_intent\".\"container_id\", \"public\".\"ci_runner_provisioning_intent\".\"container_region\", \"public\".\"ci_runner_provisioning_intent\".\"github_runner_id\", \"public\".\"ci_runner_provisioning_intent\".\"runner_name\", \"public\".\"ci_runner_provisioning_intent\".\"booted_at\", \"public\".\"ci_runner_provisioning_intent\".\"started_at\", \"public\".\"ci_runner_provisioning_intent\".\"boot_latency_ms\", \"public\".\"ci_runner_provisioning_intent\".\"teardown_reason\", \"public\".\"ci_runner_provisioning_intent\".\"settled_at\", \"public\".\"ci_runner_provisioning_intent\".\"failure_detail\", \"public\".\"ci_runner_provisioning_intent\".\"created_at\", \"public\".\"ci_runner_provisioning_intent\".\"updated_at\" FROM \"public\".\"ci_runner_provisioning_intent\" WHERE (\"public\".\"ci_runner_provisioning_intent\".\"organization_id\" = $1 AND \"public\".\"ci_runner_provisioning_intent\".\"status\" IN ($2 /*, ... */)) ORDER BY \"public\".\"ci_runner_provisioning_intent\".\"created_at\" ASC OFFSET $3",
+        "SELECT gr.\"id\" AS \"id\", gr.\"owner\" AS \"owner\", gr.\"name\" AS \"name\", gr.\"provider\" AS \"provider\", gr.\"indexed_head_sha\" AS \"indexedHeadSha\", gr.\"default_branch_head_sha\" AS \"defaultBranchHeadSha\", gi.\"installation_id\" AS \"hostInstallationId\" FROM \"github_repo\" gr JOIN \"github_installation\" gi ON gi.\"id\" = gr.\"installation_id\" WHERE gr.\"archived\" = $2 AND gr.\"indexed_head_sha\" IS NOT NULL AND gr.\"default_branch_head_sha\" IS NOT NULL AND gr.\"indexed_head_sha\" <> gr.\"default_branch_head_sha\" AND ( gr.\"commits_behind_base_sha\" IS DISTINCT FROM gr.\"indexed_head_sha\" OR gr.\"commits_behind_head_sha\" IS DISTINCT FROM gr.\"default_branch_head_sha\" ) ORDER BY gr.\"updated_at\" ASC LIMIT $1",
+        "SELECT s.\"id\", s.\"workspace_id\" FROM \"plan_change_session\" s WHERE s.\"ended_at\" IS NULL AND s.\"origin\" = $3 AND s.\"created_by_id\" IS NOT NULL AND s.\"failed_at\" IS NULL AND s.\"awaiting_person_since\" IS NULL AND s.\"last_activity_at\" < $1 AND ( SELECT t.\"role\" = $4 AND t.\"question\" IS NULL FROM \"plan_change_turn\" t WHERE t.\"session_id\" = s.\"id\" ORDER BY t.\"seq\" DESC LIMIT $5 ) AND NOT EXISTS ( SELECT $6 FROM \"plan\" p WHERE p.\"session_id\" = s.\"id\" AND p.\"status\" = $7 ) ORDER BY s.\"last_activity_at\" ASC, s.\"id\" ASC LIMIT $2",
+        "SELECT MAX(\"tick_start\") AS \"_max$tick_start\" FROM (SELECT \"public\".\"ci_live_accrual\".\"tick_start\" FROM \"public\".\"ci_live_accrual\" WHERE \"public\".\"ci_live_accrual\".\"organization_id\" = $1 OFFSET $2) AS \"sub\"",
+        "UPDATE \"project\" SET \"lastWorkItemNumber\" = \"lastWorkItemNumber\" + $2 WHERE \"id\" = $1 RETURNING \"lastWorkItemNumber\" AS n",
+        "INSERT INTO \"public\".\"workflow_status\" (\"id\",\"workspace_id\",\"project_id\",\"key\",\"label\",\"category\",\"position\",\"is_initial\",\"created_at\",\"updated_at\") VALUES ($1,$2,$3,$4,$5,CAST($6::text AS \"public\".\"status_category\"),$7,$8,$9,$10) RETURNING \"public\".\"workflow_status\".\"id\", \"public\".\"workflow_status\".\"workspace_id\", \"public\".\"workflow_status\".\"project_id\", \"public\".\"workflow_status\".\"key\", \"public\".\"workflow_status\".\"label\", \"public\".\"workflow_status\".\"category\"::text, \"public\".\"workflow_status\".\"color\", \"public\".\"workflow_status\".\"position\", \"public\".\"workflow_status\".\"is_initial\", \"public\".\"workflow_status\".\"created_at\", \"public\".\"workflow_status\".\"updated_at\"",
+        "INSERT INTO \"public\".\"board\" (\"id\",\"workspace_id\",\"project_id\",\"name\",\"type\",\"is_default\",\"position\",\"swimlane_group_by\",\"created_at\",\"updated_at\") VALUES ($1,$2,$3,$4,CAST($5::text AS \"public\".\"board_type\"),$6,$7,CAST($8::text AS \"public\".\"board_swimlane_group_by\"),$9,$10) RETURNING \"public\".\"board\".\"id\", \"public\".\"board\".\"workspace_id\", \"public\".\"board\".\"project_id\", \"public\".\"board\".\"name\", \"public\".\"board\".\"type\"::text, \"public\".\"board\".\"is_default\", \"public\".\"board\".\"position\", \"public\".\"board\".\"swimlane_group_by\"::text, \"public\".\"board\".\"created_at\", \"public\".\"board\".\"updated_at\"",
+        "SELECT \"public\".\"work_item\".\"id\", \"public\".\"work_item\".\"backlogRank\" FROM \"public\".\"work_item\" WHERE (\"public\".\"work_item\".\"projectId\" = $1 AND \"public\".\"work_item\".\"workspaceId\" = $2 AND \"public\".\"work_item\".\"sprintId\" IS NULL AND \"public\".\"work_item\".\"archivedAt\" IS NULL) ORDER BY \"public\".\"work_item\".\"backlogRank\" DESC LIMIT $3 OFFSET $4",
+        "UPDATE \"public\".\"job_supervision\" SET \"state\" = CAST($1::text AS \"public\".\"job_supervision_state\"), \"updated_at\" = $2 WHERE ((\"public\".\"job_supervision\".\"run_id\" = $3 AND \"public\".\"job_supervision\".\"subject\" = $4) AND $5=$6) RETURNING \"public\".\"job_supervision\".\"id\", \"public\".\"job_supervision\".\"run_id\", \"public\".\"job_supervision\".\"subject\", \"public\".\"job_supervision\".\"kind\", \"public\".\"job_supervision\".\"poll_number\", \"public\".\"job_supervision\".\"started_at\", \"public\".\"job_supervision\".\"consecutive_read_failures\", \"public\".\"job_supervision\".\"next_poll_at\", \"public\".\"job_supervision\".\"state\"::text, \"public\".\"job_supervision\".\"workspace_id\", \"public\".\"job_supervision\".\"created_at\", \"public\".\"job_supervision\".\"updated_at\"",
+        "SELECT \"public\".\"project\".\"id\", \"public\".\"project\".\"workspaceId\", \"public\".\"project\".\"ai_auto_plan_threshold\" FROM \"public\".\"project\" WHERE (\"public\".\"project\".\"ai_auto_plan_enabled\" = $1 AND \"public\".\"project\".\"archivedAt\" IS NULL) ORDER BY \"public\".\"project\".\"id\" ASC LIMIT $2 OFFSET $3",
+        "SELECT \"public\".\"work_item_delivery\".\"id\", \"public\".\"work_item_delivery\".\"work_item_id\", \"public\".\"work_item_delivery\".\"workspace_id\", \"public\".\"work_item_delivery\".\"github_pull_request_id\" FROM \"public\".\"work_item_delivery\" WHERE \"public\".\"work_item_delivery\".\"github_pull_request_id\" IN ($1 /*, ... */) OFFSET $2",
+        "SELECT gr.\"id\" AS \"id\", gr.\"owner\" AS \"owner\", gr.\"name\" AS \"name\", gr.\"provider\" AS \"provider\", gr.\"workspace_id\" AS \"workspaceId\", gr.\"organization_id\" AS \"organizationId\", gr.\"default_branch\" AS \"defaultBranch\", gr.\"index_paused_reason\" AS \"indexPausedReason\", gr.\"indexed_head_sha\" AS \"indexedHeadSha\", gr.\"default_branch_head_sha\" AS \"defaultBranchHeadSha\", gi.\"installation_id\" AS \"hostInstallationId\" FROM \"github_repo\" gr JOIN \"github_installation\" gi ON gi.\"id\" = gr.\"installation_id\" WHERE gr.\"index_paused_reason\" IS NOT NULL AND gr.\"archived\" = $2 ORDER BY gr.\"index_paused_at\" ASC NULLS FIRST, gr.\"id\" ASC LIMIT $1",
+        "SELECT \"public\".\"monitor_connection\".\"id\", \"public\".\"monitor_connection\".\"installation_id\", \"public\".\"monitor_connection\".\"project_id\", \"public\".\"monitor_connection\".\"workspace_id\", \"public\".\"monitor_connection\".\"external_project_id\", \"public\".\"monitor_connection\".\"external_project_slug\", \"public\".\"monitor_connection\".\"minimum_level\", \"public\".\"monitor_connection\".\"last_seen_watermark\", \"public\".\"monitor_connection\".\"last_polled_at\", \"public\".\"monitor_connection\".\"last_poll_status\", \"public\".\"monitor_connection\".\"last_poll_error\", \"public\".\"monitor_connection\".\"last_poll_filed_count\", \"public\".\"monitor_connection\".\"last_poll_succeeded_at\", \"public\".\"monitor_connection\".\"bound_by_user_id\", \"public\".\"monitor_connection\".\"resolve_on_done\", \"public\".\"monitor_connection\".\"sync_assignee\", \"public\".\"monitor_connection\".\"last_sync_error\", \"public\".\"monitor_connection\".\"last_sync_error_at\", \"public\".\"monitor_connection\".\"last_sync_error_work_item_identifier\", \"public\".\"monitor_connection\".\"created_at\", \"public\".\"monitor_connection\".\"updated_at\" FROM \"public\".\"monitor_connection\" LEFT JOIN \"public\".\"monitor_installation\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"monitor_connection\".\"installation_id\") WHERE (\"j0\".\"refresh_revoked_at\" IS NULL AND (\"j0\".\"id\" IS NOT NULL)) ORDER BY \"public\".\"monitor_connection\".\"id\" ASC OFFSET $1",
+        "SELECT \"public\".\"migrate_onboarding\".\"id\", \"public\".\"migrate_onboarding\".\"workspace_id\", \"public\".\"migrate_onboarding\".\"project_id\", \"public\".\"migrate_onboarding\".\"kind\"::text, \"public\".\"migrate_onboarding\".\"step\"::text, \"public\".\"migrate_onboarding\".\"status\"::text, \"public\".\"migrate_onboarding\".\"connected_repo_ref\", \"public\".\"migrate_onboarding\".\"code_graph_ready\", \"public\".\"migrate_onboarding\".\"convention_approved_at\", \"public\".\"migrate_onboarding\".\"discovery_job_id\", \"public\".\"migrate_onboarding\".\"generate_job_id\", \"public\".\"migrate_onboarding\".\"import_skipped\", \"public\".\"migrate_onboarding\".\"import_completed\", \"public\".\"migrate_onboarding\".\"reconciled_at\", \"public\".\"migrate_onboarding\".\"reconciled_from_step\"::text, \"public\".\"migrate_onboarding\".\"kept_steps\"::text[], \"public\".\"migrate_onboarding\".\"created_at\", \"public\".\"migrate_onboarding\".\"updated_at\" FROM \"public\".\"migrate_onboarding\" WHERE (\"public\".\"migrate_onboarding\".\"step\" = CAST($1::text AS \"public\".\"migrate_onboarding_step\") AND \"public\".\"migrate_onboarding\".\"status\" = CAST($2::text AS \"public\".\"migrate_onboarding_status\")) ORDER BY \"public\".\"migrate_onboarding\".\"id\" ASC LIMIT $3 OFFSET $4",
+        "SELECT \"public\".\"work_item\".\"id\", \"public\".\"work_item\".\"workspaceId\", \"public\".\"work_item\".\"projectId\", \"public\".\"work_item\".\"parentId\", \"public\".\"work_item\".\"folderId\", \"public\".\"work_item\".\"kind\"::text, \"public\".\"work_item\".\"key\", \"public\".\"work_item\".\"identifier\", \"public\".\"work_item\".\"title\", \"public\".\"work_item\".\"descriptionMd\", \"public\".\"work_item\".\"explanationMd\", \"public\".\"work_item\".\"title_language\", \"public\".\"work_item\".\"description_language\", \"public\".\"work_item\".\"explanation_language\", \"public\".\"work_item\".\"explanationSource\"::text, \"public\".\"work_item\".\"status\", \"public\".\"work_item\".\"priority\"::text, \"public\".\"work_item\".\"assigneeId\", \"public\".\"work_item\".\"reporterId\", \"public\".\"work_item\".\"dueDate\", \"public\".\"work_item\".\"estimateMinutes\", \"public\".\"work_item\".\"type\"::text, \"public\".\"work_item\".\"executor\"::text, \"public\".\"work_item\".\"difficulty\"::text, \"public\".\"work_item\".\"planningSource\"::text, \"public\".\"work_item\".\"planningHarness\", \"public\".\"work_item\".\"planningModel\", \"public\".\"work_item\".\"implementationSource\"::text, \"public\".\"work_item\".\"implementationHarness\", \"public\".\"work_item\".\"implementationModel\", \"public\".\"work_item\".\"subject\", \"public\".\"work_item\".\"storyPoints\", \"public\".\"work_item\".\"position\", \"public\".\"work_item\".\"sprintId\", \"public\".\"work_item\".\"backlogRank\", \"public\".\"work_item\".\"archivedAt\", \"public\".\"work_item\".\"obsolescence\"::text, \"public\".\"work_item\".\"obsolescenceNoteMd\", \"public\".\"work_item\".\"triagedAt\", \"public\".\"work_item\".\"snoozedUntil\", \"public\".\"work_item\".\"submittedByUserId\", \"public\".\"work_item\".\"publicChildrenHidden\", \"public\".\"work_item\".\"sessionBranch\", \"public\".\"work_item\".\"targetRepo\", \"public\".\"work_item\".\"targetRepos\", \"public\".\"work_item\".\"ciState\", \"public\".\"work_item\".\"fixReason\"::text, \"public\".\"work_item\".\"fixDetail\", \"public\".\"work_item\".\"resumeState\"::text, \"public\".\"work_item\".\"resume_run_id\", \"public\".\"work_item\".\"embedding_failed_hash\", \"public\".\"work_item\".\"embedding_failed_attempts\", \"public\".\"work_item\".\"completedAt\", \"public\".\"work_item\".\"createdAt\", \"public\".\"work_item\".\"updatedAt\" FROM \"public\".\"work_item\" WHERE (\"public\".\"work_item\".\"projectId\" = $1 AND \"public\".\"work_item\".\"parentId\" = $2 AND \"public\".\"work_item\".\"archivedAt\" IS NULL) ORDER BY \"public\".\"work_item\".\"position\" ASC OFFSET $3",
+        "INSERT INTO \"public\".\"user\" (\"id\",\"email\",\"emailVerified\",\"twoFactorEnabled\",\"name\",\"createdAt\",\"updatedAt\") VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING \"public\".\"user\".\"id\"",
+        "UPDATE \"public\".\"project\" SET \"bug_destination_folder_id\" = $1, \"updatedAt\" = $2 WHERE (\"public\".\"project\".\"id\" = $3 AND $4=$5) RETURNING \"public\".\"project\".\"id\", \"public\".\"project\".\"workspaceId\", \"public\".\"project\".\"name\", \"public\".\"project\".\"slug\", \"public\".\"project\".\"identifier\", \"public\".\"project\".\"lastWorkItemNumber\", \"public\".\"project\".\"workflowPolicyMode\"::text, \"public\".\"project\".\"auto_rollup_parent_status\", \"public\".\"project\".\"auto_complete_children_on_parent_done\", \"public\".\"project\".\"acceptance_video_enabled\", \"public\".\"project\".\"design_approval_gate\", \"public\".\"project\".\"auto_translate_work_content\", \"public\".\"project\".\"pr_merge_mode\"::text, \"public\".\"project\".\"pr_merge_mode_decided_at\", \"public\".\"project\".\"review_agent_enabled\", \"public\".\"project\".\"access_mode\"::text, \"public\".\"project\".\"public_overview_md\", \"public\".\"project\".\"made_public_at\", \"public\".\"project\".\"public_tagline\", \"public\".\"project\".\"public_tags\", \"public\".\"project\".\"onboarding_ran_at\", \"public\".\"project\".\"estimationStatistic\"::text, \"public\".\"project\".\"pointScale\"::text, \"public\".\"project\".\"customScaleValues\", \"public\".\"project\".\"ai_generate_explanations\", \"public\".\"project\".\"ai_auto_plan_enabled\", \"public\".\"project\".\"ai_auto_plan_threshold\", \"public\".\"project\".\"ai_sprint_planning_enabled\", \"public\".\"project\".\"ai_sprint_length_days\", \"public\".\"project\".\"hosted_model_trivial\", \"public\".\"project\".\"hosted_model_low\", \"public\".\"project\".\"hosted_model_medium\", \"public\".\"project\".\"hosted_model_high\", \"public\".\"project\".\"ai_record_planning_mistakes\", \"public\".\"project\".\"repo_set_ownership\"::text, \"public\".\"project\".\"repo_set_target_account\", \"public\".\"project\".\"runner_group_id\", \"public\".\"project\".\"runner_group_name\", \"public\".\"project\".\"runner_group_synced_at\", \"public\".\"project\".\"runner_group_sync_pending\", \"public\".\"project\".\"image\", \"public\".\"project\".\"createdAt\", \"public\".\"project\".\"updatedAt\", \"public\".\"project\".\"archivedAt\", \"public\".\"project\".\"primary_address_id\", \"public\".\"project\".\"bug_destination_folder_id\", \"public\".\"project\".\"planner_bug_destination_folder_id\"",
+        "SELECT COUNT(*) AS \"_count$_all\" FROM (SELECT \"public\".\"dispatch_run_event\".\"id\" FROM \"public\".\"dispatch_run_event\" WHERE \"public\".\"dispatch_run_event\".\"dispatch_run_id\" = $1 OFFSET $2) AS \"sub\"",
+        "SELECT COUNT(*) AS \"_count$_all\" FROM (SELECT \"public\".\"fleet_in_flight_slot\".\"id\" FROM \"public\".\"fleet_in_flight_slot\" WHERE (\"public\".\"fleet_in_flight_slot\".\"workload\" = $1 AND \"public\".\"fleet_in_flight_slot\".\"organization_id\" = $2 AND \"public\".\"fleet_in_flight_slot\".\"expires_at\" > $3) OFFSET $4) AS \"sub\"",
+        "SELECT \"public\".\"ci_live_accrual\".\"id\", \"public\".\"ci_live_accrual\".\"organization_id\" FROM \"public\".\"ci_live_accrual\" WHERE \"public\".\"ci_live_accrual\".\"tick_start\" >= $1 OFFSET $2"
+      ]
+    }
+  },
+  "crossChecks": [
+    "mcp_rate_limited (summary.json, a Rate: passes = the sum of its values) 0 vs mcp_calls outcome limited over the run 0",
+    "run_limited (summary.json) unmeasured vs run_steps outcome limited over the run 0",
+    "870 judged samples fell outside the steady window and were not judged"
+  ]
+}
