@@ -442,6 +442,17 @@ describe('the debug turn after a RELOAD — drawn from the turn DTOs alone', () 
       'Filed PROD-414Drag drops one column short with the diagnosis. Nothing else changed.',
     ],
     [
+      'a new bug filed from an anchored turn',
+      {
+        outcome: 'diagnose',
+        workItemKey: 'PROD-500',
+        title: 'Drag drops one column short',
+        createdInTriage: false,
+      },
+      'PROD-412',
+      'Filed PROD-500Drag drops one column short with the diagnosis. Nothing else changed.',
+    ],
+    [
       'enrich_existing on the widget path',
       {
         outcome: 'enrich_existing',

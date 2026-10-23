@@ -78,6 +78,10 @@ const RETIRED_ALLOWED: Record<string, { names: string[]; why: string }> = {
     names: ['a debug_bug submit'],
     why: 'the story spec asserts no debug_bug job is ever submitted',
   },
+  'tests/e2e/acceptance-debug-with-motir-ai.spec.ts': {
+    names: ['a debug_bug submit'],
+    why: 'the bug-offer receipt asserts no debug_bug job is ever submitted',
+  },
   'tests/ai/debugLanding.test.ts': {
     names: ['a debugged settle member'],
     why: 'debugLandingService’s own test, which stored landings still read',

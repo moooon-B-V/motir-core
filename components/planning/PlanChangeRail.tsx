@@ -2273,7 +2273,7 @@ interface DebugOutcome {
  * One sentence per A1.4 row, chosen from the landing — never from the prose:
  *
  *  · `diagnose` onto the anchored bug → `wroteAnchor` ("It stays in Triage");
- *  · `diagnose` with no anchor (the orb) → `filed`, the bug it filed;
+ *  · `diagnose` onto any other card (a new bug) → `filed`, the bug it filed;
  *  · `enrich_existing` → `enrichedAnchor` / `enriched`, the card that already
  *    covers it — and, on the widget path, the anchor named as left as it is, in
  *    plain text, because the turn did not touch it;
@@ -2309,9 +2309,11 @@ function DebugOutcomeLine({
         ? anchorKey && anchorKey.toUpperCase() !== key.toUpperCase()
           ? 'debug.enrichedAnchor'
           : 'debug.enriched'
-        : landing.createdInTriage || !anchorKey
-          ? 'debug.filed'
-          : 'debug.wroteAnchor';
+        : // Onto the anchor only when the card written IS the anchor: a confirmed
+          // log-a-bug offer can file a new bug from an anchored turn (MOTIR-9323).
+          !landing.createdInTriage && anchorKey && anchorKey.toUpperCase() === key.toUpperCase()
+          ? 'debug.wroteAnchor'
+          : 'debug.filed';
     body = tc.rich(messageKey, { key, anchorKey: anchorKey ?? '', chip });
   }
 
