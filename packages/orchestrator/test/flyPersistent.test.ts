@@ -64,7 +64,7 @@ const SPEC: PersistentContainerSpec = {
   workspaceId: 'ws-1',
   projectId: 'proj-1',
   instanceId: 'cmInstance1',
-  image: 'ghcr.io/moooon-b-v/motir-sandbox@sha256:' + 'b'.repeat(64),
+  image: 'ghcr.io/motir-co/motir-sandbox@sha256:' + 'b'.repeat(64),
   size: FLEET_CONTAINER_SIZE,
   env: { MOTIR_INSTANCE_ID: 'cmInstance1' },
   region: 'iad',
@@ -1089,7 +1089,7 @@ describe('the terminal machine config (agent-terminal.md Q2–Q4 · MOTIR-6939)'
 });
 
 describe('moveImage — an agent moved to a newer image on the same machine and volume (MOTIR-6950)', () => {
-  const NEW_IMAGE = 'ghcr.io/moooon-b-v/motir-sandbox@sha256:' + 'c'.repeat(64);
+  const NEW_IMAGE = 'ghcr.io/motir-co/motir-sandbox@sha256:' + 'c'.repeat(64);
   /** A machine as MOTIR-6939 leaves it: the terminal process, service, env and stamp. */
   const CURRENT_CONFIG = {
     image: SPEC.image,

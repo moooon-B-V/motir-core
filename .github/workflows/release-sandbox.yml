@@ -47,11 +47,11 @@ concurrency:
 env:
   # The SAME repository `sandbox-images.yml` publishes to, and lowercase for the
   # same reason: OCI repository names are lowercase-only, so
-  # `ghcr.io/moooon-B-V/...` is not a reference docker will resolve at all. Two
+  # `ghcr.io/Motir-Co/...` is not a reference docker will resolve at all. Two
   # files name it now that this lane also RECORDS what was published;
   # `packages/cli/test/sandboxCi.test.ts` asserts the two spellings are identical,
   # which is the drift guard the profile matrix already gets.
-  IMAGE: ghcr.io/moooon-b-v/motir-sandbox
+  IMAGE: ghcr.io/motir-co/motir-sandbox
 
 jobs:
   # Fail fast if the tag and the package version disagree: the tag is the human

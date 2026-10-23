@@ -40,6 +40,8 @@ import {
   planStatusCanBeStale,
 } from '@/lib/services/planStalenessService';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
+import { parseWorkItemTokenIds } from '@/lib/mentions/workItemRefs';
 import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
 import { RESTING_BLOCKED_KEY, RESTING_TODO_KEY } from '@/lib/plans/restingStatus';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
@@ -1961,6 +1963,38 @@ export const planReviewService = {
       item.blockerStubs = [...blockerNodeIds]
         .map(blockerStubOf)
         .filter((stub): stub is PlanBlockerStubDto => stub !== null);
+    }
+
+    // ── THE PROPOSED BODIES' WORK-ITEM CHIPS (bug MOTIR-9355) ──────────────────
+    //
+    // Every `[KEY](motir:<id>)` in a proposal's title and two bodies is resolved
+    // HERE, in ONE batched read for the whole plan, and each item carries the
+    // summaries of its own links. The peek renders the PROPOSED bodies, so it
+    // needs THEIR refs: an `add` has no work item to read a map from, and a
+    // `modify`'s target map is resolved from the target's stored description
+    // alone. Resolved for the ORIGINAL reader, so a Visitor gets the Visitor's
+    // narrowing and nothing beyond it. A plan whose bodies link nothing pays no
+    // read at all (`resolveWorkItemRefSummaries` returns `{}` for an empty set).
+    const refIdsByItem = new Map(
+      items.map((i) => [
+        i.planItemId,
+        parseWorkItemTokenIds(
+          [i.title, i.descriptionMd, i.explanationMd].filter(Boolean).join('\n'),
+        ),
+      ]),
+    );
+    const bodyRefs = await resolveWorkItemRefSummaries(
+      { ids: [...new Set([...refIdsByItem.values()].flat())], keys: [] },
+      plan.projectId,
+      reader,
+    );
+    for (const item of items) {
+      item.workItemRefs = Object.fromEntries(
+        (refIdsByItem.get(item.planItemId) ?? []).flatMap((id) => {
+          const summary = bodyRefs[id];
+          return summary ? [[id, summary]] : [];
+        }),
+      );
     }
 
     // ── WHAT EACH OFF-LEVEL EDGE DRAWS AFTER APPROVE (MOTIR-6362) ──────────────

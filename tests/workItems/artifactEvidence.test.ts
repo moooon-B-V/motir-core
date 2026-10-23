@@ -83,7 +83,7 @@ describe('findArtifactEvidence — the three accepted forms', () => {
   });
 
   it('accepts a registry digest', () => {
-    const body = 'pulled ghcr.io/moooon-b-v/motir-ci-runner@sha256:446c692d1f0a3b5c7e9d';
+    const body = 'pulled ghcr.io/motir-co/motir-ci-runner@sha256:446c692d1f0a3b5c7e9d';
     expect(findArtifactEvidence([body])).toEqual({
       kind: 'digest',
       match: 'sha256:446c692d1f0a3b5c7e9d',

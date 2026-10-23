@@ -353,7 +353,7 @@ describe('§6.2 — an UNPULLABLE image is its own named failure, not one more 4
   // on 2026-08-02 with a private GHCR reference (ADR §2.2, re-run by
   // MOTIR-2006). Nothing here is a guess about what Fly says.
   const FLY_MANIFEST_400 = {
-    error: 'failed to get manifest ghcr.io/moooon-b-v/motir-sandbox:claude: unauthorized',
+    error: 'failed to get manifest ghcr.io/motir-co/motir-sandbox:claude: unauthorized',
   };
 
   it('classifies the measured manifest refusal as OrchestratorImageUnpullableError', async () => {

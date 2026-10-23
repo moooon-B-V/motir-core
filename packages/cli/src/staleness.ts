@@ -228,7 +228,7 @@ export function pullAndRerunRecipe(): string[] {
     '    -v "$PWD:/workspace" \\',
     '    -v motir-auth:/home/node/.config/motir \\',
     '    <your profile’s credential mount> \\',
-    '    ghcr.io/moooon-b-v/motir-sandbox:<profile>',
+    '    ghcr.io/motir-co/motir-sandbox:<profile>',
     '',
     'Your sign-in lives in the motir-auth volume, so it survives the swap.',
   ];

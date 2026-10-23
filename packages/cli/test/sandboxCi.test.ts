@@ -535,11 +535,11 @@ describe('the release lane that publishes the images (7.9.7e)', () => {
   });
 
   it('names the registry in LOWERCASE, the only form docker will pull', () => {
-    // `ghcr.io/moooon-B-V/...` is not a reference docker will even resolve —
+    // `ghcr.io/Motir-Co/...` is not a reference docker will even resolve —
     // OCI repository names are lowercase-only, and it fails before any network
     // call. The org is spelled `moooon-B-V` everywhere else, so this is a real
     // trap rather than a style point.
-    expect(images).toContain('IMAGE: ghcr.io/moooon-b-v/motir-sandbox');
+    expect(images).toContain('IMAGE: ghcr.io/motir-co/motir-sandbox');
     // Comments are exempt — the header explains the trap by SPELLING the
     // uppercase form out. Only references the workflow would actually push to
     // or pull from have to be lowercase.
@@ -614,7 +614,7 @@ describe('the release lane that publishes the images (7.9.7e)', () => {
       expect(publicJob).toContain('digest=$(cat digests/claude)');
       expect(publicJob).toContain('docker run --rm "${IMAGE}@${digest}" motir --version');
       const documented = read(join(CLI_DIR, '..', '..', 'docs', 'cli.md'));
-      expect(documented).toContain('ghcr.io/moooon-b-v/motir-sandbox:claude');
+      expect(documented).toContain('ghcr.io/motir-co/motir-sandbox:claude');
     });
   });
 
@@ -767,7 +767,7 @@ describe('the release lane that publishes the images (7.9.7e)', () => {
       // would be wrong in the least visible way possible.
       const imageOf = (yaml: string) => /^\s*IMAGE: (\S+)$/m.exec(yaml)?.[1];
       expect(imageOf(release)).toBe(imageOf(images));
-      expect(imageOf(release)).toBe('ghcr.io/moooon-b-v/motir-sandbox');
+      expect(imageOf(release)).toBe('ghcr.io/motir-co/motir-sandbox');
     });
 
     it('calls the script rather than reimplementing the table in YAML', () => {
@@ -917,7 +917,7 @@ describe('the README, as the adoption path', () => {
     const build = readme.indexOf('## Build it yourself');
     expect(run).toBeGreaterThan(-1);
     expect(build).toBeGreaterThan(run);
-    expect(readme).toContain('ghcr.io/moooon-b-v/motir-sandbox:claude');
+    expect(readme).toContain('ghcr.io/motir-co/motir-sandbox:claude');
   });
 
   it('documents the mounts the run contract is made of — and which one is optional', () => {
@@ -931,13 +931,13 @@ describe('the README, as the adoption path', () => {
   });
 
   it('records a digest per published tag and shows how to pin one', () => {
-    expect(readme).toContain('ghcr.io/moooon-b-v/motir-sandbox@sha256:');
+    expect(readme).toContain('ghcr.io/motir-co/motir-sandbox@sha256:');
     for (const profile of matrix) {
       expect(readme, `a published-image row for ${profile.id}`).toContain(
-        `| \`ghcr.io/moooon-b-v/motir-sandbox:${profile.id}\``,
+        `| \`ghcr.io/motir-co/motir-sandbox:${profile.id}\``,
       );
     }
-    expect(readme).toContain('| `ghcr.io/moooon-b-v/motir-sandbox:base`');
+    expect(readme).toContain('| `ghcr.io/motir-co/motir-sandbox:base`');
   });
 
   it('keeps the build-from-source path for anyone customising a profile', () => {

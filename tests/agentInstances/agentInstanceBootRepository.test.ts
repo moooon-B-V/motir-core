@@ -65,7 +65,7 @@ async function seed(): Promise<Fixture> {
         ownerId: owner.id,
         name: 'boot-check',
         profileId: 'claude',
-        imageTag: 'ghcr.io/moooon-b-v/motir-sandbox:claude',
+        imageTag: 'ghcr.io/motir-co/motir-sandbox:claude',
         imageDigest: 'sha256:' + 'a'.repeat(64),
         region: 'iad',
       },

@@ -183,7 +183,7 @@ describe('wake — an older agent’s machine config is brought up to date BEFOR
     ]);
     expect(fleet.machineConfigVersion(machineId!)).toBe(AGENT_MACHINE_CONFIG_VERSION);
     const [spec] = fleet.persistentSpecs;
-    expect(spec!.image).toBe(`ghcr.io/moooon-b-v/motir-sandbox@${dto.imageDigest}`);
+    expect(spec!.image).toBe(`ghcr.io/motir-co/motir-sandbox@${dto.imageDigest}`);
     expect(spec!.mountPath).toBe('/home/node');
     // The first boot with the terminal on probes this digest.
     expect(woken.terminalServer).toBe('present');

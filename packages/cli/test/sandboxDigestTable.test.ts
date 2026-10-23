@@ -65,7 +65,7 @@ let server: Server;
 let origin = '';
 
 /** The stub's `<registry>/<repository>`, in the form the script is pointed at. */
-const image = (): string => `${origin}/moooon-b-v/motir-sandbox`;
+const image = (): string => `${origin}/motir-co/motir-sandbox`;
 
 /** The script always talks https; the stub is http, so requests are rewritten
  *  onto it. Everything else — the challenge, the token, the manifest — is real. */
@@ -271,11 +271,11 @@ describe('the rendered markdown', () => {
 
   it('reads the rows back out of a section it just rendered', () => {
     const rows = [
-      { name: 'base', tag: 'ghcr.io/moooon-b-v/motir-sandbox:base', digest: digest('a') },
-      { name: 'claude', tag: 'ghcr.io/moooon-b-v/motir-sandbox:claude', digest: digest('b') },
+      { name: 'base', tag: 'ghcr.io/motir-co/motir-sandbox:base', digest: digest('a') },
+      { name: 'claude', tag: 'ghcr.io/motir-co/motir-sandbox:claude', digest: digest('b') },
     ];
     const section = renderSection({
-      image: 'ghcr.io/moooon-b-v/motir-sandbox',
+      image: 'ghcr.io/motir-co/motir-sandbox',
       version: '0.4.0',
       runUrl: 'https://github.com/moooon-B-V/motir-core/actions/runs/999',
       rows,
@@ -306,12 +306,12 @@ describe('the rendered markdown', () => {
     // A long URL is the one legitimate over-width line — it is a single token, and
     // the hand-written sections carry the same.
     const section = renderSection({
-      image: 'ghcr.io/moooon-b-v/motir-sandbox',
+      image: 'ghcr.io/motir-co/motir-sandbox',
       version: '0.10.11',
       runUrl: 'https://github.com/moooon-B-V/motir-core/actions/runs/31529928332',
       rows: Array.from({ length: 9 }, (_, index) => ({
         name: `profile-${index}`,
-        tag: `ghcr.io/moooon-b-v/motir-sandbox:profile-${index}`,
+        tag: `ghcr.io/motir-co/motir-sandbox:profile-${index}`,
         digest: digest(String(index)),
       })),
       novelty: { checked: true, problems: [], against: '0.9.0' },
@@ -339,10 +339,10 @@ describe('the rendered markdown', () => {
 
   it('says the novelty invariant is VACUOUS on a first release instead of claiming it', () => {
     const section = renderSection({
-      image: 'ghcr.io/moooon-b-v/motir-sandbox',
+      image: 'ghcr.io/motir-co/motir-sandbox',
       version: '0.1.0',
       runUrl: 'https://github.com/moooon-B-V/motir-core/actions/runs/1',
-      rows: [{ name: 'base', tag: 'ghcr.io/moooon-b-v/motir-sandbox:base', digest: digest('a') }],
+      rows: [{ name: 'base', tag: 'ghcr.io/motir-co/motir-sandbox:base', digest: digest('a') }],
       novelty: { checked: false, problems: [] },
     });
     expect(section).toContain('vacuous here rather than passed');
@@ -405,7 +405,7 @@ describe('reading the file it edits', () => {
     // the digests themselves belong to whichever release is current.
     expect(rows).toHaveLength(9);
     expect(rows[0]?.name).toBe('base');
-    expect(rows[0]?.tag).toBe('ghcr.io/moooon-b-v/motir-sandbox:base');
+    expect(rows[0]?.tag).toBe('ghcr.io/motir-co/motir-sandbox:base');
     expect(rows.every((row) => /^sha256:[0-9a-f]{64}$/.test(row.digest))).toBe(true);
   });
 });
@@ -413,10 +413,10 @@ describe('reading the file it edits', () => {
 describe('placing the section in the file', () => {
   const section = (version: string, sha: string) =>
     renderSection({
-      image: 'ghcr.io/moooon-b-v/motir-sandbox',
+      image: 'ghcr.io/motir-co/motir-sandbox',
       version,
       runUrl: 'https://github.com/moooon-B-V/motir-core/actions/runs/999',
-      rows: [{ name: 'base', tag: 'ghcr.io/moooon-b-v/motir-sandbox:base', digest: digest(sha) }],
+      rows: [{ name: 'base', tag: 'ghcr.io/motir-co/motir-sandbox:base', digest: digest(sha) }],
       novelty: { checked: true, problems: [], against: shippedNewest },
     });
 

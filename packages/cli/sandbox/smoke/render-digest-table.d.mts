@@ -52,7 +52,7 @@ export interface PreviousRelease {
 }
 
 export interface RenderOptions {
-  /** The OCI repository, without a tag (`ghcr.io/moooon-b-v/motir-sandbox`). */
+  /** The OCI repository, without a tag (`ghcr.io/motir-co/motir-sandbox`). */
   image: string;
   /** The bare `x.y.z` this release published. */
   version: string;
