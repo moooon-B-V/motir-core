@@ -237,6 +237,16 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'arms, same reason; what differs is only the consequence of the zero-row read \u2014 the meter ' +
       'charges nobody, this REFUSES the job.',
   },
+  'lib/services/fleetGithubOrgAssignmentService.ts#hasExistingHosting': {
+    tables: ['github_repo', 'project_repository', 'workspace'],
+    source: 'scan',
+    why:
+      'MOTIR-8966 — does this organisation already have a repository established in the ' +
+      'fallback provisioning org? `project_repository` has no system-admin read arm, so the ' +
+      'read binds the tenant in its own transaction: project_repository_org_read, the ' +
+      'github_repo owner filter by github_repo_org_read, and the workspace JOIN by ' +
+      'workspace_org_service_read.',
+  },
   'lib/services/entitlementsService.ts#tierForOrg': {
     tables: ['organization'],
     source: 'scan',
@@ -683,7 +693,7 @@ describe('the guard has been SEEN to fail', () => {
     expect(withoutJoinArm.has('attachment'), 'the FROM clause is still armed').toBe(true);
     expect(withoutJoinArm.has('workspace'), 'the JOIN target is not').toBe(false);
 
-    // ⚠️ FIVE members since MOTIR-8777 (four since MOTIR-6308, three since MOTIR-4839), not one. The control removes `workspace`'s
+    // ⚠️ SIX members since MOTIR-8966 (five since MOTIR-8777, four since MOTIR-6308, three since MOTIR-4839), not one. The control removes `workspace`'s
     // org arms wholesale, so it reports every swept site that reaches that table
     // under the org context — and CI attribution now does, at both of its sites,
     // for the tenancy reason their sweep entries carry. Their presence here is the
@@ -699,6 +709,9 @@ describe('the guard has been SEEN to fail', () => {
       'lib/services/entitlementsService.ts#assertWithinStorageCap :: workspace -> "workspace" ' +
         'has RLS and NO app.organization_id read arm ' +
         '(reached via attachmentRepository.sumSizeByOrganization)',
+      'lib/services/fleetGithubOrgAssignmentService.ts#hasExistingHosting :: workspace -> "workspace" ' +
+        'has RLS and NO app.organization_id read arm ' +
+        '(reached via projectRepoRepository.hasEstablishedHostedRepoForOrganizationInTx)',
       'lib/services/workspacesService.ts#isOrgManagerTarget :: workspace -> "workspace" ' +
         'has RLS and NO app.organization_id read arm ' +
         '(reached via organizationMembershipRepository.isOrgManagerOfWorkspaceOrg)',
