@@ -337,18 +337,24 @@ describe('the boot and reap handlers DELEGATE', () => {
     ).toBeDefined();
   });
 
-  it('the attribution reconciler delegates, then sweeps stale claims (MOTIR-6925)', async () => {
+  it('the attribution reconciler delegates, then sweeps stale claims and vanished containers (MOTIR-6925, MOTIR-9347)', async () => {
     const reconcile = vi
       .spyOn(fleetAttributionService, 'reconcile')
       .mockResolvedValue({ outcome: 'disabled' });
     const sweep = vi.spyOn(ciRunnerBootService, 'sweepStaleClaims').mockResolvedValue(1);
+    const vanished = vi.spyOn(ciRunnerBootService, 'sweepVanishedInFlight').mockResolvedValue(2);
 
     const engine = new JobTestEngine({ function: fleetAttribution });
     const { result } = await engine.execute();
 
     expect(reconcile).toHaveBeenCalledTimes(1);
     expect(sweep).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ reconciled: { outcome: 'disabled' }, staleClaims: 1 });
+    expect(vanished).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      reconciled: { outcome: 'disabled' },
+      staleClaims: 1,
+      vanishedInFlight: 2,
+    });
   });
 
   it('the reconciler runs end to end against a real (empty) database', async () => {
@@ -363,7 +369,11 @@ describe('the boot and reap handlers DELEGATE', () => {
     try {
       const engine = new JobTestEngine({ function: fleetAttribution });
       const { result } = await engine.execute();
-      expect(result).toEqual({ reconciled: { outcome: 'disabled' }, staleClaims: 0 });
+      expect(result).toEqual({
+        reconciled: { outcome: 'disabled' },
+        staleClaims: 0,
+        vanishedInFlight: 0,
+      });
     } finally {
       vi.unstubAllEnvs();
     }
@@ -372,6 +382,7 @@ describe('the boot and reap handlers DELEGATE', () => {
   it('a reconciler run lands one succeeded, UNTENANTED ledger row', async () => {
     vi.spyOn(fleetAttributionService, 'reconcile').mockResolvedValue({ outcome: 'disabled' });
     vi.spyOn(ciRunnerBootService, 'sweepStaleClaims').mockResolvedValue(0);
+    vi.spyOn(ciRunnerBootService, 'sweepVanishedInFlight').mockResolvedValue(0);
 
     const engine = new JobTestEngine({ function: fleetAttribution });
     await engine.execute();

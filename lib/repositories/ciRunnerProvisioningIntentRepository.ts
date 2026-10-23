@@ -338,6 +338,28 @@ export const ciRunnerProvisioningIntentRepository = {
     });
   },
 
+  /**
+   * In-flight intents that booted a container before `bootedBefore` — past their
+   * own end, so a container they still own has outlived the job timeout. The
+   * attribution reconciler reaches an intent only THROUGH a listed machine, so
+   * one whose machine is already gone is found here instead (MOTIR-9347).
+   */
+  async listInFlightBootedBefore(
+    bootedBefore: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<CiRunnerProvisioningIntent[]> {
+    return tx.ciRunnerProvisioningIntent.findMany({
+      where: {
+        status: { in: [...CI_RUNNER_INTENT_IN_FLIGHT] },
+        containerId: { not: null },
+        bootedAt: { lt: bootedBefore },
+      },
+      orderBy: { bootedAt: 'asc' },
+      take: limit,
+    });
+  },
+
   /** Record the container this intent booted, and flip it to `running`. Written
    *  as ONE statement so a handle never exists without the status that tells the
    *  reaper to watch it. */
