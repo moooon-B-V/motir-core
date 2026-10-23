@@ -7966,7 +7966,7 @@
       "handoff": "Gelezen als planwijziging — er wordt aan het voorstel gewerkt",
       "debug": {
         "wroteAnchor": "De diagnose is op <chip>{key}</chip> gezet. Het blijft in Triage en verder is er niets gewijzigd.",
-        "filed": "<chip>{key}</chip> met de diagnose in Triage gezet. Verder is er niets gewijzigd.",
+        "filed": "<chip>{key}</chip> aangemaakt met de diagnose. Verder is er niets veranderd.",
         "enrichedAnchor": "De diagnose is toegevoegd aan <chip>{key}</chip>, dat deze bug al dekt. Er is niets nieuws aangemaakt en {anchorKey} blijft zoals het is.",
         "enriched": "De diagnose is toegevoegd aan <chip>{key}</chip>, dat deze bug al dekt. Er is niets nieuws aangemaakt.",
         "ungrounded": "Dit kon niet naar de code worden herleid, dus er is niets geschreven."
@@ -8453,6 +8453,25 @@
         "outOfCredits": "Je organisatie heeft geen AI-tegoed meer, dus de planning kan niet starten.",
         "targetUnavailable": "Je kunt {key} niet meer openen, dus de planning kan niet starten.",
         "generic": "De planning kan niet starten vanuit dit voorstel."
+      }
+    },
+    "logBugOffer": {
+      "label": "Aanbod om een bug vast te leggen",
+      "writeNew": "Een nieuwe bug aanmaken",
+      "writeAnchored": "De diagnose toevoegen aan <chip>{key}</chip>",
+      "writeExisting": "De diagnose noteren op <chip>{key}</chip>, dat dit al dekt",
+      "confirming": "Vastleggen…",
+      "confirmHelp": "Bevestigen doet deze ene schrijfactie, als Motir. Met „ja” antwoorden doet hetzelfde.",
+      "declineHelp": "Weigeren schrijft niets, en het gesprek gaat verder.",
+      "logged": "Vastgelegd",
+      "loggedBy": "Bevestigd · {when}",
+      "recorded": "Er is niets geschreven.",
+      "cannotStart": {
+        "planningUnavailable": "Bugs vastleggen kan hier niet: Motir AI is niet ingesteld voor dit project, of je hebt geen toestemming om het te gebruiken.",
+        "targetChanged": "{key} is na dit aanbod gewijzigd, dus er is niets geschreven. Vraag het opnieuw voor een actueel aanbod.",
+        "targetUnavailable": "Je kunt {key} niet meer openen, dus er is niets geschreven.",
+        "anchorNotTriage": "{key} staat niet meer in Triage, dus de diagnose is niet toegevoegd.",
+        "generic": "Deze bug kan niet vanuit dit aanbod worden vastgelegd."
       }
     },
     "restart": {

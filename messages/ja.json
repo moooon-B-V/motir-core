@@ -7963,7 +7963,7 @@
       "handoff": "計画の変更として読み取りました — 提案を作成しています",
       "debug": {
         "wroteAnchor": "診断内容を <chip>{key}</chip> に書き込みました。トリアージに残ったままで、ほかには何も変更されていません。",
-        "filed": "診断内容を添えて <chip>{key}</chip> をトリアージに登録しました。ほかには何も変更されていません。",
+        "filed": "診断内容を添えて <chip>{key}</chip> を登録しました。ほかには何も変更していません。",
         "enrichedAnchor": "このバグをすでに扱っている <chip>{key}</chip> に診断内容を追加しました。新規登録はなく、{anchorKey} はそのままです。",
         "enriched": "このバグをすでに扱っている <chip>{key}</chip> に診断内容を追加しました。新規登録はありません。",
         "ungrounded": "コードまで追跡できなかったため、何も書き込まれていません。"
@@ -8450,6 +8450,25 @@
         "outOfCredits": "組織の AI クレジットが不足しているため、計画を開始できません。",
         "targetUnavailable": "{key} を開けなくなったため、計画を開始できません。",
         "generic": "この提案から計画を開始できません。"
+      }
+    },
+    "logBugOffer": {
+      "label": "バグ登録の提案",
+      "writeNew": "新しいバグを登録する",
+      "writeAnchored": "<chip>{key}</chip> に診断を追記する",
+      "writeExisting": "すでにこの問題を扱っている <chip>{key}</chip> に診断を記録する",
+      "confirming": "登録中…",
+      "confirmHelp": "確認すると、Motir としてこの 1 件の書き込みを行います。「はい」と返信しても同じです。",
+      "declineHelp": "辞退すると何も書き込まれず、会話はそのまま続きます。",
+      "logged": "登録済み",
+      "loggedBy": "確認済み · {when}",
+      "recorded": "何も書き込まれていません。",
+      "cannotStart": {
+        "planningUnavailable": "ここではバグを登録できません。このプロジェクトで Motir AI が設定されていないか、使用する権限がありません。",
+        "targetChanged": "この提案のあとで {key} が変更されたため、何も書き込んでいません。もう一度尋ねると最新の提案が得られます。",
+        "targetUnavailable": "{key} を開けなくなったため、何も書き込んでいません。",
+        "anchorNotTriage": "{key} はトリアージにないため、診断は追記されませんでした。",
+        "generic": "この提案からはバグを登録できません。"
       }
     },
     "restart": {

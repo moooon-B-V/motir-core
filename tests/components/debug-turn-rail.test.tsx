@@ -242,7 +242,7 @@ describe('the debug turn, FINISHED — the outcome line (panels 2–4)', () => {
     expect(screen.getByTestId('plan-change-report').textContent).toContain('Likely cause:');
   });
 
-  it('diagnose with no anchor (the orb path): the bug it FILED in Triage', () => {
+  it('diagnose with no anchor (the orb path): the bug it FILED', () => {
     renderRail(
       debugged(
         {
@@ -256,7 +256,7 @@ describe('the debug turn, FINISHED — the outcome line (panels 2–4)', () => {
     );
 
     expect(outcomeLine().textContent).toBe(
-      'Filed PROD-414Drag drops one column short in Triage with the diagnosis. Nothing else changed.',
+      'Filed PROD-414Drag drops one column short with the diagnosis. Nothing else changed.',
     );
   });
 
@@ -436,7 +436,7 @@ describe('the debug turn after a RELOAD — drawn from the turn DTOs alone', () 
         createdInTriage: true,
       },
       null,
-      'Filed PROD-414Drag drops one column short in Triage with the diagnosis. Nothing else changed.',
+      'Filed PROD-414Drag drops one column short with the diagnosis. Nothing else changed.',
     ],
     [
       'enrich_existing on the widget path',

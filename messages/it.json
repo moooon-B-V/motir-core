@@ -7966,7 +7966,7 @@
       "handoff": "Interpretato come modifica al piano: elaborazione della proposta",
       "debug": {
         "wroteAnchor": "Ho scritto la diagnosi su <chip>{key}</chip>. Resta in Smistamento e non è cambiato nient’altro.",
-        "filed": "Ho registrato <chip>{key}</chip> in Smistamento con la diagnosi. Non è cambiato nient’altro.",
+        "filed": "Creato <chip>{key}</chip> con la diagnosi. Nient'altro è cambiato.",
         "enrichedAnchor": "Ho aggiunto la diagnosi a <chip>{key}</chip>, che copre già questo Bug. Non è stato registrato nulla di nuovo e {anchorKey} resta com’è.",
         "enriched": "Ho aggiunto la diagnosi a <chip>{key}</chip>, che copre già questo Bug. Non è stato registrato nulla di nuovo.",
         "ungrounded": "Non è stato possibile ricondurre il problema al codice, quindi non è stato scritto nulla."
@@ -8453,6 +8453,25 @@
         "outOfCredits": "La tua organizzazione ha esaurito i crediti AI, quindi la pianificazione non può iniziare.",
         "targetUnavailable": "Non puoi più aprire {key}, quindi la pianificazione non può iniziare.",
         "generic": "La pianificazione non può iniziare da questa proposta."
+      }
+    },
+    "logBugOffer": {
+      "label": "Proposta di registrare un bug",
+      "writeNew": "Crea un nuovo bug",
+      "writeAnchored": "Aggiungi la diagnosi a <chip>{key}</chip>",
+      "writeExisting": "Annota la diagnosi su <chip>{key}</chip>, che copre già questo problema",
+      "confirming": "Registrazione…",
+      "confirmHelp": "Conferma esegue questa sola scrittura, come Motir. Rispondere «sì» fa lo stesso.",
+      "declineHelp": "Rifiuta non scrive nulla e la conversazione continua.",
+      "logged": "Registrato",
+      "loggedBy": "Confermato · {when}",
+      "recorded": "Non è stato scritto nulla.",
+      "cannotStart": {
+        "planningUnavailable": "Qui non è possibile registrare bug: Motir AI non è configurato per questo progetto, oppure non hai il permesso di usarlo.",
+        "targetChanged": "{key} è stato modificato dopo questa proposta, quindi non è stato scritto nulla. Chiedi di nuovo per una proposta aggiornata.",
+        "targetUnavailable": "Non puoi più aprire {key}, quindi non è stato scritto nulla.",
+        "anchorNotTriage": "{key} non è più in Triage, quindi la diagnosi non è stata aggiunta.",
+        "generic": "Questo bug non può essere registrato da questa proposta."
       }
     },
     "restart": {

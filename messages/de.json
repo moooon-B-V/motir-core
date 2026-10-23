@@ -7966,7 +7966,7 @@
       "handoff": "Als Planänderung verstanden – am Vorschlag wird gearbeitet",
       "debug": {
         "wroteAnchor": "Die Diagnose wurde in <chip>{key}</chip> geschrieben. Es bleibt in der Triage, und sonst hat sich nichts geändert.",
-        "filed": "<chip>{key}</chip> wurde mit der Diagnose in der Triage erfasst. Sonst hat sich nichts geändert.",
+        "filed": "<chip>{key}</chip> wurde mit der Diagnose angelegt. Sonst wurde nichts geändert.",
         "enrichedAnchor": "Die Diagnose wurde zu <chip>{key}</chip> hinzugefügt, das diesen Bug bereits abdeckt. Es wurde nichts Neues erfasst, und {anchorKey} bleibt unverändert.",
         "enriched": "Die Diagnose wurde zu <chip>{key}</chip> hinzugefügt, das diesen Bug bereits abdeckt. Es wurde nichts Neues erfasst.",
         "ungrounded": "Dies konnte nicht bis zum Code zurückverfolgt werden, daher wurde nichts geschrieben."
@@ -8453,6 +8453,25 @@
         "outOfCredits": "Ihre Organisation hat keine AI-Credits mehr, daher kann die Planung nicht starten.",
         "targetUnavailable": "Sie können {key} nicht mehr öffnen, daher kann die Planung nicht starten.",
         "generic": "Die Planung kann aus diesem Angebot nicht starten."
+      }
+    },
+    "logBugOffer": {
+      "label": "Angebot, einen Bug zu erfassen",
+      "writeNew": "Einen neuen Bug anlegen",
+      "writeAnchored": "Die Diagnose zu <chip>{key}</chip> hinzufügen",
+      "writeExisting": "Die Diagnose auf <chip>{key}</chip> vermerken, das dies bereits abdeckt",
+      "confirming": "Wird erfasst…",
+      "confirmHelp": "Bestätigen nimmt genau diese eine Änderung vor, als Motir. Mit „Ja“ zu antworten bewirkt dasselbe.",
+      "declineHelp": "Ablehnen schreibt nichts, und das Gespräch geht weiter.",
+      "logged": "Erfasst",
+      "loggedBy": "Bestätigt · {when}",
+      "recorded": "Es wurde nichts geschrieben.",
+      "cannotStart": {
+        "planningUnavailable": "Bugs können hier nicht erfasst werden: Motir AI ist für dieses Projekt nicht eingerichtet, oder du hast keine Berechtigung dafür.",
+        "targetChanged": "{key} wurde nach diesem Angebot geändert, daher wurde nichts geschrieben. Frag erneut, um ein aktuelles Angebot zu erhalten.",
+        "targetUnavailable": "Du kannst {key} nicht mehr öffnen, daher wurde nichts geschrieben.",
+        "anchorNotTriage": "{key} ist nicht mehr in der Triage, daher wurde die Diagnose nicht hinzugefügt.",
+        "generic": "Dieser Bug kann über dieses Angebot nicht erfasst werden."
       }
     },
     "restart": {

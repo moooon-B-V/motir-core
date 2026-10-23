@@ -3488,8 +3488,9 @@ export function usePlanChangeConversation({
   }, []);
 
   /**
-   * ANSWER A PLAN OFFER (Story MOTIR-9219 · MOTIR-9294): the offer row's Confirm or
-   * Decline, one post per press. The doors decide everything — whether the start
+   * ANSWER A PLAN OFFER (Story MOTIR-9219 · MOTIR-9294) — or a log-a-bug offer
+   * (MOTIR-9324), through the same doors: the offer row's Confirm or Decline, one post
+   * per press. The doors decide everything — whether the start
    * runs here, on the target's conversation, or after ending a plan in progress —
    * and the hook only follows: the conversation is REFETCHED, never read from the
    * answer's body, so the refetched offer is what flips the row to confirmed or
@@ -3516,6 +3517,14 @@ export function usePlanChangeConversation({
           return;
         }
         const started = await answerPlanOffer(session.id, turnId, 'confirm');
+        // A `log_bug` offer (MOTIR-9323) made its one write: no run follows, and the
+        // thread the door answered already carries the landing on the offer's turn.
+        if (started.kind === 'log_bug') {
+          if (!mountedRef.current) return;
+          const landed = started.session;
+          setState((s) => (s.session?.id === landed.id ? { ...s, session: landed } : s));
+          return;
+        }
         const read = await getPlanChangeSession(started.sessionId);
         if (!mountedRef.current) return;
         // The run in flight (a mid-planning confirm) was stopped by the door; its
