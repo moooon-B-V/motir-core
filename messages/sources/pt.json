@@ -5408,6 +5408,7 @@
   "billing.plans.tiers.max_x2.useCase": "Max, at twice the volume.",
   "billing.plans.tiers.max_x2.prev": "Max",
   "billing.plans.tiers.max_x2.features.0": "Twice the Max monthly credit pool",
+  "billing.plans.tiers.max_x2.features.1": "Dispatch more planned work to the agent automatically",
   "billing.plans.trial.pill": "Free trial",
   "billing.plans.trial.pillUsed": "Free trial used",
   "billing.plans.trial.left": "{left} of {n} trial credits left · one-time.",

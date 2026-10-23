@@ -6651,7 +6651,10 @@
         "max_x2": {
           "useCase": "Max, met twee keer het volume.",
           "prev": "Max",
-          "features": ["Twee keer de maandelijkse creditpool van Max"]
+          "features": [
+            "Twee keer de maandelijkse creditpool van Max",
+            "Meer gepland werk automatisch aan de agent toewijzen"
+          ]
         }
       },
       "trial": {

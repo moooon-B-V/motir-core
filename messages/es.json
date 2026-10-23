@@ -6651,7 +6651,10 @@
         "max_x2": {
           "useCase": "Max, con el doble de volumen.",
           "prev": "Max",
-          "features": ["El doble del fondo mensual de créditos de Max"]
+          "features": [
+            "El doble del fondo mensual de créditos de Max",
+            "Envía automáticamente más trabajo planificado al agente"
+          ]
         }
       },
       "trial": {

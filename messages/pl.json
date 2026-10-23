@@ -6651,7 +6651,10 @@
         "max_x2": {
           "useCase": "Max, w podwójnej ilości.",
           "prev": "Max",
-          "features": ["Dwukrotność miesięcznej puli kredytów Max"]
+          "features": [
+            "Dwukrotność miesięcznej puli kredytów Max",
+            "Automatycznie przekazuj agentowi więcej zaplanowanej pracy"
+          ]
         }
       },
       "trial": {

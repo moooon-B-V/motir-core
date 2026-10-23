@@ -6651,7 +6651,10 @@
         "max_x2": {
           "useCase": "Max, com o dobro do volume.",
           "prev": "Max",
-          "features": ["O dobro do pacote mensal de créditos do Max"]
+          "features": [
+            "O dobro do pacote mensal de créditos do Max",
+            "Envie automaticamente mais trabalho planejado ao agente"
+          ]
         }
       },
       "trial": {

@@ -6645,7 +6645,7 @@
         "max_x2": {
           "useCase": "Max 的两倍用量。",
           "prev": "Max",
-          "features": ["两倍于 Max 的每月额度池"]
+          "features": ["两倍于 Max 的每月额度池", "自动把更多规划好的工作派给智能体"]
         }
       },
       "trial": {

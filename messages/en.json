@@ -6648,7 +6648,10 @@
         "max_x2": {
           "useCase": "Max, at twice the volume.",
           "prev": "Max",
-          "features": ["Twice the Max monthly credit pool"]
+          "features": [
+            "Twice the Max monthly credit pool",
+            "Dispatch more planned work to the agent automatically"
+          ]
         }
       },
       "trial": {

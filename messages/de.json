@@ -6651,7 +6651,10 @@
         "max_x2": {
           "useCase": "Max, mit doppeltem Volumen.",
           "prev": "Max",
-          "features": ["Doppelter monatlicher Credit-Pool von Max"]
+          "features": [
+            "Doppelter monatlicher Credit-Pool von Max",
+            "Mehr geplante Arbeit automatisch an den Agenten übergeben"
+          ]
         }
       },
       "trial": {
