@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
 import { signIn } from './_helpers/shell-session';
 import { seedMyAgents, type MyAgentsSeed } from './_helpers/my-agents-seed';
-import { paidOrgState, patchOrgBillingState, setOrgBillingState } from './_helpers/billing';
+import { paidOrgState, patchOrgBillingState, setOrgBillingState, TIERS } from './_helpers/billing';
 import { pushAiIncludedSeat } from './_helpers/billing-push';
 import { adminDb } from './_helpers/db-reset';
 import en from '@/messages/en.json';
@@ -122,7 +122,7 @@ test.describe('Agents are an AI-plan feature, paid in credits', () => {
     seed = await seedMyAgents(Date.now().toString(36));
     // A Pro plan, and an Agents ledger that starts at zero this month.
     setOrgBillingState(seed.organizationId, {
-      ...paidOrgState({ status: 'active' }),
+      ...paidOrgState({ tier: TIERS.pro, status: 'active' }),
       agents: { machine: 0, storage: 0 },
     });
     await signIn(page, seed.email, seed.password);
@@ -211,7 +211,7 @@ test.describe('Agents are an AI-plan feature, paid in credits', () => {
       'The organization’s AI plan ends — every agent shows the date it will be deleted',
       async () => {
         patchOrgBillingState(seed.organizationId, {
-          subscription: { ...paidOrgState().subscription, status: 'canceled' },
+          subscription: { ...paidOrgState({ tier: TIERS.pro }).subscription, status: 'canceled' },
         });
         await pushAiIncludedSeat(page, seed.organizationId, false);
         const org = await adminDb.organization.findUniqueOrThrow({
@@ -251,7 +251,7 @@ test.describe('Agents are an AI-plan feature, paid in credits', () => {
 
     await chapter('Re-subscribe before the date — the dates go, and Wake works again', async () => {
       patchOrgBillingState(seed.organizationId, {
-        subscription: { ...paidOrgState().subscription, status: 'active' },
+        subscription: { ...paidOrgState({ tier: TIERS.pro }).subscription, status: 'active' },
       });
       await pushAiIncludedSeat(page, seed.organizationId, true);
       await goToMyAgents(page);

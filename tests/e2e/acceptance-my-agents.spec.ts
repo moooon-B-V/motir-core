@@ -213,7 +213,8 @@ test.describe('My agents', () => {
     await dialog.getByRole('button', { name: copy.create.submit }).click();
     expect((await created).status()).toBe(429);
     await expect(dialog.getByRole('alert')).toContainText(
-      'You already have 10 agents. Each one is charged for its storage every day, even asleep. Delete one to create another.',
+      // The seed's plan is Max ×2: 10 agents per person (MOTIR-9374 · MOTIR-9376).
+      'Your organization’s Max ×2 plan allows 10 agents per person. Each one is charged for its storage every day, even asleep. Delete one to create another.',
     );
   });
 
