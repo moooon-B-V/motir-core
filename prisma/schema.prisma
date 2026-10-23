@@ -2811,10 +2811,10 @@ enum PointScale {
 /// only via `archivedAt` — work-item history must survive (the Project
 /// pattern). RLS on this table lands in Subtask 1.4.5, not here.
 model WorkItem {
-  id                    String                        @id @default(cuid())
-  workspaceId           String
-  projectId             String
-  parentId              String?
+  id                      String                        @id @default(cuid())
+  workspaceId             String
+  projectId               String
+  parentId                String?
   // The FOLDER this item is filed in (Epic MOTIR-5307 · MOTIR-5312), or NULL.
   // A placement of its OWN, never a second meaning of `parentId`: a filed item
   // keeps `parentId IS NULL`, so every walk over `parentId` (readiness, status
@@ -2822,27 +2822,27 @@ model WorkItem {
   // The CHECK `work_item_parent_xor_folder` refuses both at once, and the
   // `trg_work_item_cotenancy_folder` trigger keeps the folder in this item's
   // own project. See prisma/migrations/20260913090000_folder.
-  folderId              String?
-  kind                  WorkItemKind
-  key                   Int
-  identifier            String // "PROD-42" — denormalized from project.identifier + key for search/index efficiency
-  title                 String
-  descriptionMd         String?                       @db.Text // "what to do" — Markdown source
-  explanationMd         String?                       @db.Text // "why this matters" — distinct from description; mostly AI-drafted, user-owned
+  folderId                String?
+  kind                    WorkItemKind
+  key                     Int
+  identifier              String // "PROD-42" — denormalized from project.identifier + key for search/index efficiency
+  title                   String
+  descriptionMd           String?                       @db.Text // "what to do" — Markdown source
+  explanationMd           String?                       @db.Text // "why this matters" — distinct from description; mostly AI-drafted, user-owned
   /// The language each work content field was WRITTEN in (Story MOTIR-7731 ·
   /// MOTIR-8092) — one of the eleven codes in `lib/i18n/locales.ts`, or NULL for
   /// "no language recorded" (every row written before the story, and imports).
   /// Deliberately no default: NULL must stay distinguishable from a real `en`.
-  titleLanguage         String?                       @map("title_language")
-  descriptionLanguage   String?                       @map("description_language")
-  explanationLanguage   String?                       @map("explanation_language")
-  explanationSource     WorkItemExplanationSource     @default(user_authored)
-  status                String                        @default("open")
-  priority              WorkItemPriority              @default(medium)
-  assigneeId            String?
-  reporterId            String
-  dueDate               DateTime?
-  estimateMinutes       Int?
+  titleLanguage           String?                       @map("title_language")
+  descriptionLanguage     String?                       @map("description_language")
+  explanationLanguage     String?                       @map("explanation_language")
+  explanationSource       WorkItemExplanationSource     @default(user_authored)
+  status                  String                        @default("open")
+  priority                WorkItemPriority              @default(medium)
+  assigneeId              String?
+  reporterId              String
+  dueDate                 DateTime?
+  estimateMinutes         Int?
   // Work-item TYPE + EXECUTOR (Story 2.7 · Subtask 2.7.3) — the nature of the
   // executable work (`code` / `design` / `decision` / …) and WHO does it
   // (`coding_agent` | `human`). Both NULLABLE and DISTINCT from `kind`: only
@@ -2855,8 +2855,8 @@ model WorkItem {
   // overridable. The split exists for the Epic-7 AI dispatch layer (route by
   // `type` → prompt template; by `executor` → agent-dispatch vs human-assign);
   // see docs/decisions/work-item-type-taxonomy.md (the 2.7.2 ADR).
-  type                  WorkItemType?
-  executor              Executor?
+  type                    WorkItemType?
+  executor                Executor?
   // How HARD the work is to REASON about (Story MOTIR-6016 · MOTIR-6096) — the
   // ambiguity, blast radius, concurrency / security sensitivity or novelty it
   // demands, which `storyPoints` / `estimateMinutes` (SIZE) do not capture: a
@@ -2868,7 +2868,7 @@ model WorkItem {
   //     guesses one.
   //   - A CLOSED enum, unlike `subject` below: this is a fixed scale a model
   //     router reads, not a vocabulary that grows with a rule-pack file.
-  difficulty            WorkItemDifficulty?
+  difficulty              WorkItemDifficulty?
   // Work-item PROVENANCE (Story MOTIR-1685, docs/decisions/work-item-provenance.md)
   // — how the item was PLANNED and how it was IMPLEMENTED, each a
   // `source · harness · model` triple. Denormalized latest-authoritative columns
@@ -2879,12 +2879,12 @@ model WorkItem {
   // names are fast-moving — an enum would force a migration per new tool). camelCase
   // with no `@map`, matching this table's existing columns. See the ADR for the
   // per-seam stamping contract (manual/mcp/native planning; byok/manual/hosted impl).
-  planningSource        WorkItemPlanningSource?
-  planningHarness       String?
-  planningModel         String?
-  implementationSource  WorkItemImplementationSource?
-  implementationHarness String?
-  implementationModel   String?
+  planningSource          WorkItemPlanningSource?
+  planningHarness         String?
+  planningModel           String?
+  implementationSource    WorkItemImplementationSource?
+  implementationHarness   String?
+  implementationModel     String?
   // WHICH SUBJECT MATTER the planner composed this card's rule packs from (Story
   // MOTIR-5062 · MOTIR-5065) — the FOURTH selector coordinate, beside the three
   // planning columns above because it is the same KIND of fact: a record of how
@@ -2903,7 +2903,7 @@ model WorkItem {
   // vocabulary. Same posture as `planningHarness` / `planningModel` directly
   // above, for the same reason stated there (fast-moving names, no migration
   // per member).
-  subject               String?
+  subject                 String?
   // The agile STORY-POINT estimate (Story 4.3) — SEPARATE from the `estimateMinutes`
   // TIME estimate above; both columns coexist and the project's `estimationStatistic`
   // config picks which one is THE planning estimate the surfaces display + roll up.
@@ -2913,8 +2913,8 @@ model WorkItem {
   // NULL = unestimated (contributes 0 to a roll-up). camelCase with NO `@map`, matching
   // this table's existing columns (the same within-table-consistency call recorded for
   // `sprintId` / `backlogRank` — decision-authority rung 2 > the card's `@map` prose).
-  storyPoints           Decimal?                      @db.Decimal(6, 2)
-  position              String                        @db.Text
+  storyPoints             Decimal?                      @db.Decimal(6, 2)
+  position                String                        @db.Text
   // Agile association + backlog rank (Story 4.1). `sprintId` is the issue's
   // sprint (NULL = in the backlog); `onDelete: SetNull` so deleting/clearing a
   // sprint never deletes its issues (they fall back to the backlog). `backlogRank`
@@ -2925,9 +2925,9 @@ model WorkItem {
   // stay camelCase to match this table's existing columns (the `board` table is
   // snake_case-mapped, but `work_item`'s 20 existing columns are not — within-table
   // consistency wins, decision-authority rung 2 > the card's `@map` prose).
-  sprintId              String?
-  backlogRank           String?                       @db.Text
-  archivedAt            DateTime?
+  sprintId                String?
+  backlogRank             String?                       @db.Text
+  archivedAt              DateTime?
   // OBSOLESCENCE (Story MOTIR-6574 · MOTIR-6579) — whether the card is still true
   // of the code: `outdated` (its text no longer describes what the code does —
   // the capability lives on in another shape) or `deprecated` (the direction or
@@ -2941,8 +2941,8 @@ model WorkItem {
   //   - A CLOSED enum because it is a fixed scale both planners branch on.
   //   - The SUPERSEDERS are a LINK KIND (`supersedes`, the sibling card), not a
   //     column here. MADR's `deprecated` / `superseded by` status is the reference.
-  obsolescence          WorkItemObsolescence?
-  obsolescenceNoteMd    String?                       @db.Text
+  obsolescence            WorkItemObsolescence?
+  obsolescenceNoteMd      String?                       @db.Text
   // Triage marker (Story 6.11 · Subtask 6.11.3, per docs/decisions/triage-model.md
   // §1). NON-NULL ⇔ the item lives in the triage inbox and has NOT graduated to
   // the planned tree; NULL ⇔ a normal, graduated (or never-triage) item. Set at
@@ -2952,12 +2952,12 @@ model WorkItem {
   // `cancelled` once declined/merged) the whole time — the exclusion predicate is
   // the single, total `triagedAt IS NULL`. `DateTime?` (not a boolean) gives the
   // queue read newest-first ordering + an age display for free.
-  triagedAt             DateTime?
+  triagedAt               DateTime?
   // Snooze (6.11.5): a triage item drops out of the ACTIVE queue until this time
   // OR new activity, whichever first. Does NOT affect the normal-read exclusion —
   // a snoozed item is still `triagedAt`-marked, so still hidden from every tree /
   // board / list / ready / search read.
-  snoozedUntil          DateTime?
+  snoozedUntil            DateTime?
   // Triage submitter (Story 6.11 · Subtask 6.11.4, the 2026-06-14 signed-in-only
   // revision). The human who SUBMITTED a triage item — ALWAYS a real account: a
   // workspace member (the in-app "report a bug / request a feature" widget) OR a
@@ -2974,7 +2974,7 @@ model WorkItem {
   // submitter must never delete or block the work item — the `reporter`
   // (`Restrict`) is the durable owner; a departed submitter just loses
   // attribution.
-  submittedByUserId     String?
+  submittedByUserId       String?
   // Epic-level privacy on public projects (Story 6.14 · Subtask 6.14.3, per
   // docs/decisions/epic-privacy.md §1). When TRUE on an EPIC-kind item, the
   // epic's DESCENDANTS (stories / tasks / subtasks) and its aggregate TELLS
@@ -2992,7 +2992,7 @@ model WorkItem {
   // the locked model needs is binary (hiding the row is a named non-goal), so a
   // boolean is the complete state space — migrating to an enum later is a
   // contained change if a third visibility mode is ever added (ADR §1).
-  publicChildrenHidden  Boolean                       @default(false)
+  publicChildrenHidden    Boolean                       @default(false)
   // Integration branch (Story 7.8 · Subtask 7.8.11) — the session branch this
   // item's work currently sits on after a run integrated it (status moved to
   // `in_review` via `mark_integrated`). NON-NULL ⇔ the item is integrated-
@@ -3016,7 +3016,7 @@ model WorkItem {
   // cannot be moved onto the delivery table; `work-item-delivery-links.md` Q2
   // once scheduled this column for removal and is amended.
   // See docs/decisions/session-branch-lineage.md.
-  sessionBranch         String?
+  sessionBranch           String?
   // Per-item REPO ATTRIBUTION (Story 7.9 · MOTIR-1804, the rebuilt half of the
   // cancelled 7.7.3) — WHICH repo this item's work ships in, as the bare repo
   // NAME (`motir-core`), or NULL when the planner never pinned one. A Motir
@@ -3035,7 +3035,7 @@ model WorkItem {
   // column itself only ever holds an explicit pin. A plain `String?` matching
   // this table's camelCase, no-`@map` columns; unindexed (never a lookup key).
   // See docs/decisions/target-repo-attribution.md.
-  targetRepo            String?
+  targetRepo              String?
   // The full repository SET (Story MOTIR-2725 · MOTIR-2727, ADR
   // `docs/decisions/work-item-repository-set.md` §1) — EVERY repository this
   // item's work ships in, ordered, de-duplicated, **element 0 being the PRIMARY**
@@ -3076,7 +3076,7 @@ model WorkItem {
   // MOTIR-3037 §A3): no node ever carries two roles, so there was never a role
   // list to widen. MOTIR-2978 — the card that deferral filed — became the
   // container ROLLUP instead, and the role column below is retired outright.
-  targetRepos           String[]                      @default([])
+  targetRepos             String[]                      @default([])
   // ⚠️ `targetRepoRole` WAS HERE AND IS RETIRED (Story MOTIR-2732 · MOTIR-3040,
   // ADR `docs/decisions/work-item-repository-set.md` "Amendment 2026-08-18" §A3).
   // It was the PORTABLE stand-in for a pin: at generation the repositories do not
@@ -3118,7 +3118,7 @@ model WorkItem {
   // no-`@map` columns; not an enum (a third provider-neutral value would be a
   // contained change, and the roll-up filters on the literal `'passing'`, which
   // `running` deliberately does not match).
-  ciState               String?
+  ciState                 String?
   // WHY this card is STUCK UNTIL SOMETHING IS REPAIRED (Story MOTIR-6588 ·
   // MOTIR-6600) — the Workbench's To fix tab reads it, and so will the To fix
   // tag (MOTIR-6589). `null` means there is nothing to repair.
@@ -3135,13 +3135,13 @@ model WorkItem {
   // RECOMPUTED, never stamped, by `fixReasonService.recomputeWorkItemFixReason`
   // under the card's row lock — the `ciState` pattern — and backfilled once.
   // `null` off the `in_progress` status CATEGORY and on an archived card.
-  fixReason             WorkItemFixReason?
+  fixReason               WorkItemFixReason?
   // What the row NAMES for that reason (`FixDetail`, `lib/dto/fixReason.ts`):
   // the failing check or queue reason, the base branch, the reviewer and the
   // first line of their note, which repair command applies, and how many of the
   // card's open pull requests are affected. Written with `fixReason`, `null`
   // exactly when it is.
-  fixDetail             Json?
+  fixDetail               Json?
   // WHETHER a card waits To resume (Story MOTIR-7701 · MOTIR-7707) — a SIBLING
   // of `fixReason`, never a sixth value of it: To fix means a repair would claim
   // the card, and a run stopped at an approval gate is not broken. Set while the
@@ -3149,12 +3149,12 @@ model WorkItem {
   // its held gates is approved, then `ready_to_resume`. RECOMPUTED by
   // `resumeStateService.recomputeWorkItemResumeState`, never stamped; `null` off
   // the `in_progress` category, on an archived card, and once a newer run opens.
-  resumeState           WorkItemResumeState?
+  resumeState             WorkItemResumeState?
   // The gated run the state is about — the To resume tab's ENTRY key, as To fix
   // groups by run (MOTIR-7589). Written with `resumeState`, `null` exactly when it
   // is; `SetNull` so a pruned run can never leave a dangling pointer.
-  resumeRunId           String?                       @map("resume_run_id")
-  resumeRun             DispatchRun?                  @relation("WorkItemResumeRun", fields: [resumeRunId], references: [id], onDelete: SetNull)
+  resumeRunId             String?                       @map("resume_run_id")
+  resumeRun               DispatchRun?                  @relation("WorkItemResumeRun", fields: [resumeRunId], references: [id], onDelete: SetNull)
   // The EMBEDDING SWEEP's poison-item bookkeeping (Story MOTIR-8226 · MOTIR-8227):
   // the content hash of the document the provider REJECTED, and how many runs have
   // rejected it. Both NULL until a rejection is recorded. A work item with no
@@ -3163,8 +3163,8 @@ model WorkItem {
   // description is a different hash, so the count restarts without any cleanup;
   // a successful embed clears both. Written by raw SQL in the workspace context,
   // so neither bumps `updatedAt` nor emits a work-item event.
-  embeddingFailedHash   String?                       @map("embedding_failed_hash")
-  embeddingFailedAttempts Int?                        @map("embedding_failed_attempts")
+  embeddingFailedHash     String?                       @map("embedding_failed_hash")
+  embeddingFailedAttempts Int?                          @map("embedding_failed_attempts")
   // WHEN this item finished (Story MOTIR-4777 · MOTIR-4780) — the moment it
   // ENTERED a `done`-CATEGORY status, cleared the moment it leaves one. The
   // Workbench's "Recently finished" tab is the first reader; it is also the
@@ -3199,9 +3199,9 @@ model WorkItem {
   // — the same within-table-consistency call already recorded for `storyPoints`
   // and `sprintId` / `backlogRank` (decision-authority rung 2 > the card's
   // `@map` prose).
-  completedAt           DateTime?
-  createdAt             DateTime                      @default(now())
-  updatedAt             DateTime                      @updatedAt
+  completedAt             DateTime?
+  createdAt               DateTime                      @default(now())
+  updatedAt               DateTime                      @updatedAt
 
   workspace                Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project                  Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -11455,6 +11455,105 @@ model FleetInFlightSlot {
   /// The per-organisation pool count (MOTIR-6907), read under the fleet lock.
   @@index([organizationId, expiresAt])
   @@map("fleet_in_flight_slot")
+}
+
+/// The provider an account of a fleet pool runs on (MOTIR-8961). `fly` only: the
+/// AWS story adds `aws` in its own migration, with its own columns and CHECKs.
+enum FleetShardProvider {
+  fly
+
+  @@map("fleet_shard_provider")
+}
+
+/// What an account is to its fleet kind. `primary` = an account of that kind's
+/// SHARED pool. The pool-growth story adds `spare`.
+enum FleetShardRole {
+  primary
+
+  @@map("fleet_shard_role")
+}
+
+/// `provisioning` while add-shard is still setting the account up; `active` is
+/// admissible; `disabled` is kept but takes no new job.
+enum FleetShardState {
+  provisioning
+  active
+  disabled
+
+  @@map("fleet_shard_state")
+}
+
+/// ONE ACCOUNT OF ONE FLEET KIND'S POOL (Story MOTIR-8953 · MOTIR-8961) — the
+/// noun the pool layer is written against: one fleet kind, one provider
+/// location, one Motir-owned GitHub org with the App installation serving it,
+/// the REFERENCE to its provider credential, and the account's real limits with
+/// where each was read.
+///
+/// ⚠️ NOT A TENANT TABLE. An account of a shared pool is platform infrastructure
+/// many tenants share, so there is no `workspace_id` / `organization_id`, and the
+/// RLS policy is `app.system_admin` only, like `fleet_in_flight_slot`.
+///
+/// ⚠️ CREDENTIALS ARE REFERENCED, NEVER STORED. `credentialRef` names the
+/// environment variable (or prefix) the secret lives in — where every fleet
+/// credential already lives (`FLY_FLEET_API_TOKEN`). The repo has no
+/// encryption-at-rest scheme for provider secrets, and a secret in a row is a
+/// secret in every database dump.
+///
+/// ⚠️ LIMITS, NOT CEILINGS. The limit columns record what the provider or GitHub
+/// ALLOWS, and `limitsSource` says where each number came from (`provider_read` ·
+/// `documented` · `raised`, keyed by limit name). Admission ceilings are DERIVED
+/// from them and never stored here — one number per fact.
+///
+/// The database holds the invariants itself (migration `fleet_shard`): the fleet
+/// kind is one of the four `FLEET_WORKLOADS` names; a `fly` row names its
+/// org/app/region and machine limit; every limit present is > 0; one Fly
+/// location is one account.
+///
+/// Nothing reads it in production yet: boot, stop, reap and admission still read
+/// the process-wide fleet config.
+model FleetShard {
+  id   String @id @default(cuid())
+  /// A lowercase slug, e.g. `ci-runner-iad-1`.
+  name String @unique
+
+  /// The pool it belongs to — a `FLEET_WORKLOADS` name (`lib/ciFleet/workloads.ts`),
+  /// held to the four by a CHECK.
+  fleetKind String             @map("fleet_kind")
+  provider  FleetShardProvider
+  role      FleetShardRole     @default(primary)
+  state     FleetShardState    @default(provisioning)
+
+  /// The Motir-owned GitHub org, the provisioning App's installation on it (a
+  /// string, as `GithubOrgTarget.installationId` is), and which App that is.
+  githubOrg            String @map("github_org")
+  githubInstallationId String @map("github_installation_id")
+  githubAppRole        String @default("provisioning") @map("github_app_role")
+
+  /// The Fly location. Required for a `fly` row (CHECK).
+  flyOrg    String? @map("fly_org")
+  flyApp    String? @map("fly_app")
+  flyRegion String? @map("fly_region")
+
+  /// The environment variable (or prefix) holding the provider credential.
+  credentialRef String @map("credential_ref")
+
+  /// The account's REAL limits — each > 0 when present (CHECK).
+  vcpuQuota                  Int?      @map("vcpu_quota")
+  machineLimit               Int?      @map("machine_limit")
+  githubRegistrationsPer5Min Int?      @map("github_registrations_per_5_min")
+  githubApiPerHour           Int?      @map("github_api_per_hour")
+  /// Where each limit was read: `{ "<limit>": "provider_read" | "documented" | "raised" }`.
+  limitsSource               Json      @default("{}") @map("limits_source")
+  limitsVerifiedAt           DateTime? @map("limits_verified_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// One Fly location is one account.
+  @@unique([provider, flyOrg, flyApp])
+  /// Admission and the headroom reading list one kind's accounts by role and state.
+  @@index([fleetKind, role, state])
+  @@map("fleet_shard")
 }
 
 /// The repo-role vocabulary (`docs/decisions/project-repository-set.md` §1.1).
