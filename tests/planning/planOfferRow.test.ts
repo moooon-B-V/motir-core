@@ -88,6 +88,10 @@ describe('the total maps', () => {
     expect(alreadyPlanning({ phase: 'review', hasUndecidedPlan: true })).toBe(true);
     expect(alreadyPlanning({ phase: 'streaming', hasUndecidedPlan: false })).toBe(true);
     expect(alreadyPlanning({ phase: 'deciding', hasUndecidedPlan: false })).toBe(true);
+    // A reopened conversation's plan still being written: idle phase, live review.
+    expect(alreadyPlanning({ phase: 'idle', hasUndecidedPlan: false, writingPlan: true })).toBe(
+      true,
+    );
   });
 });
 

@@ -649,12 +649,13 @@ export function PlanChangeRail({
   // THE ENDED SESSION (AMENDMENT 23 §1): read from the server's row, so a reload
   // draws the same end. It accepts no turn — the composer slot says so instead.
   const ended = Boolean(state.session?.endedAt);
-  // The plan offer's MID-PLANNING variant (MOTIR-9294): a PLANNING run in flight, or
-  // a plan still waiting for its decision. An ask streaming carries no plan id, and
-  // plans nothing.
+  // The plan offer's MID-PLANNING variant (MOTIR-9294): a PLANNING run in flight, a
+  // plan still being written (a reopened one is the live review), or a plan still
+  // waiting for its decision. An ask streaming carries no plan id, and plans nothing.
   const offerMidPlanning = alreadyPlanning({
     phase: state.planId ? state.phase : 'idle',
     hasUndecidedPlan: Boolean(state.review) && !state.decided,
+    writingPlan: Boolean(state.liveReview),
   });
   // A FAILED HOSTED ATTEMPT WAITS TO BE RESUMED (Story MOTIR-7905 · MOTIR-7918): the session
   // is OPEN, so there is no end marker, no *Start a new session* and no Try again — the
