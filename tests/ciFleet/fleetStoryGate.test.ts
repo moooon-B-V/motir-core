@@ -342,7 +342,6 @@ beforeEach(async () => {
   // The kill switch disengaged and the org pool at its default: the pool is
   // asserted where a test sets it, never by accident from a default that binds.
   vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '');
-  vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '');
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
   captured = captureJobEvents();

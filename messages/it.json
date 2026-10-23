@@ -10300,34 +10300,41 @@
       "fleet": {
         "orgs": {
           "title": "Flotta · organizzazioni con container in esecuzione",
-          "subtitle": "Ogni organizzazione che ha attualmente un container, accanto a ciò che l’addebito della CI ha fatto per essa negli ultimi {minutes} minuti (due periodi di addebito). Prima quelle non corrispondenti.",
+          "subtitle": "Ogni organizzazione che ha attualmente un container, rispetto ai valori del suo piano, accanto a ciò che l’addebito della CI ha fatto per essa negli ultimi {minutes} minuti (due periodi di addebito). Prima quelle non corrispondenti.",
           "mismatchedCount": "{count} non corrispondenti",
           "runningCount": "{count, plural, one {# organizzazione attiva} other {# organizzazioni attive}}",
           "noMismatch": "Nessuna discrepanza",
           "stat": {
             "orgs": "organizzazioni con un container in esecuzione",
-            "pooled": "container nei pool per organizzazione (CI · ospitati · indice)",
-            "instances": "istanze di agenti · un pool a parte, non conteggiate sopra",
+            "ciRunners": "runner di CI · ogni organizzazione limitata al picco CI del suo piano",
+            "hostedAgents": "esecuzioni dell’agente ospitato · ogni organizzazione limitata alle esecuzioni parallele del suo piano",
+            "instances": "istanze di agenti in esecuzione · ogni organizzazione limitata al valore del suo piano",
             "mismatched": "non corrispondenti · esecuzione e addebito non concordano"
           },
           "group": {
-            "pool": "Nel pool da {pool} container",
-            "own": "Pool proprio"
+            "plan": "Limitato dal piano",
+            "uncapped": "Nessun valore del piano"
           },
           "col": {
             "org": "Organizzazione",
+            "plan": "Piano",
             "ciRunner": "Runner di CI",
             "hostedAgent": "Esecuzioni dell’agente ospitato",
             "index": "Container di indicizzazione",
-            "poolUsed": "Pool usato",
             "agentInstance": "Istanze di agenti",
-            "agentInstanceNote": "non nel pool",
             "accrued": "Minuti di CI · ultimi {minutes} min",
             "credits": "Crediti di questo mese · confermati",
             "verdict": "Esito"
           },
-          "poolOf": "{used} / {pool}",
-          "poolUnknown": "pool non leggibile",
+          "plan": {
+            "named": "{plan}<pp> · {perUser} per persona</pp>",
+            "exempt": "Nessun limite di piano",
+            "unknown": "Piano sconosciuto · {key}",
+            "unknownNoKey": "Piano sconosciuto",
+            "unknownNote": "nuovi container rifiutati"
+          },
+          "usedOf": "<b>{used}</b> su {figure}",
+          "override": "deroga",
           "metaTag": "meta org · isMeta",
           "unnamed": "Organizzazione {id}",
           "accrued": {
@@ -10345,7 +10352,7 @@
           "foot": "Visualizzate {from}–{to} di {total} · prima quelle non corrispondenti, poi quelle con più container · viene valutata solo la CI, l’unico carico di lavoro addebitato durante l’esecuzione",
           "empty": {
             "title": "Nessuna organizzazione ha un container della flotta in esecuzione",
-            "body": "Al momento tutti i pool per organizzazione sono vuoti, quindi non c’è nulla da confrontare con l’addebito. È una lettura sana, non un guasto."
+            "body": "Al momento nessuna organizzazione ha un runner di CI, un’esecuzione dell’agente ospitato, un’istanza di agente o un container di indicizzazione, quindi non c’è nulla da confrontare con l’addebito. È una lettura sana, non un guasto."
           },
           "error": {
             "title": "Impossibile leggere la flotta",
@@ -11441,12 +11448,20 @@
         "charge": {
           "ciRunner": "Addebitato durante l’esecuzione",
           "hostedAgent": "Addebitato al termine dell’esecuzione",
-          "agentInstance": "Addebitato per intervallo di esecuzione · fuori dal pool",
+          "agentInstance": "Addebitato per intervallo di esecuzione",
           "index": "Costo di Motir: mai addebitato"
         },
+        "tile": {
+          "of": " su {figure}",
+          "override": "deroga"
+        },
         "facts": {
-          "pool": "Pool <strong>{used} su {pool}</strong>",
-          "poolUnknown": "Pool <strong>{used} su —</strong>",
+          "plan": "Piano <strong>{plan}</strong> · {runs} esecuzioni ospitate alla volta · {perUser} agenti per persona · {running} agenti in esecuzione · {ci} job di CI alla volta",
+          "planCiUnreadable": "Piano <strong>{plan}</strong> · {runs} esecuzioni ospitate alla volta · {perUser} agenti per persona · {running} agenti in esecuzione · limite CI illeggibile",
+          "planExempt": "Piano <strong>Nessun limite di piano</strong>",
+          "planExemptOverride": "Piano <strong>Nessun limite di piano</strong> · {ci} job di CI alla volta (deroga)",
+          "planUnknown": "Piano <strong>sconosciuto · {key}</strong> · nuovi container rifiutati",
+          "planUnknownNoKey": "Piano <strong>sconosciuto</strong> · nuovi container rifiutati",
           "accrued": "Maturati, ultimi {minutes} min <strong>{value} min</strong>",
           "debited": "Addebitati questo mese <strong>{credits} crediti</strong>",
           "pending": "In attesa di conferma <strong>{credits} crediti</strong>"

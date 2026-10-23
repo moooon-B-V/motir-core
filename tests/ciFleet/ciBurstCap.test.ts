@@ -6,7 +6,6 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { ciRunnerAdmissionService } from '@/lib/services/ciRunnerAdmissionService';
 import { codeGraphIndexAdmissionService } from '@/lib/services/codeGraphIndexAdmissionService';
-import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import { planCapsService } from '@/lib/services/planCapsService';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { adminDb } from '../helpers/adminDb';
@@ -305,10 +304,8 @@ describe('the staff override, and the plans that have no figure', () => {
     },
   );
 
-  it('MOTIR_FLEET_ORG_MAX_IN_FLIGHT=0 changes no CI or index verdict, and no gate reads the retired pool', async () => {
+  it('no pool remains to hold CI or indexing: a Pro org admits both (MOTIR-9377 deleted the pool)', async () => {
     stubPaidAiPlan('pro');
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '0');
-    const pool = vi.spyOn(fleetCeilingService, 'resolveOrgPool');
     const fx = await seedTenant();
 
     expect((await admit(fx)).outcome).toBe('admitted');
@@ -321,7 +318,6 @@ describe('the staff override, and the plans that have no figure', () => {
       containerTimeoutMs: 60_000,
     });
     expect(index.outcome).toBe('admitted');
-    expect(pool).not.toHaveBeenCalled();
   });
 });
 

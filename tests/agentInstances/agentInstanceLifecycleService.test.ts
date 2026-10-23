@@ -407,8 +407,7 @@ describe('create', () => {
       expect(await instances()).toHaveLength(2);
     });
 
-    it('agents have their OWN pool: the org’s shared fleet pool neither refuses them nor counts them', async () => {
-      vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
+    it('agents are slotted and counted per workload, never in a shared total', async () => {
       await create('one');
       await create('two');
       expect(await slots()).toHaveLength(2);

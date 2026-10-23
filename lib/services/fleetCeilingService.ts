@@ -10,7 +10,7 @@ import {
   FLEET_WORKLOAD_KINDS,
   type FleetWorkloadKind,
 } from '@/lib/ciFleet/workloads';
-import { fleetKillSwitchEngaged, fleetSlotTtlSeconds, orgPoolCap } from '@/lib/ciFleet/limits';
+import { fleetKillSwitchEngaged, fleetSlotTtlSeconds } from '@/lib/ciFleet/limits';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import {
@@ -42,10 +42,10 @@ import type { PlanCaps } from '@/lib/billing/planCaps';
 //     (MOTIR-9375); `Organization.fleetPoolCap`, set by platform staff, overrides
 //     that one figure and nothing else ({@link fleetCeilingService.resolveCiBurstCap}).
 //     Code-graph indexing is held to no plan figure: its own index caps bound it.
-//   * THE ORGANISATION'S POOL (§2) — `MOTIR_FLEET_ORG_MAX_IN_FLIGHT`, default
-//     500 — is read by NO admission. `orgCensus` keeps its `total` and
-//     `resolveOrgPool` stays for the platform monitor's display until the
-//     platform-view card (MOTIR-9377) replaces that read.
+//   * THE ORGANISATION'S POOL (§2, the flat 500) is GONE: no admission reads it
+//     (MOTIR-9375) and the platform monitor shows each workload against its own
+//     plan figure instead (MOTIR-9377), reading the same `capsFor` and
+//     {@link fleetCeilingService.resolveCiBurstCap} the gates read.
 //   * THE KILL SWITCH (§6) — `MOTIR_FLEET_MAX_IN_FLIGHT=0` stops every new boot
 //     of every workload. It is what the one fleet-wide ceiling (MOTIR-1997,
 //     default 24) became; unset or positive, it imposes nothing.
@@ -338,32 +338,6 @@ export const fleetCeilingService = {
       if (FLEET_WORKLOADS[kind].pool === 'shared') total += count;
     }
     return { total, byWorkload };
-  },
-
-  /**
-   * The organisation's retired POOL — its override, else the environment's
-   * number (`orgPoolCap`). DISPLAY ONLY: read only by the platform monitor until
-   * the platform-view card (MOTIR-9377) replaces it; no admission reads it
-   * (MOTIR-9375). Null when the org row could not be read.
-   *
-   * Read under the ORG GUC (`withOrgServiceWriteContext`), NOT inside the
-   * admission's system-context transaction: the org policies have no system
-   * escape in production, so a read there would silently answer "no override".
-   * It is read BEFORE the lock, so the fleet-wide lock is never held across it.
-   */
-  async resolveOrgPool(organizationId: string): Promise<number | null> {
-    try {
-      const override = await withOrgServiceWriteContext(organizationId, (tx) =>
-        organizationRepository.findFleetPoolCapInTx(organizationId, tx),
-      );
-      return orgPoolCap(override);
-    } catch (err) {
-      console.error("[fleetCeilingService] could not read the organization's fleet pool", {
-        organizationId,
-        detail: detailOf(err),
-      });
-      return null;
-    }
   },
 
   /**

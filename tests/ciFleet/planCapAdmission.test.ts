@@ -287,10 +287,9 @@ describe('Motir’s own organisations are held by no plan figure', () => {
 });
 
 describe('the retired pool no longer reaches a hosted run', () => {
-  it('MOTIR_FLEET_ORG_MAX_IN_FLIGHT=0 and fleetPoolCap=0 change no verdict', async () => {
+  it('fleetPoolCap=0 (the CI override) changes no hosted verdict', async () => {
     const fx = await seedTenant();
     onPlan(fx, 'pro', 'Pro');
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '0');
     await adminDb.organization.update({
       where: { id: fx.organizationId },
       data: { fleetPoolCap: 0 },

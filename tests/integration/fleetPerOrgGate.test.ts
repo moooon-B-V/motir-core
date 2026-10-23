@@ -245,7 +245,6 @@ beforeEach(async () => {
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
   vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '');
-  vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '');
   stubMotirAi();
   // Every refusal logs; the assertions are on verdicts and rows.
   vi.spyOn(console, 'error').mockImplementation(() => undefined);

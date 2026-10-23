@@ -54,19 +54,16 @@ import type { FleetWorkloadKind } from '@motir/orchestrator';
 export type { FleetWorkloadKind };
 
 /**
- * Which pool a workload counts against.
+ * Which census total a workload is summed into.
  *
- * `shared` — a paid-AI-plan workload admitted by the org's plan: a hosted-agent
- * run is held to its plan's parallel-run figure (`PLAN_FIGURE_BY_WORKLOAD` in
- * `fleetCeilingService`, MOTIR-9373; the fleet-capacity decision MOTIR-9357
- * amends `docs/decisions/fleet-per-org-pool.md` §2), while the CI and index gates
- * still sum CI, indexing and hosted runs against the org's pool
- * (`MOTIR_FLEET_ORG_MAX_IN_FLIGHT`, default 500) until the CI burst cap card
- * moves them off it. `own` — a workload with a limit of its own, decided by its caller
- * under the same admission lock, and NOT summed into the org's pool: agent
- * instances (`docs/decisions/agent-instances.md` AMENDMENT 2), whose machines are
- * long-lived and paid for per minute, so letting them fill the pool would starve
- * CI.
+ * The org pool this once named is gone (the fleet-capacity decision MOTIR-9357,
+ * amending `docs/decisions/fleet-per-org-pool.md` §2): each workload is held to
+ * its own plan figure (`PLAN_FIGURE_BY_WORKLOAD` in `fleetCeilingService`;
+ * MOTIR-9373, MOTIR-9375) and no admission or monitor decides on the summed
+ * `total`. The split survives only as that total's membership, kept in the
+ * census an admission logs: `shared` workloads are summed (CI, indexing, hosted
+ * runs), `own` ones are not (agent instances, `docs/decisions/agent-instances.md`
+ * AMENDMENT 2, decided by their caller's guard under the same lock).
  */
 export type FleetPool = 'shared' | 'own';
 

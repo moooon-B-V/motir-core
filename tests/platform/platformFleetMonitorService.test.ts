@@ -8,6 +8,9 @@ import { ciPeriodUsageRepository } from '@/lib/repositories/ciPeriodUsageReposit
 import { withSystemContext } from '@/lib/workspaces/context';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { stubPaidAiPlan } from '../helpers/paidAiPlan';
+import { planCapsService } from '@/lib/services/planCapsService';
+import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import { truncateAuthTables } from '../helpers/db';
 
 // THE FLEET MONITOR READ (MOTIR-7316 · Story MOTIR-6905) against a REAL Postgres.
@@ -145,6 +148,9 @@ async function spendPool(t: Tenant) {
 const auditRows = () => adminDb.platformAuditLog.count();
 
 beforeEach(async () => {
+  vi.restoreAllMocks();
+  // The plan's figures at their seam (MOTIR-9377): Max unless a case says otherwise.
+  stubPaidAiPlan('max');
   await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "fleet_machine_kill", "ci_period_usage", "fleet_in_flight_slot", "ci_live_accrual", "ci_runner_provisioning_intent", "ci_period_charge" RESTART IDENTITY CASCADE',
   );
@@ -351,8 +357,6 @@ describe('judgeOrganization — the facts the verdict is judged on', () => {
     const reading = await platformFleetMonitorService.judgeOrganization(t.organizationId, NOW);
     expect(reading.verdicts).toEqual(['exhausted_still_running']);
     expect(reading.byWorkload.agent_instance).toBe(1);
-    // An own-pool workload is shown and never counted against the pool.
-    expect(reading.poolUsed).toBe(0);
     // The figure the zero stop read rides along, for the page's "balance −3".
     expect(reading.balanceCredits).toBe(-3);
   });
@@ -383,6 +387,105 @@ describe('judgeOrganization — the facts the verdict is judged on', () => {
   });
 });
 
+// ── The plan's figures (MOTIR-9377) ─────────────────────────────────────────
+
+describe('judgeOrganization — the plan figures each workload is read against', () => {
+  it('a Pro org reads its four figures, the CI one from the plan', async () => {
+    stubPaidAiPlan('pro');
+    const t = await seedTenant();
+    const reading = await platformFleetMonitorService.judgeOrganization(t.organizationId, NOW);
+    expect(reading.plan).toEqual({
+      kind: 'capped',
+      planKey: 'pro',
+      planName: 'Pro',
+      agentRunsInParallel: 3,
+      agentsPerUser: 5,
+      agentsRunningPerOrg: 30,
+      ciBurstCap: 10,
+      ciBurstSource: 'plan',
+    });
+  });
+
+  it('a staff override on a Max org is the CI figure, exactly as CI admission reads it', async () => {
+    const t = await seedTenant();
+    await adminDb.organization.update({
+      where: { id: t.organizationId },
+      data: { fleetPoolCap: 7 },
+    });
+    const reading = await platformFleetMonitorService.judgeOrganization(t.organizationId, NOW);
+    expect(reading.plan).toMatchObject({
+      kind: 'capped',
+      planKey: 'max',
+      agentRunsInParallel: 5,
+      agentsPerUser: 10,
+      agentsRunningPerOrg: 50,
+      ciBurstCap: 7,
+      ciBurstSource: 'override',
+    });
+    expect(await fleetCeilingService.resolveCiBurstCap(t.organizationId)).toMatchObject({
+      kind: 'capped',
+      figure: 7,
+      source: 'override',
+    });
+  });
+
+  it.each([['isMeta'] as const, ['internalBilling'] as const])(
+    'an exempt (%s) org reads no plan limit',
+    async (flag) => {
+      vi.spyOn(planCapsService, 'capsFor').mockResolvedValue({ kind: 'exempt' });
+      const t = await seedTenant();
+      await adminDb.organization.update({
+        where: { id: t.organizationId },
+        data: { [flag]: true },
+      });
+      const reading = await platformFleetMonitorService.judgeOrganization(t.organizationId, NOW);
+      expect(reading.plan).toEqual({ kind: 'exempt', ciBurstOverride: null });
+    },
+  );
+
+  it('an exempt org with a staff override carries it', async () => {
+    vi.spyOn(planCapsService, 'capsFor').mockResolvedValue({ kind: 'exempt' });
+    const t = await seedTenant({ isMeta: true });
+    await adminDb.organization.update({
+      where: { id: t.organizationId },
+      data: { fleetPoolCap: 3 },
+    });
+    expect(
+      (await platformFleetMonitorService.judgeOrganization(t.organizationId, NOW)).plan,
+    ).toEqual({ kind: 'exempt', ciBurstOverride: 3 });
+  });
+
+  it('an unmatched plan key is named; no figure is filled in', async () => {
+    vi.spyOn(planCapsService, 'capsFor').mockResolvedValue({
+      kind: 'plan_unknown',
+      planKey: 'legacy_tier',
+    });
+    const t = await seedTenant();
+    expect(
+      (await platformFleetMonitorService.judgeOrganization(t.organizationId, NOW)).plan,
+    ).toEqual({ kind: 'plan_unknown', planKey: 'legacy_tier' });
+  });
+
+  it.each(['capsFor', 'resolveCiBurstCap'] as const)(
+    'a throw from %s reads plan_unknown with no key, and the row keeps its counts and verdicts',
+    async (read) => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      if (read === 'capsFor') {
+        vi.spyOn(planCapsService, 'capsFor').mockRejectedValue(new Error('motir-ai is down'));
+      } else {
+        vi.spyOn(fleetCeilingService, 'resolveCiBurstCap').mockRejectedValue(new Error('db down'));
+      }
+      const t = await seedTenant();
+      await seedIntent(t, { startedAt: ago(30 * MIN) });
+      const reading = await platformFleetMonitorService.judgeOrganization(t.organizationId, NOW);
+      expect(reading.plan).toEqual({ kind: 'plan_unknown', planKey: null });
+      expect(reading.byWorkload.ci_runner).toBe(1);
+      expect(reading.verdicts).toEqual(['running_not_debited']);
+      expect(error).toHaveBeenCalled();
+    },
+  );
+});
+
 // ── The staff reads ─────────────────────────────────────────────────────────
 
 describe('listRunningOrgs', () => {
@@ -406,10 +509,14 @@ describe('listRunningOrgs', () => {
     if (first.meter !== 'enabled') throw new Error('expected the meter enabled');
     expect(first.total).toBe(60);
     expect(first.mismatched).toBe(1);
-    // The head stats sum the WHOLE set, not the page: 59 index slots + 1 runner.
-    expect(first.pooledContainers).toBe(60);
+    // The head stats sum the WHOLE set, not the page: 1 runner, no hosted run.
+    expect(first.ciRunners).toBe(1);
+    expect(first.hostedAgents).toBe(0);
     expect(first.agentInstances).toBe(0);
-    expect(first.defaultPool).toBe(500);
+    expect(first).not.toHaveProperty('defaultPool');
+    expect(first).not.toHaveProperty('pooledContainers');
+    expect(first.rows[0]).not.toHaveProperty('pool');
+    expect(first.rows[0]).not.toHaveProperty('poolUsed');
     expect(first.pageCount).toBe(3);
     expect(first.rows).toHaveLength(FLEET_ORGS_PAGE_SIZE);
     expect(first.rows[0]).toMatchObject({
@@ -456,7 +563,7 @@ describe('orgFleet', () => {
     if (dto.meter !== 'enabled') throw new Error('expected the meter enabled');
     expect(dto.row).toMatchObject({
       organizationId: t.organizationId,
-      poolUsed: 0,
+      plan: { kind: 'capped', planKey: 'max', ciBurstCap: 25, ciBurstSource: 'plan' },
       confirmedCreditsThisMonth: 0,
       pendingCredits: 0,
       verdicts: ['ok'],

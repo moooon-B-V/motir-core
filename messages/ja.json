@@ -10297,34 +10297,41 @@
       "fleet": {
         "orgs": {
           "title": "フリート · コンテナーを実行中の組織",
-          "subtitle": "現在コンテナーを保持している各組織と、過去 {minutes} 分間(2 回分の引き落とし期間)の CI の引き落とし状況です。不一致のものが先頭です。",
+          "subtitle": "現在コンテナーを保持している各組織を、プランの上限と照らし合わせ、過去 {minutes} 分間(2 回分の引き落とし期間)の CI の引き落とし状況とともに表示します。不一致のものが先頭です。",
           "mismatchedCount": "{count} 件不一致",
           "runningCount": "{count, plural, other {# 組織が実行中}}",
           "noMismatch": "不一致なし",
           "stat": {
             "orgs": "コンテナーを実行中の組織",
-            "pooled": "組織ごとのプール内のコンテナー(CI · ホスト型 · インデックス)",
-            "instances": "エージェントインスタンス · 独自のプールで、上記には含まれません",
+            "ciRunners": "CI ランナー · 各組織はプランのバースト上限まで",
+            "hostedAgents": "ホスト型エージェントの実行 · 各組織はプランの同時実行数まで",
+            "instances": "実行中のエージェントインスタンス · 各組織はプランの上限まで",
             "mismatched": "不一致 · 実行状況と引き落としが一致しません"
           },
           "group": {
-            "pool": "{pool} コンテナーのプール内",
-            "own": "独自のプール"
+            "plan": "プランの上限",
+            "uncapped": "プランの上限なし"
           },
           "col": {
             "org": "組織",
+            "plan": "プラン",
             "ciRunner": "CI ランナー",
             "hostedAgent": "ホスト型エージェントの実行",
             "index": "インデックスのコンテナー",
-            "poolUsed": "プールの使用量",
             "agentInstance": "エージェントインスタンス",
-            "agentInstanceNote": "プール外",
             "accrued": "CI の分数 · 直近 {minutes} 分",
             "credits": "今月のクレジット · 確定分",
             "verdict": "判定"
           },
-          "poolOf": "{used} / {pool}",
-          "poolUnknown": "プールを読み取れません",
+          "plan": {
+            "named": "{plan}<pp> · 1 人あたり {perUser}</pp>",
+            "exempt": "プランの上限なし",
+            "unknown": "プラン不明 · {key}",
+            "unknownNoKey": "プラン不明",
+            "unknownNote": "新しいコンテナーは拒否"
+          },
+          "usedOf": "{figure} 中 <b>{used}</b>",
+          "override": "上書き",
           "metaTag": "メタ組織 · isMeta",
           "unnamed": "組織 {id}",
           "accrued": {
@@ -10342,7 +10349,7 @@
           "foot": "{total} 件中 {from}–{to} 件を表示 · 不一致が先頭、次にコンテナー数の多い順 · 判定対象は CI のみです(実行中に引き落とされる唯一のワークロードのため)",
           "empty": {
             "title": "フリートのコンテナーを実行中の組織はありません",
-            "body": "現在、組織ごとのプールはすべて空のため、引き落としと比較するものはありません。これは正常な状態であり、障害ではありません。"
+            "body": "現在、CI ランナー、ホスト型エージェントの実行、エージェントインスタンス、インデックスのコンテナーを保持している組織はないため、引き落としと比較するものはありません。これは正常な状態であり、障害ではありません。"
           },
           "error": {
             "title": "フリートを読み取れませんでした",
@@ -11438,12 +11445,20 @@
         "charge": {
           "ciRunner": "実行中に請求",
           "hostedAgent": "実行終了時に請求",
-          "agentInstance": "稼働期間ごとに請求 · プール外",
+          "agentInstance": "稼働期間ごとに請求",
           "index": "Motir のコスト — 請求なし"
         },
+        "tile": {
+          "of": " / {figure}",
+          "override": "上書き"
+        },
         "facts": {
-          "pool": "プール <strong>{pool} 中 {used}</strong>",
-          "poolUnknown": "プール <strong>— 中 {used}</strong>",
+          "plan": "プラン <strong>{plan}</strong> · ホスト型実行を同時に {runs} 件 · 1 人あたりエージェント {perUser} 個 · 実行中のエージェント {running} 個 · CI ジョブを同時に {ci} 件",
+          "planCiUnreadable": "プラン <strong>{plan}</strong> · ホスト型実行を同時に {runs} 件 · 1 人あたりエージェント {perUser} 個 · 実行中のエージェント {running} 個 · CI の上限を読み取れません",
+          "planExempt": "プラン <strong>プランの上限なし</strong>",
+          "planExemptOverride": "プラン <strong>プランの上限なし</strong> · CI ジョブを同時に {ci} 件(上書き)",
+          "planUnknown": "プラン <strong>不明 · {key}</strong> · 新しいコンテナーは拒否",
+          "planUnknownNoKey": "プラン <strong>不明</strong> · 新しいコンテナーは拒否",
           "accrued": "直近 {minutes} 分の計上 <strong>{value} 分</strong>",
           "debited": "今月の引き落とし <strong>{credits} クレジット</strong>",
           "pending": "確定待ち <strong>{credits} クレジット</strong>"

@@ -341,7 +341,6 @@ describe("each workload is held to its OWN figure, never the org's summed pool",
   // MOTIR-9373: a hosted run is judged against its plan's figure (Max ×2: 5)
   // and its OWN count, and the reservation reports the figure it used.
   it('reserves a hosted run against its plan figure and reports the figure it used', async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '4');
     const fx = await seedTenant();
     await seedIntent(fx, { status: 'running' });
     await reserve('code_graph_index', fx);
@@ -352,10 +351,8 @@ describe("each workload is held to its OWN figure, never the org's summed pool",
     expect((await orgCensus(fx)).total).toBe(3);
   });
 
-  // The retired pool no longer reaches a hosted run, from the environment or
-  // from the org row.
-  it("neither MOTIR_FLEET_ORG_MAX_IN_FLIGHT nor the org's own pool moves a hosted run's verdict", async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '0');
+  // The org row's `fleetPoolCap` overrides CI's figure alone, never a hosted run's.
+  it("the org's CI override does not move a hosted run's verdict", async () => {
     const fx = await seedTenant();
     await adminDb.organization.update({
       where: { id: fx.organizationId },
@@ -372,8 +369,7 @@ describe("each workload is held to its OWN figure, never the org's summed pool",
 
   // An `own`-pool workload is bounded by its guard alone (agent-instances.md
   // AMENDMENT 2): it neither counts toward nor is refused by the org's pool.
-  it("agent instances neither count toward nor are refused by the org's pool", async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
+  it('agent instances are bounded by their guard and counted in no shared total', async () => {
     const fx = await seedTenant();
     await reserve('hosted_agent', fx);
 

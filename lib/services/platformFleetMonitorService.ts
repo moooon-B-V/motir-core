@@ -3,13 +3,13 @@ import { isCloudBilling } from '@/lib/billing/availability';
 import { CI_DEBIT_PERIOD_MINUTES } from '@/lib/ciMetering/allowance';
 import { isCiMeteringEnabled } from '@/lib/ciMetering/config';
 import { periodStartFor } from '@/lib/ciMetering/period';
-import { orgPoolCap } from '@/lib/ciFleet/limits';
 import { FLEET_WORKLOAD_KINDS, type FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
   isFleetMismatch,
   type FleetKillDTO,
   type FleetKillsDTO,
   type FleetOrgDTO,
+  type FleetOrgPlanDTO,
   type FleetOrgRowDTO,
   type FleetRunningOrgsDTO,
   type FleetVerdict,
@@ -27,6 +27,7 @@ import { organizationRepository } from '@/lib/repositories/organizationRepositor
 import { platformOrganizationRepository } from '@/lib/repositories/platformOrganizationRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
+import { planCapsService } from '@/lib/services/planCapsService';
 import { platformAuditService } from '@/lib/services/platformAuditService';
 import { withSystemContext } from '@/lib/workspaces/context';
 
@@ -47,6 +48,11 @@ import { withSystemContext } from '@/lib/workspaces/context';
 // index containers never (Motir does not charge for indexing), agent instances
 // sit outside the pool. They are counted and shown; only the zero stop judges
 // hosted runs and agent instances, because the stop must have ended them.
+//
+// ⚠️ CAPACITY FOLLOWS THE PLAN (MOTIR-9377; the fleet-capacity decision
+// MOTIR-9357). Each workload is shown against its own plan figure, read through
+// the same `planCapsService.capsFor` and `fleetCeilingService.resolveCiBurstCap`
+// the admissions read, so the monitor never names a number no gate applies.
 //
 // ⚠️ READS ONLY. It computes no charge and changes no meter; a wrong debit found
 // here is a bug or a ledger adjustment (MOTIR-745), never a write from this file.
@@ -198,8 +204,7 @@ export interface FleetOrgReading {
   facts: FleetFacts;
   verdicts: FleetVerdict[];
   byWorkload: Record<FleetWorkloadKind, number>;
-  poolUsed: number;
-  pool: number | null;
+  plan: FleetOrgPlanDTO;
   accruedMinutesInWindow: number;
   /** The balance figure the zero-stop read returned, when it was read and answered. */
   balanceCredits: number | null;
@@ -227,6 +232,43 @@ async function readBalance(
       detail: detailOf(err),
     });
     return { balance: 'unknown', credits: null };
+  }
+}
+
+/**
+ * The org's plan figures, read where the admissions read them: the three agent
+ * figures from `capsFor`, the CI figure (and whether staff overrode it) from the
+ * CI gate's own `resolveCiBurstCap`. A throw from either reads as an unknown
+ * plan with no key — the row is still shown with its counts and verdicts.
+ */
+async function readPlan(organizationId: string): Promise<FleetOrgPlanDTO> {
+  try {
+    const caps = await planCapsService.capsFor(organizationId);
+    if (caps.kind === 'plan_unknown') return { kind: 'plan_unknown', planKey: caps.planKey };
+    const ci = await fleetCeilingService.resolveCiBurstCap(organizationId);
+    const ciCapped = ci.kind === 'capped' ? ci : null;
+    if (caps.kind === 'exempt') {
+      return {
+        kind: 'exempt',
+        ciBurstOverride: ciCapped?.source === 'override' ? ciCapped.figure : null,
+      };
+    }
+    return {
+      kind: 'capped',
+      planKey: caps.planKey,
+      planName: caps.planName,
+      agentRunsInParallel: caps.caps.agentRunsInParallel,
+      agentsPerUser: caps.caps.agentsPerUser,
+      agentsRunningPerOrg: caps.caps.agentsRunningPerOrg,
+      ciBurstCap: ciCapped?.figure ?? null,
+      ciBurstSource: ciCapped?.source ?? 'unreadable',
+    };
+  } catch (err) {
+    console.error("[platformFleetMonitorService] could not read the organization's plan", {
+      organizationId,
+      detail: detailOf(err),
+    });
+    return { kind: 'plan_unknown', planKey: null };
   }
 }
 
@@ -265,8 +307,7 @@ function toRow(
     isMeta: org?.isMeta ?? reading.facts.isMeta,
     internalBilling: reading.internalBilling,
     byWorkload: reading.byWorkload,
-    poolUsed: reading.poolUsed,
-    pool: reading.pool,
+    plan: reading.plan,
     accruedMinutesInWindow: reading.accruedMinutesInWindow,
     confirmedCreditsThisMonth: charge?.debitedCredits ?? 0,
     pendingCredits: charge ? Math.max(0, charge.chargedCredits - charge.debitedCredits) : 0,
@@ -327,8 +368,8 @@ export const platformFleetMonitorService = {
    * job calls it with no principal; every staff path gates before calling it.
    *
    * The fleet tables are read under the system context, as the census is; the
-   * charge row and `isMeta` under the org GUC, as `resolveOrgPool` reads (the org
-   * policies have no system escape).
+   * charge row and `isMeta` under the org GUC (the org policies have no system
+   * escape), and the plan outside both, as the admissions read it.
    */
   async judgeOrganization(organizationId: string, now: Date): Promise<FleetOrgReading> {
     const windowStart = new Date(now.getTime() - FLEET_MONITOR_WINDOW_MS);
@@ -375,7 +416,7 @@ export const platformFleetMonitorService = {
         ),
       };
     });
-    const pool = await fleetCeilingService.resolveOrgPool(organizationId);
+    const plan = await readPlan(organizationId);
 
     const oldestCiJobStartedAt = earliest(...fleet.inFlight.map((intent) => intent.startedAt));
     const oldestCiInFlightAt = earliest(
@@ -419,8 +460,7 @@ export const platformFleetMonitorService = {
       facts,
       verdicts: classify(facts, now),
       byWorkload: fleet.census.byWorkload,
-      poolUsed: fleet.census.total,
-      pool,
+      plan,
       accruedMinutesInWindow: Math.floor(fleet.accruedSeconds / 60),
       balanceCredits: balanceRead.credits,
     };
@@ -478,9 +518,9 @@ export const platformFleetMonitorService = {
       rows: slice.map((reading) => toRow(reading, byId.get(reading.organizationId))),
       total,
       mismatched: readings.filter(hasMismatch).length,
-      pooledContainers: readings.reduce((sum, reading) => sum + reading.poolUsed, 0),
+      ciRunners: readings.reduce((sum, reading) => sum + reading.byWorkload.ci_runner, 0),
+      hostedAgents: readings.reduce((sum, reading) => sum + reading.byWorkload.hosted_agent, 0),
       agentInstances: readings.reduce((sum, reading) => sum + reading.byWorkload.agent_instance, 0),
-      defaultPool: orgPoolCap(),
       page,
       pageSize: FLEET_ORGS_PAGE_SIZE,
       pageCount,

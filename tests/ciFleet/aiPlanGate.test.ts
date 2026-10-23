@@ -153,7 +153,6 @@ beforeEach(async () => {
   vi.stubEnv('MOTIR_AI_URL', 'https://ai.test');
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
   vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '');
-  vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '');
 });
 
 afterEach(() => {
