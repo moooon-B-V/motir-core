@@ -118,11 +118,11 @@ export const planChangeTurnRepository = {
     await tx.planChangeTurn.updateMany({ where: { id, workspaceId }, data: { answerOffer } });
   },
 
-  /** CLAIM a `debug` turn's one write (MOTIR-7049): stamp `debugLandingClaimedAt`
-   *  ONLY while it is still null — a compare-and-set in one statement. Returns
-   *  whether THIS call claimed it. Called under the session's row lock, so two
-   *  concurrent settles of one `debug_bug` job are serialised and exactly one
-   *  sees `true`. The fourth mutable field of a turn, and like the other three a
+  /** CLAIM a landing's one write (MOTIR-7049; the `log_bug` offer's turn since
+   *  MOTIR-9323): stamp `debugLandingClaimedAt` ONLY while it is still null — a
+   *  compare-and-set in one statement. Returns whether THIS call claimed it. Called
+   *  under the session's row lock, so two concurrent confirms of one offer are
+   *  serialised and exactly one sees `true`. The fourth mutable field of a turn, and like the other three a
    *  record of what Motir DID, never of what the person said. */
   async claimDebugLanding(
     id: string,
@@ -134,6 +134,23 @@ export const planChangeTurnRepository = {
       data: { debugLandingClaimedAt: new Date() },
     });
     return count === 1;
+  },
+
+  /** STAMP a landed `log_bug` offer (MOTIR-9323): the offer moved to confirmed and
+   *  the landing recorded on the SAME turn, in one statement — so a reload never sees
+   *  one without the other. The caller holds the session's row lock and the turn's
+   *  landing claim. Requires `tx`. */
+  async confirmDebugLanding(
+    id: string,
+    workspaceId: string,
+    answerOffer: Prisma.InputJsonValue,
+    debugLanding: Prisma.InputJsonValue,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.planChangeTurn.updateMany({
+      where: { id, workspaceId },
+      data: { answerOffer, debugLanding },
+    });
   },
 
   /** CLAIM a `guide` turn's landing (MOTIR-7470): stamp `guideLandingClaimedAt`

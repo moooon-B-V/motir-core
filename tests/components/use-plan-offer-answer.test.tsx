@@ -208,6 +208,41 @@ describe('Confirm', () => {
     expect(stream.mock.calls[0]![0]).toBe('job-8');
   });
 
+  it('a log_bug offer adopts the landed thread and follows no run (MOTIR-9324)', async () => {
+    const landed = session('s1', offer({ kind: 'log_bug', state: 'confirmed' }));
+    answerOffer.mockResolvedValue({
+      kind: 'log_bug',
+      sessionId: 's1',
+      landing: { outcome: 'diagnose', workItemKey: 'ACME-41', title: 'x', createdInTriage: false },
+      session: landed,
+    });
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.confirmPlanOffer('t1');
+    });
+    expect(answerOffer).toHaveBeenCalledWith('s1', 't1', 'confirm');
+    expect(readSession).not.toHaveBeenCalled();
+    expect(stream).not.toHaveBeenCalled();
+    expect(result.current.state.session?.turns[1]?.offer?.state).toBe('confirmed');
+    expect(result.current.state.offerAnsweringTurnId).toBeNull();
+  });
+
+  it('a refused bug landing records the door code on the offer', async () => {
+    answerOffer.mockRejectedValue(
+      new PlanEditsClientError(409, 'DEBUG_TARGET_CHANGED', { code: 'DEBUG_TARGET_CHANGED' }),
+    );
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.confirmPlanOffer('t1');
+    });
+    expect(result.current.state.offerRefusal).toEqual({
+      turnId: 't1',
+      code: 'DEBUG_TARGET_CHANGED',
+    });
+  });
+
   it('a refused start records its reason on the offer and clears the in-flight id', async () => {
     answerOffer.mockRejectedValue(
       new PlanEditsClientError(409, 'PLAN_OFFER_START_REFUSED', {

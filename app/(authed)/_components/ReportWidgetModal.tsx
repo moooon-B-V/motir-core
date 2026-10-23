@@ -41,7 +41,10 @@ import { debugSeedBody, handSurfaceSeed } from '@/lib/planning/surfaceSeed';
 // `conversation-turn-intent.md` AMENDMENT 1, A1.3): the widget closes, the one
 // Motir AI surface opens on the PROJECT conversation, and the person's own title
 // and description are sent ONCE through the ask door, anchored on the triage bug
-// just filed. Close sends nothing. In every other case — a Feature, no Motir AI,
+// just filed. That turn is an ORDINARY grounded ask, not a separate debug run
+// (MOTIR-9325): its answer names the likely cause and may OFFER to log it on the
+// anchored bug, and nothing is written until the person confirms that offer.
+// Close sends nothing. In every other case — a Feature, no Motir AI,
 // no `ai:plan` — nothing here renders and the widget closes and toasts exactly as
 // it always has: no dimmed button, no "ask an admin" line.
 
@@ -175,7 +178,7 @@ export function ReportWidgetModal({
   /**
    * THE PRESS IS THE GO. Hand the seeded turn to the surface (page memory, never
    * the address), close the widget, then open the project conversation — whose
-   * rail sends it once, claimed under the triage bug's key.
+   * rail sends it once, claimed under the triage bug's key, as an ordinary ask.
    */
   function startDebug(bug: FiledBug) {
     handSurfaceSeed({ kind: 'send', body: bug.body, anchorKey: bug.key });

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
 import type { PlanAnswerOfferDto, PlanChangeSessionDto } from '@/lib/dto/planChange';
-import { answerRefusalKey, cannotStartKey } from '@/lib/planning/planOfferRow';
+import { answerRefusalKey, cannotStartKey, logBugRefusalKey } from '@/lib/planning/planOfferRow';
 
 // THE PLAN OFFER on an answer turn (Story MOTIR-9219 · MOTIR-9294; design
 // `design/ai-chat/plan-offer.mock.html`, § "The plan offer on an answer turn"). The
@@ -22,6 +22,14 @@ import { answerRefusalKey, cannotStartKey } from '@/lib/planning/planOfferRow';
 //
 // ⚠️ THE REQUEST TEXT IS DATA THE ANSWERING MODEL WROTE — rendered as markdown,
 // never as catalogue copy.
+//
+// ── THE LOG-A-BUG OFFER (Story MOTIR-9220 · MOTIR-9324) ──────────────────────────
+// A `log_bug` offer is the same row, not a parallel one: the request box holds the
+// bug's title, and the target line becomes the ONE write a yes makes — a new bug, the
+// diagnosis added to the anchored bug, or a note on the work item that covers it — so
+// the person sees it before agreeing. Its copy lives under `logBugOffer`; Confirm and
+// Decline are the plan offer's own buttons and handlers. What it wrote is the debug
+// outcome line in the answer bubble (MOTIR-7064), drawn from the turn's landing.
 
 /** A long request clamps to this many characters' worth of room until *Show all*. */
 const CLAMP_AT = 480;
@@ -76,6 +84,33 @@ function TargetChip({
   );
 }
 
+/** The ONE write a `log_bug` offer's yes makes, named before agreement. */
+function BugWriteLine({
+  offer,
+  workItemRefs,
+}: {
+  offer: PlanAnswerOfferDto;
+  workItemRefs: PlanChangeSessionDto['workItemRefs'];
+}) {
+  const t = useTranslations('planningWorkspace.logBugOffer');
+  const target = offer.bug?.target;
+  const key = target?.key ?? null;
+  const chip = () => (key ? <TargetChip itemKey={key} workItemRefs={workItemRefs} /> : null);
+  return (
+    <p
+      className="flex flex-wrap items-center gap-1.5 border-l-2 border-(--el-border-strong) pl-2 text-xs text-(--el-text)"
+      data-testid="log-bug-offer-write"
+      data-target={target?.kind ?? 'new'}
+    >
+      {key && target?.kind === 'anchored'
+        ? t.rich('writeAnchored', { key, chip })
+        : key && target?.kind === 'existing'
+          ? t.rich('writeExisting', { key, chip })
+          : t('writeNew')}
+    </p>
+  );
+}
+
 /**
  * One more Motir AI line in the answer turn, in place of a panel — an offer that
  * cannot start, or whose target is being planned right now (design sheets 3 and 4).
@@ -118,7 +153,9 @@ export function PlanOffer({
   onDecline,
 }: PlanOfferProps) {
   const t = useTranslations('planningWorkspace.planOffer');
+  const tb = useTranslations('planningWorkspace.logBugOffer');
   const format = useFormatter();
+  const bug = offer.kind === 'log_bug';
   const [expanded, setExpanded] = useState(false);
   const [pressed, setPressed] = useState<'confirm' | 'decline' | null>(null);
 
@@ -143,6 +180,13 @@ export function PlanOffer({
   // AN OFFER THAT CANNOT START draws no panel and no Decline: there is nothing to
   // confirm and nothing to decline (design, second review).
   if (state === 'undecided' && offer.cannotStart) {
+    if (bug) {
+      return (
+        <AnswerLine testId="plan-offer-cannot-start" reason={offer.cannotStart}>
+          {tb(`cannotStart.${logBugRefusalKey(offer.cannotStart)}`, { key: target ?? '' })}
+        </AnswerLine>
+      );
+    }
     const line = cannotStartKey(offer.cannotStart);
     if (line.kind === 'beingPlanned') {
       const key = target ?? '';
@@ -163,28 +207,31 @@ export function PlanOffer({
   const long = offer.requestMd.length > CLAMP_AT;
   const decided = state === 'confirmed' || state === 'declined';
   const live = state === 'undecided' && answerable;
-  const variant = live && midPlanning;
+  // Logging a bug ends no plan, so a bug offer never draws the mid-planning variant.
+  const variant = live && midPlanning && !bug;
   const elsewhere =
+    !bug &&
     target !== null &&
     sessionTargetKeys.length > 0 &&
     !sessionTargetKeys.some((k) => sameKey(k, target));
-  const refusalKey = live && refusal !== null ? answerRefusalKey(refusal) : null;
+  const refusalKey = live && refusal !== null && !bug ? answerRefusalKey(refusal) : null;
+  const bugRefusalKey = live && refusal !== null && bug ? logBugRefusalKey(refusal) : null;
+  const label = bug ? tb('label') : variant ? t('labelMidPlanning') : t('label');
   const confirming = answering && pressed === 'confirm';
   const declining = answering && pressed === 'decline';
   const disabled = busy || answering;
 
   return (
     <section
-      aria-label={variant ? t('labelMidPlanning') : t('label')}
+      aria-label={label}
       data-testid="plan-offer"
+      data-offer-kind={offer.kind}
       data-offer-state={state}
       className={`flex flex-col gap-2.5 rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) ${
         decided ? 'bg-(--el-surface-soft)' : 'bg-(--el-surface)'
       }`}
     >
-      <p className="text-xs font-semibold text-(--el-text-secondary)">
-        {variant ? t('labelMidPlanning') : t('label')}
-      </p>
+      <p className="text-xs font-semibold text-(--el-text-secondary)">{label}</p>
 
       <div
         className={`rounded-(--radius-input) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-input-x) py-(--spacing-control-y-8) text-sm text-(--el-text) ${
@@ -206,7 +253,9 @@ export function PlanOffer({
         </button>
       ) : null}
 
-      {target === null ? (
+      {bug ? (
+        <BugWriteLine offer={offer} workItemRefs={workItemRefs} />
+      ) : target === null ? (
         <p
           className="border-l-2 border-(--el-border-strong) pl-2 text-xs text-(--el-text)"
           data-testid="plan-offer-no-target"
@@ -231,14 +280,17 @@ export function PlanOffer({
         <div className="flex flex-col gap-1.5" data-testid="plan-offer-confirmed">
           <span className="inline-flex w-fit items-center gap-1 rounded-(--radius-badge) bg-(--el-tint-mint) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-text-strong)">
             <CircleCheck className="size-3.5" aria-hidden />
-            {t('started')}
+            {bug ? tb('logged') : t('started')}
           </span>
           {offer.confirmedAt ? (
             <p className="text-xs text-(--el-text-secondary)">
-              {t('startedBy', { when: when(offer.confirmedAt) })}
+              {bug
+                ? tb('loggedBy', { when: when(offer.confirmedAt) })
+                : t('startedBy', { when: when(offer.confirmedAt) })}
             </p>
           ) : null}
-          <p className="text-xs text-(--el-text-secondary)">{t('startedHere')}</p>
+          {/* A bug offer's result is the outcome line in the answer above. */}
+          {bug ? null : <p className="text-xs text-(--el-text-secondary)">{t('startedHere')}</p>}
         </div>
       ) : state === 'declined' ? (
         <div className="flex flex-col gap-1.5" data-testid="plan-offer-declined">
@@ -250,9 +302,20 @@ export function PlanOffer({
               {t('declinedBy', { when: when(offer.declinedAt) })}
             </p>
           ) : null}
-          <p className="text-xs text-(--el-text-secondary)">{t('recorded')}</p>
+          <p className="text-xs text-(--el-text-secondary)">
+            {bug ? tb('recorded') : t('recorded')}
+          </p>
         </div>
-      ) : !live ? null : refusalKey ? (
+      ) : !live ? null : bugRefusalKey ? (
+        <p
+          className="flex items-start gap-1.5 border-l-2 border-(--el-border-strong) pl-2 text-xs text-(--el-text)"
+          data-testid="plan-offer-cannot-start"
+          data-reason={refusal ?? undefined}
+        >
+          <Lock className="mt-px size-3.5 flex-none" aria-hidden />
+          <span>{tb(`cannotStart.${bugRefusalKey}`, { key: target ?? '' })}</span>
+        </p>
+      ) : refusalKey ? (
         // A REFUSED PRESS keeps the request and target and replaces BOTH buttons
         // with the reason (design sheet 7).
         <p
@@ -282,7 +345,7 @@ export function PlanOffer({
                 onConfirm?.(turnId);
               }}
             >
-              {confirming ? t('confirming') : t('confirm')}
+              {confirming ? (bug ? tb('confirming') : t('confirming')) : t('confirm')}
             </Button>
             <Button
               variant="secondary"
@@ -299,8 +362,9 @@ export function PlanOffer({
             </Button>
           </div>
           <p className="text-xs leading-relaxed text-(--el-text-secondary)">
-            {target !== null ? t('confirmHelp', { key: target }) : t('confirmHelpNoTarget')}{' '}
-            {t('declineHelp')}
+            {bug
+              ? `${tb('confirmHelp')} ${tb('declineHelp')}`
+              : `${target !== null ? t('confirmHelp', { key: target }) : t('confirmHelpNoTarget')} ${t('declineHelp')}`}
           </p>
         </>
       )}

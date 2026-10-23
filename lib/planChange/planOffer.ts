@@ -53,6 +53,8 @@ export interface PlanOfferRecord {
   declinedAt: string | null;
   confirmedAt: string | null;
   confirmedSessionId: string | null;
+  /** A `log_bug` offer's write (MOTIR-9322): where it goes, read to state it. */
+  bug?: { target: { kind: string; key: string | null } };
 }
 
 /** The slice of a thread turn this reads (a `PlanChangeTurnDto` fits). */

@@ -89,3 +89,26 @@ export function alreadyPlanning({
 }): boolean {
   return phase === 'streaming' || phase === 'deciding' || hasUndecidedPlan || writingPlan;
 }
+
+/** The refused-press line keys under `planningWorkspace.logBugOffer.cannotStart`. */
+export type LogBugRefusalKey =
+  | 'planningUnavailable'
+  | 'targetChanged'
+  | 'targetUnavailable'
+  | 'anchorNotTriage'
+  | 'generic';
+
+const LOG_BUG_REFUSAL_KEY: Record<string, LogBugRefusalKey> = {
+  // The landing's own refusals (MOTIR-9323), each written before anything was.
+  DEBUG_TARGET_CHANGED: 'targetChanged',
+  NOT_FOUND: 'targetUnavailable',
+  DEBUG_ANCHOR_NOT_TRIAGE_BUG: 'anchorNotTriage',
+  PERMISSION_DENIED: 'planningUnavailable',
+  planning_unavailable: 'planningUnavailable',
+};
+
+/** The line a refused Confirm of a `log_bug` offer draws (MOTIR-9324), or a served
+ *  `cannotStart`; generic for anything else. */
+export function logBugRefusalKey(code: string): LogBugRefusalKey {
+  return Object.hasOwn(LOG_BUG_REFUSAL_KEY, code) ? LOG_BUG_REFUSAL_KEY[code]! : 'generic';
+}

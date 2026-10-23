@@ -4,7 +4,6 @@ import { GUIDE_OFFER_CLOSED } from '@/lib/planning/guideOfferClosed';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   CopyableSessionDto,
-  DebugLandingDto,
   EarlierSessionDto,
   PlanChangeRunPauseDto,
   PlanChangeSessionDto,
@@ -404,7 +403,7 @@ export interface PlanChangeConversationState {
   targetHeld?: PlanTargetHeldByDto | null;
   /**
    * The work item each ask turn SENT FROM HERE was anchored on, by user-turn id
-   * (MOTIR-7050) — the report widget's triage bug on its seeded debug turn. The
+   * (MOTIR-7050) — the report widget's triage bug on its seeded turn. The
    * rail draws it as the turn's target row. The send-time SEED only: the turn
    * DTO carries the persisted anchor (`anchorKey`, MOTIR-7064) and the rail reads
    * that first, so a reloaded thread keeps the chip; this covers a turn whose DTO
@@ -412,15 +411,6 @@ export interface PlanChangeConversationState {
    * test) needs no change.
    */
   turnAnchors?: Readonly<Record<string, string>>;
-  /**
-   * What each DEBUG turn landed, by its `debug_bug` job id (MOTIR-7049's settle,
-   * rendered by MOTIR-7050) — the one card written, or none. The assistant turn
-   * carrying the diagnosis shares that job id, so the rail finds its OUTCOME LINE
-   * here as the FALLBACK: the reply turn's DTO carries the persisted landing
-   * (`debugLanding`, MOTIR-7064), which the rail reads first and a reload keeps.
-   * Kept as the fallback for a state built without it (every rail test).
-   */
-  debugLandings?: Readonly<Record<string, DebugLandingDto>>;
   /**
    * THE PLANNER'S NARRATION (Story MOTIR-8060 · MOTIR-8064) — the stored read
    * (`PlanReviewDto.narration`) of the plan this surface last read, replaced WHOLE
@@ -568,7 +558,6 @@ const INITIAL: PlanChangeConversationState = {
   copyable: null,
   targetHeld: null,
   turnAnchors: {},
-  debugLandings: {},
   ...NO_NARRATION,
 };
 
@@ -2553,7 +2542,7 @@ export function usePlanChangeConversation({
       targets?: readonly PlanningTarget[],
       /**
        * `anchorKey` — the ONE work item a PROJECT-thread turn is about
-       * (MOTIR-7047 · MOTIR-7050): the report widget's seeded debug turn names
+       * (MOTIR-7047 · MOTIR-7050): the report widget's seeded turn names
        * the triage bug it just filed. It is data for the ask door, not a target
        * set — the turn stays on the project thread — and it is ignored on an
        * anchored (item) thread, which has no ask door.
@@ -3488,8 +3477,9 @@ export function usePlanChangeConversation({
   }, []);
 
   /**
-   * ANSWER A PLAN OFFER (Story MOTIR-9219 · MOTIR-9294): the offer row's Confirm or
-   * Decline, one post per press. The doors decide everything — whether the start
+   * ANSWER A PLAN OFFER (Story MOTIR-9219 · MOTIR-9294) — or a log-a-bug offer
+   * (MOTIR-9324), through the same doors: the offer row's Confirm or Decline, one post
+   * per press. The doors decide everything — whether the start
    * runs here, on the target's conversation, or after ending a plan in progress —
    * and the hook only follows: the conversation is REFETCHED, never read from the
    * answer's body, so the refetched offer is what flips the row to confirmed or
@@ -3516,6 +3506,14 @@ export function usePlanChangeConversation({
           return;
         }
         const started = await answerPlanOffer(session.id, turnId, 'confirm');
+        // A `log_bug` offer (MOTIR-9323) made its one write: no run follows, and the
+        // thread the door answered already carries the landing on the offer's turn.
+        if (started.kind === 'log_bug') {
+          if (!mountedRef.current) return;
+          const landed = started.session;
+          setState((s) => (s.session?.id === landed.id ? { ...s, session: landed } : s));
+          return;
+        }
         const read = await getPlanChangeSession(started.sessionId);
         if (!mountedRef.current) return;
         // The run in flight (a mid-planning confirm) was stopped by the door; its

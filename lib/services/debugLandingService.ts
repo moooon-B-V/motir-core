@@ -1,104 +1,118 @@
 import type { ProjectContext } from '@/lib/projects';
 import { describedForWrite, type AuthoredBug } from '@/lib/ai/authoredBug';
-import { parseDebugBug, type DebugBugOutcome } from '@/lib/ai/debugBug';
-import type { DebugLandingDto, PlanChangeSessionDto } from '@/lib/dto/planChange';
+import type { DebugBugOutcome } from '@/lib/ai/debugBug';
+import { motirSystemContext } from '@/lib/ai/serviceAuth';
+import type {
+  DebugLandingDto,
+  LogBugOfferDto,
+  PlanChangeSessionDto,
+  PlanChangeTurnDto,
+} from '@/lib/dto/planChange';
 import type { UpdateWorkItemInput, WorkItemDto } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
+import { bugDestinationService } from '@/lib/services/bugDestinationService';
 import { commentsService } from '@/lib/services/commentsService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { triageService } from '@/lib/services/triageService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import type { PlanChangeSessionAddress } from '@/lib/services/planChangeSessionsService';
 import { readWorkItem } from '@/lib/workspaces/tenantRead';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { CommentForbiddenError } from '@/lib/comments/errors';
 import {
   DebugAnchorNotTriageBugError,
   DebugTargetChangedError,
   DebugTargetNotAvailableError,
+  PlanChangeTurnNotFoundError,
+  PlanOfferStartRefusedError,
 } from '@/lib/planChange/errors';
 import {
   PermissionDeniedError,
   ProjectAccessDeniedError,
   ProjectNotFoundError,
 } from '@/lib/projects/errors';
-import {
-  InvalidTriageSubmissionKindError,
-  InvalidTriageSubmissionTitleError,
-} from '@/lib/triage/errors';
-import { readCodeUnreadable } from '@/lib/planning/codeUnreadable';
 import { StaleWorkItemError, WorkItemError, WorkItemNotFoundError } from '@/lib/workItems/errors';
 
-// LANDING a debug turn (Story MOTIR-7042 · MOTIR-7049) — the write half of the
-// conversation's THIRD intent, `docs/decisions/conversation-turn-intent.md`
-// AMENDMENT 1 · A1.4. `debug_bug` (motir-ai, MOTIR-7046) diagnoses and writes
-// nothing; this reads its settled result and makes the ONE write the turn is
-// allowed:
+// LANDING a confirmed `log_bug` offer (Story MOTIR-9220 · MOTIR-9323; first shipped
+// for the debug turn, MOTIR-7042 · MOTIR-7049, `docs/decisions/conversation-turn-
+// intent.md` AMENDMENT 1 · A1.4). An answer that found a defect carries ONE stored
+// offer (`logBugOfferService.land`, MOTIR-9322); the person's yes — the Confirm press
+// or a typed agreement — reaches {@link debugLandingService.confirmLogBugOffer}, which
+// makes the ONE write the offer names:
 //
-//   | result                                 | the one write                                   |
-//   | -------------------------------------- | ----------------------------------------------- |
-//   | `enrich_existing`                      | ONE comment on the named card, carrying the     |
-//   |                                        | diagnosis; its `motir:` reference to the anchor |
-//   |                                        | relates the two in the same transaction         |
-//   | `diagnose`, anchored on a triage bug   | ONE update of that bug, ADDING the diagnosis    |
-//   | `diagnose`, no anchor (the orb)        | ONE bug created in Triage, born with it         |
-//   | `grounded: false` (either outcome)     | NOTHING — the turn says it could not ground it  |
+//   | the offer's target | the one write                                          |
+//   | ------------------ | ------------------------------------------------------ |
+//   | `existing`         | ONE comment on the covering card, carrying the         |
+//   |                    | diagnosis; its `motir:` reference to the anchor        |
+//   |                    | relates the two in the same transaction                |
+//   | `anchored`         | ONE update of the anchored triage bug, ADDING the      |
+//   |                    | diagnosis                                              |
+//   | `new`              | ONE bug created in the project's bug destination,      |
+//   |                    | born with the diagnosis                                |
 //
-// ── ONE CARD, ONE TRANSACTION ────────────────────────────────────────────────
-// Each row's write is ONE call into the authority that already owns it, and each
-// of those is one transaction: `commentsService.addComment` (the comment + its
-// auto-relate link), `workItemsService.updateWorkItem`, and
-// `triageService.createSubmission` — which now carries the diagnosis's planned
-// fields INTO the create, so the orb's bug is never visible half-written. Every
-// write runs as the SENDER through the gated path, so the turn can do nothing
-// they could not do by hand. Nothing here moves a status, kind, parent, sprint
-// or dependency edge, and nothing promotes a triage item.
+// No model call and no code read happens here: the draft and its context refs are
+// written exactly as the settle checked and stored them.
+//
+// ── READ AS THE PERSON, WRITTEN BY MOTIR ─────────────────────────────────────
+// The target is re-resolved under the SENDER'S read access, so Motir never writes to
+// a card the person cannot see. The write itself is Motir's (MOTIR-9329): it runs
+// under the system account's context bound to this workspace, so a new bug's
+// reporter is Motir, the anchored bug's revision and the covering card's comment are
+// Motir's, and the person's own `work_item:edit` is never asked for. Each write is
+// ONE call into the authority that already owns it, and each of those is one
+// transaction: `commentsService.addComment` (the comment + its auto-relate link),
+// `workItemsService.updateWorkItem`, and `workItemsService.createWorkItem` — placed
+// the way `aiWorkItemsService.fileBug` places Motir's bugs, never through Triage.
+// Nothing here moves a status, kind, parent, sprint or dependency edge.
+//
+// ── A STALE TARGET IS REFUSED ────────────────────────────────────────────────
+// The offer stored its target's `updatedAt` when the answer settled. A target edited
+// since — the anchored bug, or the covering card — is refused with
+// `DebugTargetChangedError` rather than written over: a read taken at confirm cannot
+// see an edit made between the offer and the press.
 //
 // ── EXACTLY ONCE: A CLAIM BEFORE THE WRITE ───────────────────────────────────
-// The settle is replayable (a reload, a retried request, a second tab), and the
-// write lives in another service's transaction, so it cannot share one with the
-// thread. The turn therefore carries a CLAIM (`debugLandingClaimedAt`), taken by
-// a compare-and-set under the session's row lock AFTER every check has passed
-// and BEFORE the write:
+// The write lives in another service's transaction, so it cannot share one with the
+// thread. The OFFER'S turn therefore carries a CLAIM (`debugLandingClaimedAt`), taken
+// by a compare-and-set under the session's row lock AFTER every check has passed and
+// BEFORE the write:
 //
-//   * a replay after a finished landing finds the job's `assistant` turn and
-//     returns the same DTO, writing nothing;
-//   * a concurrent settle loses the claim and writes nothing;
+//   * a confirm after a finished landing finds `debugLanding` on the offer's turn and
+//     returns it, writing nothing;
+//   * a concurrent confirm (a double press, a second tab, Confirm plus a typed yes)
+//     loses the claim, writes nothing, and answers the winner's landing;
 //   * a write REFUSED inside its own transaction (a stale edit, a permission)
-//     committed nothing, so the claim is released and a later settle retries;
-//   * any OTHER failure after the claim keeps it — the landing fails CLOSED. A
-//     crash between the write and the reply leaves the card written and the
-//     turn without its reply; it never files a second bug.
-
-/** The line an ungrounded turn answers with. motir-ai's own `replyMd` names where
- *  the diagnosis "goes", which is untrue once A1.4's no-write row applies, so
- *  core states what it actually did. */
-export const DEBUG_UNGROUNDED_REPLY =
-  "I could not ground this report in the project's code, so I did not write it onto any card. Add where it happens, or what you were doing when it broke, and send it again.";
+//     committed nothing, so the claim is released and a later confirm retries;
+//   * any OTHER failure after the claim keeps it — the landing fails CLOSED. A crash
+//     between the write and the stamp leaves the card written and the offer
+//     unstamped; it never files a second bug.
 
 /** The line an anchored bug's diagnosis sits under — everything above it is the
  *  report as the person filed it (A1.4: ADD, never replace). */
 export const DEBUG_DIAGNOSIS_DIVIDER =
   '_Diagnosis added by Motir AI. Everything above the line is the report as it was filed._';
 
-/** What {@link debugLandingService.land} did. `null` from `land` means another
- *  settle of the same job holds the claim and has not replied yet. */
+/** What {@link debugLandingService.confirmLogBugOffer} landed, and the thread after. */
 export interface DebugLandingResult {
   landing: DebugLandingDto;
   session: PlanChangeSessionDto;
 }
 
-/** The one card a checked result will write to — resolved BEFORE the claim. */
+/** The one card a checked offer will write to — resolved BEFORE the claim. */
 type Target =
   | { kind: 'comment'; card: WorkItemDto; anchor: WorkItemDto | null }
   | { kind: 'update'; bug: WorkItemDto }
   | { kind: 'create' };
 
+/** How long a losing confirm waits for the winner's stamp before it gives up. */
+const WINNER_WAIT_MS = 30_000;
+const WINNER_POLL_MS = 200;
+
 function actorOf(ctx: ProjectContext): ServiceContext {
   return { userId: ctx.userId, workspaceId: ctx.workspaceId };
 }
 
-/** Resolve a key the result names, in the ACTIVE project, under the sender's
+/** Resolve a key the offer names, in the ACTIVE project, under the sender's
  *  access — every "not for you" is the one no-leak 404. */
 async function resolveKey(key: string, ctx: ProjectContext): Promise<WorkItemDto> {
   try {
@@ -116,13 +130,9 @@ async function resolveKey(key: string, ctx: ProjectContext): Promise<WorkItemDto
 }
 
 /** Every check, and no write. What it throws leaves the thread and every card
- *  exactly as they stood. */
+ *  exactly as they stood. Read access is the SENDER'S; no edit permission of theirs
+ *  is asked for, because the write is Motir's (MOTIR-9329). */
 async function resolveTarget(result: DebugBugOutcome, ctx: ProjectContext): Promise<Target> {
-  // A1.4: every write runs as the sender under their own permissions. The same
-  // key the debug dispatch asserted — re-asserted, because a role can change
-  // while the diagnosis runs.
-  await projectAccessService.assertPermission(ctx.projectId, actorOf(ctx), 'work_item:edit');
-
   if (result.outcome === 'enrich_existing') {
     const card = await resolveKey(result.workItemKey, ctx);
     const anchor = result.anchorKey ? await resolveKey(result.anchorKey, ctx) : null;
@@ -190,8 +200,8 @@ function additivePatch(bug: WorkItemDto, diagnosis: AuthoredBug): UpdateWorkItem
   return patch;
 }
 
-/** A refusal raised INSIDE the write's own transaction — nothing committed, so
- *  the claim may be released. Anything else keeps it (fail closed). */
+/** A refusal raised INSIDE the write's own transaction, or before it — nothing
+ *  committed, so the claim may be released. Anything else keeps it (fail closed). */
 function refusedBeforeCommit(err: unknown): boolean {
   return (
     err instanceof WorkItemError ||
@@ -199,24 +209,31 @@ function refusedBeforeCommit(err: unknown): boolean {
     err instanceof CommentForbiddenError ||
     err instanceof PermissionDeniedError ||
     err instanceof ProjectAccessDeniedError ||
-    err instanceof ProjectNotFoundError ||
-    err instanceof InvalidTriageSubmissionKindError ||
-    err instanceof InvalidTriageSubmissionTitleError
+    err instanceof ProjectNotFoundError
   );
 }
 
-/** Make the ONE write. Returns the card it touched. */
+/**
+ * Make the ONE write, as Motir (`motir`). `expectedUpdatedAt` is the target's
+ * `updatedAt` the offer stored when it settled: a target edited since is refused,
+ * never written over. Returns the card it touched.
+ */
 async function write(
   target: Target,
   result: DebugBugOutcome,
+  expectedUpdatedAt: string | null,
   ctx: ProjectContext,
+  motir: ServiceContext,
 ): Promise<{ identifier: string; title: string }> {
-  const actor = actorOf(ctx);
   if (target.kind === 'comment' && result.outcome === 'enrich_existing') {
+    // A comment has no stale guard of its own, so the stored stamp is compared here.
+    if (expectedUpdatedAt !== null && target.card.updatedAt !== expectedUpdatedAt) {
+      throw new DebugTargetChangedError(target.card.identifier);
+    }
     await commentsService.addComment(
       target.card.id,
       { bodyMd: enrichmentComment(result, target.anchor) },
-      actor,
+      motir,
     );
     return { identifier: target.card.identifier, title: target.card.title };
   }
@@ -225,10 +242,10 @@ async function write(
       const updated = await workItemsService.updateWorkItem(
         target.bug.id,
         additivePatch(target.bug, result.diagnosis),
-        actor,
-        // An edit landing between the read and this write is refused, never
-        // overwritten — the monitor enrichment's guard.
-        { expectedUpdatedAt: target.bug.updatedAt },
+        motir,
+        // An edit landing since the offer is refused, never overwritten — the
+        // monitor enrichment's guard, fed the offer's own stamp.
+        { expectedUpdatedAt: expectedUpdatedAt ?? target.bug.updatedAt },
       );
       return { identifier: updated.identifier, title: updated.title };
     } catch (err) {
@@ -238,149 +255,191 @@ async function write(
       throw err;
     }
   }
-  // The orb: ONE bug, born in Triage through the intake the widget uses, WITH the
-  // diagnosis — so there is no second step that could leave it half-written.
+  // A NEW bug: ONE create, by Motir, in the project's bug destination — the place
+  // `aiWorkItemsService.fileBug` files Motir's bugs — WITH the diagnosis, so there
+  // is no second step that could leave it half-written. Never through Triage.
   const { diagnosis } = result;
-  const created = await triageService.createSubmission(
+  const { folderId } = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    bugDestinationService.resolve(ctx.projectId, tx),
+  );
+  const created = await workItemsService.createWorkItem(
     {
-      projectKey: ctx.project.identifier,
+      projectId: ctx.projectId,
       kind: 'bug',
       title: result.title,
+      parentId: null,
+      folderId,
       descriptionMd: describedForWrite(diagnosis),
-      diagnosis: {
-        explanationMd: diagnosis.explanationMd,
-        type: diagnosis.type,
-        executor: diagnosis.executor,
-        storyPoints: diagnosis.storyPoints,
-        estimateMinutes: diagnosis.estimateMinutes,
-        difficulty: diagnosis.difficulty,
-      },
+      explanationMd: diagnosis.explanationMd,
+      explanationSource: 'ai_draft',
+      type: diagnosis.type,
+      executor: diagnosis.executor,
+      storyPoints: diagnosis.storyPoints,
+      estimateMinutes: diagnosis.estimateMinutes,
+      ...(diagnosis.difficulty !== null ? { difficulty: diagnosis.difficulty } : {}),
     },
-    actor,
+    motir,
   );
   return { identifier: created.identifier, title: created.title };
 }
 
 function landingOf(
   result: DebugBugOutcome,
-  card: { identifier: string; title: string | null } | null,
+  card: { identifier: string; title: string },
 ): DebugLandingDto {
-  if (!result.diagnosis.grounded) {
-    return { outcome: 'ungrounded', workItemKey: null, title: null, createdInTriage: false };
-  }
   return {
     outcome: result.outcome,
-    workItemKey: card?.identifier ?? null,
-    title: card?.title ?? null,
-    createdInTriage: result.outcome === 'diagnose' && result.anchorKey === null,
+    workItemKey: card.identifier,
+    title: card.title,
+    // Motir creates its bug directly; nothing lands in Triage any more.
+    createdInTriage: false,
   };
 }
 
-/** The DTO a REPLAY returns — the same one the landing returned, re-derived from
- *  the job's (immutable) result and the reply turn's citation, writing nothing. */
-async function replayed(
-  result: DebugBugOutcome,
-  citations: readonly string[],
-  ctx: ProjectContext,
-): Promise<DebugLandingDto> {
-  const key = citations[0];
-  if (!result.diagnosis.grounded || !key) return landingOf(result, null);
-  let title: string | null = null;
-  try {
-    title = (await resolveKey(key, ctx)).title;
-  } catch (err) {
-    if (!(err instanceof DebugTargetNotAvailableError)) throw err;
+/**
+ * The stored offer as the landing's input. The draft was checked when the answer
+ * settled and the offer exists only on a grounded read, so nothing is parsed here.
+ * `existing` enriches the covering card, relating it to the turn's anchor; `anchored`
+ * diagnoses the anchored triage bug; `new` diagnoses into a new bug.
+ */
+export function outcomeOfOffer(bug: LogBugOfferDto, turnAnchorKey: string | null): DebugBugOutcome {
+  const common = {
+    title: bug.title,
+    acceptanceCriteria: bug.acceptanceCriteria,
+    diagnosis: bug.draft,
+  };
+  if (bug.target.kind === 'existing' && bug.target.key) {
+    return {
+      ...common,
+      outcome: 'enrich_existing',
+      workItemKey: bug.target.key,
+      matchReason: null,
+      anchorKey: turnAnchorKey === bug.target.key ? null : turnAnchorKey,
+    };
   }
-  return landingOf(result, { identifier: key, title });
+  if (bug.target.kind === 'anchored' && bug.target.key) {
+    return { ...common, outcome: 'diagnose', anchorKey: bug.target.key };
+  }
+  return { ...common, outcome: 'diagnose', anchorKey: null };
 }
 
-/** The `assistant` turn a job already produced on this thread, if any. */
-function replyFor(session: PlanChangeSessionDto, jobId: string) {
-  return session.turns.find((t) => t.role === 'assistant' && t.jobId === jobId) ?? null;
+/** The resolved anchor of the person's turn the offer's answer answered. */
+function turnAnchorOf(session: PlanChangeSessionDto, offerTurn: PlanChangeTurnDto): string | null {
+  const asked = session.turns.find((t) => t.role === 'user' && t.jobId === offerTurn.jobId);
+  return asked?.anchorKey ?? null;
+}
+
+/** Whether the offer turn's claim is still held — read straight from the row,
+ *  because the DTO does not carry it. */
+async function claimHeld(
+  ctx: ProjectContext,
+  sessionId: string,
+  offerTurnId: string,
+): Promise<boolean> {
+  const row = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: ctx.projectId },
+    (tx) => planChangeTurnRepository.findByIdInSession(offerTurnId, sessionId, ctx.workspaceId, tx),
+  );
+  return row?.debugLandingClaimedAt != null;
+}
+
+/** The losing confirm's answer: the winner's landing, waited for while the winner is
+ *  still writing. Null when the winner gave its claim back (its write was refused). */
+async function winnerOf(
+  ctx: ProjectContext,
+  sessionId: string,
+  offerTurnId: string,
+): Promise<DebugLandingResult | null> {
+  const deadline = Date.now() + WINNER_WAIT_MS;
+  for (;;) {
+    const session = await planChangeSessionsService.getById(ctx, sessionId);
+    const landing = session.turns.find((t) => t.id === offerTurnId)?.debugLanding;
+    if (landing) return { landing, session };
+    if (!(await claimHeld(ctx, sessionId, offerTurnId))) return null;
+    if (Date.now() >= deadline) throw new PlanOfferStartRefusedError('offer_not_open');
+    await new Promise((resolve) => setTimeout(resolve, WINNER_POLL_MS));
+  }
+}
+
+async function confirm(
+  ctx: ProjectContext,
+  input: { conversationId: string; offerTurnId: string },
+  attempts: number,
+): Promise<DebugLandingResult> {
+  const address = { sessionId: input.conversationId };
+  const thread = await planChangeSessionsService.getById(ctx, input.conversationId);
+  const offerTurn = thread.turns.find((t) => t.id === input.offerTurnId);
+  const bug =
+    offerTurn?.role === 'assistant' && offerTurn.offer?.kind === 'log_bug'
+      ? offerTurn.offer.bug
+      : undefined;
+  if (!offerTurn || !bug) throw new PlanChangeTurnNotFoundError(input.offerTurnId);
+  // Already landed: the same landing, nothing written.
+  if (offerTurn.debugLanding) return { landing: offerTurn.debugLanding, session: thread };
+  const state = offerTurn.offer?.state;
+  if (state === 'declined' || state === 'superseded') {
+    throw new PlanOfferStartRefusedError('offer_not_open');
+  }
+
+  const result = outcomeOfOffer(bug, turnAnchorOf(thread, offerTurn));
+  const target = await resolveTarget(result, ctx);
+  // Resolved before the claim, so an unprovisioned account claims nothing.
+  const motir = await motirSystemContext(ctx.workspaceId);
+
+  const claimed = await planChangeSessionsService.claimDebugLanding(
+    input.offerTurnId,
+    ctx,
+    address,
+  );
+  if (!claimed) {
+    const winner = await winnerOf(ctx, input.conversationId, input.offerTurnId);
+    if (winner) return winner;
+    if (attempts <= 1) throw new PlanOfferStartRefusedError('offer_not_open');
+    return confirm(ctx, input, attempts - 1);
+  }
+
+  let card: { identifier: string; title: string };
+  try {
+    card = await write(target, result, bug.targetUpdatedAt, ctx, motir);
+  } catch (err) {
+    if (refusedBeforeCommit(err)) {
+      await planChangeSessionsService.releaseDebugLanding(input.offerTurnId, ctx, address);
+    }
+    throw err;
+  }
+
+  // The landing rides ON the offer's own answer turn (MOTIR-7064's outcome line),
+  // stamped with the offer's confirmation in one locked write.
+  const landing = landingOf(result, card);
+  const session = await planChangeSessionsService.recordDebugLanding(
+    input.offerTurnId,
+    landing,
+    ctx,
+    address,
+  );
+  return { landing, session };
 }
 
 export const debugLandingService = {
   /**
-   * Land a settled `debug_bug` job's result for the `user` turn it ran for.
+   * The Confirm press and the typed yes on a `log_bug` offer: make the ONE write the
+   * offer on `offerTurnId` names, exactly once. A second door for the same offer
+   * answers the first one's landing.
    *
-   * `result` is the job's raw result envelope, as `getJob` returned it; its
-   * `debugBug` unit is parsed here and a malformed one is refused with the typed
-   * `InvalidAuthoredBugError` before anything is written. Then, in order: a
-   * replay returns the DTO it already returned; an ungrounded result writes no
-   * card and replies that it could not ground the report; otherwise every check
-   * runs ({@link resolveTarget}), the turn is claimed, the ONE write is made, and
-   * the handler's `replyMd` is appended as the `assistant` turn citing the card
-   * it touched — idempotent on the job id, like every settled answer.
-   *
-   * Returns `null` when a concurrent settle of the same job holds the claim and
-   * has not replied yet: this call wrote nothing and has nothing to report.
+   *  - no `ai:plan` ⇒ `PermissionDeniedError` (403), before anything is read;
+   *  - an offer turn that is absent, holds no `log_bug` offer, or is another member's
+   *    ⇒ `PlanChangeTurnNotFoundError` (404);
+   *  - a declined or superseded offer ⇒ `PlanOfferStartRefusedError('offer_not_open')`;
+   *  - a target no longer readable to the sender ⇒ `DebugTargetNotAvailableError`; an
+   *    anchor that is no longer a triage bug ⇒ `DebugAnchorNotTriageBugError`; a
+   *    target edited since the offer ⇒ `DebugTargetChangedError` — nothing written,
+   *    the claim released.
    */
-  async land(
-    input: { jobId: string; turnId: string; result: unknown },
+  async confirmLogBugOffer(
     ctx: ProjectContext,
-    address: PlanChangeSessionAddress,
-  ): Promise<DebugLandingResult | null> {
-    const envelope = input.result as { debugBug?: unknown } | null | undefined;
-    const result = parseDebugBug(envelope?.debugBug);
-
-    const current = await planChangeSessionsService.getById(ctx, address.sessionId);
-    const earlier = replyFor(current, input.jobId);
-    if (earlier) {
-      return { landing: await replayed(result, earlier.citations, ctx), session: current };
-    }
-
-    // A1.4's fourth row: a report that cannot be grounded writes NOTHING.
-    if (!result.diagnosis.grounded) {
-      const landing = landingOf(result, null);
-      const session = await planChangeSessionsService.appendAnswerTurn(
-        {
-          jobId: input.jobId,
-          body: DEBUG_UNGROUNDED_REPLY,
-          citations: [],
-          debugLanding: landing,
-          // A report that could not be grounded BECAUSE the code could not be read
-          // carries the outage notice with its reply (MOTIR-8141).
-          codeUnreadable: readCodeUnreadable(input.result) === 'answered' ? 'answered' : null,
-        },
-        ctx,
-        address,
-      );
-      return { landing, session };
-    }
-
-    const target = await resolveTarget(result, ctx);
-
-    const claimed = await planChangeSessionsService.claimDebugLanding(input.turnId, ctx, address);
-    if (!claimed) {
-      const latest = await planChangeSessionsService.getById(ctx, address.sessionId);
-      const reply = replyFor(latest, input.jobId);
-      if (!reply) return null;
-      return { landing: await replayed(result, reply.citations, ctx), session: latest };
-    }
-
-    let card: { identifier: string; title: string };
-    try {
-      card = await write(target, result, ctx);
-    } catch (err) {
-      if (refusedBeforeCommit(err)) {
-        await planChangeSessionsService.releaseDebugLanding(input.turnId, ctx, address);
-      }
-      throw err;
-    }
-
-    // The landing rides ON the reply (MOTIR-7064): one append writes both, so the
-    // outcome line a reload draws is the one the settle returned.
-    const landing = landingOf(result, card);
-    const session = await planChangeSessionsService.appendAnswerTurn(
-      {
-        jobId: input.jobId,
-        body: result.replyMd,
-        citations: [card.identifier],
-        debugLanding: landing,
-      },
-      ctx,
-      address,
-    );
-    return { landing, session };
+    input: { conversationId: string; offerTurnId: string },
+  ): Promise<DebugLandingResult> {
+    await projectAccessService.assertPermission(ctx.projectId, actorOf(ctx), 'ai:plan');
+    return confirm(ctx, input, 2);
   },
 };

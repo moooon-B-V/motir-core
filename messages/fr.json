@@ -1382,7 +1382,7 @@
         },
         "debug": {
           "title": "Déboguer avec Motir AI",
-          "description": "Remonter un bug jusqu’à sa cause probable et le classer dans le Tri",
+          "description": "Remonter un bug jusqu’à sa cause probable, puis l’enregistrer si vous êtes d’accord",
           "prefill": "Quelque chose ne fonctionne pas. Ce qui se passe : \nCe qui devrait se passer : "
         }
       }
@@ -5907,7 +5907,7 @@
       "error": "Impossible d’envoyer votre signalement. Veuillez réessayer.",
       "debugOffer": {
         "action": "Déboguer avec Motir AI",
-        "hint": "<b>Déboguer avec Motir AI</b> lance le débogage dès que vous appuyez dessus et consomme des crédits Motir AI. Motir AI lit le code, identifie la cause probable et vérifie si un élément de travail couvre déjà ce bug."
+        "hint": "<b>Déboguer avec Motir AI</b> envoie votre signalement à Motir AI dès que vous appuyez dessus et consomme des crédits Motir AI. Motir AI lit le code, identifie la cause probable et propose d’ajouter le diagnostic à ce bug. Rien n’est écrit tant que vous n’avez pas confirmé."
       }
     }
   },
@@ -7966,7 +7966,7 @@
       "handoff": "Interprété comme une modification du plan — travail sur la proposition",
       "debug": {
         "wroteAnchor": "Diagnostic consigné sur <chip>{key}</chip>. Il reste en Triage et rien d'autre n'a changé.",
-        "filed": "<chip>{key}</chip> créé dans Triage avec le diagnostic. Rien d'autre n'a changé.",
+        "filed": "<chip>{key}</chip> créé avec le diagnostic. Rien d’autre n’a changé.",
         "enrichedAnchor": "Diagnostic ajouté à <chip>{key}</chip>, qui couvre déjà ce bug. Rien de nouveau n'a été créé et {anchorKey} reste tel quel.",
         "enriched": "Diagnostic ajouté à <chip>{key}</chip>, qui couvre déjà ce bug. Rien de nouveau n'a été créé.",
         "ungrounded": "Impossible de relier ce problème au code, rien n'a donc été écrit."
@@ -8453,6 +8453,25 @@
         "outOfCredits": "Votre organisation n’a plus de crédits AI, la planification ne peut donc pas démarrer.",
         "targetUnavailable": "Vous ne pouvez plus ouvrir {key}, la planification ne peut donc pas démarrer.",
         "generic": "La planification ne peut pas démarrer à partir de cette offre."
+      }
+    },
+    "logBugOffer": {
+      "label": "Proposition de consigner un bug",
+      "writeNew": "Créer un nouveau bug",
+      "writeAnchored": "Ajouter le diagnostic à <chip>{key}</chip>",
+      "writeExisting": "Noter le diagnostic sur <chip>{key}</chip>, qui couvre déjà ce problème",
+      "confirming": "Enregistrement…",
+      "confirmHelp": "Confirmer effectue cette seule écriture, au nom de Motir. Répondre « oui » fait de même.",
+      "declineHelp": "Refuser n’écrit rien, et la conversation continue.",
+      "logged": "Consigné",
+      "loggedBy": "Confirmé · {when}",
+      "recorded": "Rien n’a été écrit.",
+      "cannotStart": {
+        "planningUnavailable": "Impossible de consigner un bug ici : Motir AI n’est pas configuré pour ce projet, ou vous n’avez pas l’autorisation de l’utiliser.",
+        "targetChanged": "{key} a été modifié après cette proposition, donc rien n’a été écrit. Redemandez pour obtenir une proposition à jour.",
+        "targetUnavailable": "Vous ne pouvez plus ouvrir {key}, donc rien n’a été écrit.",
+        "anchorNotTriage": "{key} n’est plus en Triage, donc le diagnostic n’a pas été ajouté.",
+        "generic": "Ce bug ne peut pas être consigné depuis cette proposition."
       }
     },
     "restart": {

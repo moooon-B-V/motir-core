@@ -611,7 +611,7 @@ test('E. a stored debug turn with its landing and a stored new-session confirm s
     // A project-scope session has no anchor, so the stored `diagnose` landing
     // reads as the bug it filed (`debug.filed`), not as a write onto an anchor.
     await expect(line).toContainText(`Filed ${bug.identifier}`);
-    await expect(line).toContainText('in Triage with the diagnosis. Nothing else changed.');
+    await expect(line).toContainText('with the diagnosis. Nothing else changed.');
     await expect(line.getByRole('link', { name: new RegExp(bug.identifier) })).toBeVisible();
     await expect(answer(page, 'Likely cause: the drop clamp.')).toHaveCount(1);
     // No retry is drawn that could submit a debug job.

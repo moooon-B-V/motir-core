@@ -1382,7 +1382,7 @@
         },
         "debug": {
           "title": "Depurar com o Motir AI",
-          "description": "Rastrear um Bug até a causa provável e registrá-lo na Triagem",
+          "description": "Rastrear um Bug até a causa provável e registrá-lo se você concordar",
           "prefill": "Algo está quebrado. O que acontece: \nO que deveria acontecer: "
         }
       }
@@ -5907,7 +5907,7 @@
       "error": "Não foi possível enviar seu relato. Tente novamente.",
       "debugOffer": {
         "action": "Depurar com o Motir AI",
-        "hint": "<b>Depurar com o Motir AI</b> inicia a depuração assim que você clica e consome créditos do Motir AI. O Motir AI lê o código, aponta a causa provável e verifica se algum item de trabalho já cobre este Bug."
+        "hint": "<b>Depurar com o Motir AI</b> envia seu relato ao Motir AI assim que você clica e consome créditos do Motir AI. O Motir AI lê o código, aponta a causa provável e se oferece para adicionar o diagnóstico a este Bug. Nada é gravado até você confirmar."
       }
     }
   },
@@ -7966,7 +7966,7 @@
       "handoff": "Interpretando como alteração de plano — trabalhando na proposta",
       "debug": {
         "wroteAnchor": "O diagnóstico foi escrito em <chip>{key}</chip>. Ele continua na Triagem, e nada mais mudou.",
-        "filed": "<chip>{key}</chip> foi registrado na Triagem com o diagnóstico. Nada mais mudou.",
+        "filed": "Criei <chip>{key}</chip> com o diagnóstico. Nada mais mudou.",
         "enrichedAnchor": "O diagnóstico foi adicionado a <chip>{key}</chip>, que já cobre este bug. Nada novo foi registrado, e {anchorKey} permanece como está.",
         "enriched": "O diagnóstico foi adicionado a <chip>{key}</chip>, que já cobre este bug. Nada novo foi registrado.",
         "ungrounded": "Não foi possível rastrear isto até o código, então nada foi escrito."
@@ -8453,6 +8453,25 @@
         "outOfCredits": "Sua organização está sem créditos de AI, então o planejamento não pode começar.",
         "targetUnavailable": "Você não pode mais abrir {key}, então o planejamento não pode começar.",
         "generic": "O planejamento não pode começar a partir desta proposta."
+      }
+    },
+    "logBugOffer": {
+      "label": "Oferta para registrar um bug",
+      "writeNew": "Criar um bug novo",
+      "writeAnchored": "Adicionar o diagnóstico a <chip>{key}</chip>",
+      "writeExisting": "Anotar o diagnóstico em <chip>{key}</chip>, que já cobre isto",
+      "confirming": "Registrando…",
+      "confirmHelp": "Confirmar faz esta única escrita, como Motir. Responder “sim” faz o mesmo.",
+      "declineHelp": "Recusar não escreve nada, e a conversa continua.",
+      "logged": "Registrado",
+      "loggedBy": "Confirmado · {when}",
+      "recorded": "Nada foi escrito.",
+      "cannotStart": {
+        "planningUnavailable": "Não é possível registrar bugs aqui: o Motir AI não está configurado para este projeto, ou você não tem permissão para usá-lo.",
+        "targetChanged": "{key} mudou depois desta oferta, então nada foi escrito. Pergunte de novo para receber uma oferta atualizada.",
+        "targetUnavailable": "Você não consegue mais abrir {key}, então nada foi escrito.",
+        "anchorNotTriage": "{key} não está mais em Triagem, então o diagnóstico não foi adicionado.",
+        "generic": "Este bug não pode ser registrado a partir desta oferta."
       }
     },
     "restart": {

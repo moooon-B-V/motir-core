@@ -34,8 +34,9 @@
 //
 // "Debug with Motir AI" (MOTIR-7050) is the third row and has no gate of its
 // own: the orb is mounted only where `showPlanWithAi` holds (Motir AI
-// configured, an active project, `ai:plan`), which is exactly who may send a
-// debug turn — so it is never dimmed and never absent on its own.
+// configured, an active project, `ai:plan`), which is exactly who may send the
+// ordinary ask it pre-fills (MOTIR-9325) — so it is never dimmed and never
+// absent on its own.
 
 /**
  * The icon a row's tile carries. A NAME, not a component, so this module stays

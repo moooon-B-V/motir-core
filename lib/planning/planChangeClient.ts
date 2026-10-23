@@ -9,6 +9,7 @@ import {
 export type { StalePlanFinishedCard } from '@/lib/planning/planSessionClientErrors';
 import type {
   CopyableSessionDto,
+  DebugLandingDto,
   PlanChangeRunPauseDto,
   EarlierSessionDto,
   PlanChangeSessionDto,
@@ -212,11 +213,15 @@ export async function answerRestart(
 
 /** What the plan offer's Confirm answers (MOTIR-9291): the run it started — on the
  *  conversation `sessionId` names, which may not be the one on screen. */
-export interface PlanOfferConfirmResponse {
-  sessionId: string;
-  jobId: string;
-  planId?: string;
-}
+export type PlanOfferConfirmResponse =
+  | {
+      kind?: 'plan';
+      sessionId: string;
+      jobId: string;
+      planId?: string;
+    }
+  /** A `log_bug` offer (MOTIR-9323): its one write landed; no run follows. */
+  | { kind: 'log_bug'; sessionId: string; landing: DebugLandingDto; session: PlanChangeSessionDto };
 
 /** The ANSWER to a plan offer on an answer turn (Story MOTIR-9219 · MOTIR-9294): one
  *  post per press. `confirm` starts the offer's plan exactly once; `decline` records

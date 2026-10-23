@@ -1,3 +1,5 @@
+import { readLogBugOffer, type LogBugOfferClaim } from '@/lib/ai/logBugOffer';
+
 // The CONSUMING half of MOTIR-1817's boundary contract (MOTIR-1819): reading an
 // `ask_project` job's ANSWER — and its REDIRECT — off a motir-ai job result.
 //
@@ -55,9 +57,11 @@ export interface AskOutcome {
    * On an `ask` ONLY: the one offer the answer ended with (MOTIR-9287 producer ↔
    * MOTIR-9290 consumer). ABSENT when the envelope carried none, or one this build
    * cannot read — an unrecognised `kind` is NO offer, never coerced to `plan`, since
-   * the field's membership grows on the far side first.
+   * the field's membership grows on the far side first. A `log_bug` offer
+   * (MOTIR-9322) is read through `parseLogBugOffer`; one that fails any check is no
+   * offer, and the answer still lands.
    */
-  offer?: AskPlanOffer;
+  offer?: AskOffer;
   /**
    * On an `ask` ONLY: the person's decision on the offer that was PENDING when they
    * spoke (MOTIR-9292 producer ↔ MOTIR-9291 consumer). `seq` names that offer's
@@ -74,6 +78,9 @@ export interface AskOfferReply {
   kind: string;
   decision: 'agree' | 'decline';
 }
+
+/** The one offer an answer carries, once read: a plan, or a bug to log. */
+export type AskOffer = AskPlanOffer | LogBugOfferClaim;
 
 /** The plan offer an answer carries, once read. `requestText` is mapped onto the
  *  store's `requestMd` here; `targetKey` is the CLAIM the far side made, which the
@@ -112,8 +119,10 @@ function boundedString(value: unknown, max: number): string | null {
 }
 
 /** The envelope's offer, or null when it is absent, of an unknown kind, or carries
- *  no request text. The target is kept only when it is key-shaped. */
-function readOfferField(value: unknown): AskPlanOffer | null {
+ *  no request text. The target is kept only when it is key-shaped. A `log_bug`
+ *  offer is read whole by `readLogBugOffer`, or not at all. */
+function readOfferField(value: unknown): AskOffer | null {
+  if (isRecord(value) && value['kind'] === 'log_bug') return readLogBugOffer(value);
   if (!isRecord(value) || value['kind'] !== 'plan') return null;
   const requestMd = boundedString(value['requestText'], ASK_ANSWER_MAX_CHARS);
   if (!requestMd) return null;
