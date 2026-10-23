@@ -19,7 +19,12 @@ import type {
   SharpenSessionDto,
   SharpenSettleResult,
 } from '@/lib/dto/sharpen';
-import { inFlightTurn, isFailedRecord, toSharpenSessionDto } from '@/lib/mappers/sharpenMappers';
+import {
+  inFlightTurn,
+  isFailedRecord,
+  toCarriedAnswers,
+  toSharpenSessionDto,
+} from '@/lib/mappers/sharpenMappers';
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { sqlStateOf } from '@/lib/prisma/sqlstate';
 import type { ProjectContext } from '@/lib/projects';
@@ -242,6 +247,37 @@ function loadDto(sessionId: string, ctx: ProjectContext): Promise<SharpenSession
 }
 
 /**
+ * The caller's latest grilling on a conversation (MOTIR-9314), open or ended, with
+ * the person turns it was given: every one written by its latest turn. A turn
+ * written after that is a later, different request (MOTIR-9315). Null when they
+ * never grilled it.
+ */
+async function settledOnConversation(
+  conversationId: string,
+  ctx: ProjectContext,
+  tx: Prisma.TransactionClient,
+): Promise<SharpenConversationSettledDto | null> {
+  const row = await sharpenSessionRepository.findLatestByConversation(
+    conversationId,
+    ctx.userId,
+    ctx.workspaceId,
+    tx,
+  );
+  if (!row) return null;
+  const turns = await planChangeTurnRepository.listBySessionId(conversationId, ctx.workspaceId, tx);
+  return {
+    sessionId: row.id,
+    status: row.status,
+    endReason: row.endReason,
+    settled: (row.settled as unknown as SettledAnswer[]) ?? [],
+    assumptions: (row.assumptions as unknown as SharpenAssumption[]) ?? [],
+    requests: turns
+      .filter((t) => t.role === 'user' && t.createdAt <= row.lastActivityAt && t.body.trim())
+      .map((t) => t.body),
+  };
+}
+
+/**
  * The RUN a plan session stands inside (Subtask MOTIR-8450) — the plan, the
  * person's own requests of the conversation writing it, its anchor card and the
  * requirement already settled on it. Read from stored state only. `undefined`
@@ -269,11 +305,15 @@ async function runContextFor(
       : null;
     const plan = await planRepository.findById(target.planId, ctx.workspaceId, tx);
     const requirement = narrowSharpenedRequirement(plan?.sharpenedRequirement);
+    // What the conversation was grilled on before this run (MOTIR-9315), so the
+    // run's own grilling does not ask that request again.
+    const carried = toCarriedAnswers(await settledOnConversation(subject.sessionId, ctx, tx));
     return {
       planId: target.planId,
       requests,
       card: anchor ? { key: anchor.identifier, title: anchor.title } : null,
       ...(requirement ? { requirement } : {}),
+      ...(carried ? { carried } : {}),
     };
   });
 }
@@ -737,21 +777,6 @@ export const aiSharpenService = {
   ): Promise<SharpenConversationSettledDto | null> {
     await projectAccessService.assertPermission(ctx.projectId, actorOf(ctx), 'project:browse');
     const target = await resolveTarget({ conversationId }, ctx);
-    const row = await withWorkspaceContext(bindCtx(ctx), (tx) =>
-      sharpenSessionRepository.findLatestByConversation(
-        target.ref,
-        ctx.userId,
-        ctx.workspaceId,
-        tx,
-      ),
-    );
-    if (!row) return null;
-    return {
-      sessionId: row.id,
-      status: row.status,
-      endReason: row.endReason,
-      settled: (row.settled as unknown as SettledAnswer[]) ?? [],
-      assumptions: (row.assumptions as unknown as SharpenAssumption[]) ?? [],
-    };
+    return withWorkspaceContext(bindCtx(ctx), (tx) => settledOnConversation(target.ref, ctx, tx));
   },
 };

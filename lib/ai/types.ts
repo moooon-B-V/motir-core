@@ -348,6 +348,22 @@ export interface SharpenRunContext {
   /** The plan's stored sharpened requirement, narrowed to its six fields;
    *  absent when the plan carries none. */
   requirement?: SubmittedRequirement;
+  /** What the run's conversation was grilled on before planning (MOTIR-9315
+   *  producer ↔ MOTIR-9313 consumer); absent when that grilling settled nothing. */
+  carried?: CarriedAnswers;
+}
+
+/**
+ * CARRIED ANSWERS — what a conversation's grilling settled before its planning run
+ * started, in motir-ai's `CarriedAnswers` wire shape (`src/jobs/carriedAnswers.ts`).
+ * It rides the planning job as `context.carriedAnswers` and the in-run grilling as
+ * `context.sharpen.run.carried`, so neither asks the person the same request again.
+ * `requests` are the person's turns the answers were given for; never empty.
+ */
+export interface CarriedAnswers {
+  requests: string[];
+  settled: Omit<SettledAnswer, 'source'>[];
+  assumptions: Omit<SharpenAssumption, 'source'>[];
 }
 
 export interface JobContextBag {
@@ -571,6 +587,12 @@ export interface JobContextBag {
   // the only validator, and it runs where a half-answer can open a conversation
   // rather than fail a call.
   requirement?: SubmittedRequirement;
+  // The CONVERSATION'S CARRIED ANSWERS (Story MOTIR-9221 · MOTIR-9315 producer ↔
+  // MOTIR-9313 consumer) — what the person settled when the conversation was
+  // grilled before planning. BESIDE `requirement`, never merged into its six
+  // fields, and spread conditionally for the same reason: absent means there is
+  // nothing to carry.
+  carriedAnswers?: CarriedAnswers;
 }
 
 /**

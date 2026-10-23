@@ -68,6 +68,9 @@ export interface SharpenConversationSettledDto {
   endReason: 'nothing_to_ask' | 'finished' | 'stopped' | null;
   settled: SettledAnswer[];
   assumptions: SharpenAssumption[];
+  /** The conversation's person turns the grilling was given: every one written
+   *  before its latest turn. A turn written after is a later request. */
+  requests: string[];
 }
 
 /** What settling a job answers. */

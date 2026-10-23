@@ -756,6 +756,7 @@ describe('a conversation target', () => {
       endReason: null,
       settled: SETTLED,
       assumptions: [],
+      requests: ['Export invoices'],
     });
 
     const stopped = await aiSharpenService.act(opened.session.id, 'stop', {}, pctx);
