@@ -8,11 +8,12 @@
 // still lists it; opening it shows the Closed thread, the plan with Approve and
 // Decline, and a chatbox. The first turn carries the plan and the conversation
 // into a new session — the overlay switches to it in place — and the Plans list
-// shows that session holding ONE plan. The planner's answer to that turn, and to
-// the next one, REVISES the same plan rather than opening a second, and the plan
-// approves. Then, on a fresh card, a plan whose work was finished elsewhere is
-// said in words naming that work item, with Plan it again, and Plan it again
-// starts exactly one fresh plan in the same conversation.
+// shows that session holding ONE plan, and no longer the first, which holds none.
+// The planner's answer to that turn, and to the next one, REVISES the same plan
+// rather than opening a second, and the plan approves. Then, on a fresh card, a
+// plan whose work was finished elsewhere is said in words naming that work item,
+// with Plan it again, and Plan it again starts exactly one fresh plan in the same
+// conversation.
 //
 // The unrecorded tests cover the rest: another member reads the plan with no
 // chatbox, a take-back lands the turn in the open session, zh renders, and a
@@ -555,11 +556,11 @@ test('a waiting plan under a Closed session is carried by its first turn, revise
     await expect(carriedRow).toBeVisible();
     await expect(carriedRow.getByTestId('plan-session-continued-from')).toBeVisible();
     await expect(carriedRow).not.toContainText(/earlier plan/);
-    // The carry moved the plan off s1, so it holds none, and the Plans list serves
-    // only sessions that reached planning (MOTIR-9217): s1 is not listed.
+    // The carry moved the plan to S2, so S1 holds none and the Plans list, which
+    // serves only sessions holding a plan (MOTIR-9300), no longer lists it.
+    await expect(sessionRowOf(page, s1)).toHaveCount(0);
     expect(await plansIn(s2)).toBe(1);
     expect(await plansIn(s1)).toBe(0);
-    await expect(sessionRowOf(page, s1)).toHaveCount(0);
     await beat();
   });
 

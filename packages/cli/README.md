@@ -636,7 +636,7 @@ tarball as a downloadable artifact without publishing.
 **Auth:** the publish step uses **OIDC Trusted Publishing** — no `NPM_TOKEN`
 secret. GitHub mints a short-lived id-token (`id-token: write`) that npm
 exchanges for a one-time publish credential, gated by a Trusted Publisher
-configured on npmjs.com for this package (org `moooon-B-V` / repo `motir-core` /
+configured on npmjs.com for this package (org `motir-co` / repo `motir-core` /
 this workflow filename). Provenance is still requested explicitly with
 `--provenance`, which needs `id-token: write` plus the `repository` field in
 `package.json`.

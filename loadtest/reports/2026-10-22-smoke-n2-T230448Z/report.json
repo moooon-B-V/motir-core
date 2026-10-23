@@ -1,0 +1,851 @@
+{
+  "verdict": "FAIL",
+  "verdictReasons": [
+    "reads p95 FAIL",
+    "reads p99 FAIL",
+    "writes, claims and runs p95 FAIL",
+    "writes, claims and runs p99 FAIL",
+    "P2028 FAIL"
+  ],
+  "exitCode": 1,
+  "servedRps": 11.616666666666667,
+  "header": {
+    "instances": 2,
+    "sha": "f8e7d68996e0c9de87ad09f4fdc5eb70728fafd0",
+    "shaReadFrom": "image_ref tag",
+    "neon": {
+      "project": "snowy-truth-13928044",
+      "branchId": "br-blue-sea-aup5noib",
+      "copiedAt": "2026-10-19T23:31:14Z",
+      "copiedAtField": "refresh.json",
+      "endpointHost": "ep-jolly-dawn-aumdpqm0.c-10.us-east-1.aws.neon.tech"
+    },
+    "app": {
+      "name": "motir-core-staging",
+      "size": "performance-1x-2048MB",
+      "machines": [
+        {
+          "id": "83d165ea509708",
+          "region": "iad",
+          "cpus": 1,
+          "memoryMb": 2048,
+          "imageRef": "registry.fly.io/motir-core:f8e7d68996e0c9de87ad09f4fdc5eb70728fafd0"
+        },
+        {
+          "id": "82ddd09f047508",
+          "region": "iad",
+          "cpus": 1,
+          "memoryMb": 2048,
+          "imageRef": "registry.fly.io/motir-core:f8e7d68996e0c9de87ad09f4fdc5eb70728fafd0"
+        }
+      ]
+    },
+    "production": {
+      "cpuKind": "performance",
+      "cpus": 1,
+      "memoryMb": 2048
+    },
+    "candidateSize": false,
+    "instancesHeld": true,
+    "pinEnforced": true,
+    "profile": {
+      "name": "smoke",
+      "path": "loadtest/profiles/smoke.json",
+      "loadHash": "371d0a8fa6eccb3dc60ebf8081372243127505764f287a1d1305779a20f61ab5"
+    },
+    "traceRate": 0.1,
+    "concurrency": {
+      "type": "requests",
+      "softLimit": 960,
+      "hardLimit": 1200
+    },
+    "requiredConcurrency": {
+      "hard": 82,
+      "soft": 66
+    },
+    "rateLimits": {
+      "apiV1": 6000,
+      "mcp": "default",
+      "agentWorkspace": "default"
+    },
+    "offered": {
+      "rpsUpperBound": 34.41,
+      "perWorkspaceRps": 16.91,
+      "perTokenRps": {
+        "mcp": 2,
+        "apiV1": 0.45
+      },
+      "readerStreamsPerInstance": 6
+    },
+    "generator": {
+      "machineId": "85777d7a271148",
+      "region": "iad",
+      "cpus": 2,
+      "cpuMean": 0.01971211404070496,
+      "cpuMax": 0.022856189522856188
+    },
+    "k6": {
+      "version": "v1.2.1",
+      "extensions": ["github.com/phymbert/xk6-sse v0.1.12"]
+    },
+    "window": {
+      "startedAt": "2026-10-22T23:26:27.000Z",
+      "rampEndedAt": "2026-10-22T23:27:27.000Z",
+      "steadyEndedAt": "2026-10-22T23:30:27.000Z",
+      "endedAt": "2026-10-22T23:31:35Z"
+    },
+    "prometheus": {
+      "endpoint": "https://api.fly.io/prometheus/moooon",
+      "app": "motir-core-staging",
+      "queriedAt": "2026-10-23T08:12:33.830Z",
+      "settleSeconds": 60
+    },
+    "pgStatStatements": {
+      "before": {
+        "host": "ep-jolly-dawn-aumdpqm0.c-10.us-east-1.aws.neon.tech",
+        "computeStartedAt": "2026-10-19T23:31:20.328Z",
+        "statsReset": "2026-10-19T23:31:20.325Z"
+      },
+      "after": {
+        "host": "ep-jolly-dawn-aumdpqm0.c-10.us-east-1.aws.neon.tech",
+        "computeStartedAt": "2026-10-19T23:31:20.328Z",
+        "statsReset": "2026-10-19T23:31:20.325Z"
+      }
+    },
+    "baseline": "/Users/yuezhu/motir-sandbox/motir-core-8671-a2/loadtest/.out/runs/20261020T191137Z-smoke-n1"
+  },
+  "comparable": {
+    "sha": "f8e7d68996e0c9de87ad09f4fdc5eb70728fafd0",
+    "neonBranchId": "br-blue-sea-aup5noib",
+    "neonCopiedAt": "2026-10-19T23:31:14Z",
+    "app": "motir-core-staging",
+    "machineIds": ["82ddd09f047508", "83d165ea509708"],
+    "size": "performance-1x-2048MB",
+    "instances": 2,
+    "profile": "smoke",
+    "loadHash": "371d0a8fa6eccb3dc60ebf8081372243127505764f287a1d1305779a20f61ab5",
+    "concurrency": {
+      "type": "requests",
+      "softLimit": 960,
+      "hardLimit": 1200
+    },
+    "requiredConcurrency": {
+      "hard": 82,
+      "soft": 66
+    },
+    "rateLimits": {
+      "apiV1": 6000,
+      "mcp": "default",
+      "agentWorkspace": "default"
+    },
+    "traceRate": 0.1,
+    "generatorMachineId": "85777d7a271148",
+    "generatorCpus": 2,
+    "k6Version": "v1.2.1",
+    "baseline": "/Users/yuezhu/motir-sandbox/motir-core-8671-a2/loadtest/.out/runs/20261020T191137Z-smoke-n1"
+  },
+  "lines": [
+    {
+      "key": "perInstance.targetRps",
+      "name": "throughput",
+      "status": "n/a",
+      "value": "N > 1 — 5.81 rps per instance (information)",
+      "limit": "≥ 13 rps",
+      "reason": null
+    },
+    {
+      "key": "perInstance.readP95Ms",
+      "name": "reads p95",
+      "status": "FAIL",
+      "value": "17362.15 ms",
+      "limit": "≤ 500 ms",
+      "reason": null
+    },
+    {
+      "key": "perInstance.readP99Ms",
+      "name": "reads p99",
+      "status": "FAIL",
+      "value": "20388.1 ms",
+      "limit": "≤ 1500 ms",
+      "reason": null
+    },
+    {
+      "key": "perInstance.mutateP95Ms",
+      "name": "writes, claims and runs p95",
+      "status": "FAIL",
+      "value": "15207.82 ms",
+      "limit": "≤ 2000 ms",
+      "reason": null
+    },
+    {
+      "key": "perInstance.mutateP99Ms",
+      "name": "writes, claims and runs p99",
+      "status": "FAIL",
+      "value": "16617.28 ms",
+      "limit": "≤ 5000 ms",
+      "reason": null
+    },
+    {
+      "key": "perInstance.errorRate",
+      "name": "error rate",
+      "status": "PASS",
+      "value": "0 % (0 of 2114)",
+      "limit": "< 0.1 %",
+      "reason": null
+    },
+    {
+      "key": "perInstance.p2028",
+      "name": "P2028",
+      "status": "FAIL",
+      "value": "4",
+      "limit": "≤ 0",
+      "reason": null,
+      "annotation": "Blind spot: p2028_* counts only failures before the transaction body ran (lib/monitoring/transactionSpan.ts failedOutcome); a mid-body expiry is labelled rolled_back and shows as an error outcome in the latency lines, not here."
+    },
+    {
+      "key": "perInstance.streamLost",
+      "name": "held streams lost",
+      "status": "PASS",
+      "value": "0 (opened 44, open at end 44, reconnected 0)",
+      "limit": "≤ 0",
+      "reason": null
+    },
+    {
+      "key": "perInstance.rateLimitedMax",
+      "name": "rate-limit refusals",
+      "status": "PASS",
+      "value": "0 % (0 refused of 2146; retry_after p95 none)",
+      "limit": "≤ 1 %",
+      "reason": null
+    },
+    {
+      "key": "scaleOut.efficiency",
+      "name": "scale-out",
+      "limit": "≥ 9.6 rps (0.8 × 2 × 6)",
+      "status": "PASS",
+      "value": "11.62 rps (shares 82ddd09f047508 52 %, 83d165ea509708 48 %)",
+      "reason": null
+    }
+  ],
+  "measures": {
+    "servedRps": 11.616666666666667,
+    "perInstanceRps": 5.808333333333334,
+    "refusals": {
+      "limited": 0,
+      "denominator": 2146,
+      "retryAfterP95": null
+    }
+  },
+  "p2028": {
+    "status": "FAIL",
+    "total": 4,
+    "limit": 0,
+    "instances": [
+      {
+        "instance": "82ddd09f047508",
+        "p2028_wait": 4,
+        "p2028_timeout": 0,
+        "committedRise": 21108,
+        "measured": true,
+        "reason": null
+      },
+      {
+        "instance": "83d165ea509708",
+        "p2028_wait": 0,
+        "p2028_timeout": 0,
+        "committedRise": 19828,
+        "measured": true,
+        "reason": null
+      }
+    ],
+    "reason": null,
+    "logs": {
+      "state": "complete",
+      "reason": null,
+      "total": 0,
+      "byInstance": {},
+      "disagrees": true
+    },
+    "blindSpot": "Blind spot: p2028_* counts only failures before the transaction body ran (lib/monitoring/transactionSpan.ts failedOutcome); a mid-body expiry is labelled rolled_back and shows as an error outcome in the latency lines, not here."
+  },
+  "proxyShed": {
+    "platform": {
+      "state": "ok",
+      "value": {
+        "82ddd09f047508": 0,
+        "83d165ea509708": 0
+      }
+    },
+    "logCodes": {
+      "state": "ok",
+      "value": {
+        "PL01": 0,
+        "PL02": 0,
+        "PR01": 0
+      }
+    },
+    "client503": {
+      "state": "ok",
+      "value": 0
+    }
+  },
+  "generator": {
+    "status": "ok",
+    "mean": 0.01971211404070496,
+    "peak": 0.022856189522856188,
+    "reason": null
+  },
+  "bottleneck": {
+    "first": {
+      "kind": "candidate",
+      "name": "cpu",
+      "onset": "2026-10-22T23:27:12.000Z"
+    },
+    "candidates": [
+      {
+        "name": "proxy",
+        "state": "not reached",
+        "onset": null,
+        "peak": "72 concurrent (hard limit 1200)",
+        "reason": null,
+        "beside": ["proxy_shed: platform 503 0, log codes 0, client http_503 0"]
+      },
+      {
+        "name": "cpu",
+        "state": "saturated",
+        "onset": 1792711632000,
+        "peak": "0.99 of the machine's CPUs busy",
+        "reason": null,
+        "beside": ["steal peak 0.01 CPU-s/s", "throttle peak 0 CPU-s/s (limit 0.05)"]
+      },
+      {
+        "name": "memory",
+        "state": "not reached",
+        "onset": null,
+        "peak": "available down to 36.66 % of total",
+        "reason": null,
+        "beside": []
+      },
+      {
+        "name": "pool",
+        "state": "saturated",
+        "onset": 1792711647000,
+        "peak": "mean waiting 32.95, wait p95 1.29 s",
+        "reason": null,
+        "beside": [
+          "the app pg.Pool (default max 10 per runtime) is the likelier first limit than the database"
+        ]
+      },
+      {
+        "name": "database",
+        "state": "not reached",
+        "onset": null,
+        "peak": "active 0.55 % of max_connections, 1 waiting on Lock",
+        "reason": null,
+        "beside": [
+          "reads the DIRECT endpoint only, so it cannot see pooler saturation",
+          "readerStreamsPerInstance 6 (each held stream is one watermark read per second of background load)",
+          "endpoint at start: ep-jolly-dawn-aumdpqm0 active 0.25–2 CU; at end: ep-jolly-dawn-aumdpqm0 active 0.25–2 CU",
+          "compute at its autoscaling maximum: unmeasured (the endpoint record carries the range, not the current size)"
+        ]
+      }
+    ],
+    "caveats": [
+      "The database candidate reads the DIRECT endpoint only, so it cannot see pooler saturation; the app’s pg.Pool (default max 10 per runtime) is the likelier first limit.",
+      "Every held stream costs one workbench watermark read per second: readerStreamsPerInstance 6 is background database load named here, not lost inside a req/s figure."
+    ]
+  },
+  "tables": {
+    "mix": {
+      "state": "ok",
+      "value": {
+        "rows": [
+          {
+            "class": "read",
+            "label": "read",
+            "of": null,
+            "offeredVus": 32,
+            "servedRps": 4.211111111111111,
+            "share": 0.36250597800095646,
+            "ok": 758,
+            "empty": 0,
+            "error": 0,
+            "limited": 0,
+            "p95Ms": 18205.105204,
+            "p99Ms": 20973.195875
+          },
+          {
+            "class": "write",
+            "label": "write",
+            "of": null,
+            "offeredVus": 16,
+            "servedRps": 2.4444444444444446,
+            "share": 0.2104256336681014,
+            "ok": 440,
+            "empty": 0,
+            "error": 0,
+            "limited": 0,
+            "p95Ms": 15084.675042,
+            "p99Ms": 16633.756649
+          },
+          {
+            "class": "claim",
+            "label": "claim",
+            "of": null,
+            "offeredVus": 10,
+            "servedRps": 1.4777777777777779,
+            "share": 0.12721186035389767,
+            "ok": 260,
+            "empty": 6,
+            "error": 0,
+            "limited": 0,
+            "p95Ms": 15608.060594,
+            "p99Ms": 16617.283686
+          },
+          {
+            "class": "burst",
+            "label": "burst",
+            "of": null,
+            "offeredVus": 4,
+            "servedRps": 0.26666666666666666,
+            "share": 0.022955523672883785,
+            "ok": 48,
+            "empty": 0,
+            "error": 0,
+            "limited": 0,
+            "p95Ms": 12459.482587,
+            "p99Ms": 12999.354212
+          },
+          {
+            "class": "run",
+            "label": "run",
+            "of": null,
+            "offeredVus": 6,
+            "servedRps": 1.0055555555555555,
+            "share": 0.08656145384983262,
+            "ok": 181,
+            "empty": 0,
+            "error": 0,
+            "limited": 0,
+            "p95Ms": 12206.306945,
+            "p99Ms": 16146.89528
+          },
+          {
+            "class": "readers",
+            "label": "readers",
+            "of": null,
+            "offeredVus": 16,
+            "servedRps": 2.2111111111111112,
+            "share": 0.19033955045432807,
+            "ok": 398,
+            "empty": 0,
+            "error": 0,
+            "limited": 0,
+            "p95Ms": 6926.309597,
+            "p99Ms": 20264.930488
+          },
+          {
+            "class": "readers.tab",
+            "label": "readers · tab",
+            "of": "readers",
+            "offeredVus": 12,
+            "servedRps": 1.85,
+            "share": 0.15925394548063126,
+            "ok": 333,
+            "empty": 0,
+            "error": 0,
+            "limited": 0,
+            "p95Ms": 5968.42009,
+            "p99Ms": 7453.857498
+          },
+          {
+            "class": "readers.browse",
+            "label": "readers · browse",
+            "of": "readers",
+            "offeredVus": 4,
+            "servedRps": 0.3611111111111111,
+            "share": 0.031085604973696793,
+            "ok": 65,
+            "empty": 0,
+            "error": 0,
+            "limited": 0,
+            "p95Ms": 20264.930488,
+            "p99Ms": 22384.197949
+          }
+        ],
+        "total": {
+          "offeredVus": 84,
+          "servedRps": 11.616666666666667
+        },
+        "note": "Served is ok + empty over the steady window, as the throughput line counts it; the held workbench stream and the run recycle step are in no class, so the top-level rows sum to the served rps. readers · tab and readers · browse split the readers row by k6’s scenario tag."
+      }
+    },
+    "routes": {
+      "state": "ok",
+      "value": [
+        {
+          "route": "mcp get_plan",
+          "rps": 0.8277777777777777,
+          "p95": 20973.195875,
+          "p99": 21534.321592
+        },
+        {
+          "route": "reader plan_poll",
+          "rps": 0.1111111111111111,
+          "p95": 20561.003662,
+          "p99": 22384.197949
+        },
+        {
+          "route": "run recycle",
+          "rps": 0.12777777777777777,
+          "p95": 20368.524605,
+          "p99": 21716.260636
+        },
+        {
+          "route": "reader plan_get",
+          "rps": 0.05,
+          "p95": 18002.591393,
+          "p99": 18002.591393
+        },
+        {
+          "route": "run claim",
+          "rps": 0.08333333333333333,
+          "p95": 17395.526336,
+          "p99": 17395.526336
+        },
+        {
+          "route": "mcp get_work_item",
+          "rps": 1.6777777777777778,
+          "p95": 16889.19399,
+          "p99": 17647.934324
+        },
+        {
+          "route": "mcp transition_status",
+          "rps": 1.1277777777777778,
+          "p95": 16381.548286,
+          "p99": 16931.255326
+        },
+        {
+          "route": "mcp claim_work_item",
+          "rps": 0.5222222222222223,
+          "p95": 15930.514376,
+          "p99": 16683.687565
+        },
+        {
+          "route": "mcp move_to_parent",
+          "rps": 0.26666666666666666,
+          "p95": 12459.482587,
+          "p99": 12999.354212
+        },
+        {
+          "route": "mcp add_comment",
+          "rps": 0.7055555555555556,
+          "p95": 12320.712146,
+          "p99": 12494.224071
+        },
+        {
+          "route": "run read",
+          "rps": 0.3611111111111111,
+          "p95": 12311.455085,
+          "p99": 13316.967099
+        },
+        {
+          "route": "mcp add_plan_items",
+          "rps": 0.16111111111111112,
+          "p95": 8858.795967,
+          "p99": 9239.212099
+        },
+        {
+          "route": "mcp update_work_item",
+          "rps": 1.4055555555555554,
+          "p95": 8759.102999,
+          "p99": 10176.355038
+        },
+        {
+          "route": "mcp search_work_items",
+          "rps": 1.3555555555555556,
+          "p95": 8533.271261,
+          "p99": 9692.073226
+        },
+        {
+          "route": "mcp skeleton",
+          "rps": 0.35,
+          "p95": 8273.203591,
+          "p99": 9584.251746
+        },
+        {
+          "route": "run prompt",
+          "rps": 0.08333333333333333,
+          "p95": 7255.137033,
+          "p99": 7255.137033
+        },
+        {
+          "route": "reader workbench_window",
+          "rps": 1.4777777777777779,
+          "p95": 6103.745598,
+          "p99": 7525.673906
+        },
+        {
+          "route": "run open",
+          "rps": 0.08333333333333333,
+          "p95": 4881.639883,
+          "p99": 4881.639883
+        },
+        {
+          "route": "run close",
+          "rps": 0.07222222222222222,
+          "p95": 2961.017792,
+          "p99": 2961.017792
+        },
+        {
+          "route": "reader items",
+          "rps": 0.10555555555555556,
+          "p95": 2779.583972,
+          "p99": 2779.583972
+        },
+        {
+          "route": "run heartbeat",
+          "rps": 0.08333333333333333,
+          "p95": 2718.674784,
+          "p99": 2718.674784
+        },
+        {
+          "route": "run events",
+          "rps": 0.2388888888888889,
+          "p95": 2696.819202,
+          "p99": 3339.473678
+        },
+        {
+          "route": "reader workbench",
+          "rps": 0.37222222222222223,
+          "p95": 2470.351359,
+          "p99": 2658.014312
+        },
+        {
+          "route": "reader boards",
+          "rps": 0.09444444444444444,
+          "p95": 2185.994742,
+          "p99": 2185.994742
+        },
+        {
+          "route": "reader workbench_stream",
+          "rps": 0.17777777777777778,
+          "p95": null,
+          "p99": null
+        }
+      ]
+    },
+    "waitHold": {
+      "state": "ok",
+      "value": [
+        {
+          "by": "route",
+          "name": "mcp",
+          "waitP95": 1.0825723472668796,
+          "waitP99": 1.82268810289389,
+          "holdP95": 0.17558717379233751,
+          "holdP99": 0.694375000000004
+        },
+        {
+          "by": "route",
+          "name": "plan_get",
+          "waitP95": 1.217924528301886,
+          "waitP99": 1.8435849056603781,
+          "holdP95": 0.14041666666666655,
+          "holdP99": 0.2325277777777779
+        },
+        {
+          "by": "route",
+          "name": "unlabelled",
+          "waitP95": 0.9621315192743761,
+          "waitP99": 1.7311940298507464,
+          "holdP95": 0.23815896739130427,
+          "holdP99": 0.7121232876712347
+        },
+        {
+          "by": "route",
+          "name": "workbench",
+          "waitP95": 0.14223684210526288,
+          "waitP99": 0.36958333333333354,
+          "holdP95": 0.45360576923076906,
+          "holdP99": 0.8122727272727275
+        },
+        {
+          "by": "route",
+          "name": "workbench_stream",
+          "waitP95": 1.234453781512604,
+          "waitP99": 1.8468907563025208,
+          "holdP95": 0.49035648994515535,
+          "holdP99": 1.3926666666666658
+        },
+        {
+          "by": "tool",
+          "name": "unknown",
+          "waitP95": 1.0196078431372548,
+          "waitP99": 1.8117647058823525,
+          "holdP95": 0.10564814814814807,
+          "holdP99": 0.36708333333333104
+        },
+        {
+          "by": "tool",
+          "name": "add_comment",
+          "waitP95": 1.0957142857142852,
+          "waitP99": 1.819142857142857,
+          "holdP95": 0.18867897727272726,
+          "holdP99": 0.34113636363636346
+        },
+        {
+          "by": "tool",
+          "name": "add_plan_items",
+          "waitP95": 0.9898550724637678,
+          "waitP99": 1.7813333333333312,
+          "holdP95": 0.1474999999999998,
+          "holdP99": 0.22949999999999982
+        },
+        {
+          "by": "tool",
+          "name": "claim_work_item",
+          "waitP95": 1.226890756302521,
+          "waitP99": 1.8521008403361352,
+          "holdP95": 0.325,
+          "holdP99": 2.768000000000011
+        },
+        {
+          "by": "tool",
+          "name": "get_plan",
+          "waitP95": 1.036697247706422,
+          "waitP99": 1.8220183486238524,
+          "holdP95": 0.14140804597701134,
+          "holdP99": 0.23977586206896553
+        },
+        {
+          "by": "tool",
+          "name": "get_work_item",
+          "waitP95": 1.0474734042553178,
+          "waitP99": 1.8137500000000006,
+          "holdP95": 0.16805214723926365,
+          "holdP99": 0.34038793103448384
+        },
+        {
+          "by": "tool",
+          "name": "move_to_parent",
+          "waitP95": 1.3049999999999984,
+          "waitP99": 1.8810000000000002,
+          "holdP95": 0.3232142857142851,
+          "holdP99": 0.7700000000000007
+        },
+        {
+          "by": "tool",
+          "name": "search_work_items",
+          "waitP95": 1.0692307692307674,
+          "waitP99": 1.8189743589743574,
+          "holdP95": 0.11531034482758593,
+          "holdP99": 0.23630344827586183
+        },
+        {
+          "by": "tool",
+          "name": "skeleton",
+          "waitP95": 1.0161290322580645,
+          "waitP99": 1.803225806451612,
+          "holdP95": 0.16988636363636364,
+          "holdP99": 0.5642857142857126
+        },
+        {
+          "by": "tool",
+          "name": "transition_status",
+          "waitP95": 1.1570610687022886,
+          "waitP99": 1.8344656488549622,
+          "holdP95": 0.23436842105263145,
+          "holdP99": 1.9346341463414674
+        },
+        {
+          "by": "tool",
+          "name": "update_work_item",
+          "waitP95": 1.001908396946565,
+          "waitP99": 1.8064885496183214,
+          "holdP95": 0.1899193548387097,
+          "holdP99": 0.2465860215053764
+        }
+      ]
+    },
+    "statements": {
+      "state": "ok",
+      "top": [
+        {
+          "query": "INSERT INTO \"public\".\"notification\" (\"id\",\"workspace_id\",\"recipient_user_id\",\"type\",\"category\",\"work_item_id\",\"actor_id\",\"data\",\"dedupe_key\",\"created_at\") VALUES ($1,$2,$3,$4,CAST($5::text AS \"public\".\"notification_category\"),$6,$7,$8,$9,$10) ON CONFLICT DO NOTHING",
+          "callsDelta": 209,
+          "totalMsDelta": 10560.189119999997
+        },
+        {
+          "query": "SELECT \"id\" FROM \"work_item\" WHERE \"id\" = $1 FOR UPDATE",
+          "callsDelta": 2515,
+          "totalMsDelta": 7352.310303999999
+        },
+        {
+          "query": "SELECT COUNT(*) AS \"_count$_all\" FROM (SELECT \"public\".\"watcher\".\"id\" FROM \"public\".\"watcher\" LEFT JOIN \"public\".\"work_item\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"watcher\".\"work_item_id\") WHERE (\"public\".\"watcher\".\"user_id\" = $1 AND (\"j0\".\"workspaceId\" = $2 AND \"j0\".\"archivedAt\" IS NULL AND \"j0\".\"triagedAt\" IS NULL AND \"j0\".\"projectId\" = $3 AND \"j0\".\"status\" NOT IN ($4 /*, ... */) AND (\"j0\".\"id\" IS NOT NULL))) OFFSET $5) AS \"sub\"",
+          "callsDelta": 2179,
+          "totalMsDelta": 3595.6950270000652
+        },
+        {
+          "query": "INSERT INTO \"public\".\"job_step\" (\"id\",\"run_id\",\"step_id\",\"kind\",\"result\",\"workspace_id\",\"created_at\") VALUES ($1,$2,$3,CAST($4::text AS \"public\".\"job_step_kind\"),$5,$6,$7) RETURNING \"public\".\"job_step\".\"id\", \"public\".\"job_step\".\"run_id\", \"public\".\"job_step\".\"step_id\", \"public\".\"job_step\".\"kind\"::text, \"public\".\"job_step\".\"result\", \"public\".\"job_step\".\"sleep_until\", \"public\".\"job_step\".\"workspace_id\", \"public\".\"job_step\".\"created_at\"",
+          "callsDelta": 8680,
+          "totalMsDelta": 2270.3268579999276
+        },
+        {
+          "query": "SELECT \"public\".\"watcher\".\"id\", \"public\".\"watcher\".\"work_item_id\" FROM \"public\".\"watcher\" LEFT JOIN \"public\".\"work_item\" AS \"orderby_1\" ON (\"orderby_1\".\"id\") = (\"public\".\"watcher\".\"work_item_id\") LEFT JOIN \"public\".\"work_item\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"watcher\".\"work_item_id\") WHERE (\"public\".\"watcher\".\"user_id\" = $1 AND (\"j0\".\"workspaceId\" = $2 AND \"j0\".\"archivedAt\" IS NULL AND \"j0\".\"triagedAt\" IS NULL AND \"j0\".\"projectId\" = $3 AND \"j0\".\"status\" NOT IN ($4 /*, ... */) AND (\"j0\".\"id\" IS NOT NULL))) ORDER BY \"orderby_1\".\"updatedAt\" DESC LIMIT $5 OFFSET $6",
+          "callsDelta": 1738,
+          "totalMsDelta": 2162.9910320000017
+        },
+        {
+          "query": "SELECT o.\"closing_since\" AS \"closingSince\" FROM \"workspace\" w JOIN \"organization\" o ON o.\"id\" = w.\"organizationId\" WHERE w.\"id\" = $1 LIMIT $2",
+          "callsDelta": 8633,
+          "totalMsDelta": 1293.0976630000089
+        },
+        {
+          "query": "INSERT INTO \"public\".\"job_queue\" (\"id\",\"job_id\",\"event_id\",\"event_name\",\"workspace_id\",\"run_at\",\"attempts\",\"max_attempts\",\"state\",\"idempotency_key\",\"created_at\",\"updated_at\") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,CAST($9::text AS \"public\".\"job_run_state\"),$10,$11,$12) RETURNING \"public\".\"job_queue\".\"id\", \"public\".\"job_queue\".\"job_id\", \"public\".\"job_queue\".\"event_id\", \"public\".\"job_queue\".\"event_name\", \"public\".\"job_queue\".\"workspace_id\", \"public\".\"job_queue\".\"run_at\", \"public\".\"job_queue\".\"scheduled_for\", \"public\".\"job_queue\".\"attempts\", \"public\".\"job_queue\".\"max_attempts\", \"public\".\"job_queue\".\"state\"::text, \"public\".\"job_queue\".\"claimed_by\", \"public\".\"job_queue\".\"lease_expires_at\", \"public\".\"job_queue\".\"last_error\", \"public\".\"job_queue\".\"idempotency_key\", \"public\".\"job_queue\".\"debounce_key\", \"public\".\"job_queue\".\"debounce_first_seen_at\", \"public\".\"job_queue\".\"created_at\", \"public\".\"job_queue\".\"updated_at\"",
+          "callsDelta": 4235,
+          "totalMsDelta": 920.8821969999985
+        },
+        {
+          "query": "INSERT INTO \"rate_limit_counter\" (\"key\", \"window_start\", \"count\", \"expires_at\") VALUES ($1, $2, $4, $3) ON CONFLICT (\"key\", \"window_start\") DO UPDATE SET \"count\" = \"rate_limit_counter\".\"count\" + $5 RETURNING \"count\"",
+          "callsDelta": 4766,
+          "totalMsDelta": 868.74402300001
+        },
+        {
+          "query": "INSERT INTO \"public\".\"job_run\" (\"id\",\"workspace_id\",\"function_id\",\"event_name\",\"event_id\",\"lane\",\"attempt\",\"status\",\"started_at\",\"idempotency_key\") VALUES ($1,$2,$3,$4,$5,CAST($6::text AS \"public\".\"job_run_lane\"),$7,CAST($8::text AS \"public\".\"job_run_status\"),$9,$10) RETURNING \"public\".\"job_run\".\"id\", \"public\".\"job_run\".\"workspace_id\", \"public\".\"job_run\".\"function_id\", \"public\".\"job_run\".\"event_name\", \"public\".\"job_run\".\"event_id\", \"public\".\"job_run\".\"lane\"::text, \"public\".\"job_run\".\"attempt\", \"public\".\"job_run\".\"status\"::text, \"public\".\"job_run\".\"started_at\", \"public\".\"job_run\".\"finished_at\", \"public\".\"job_run\".\"duration_ms\", \"public\".\"job_run\".\"failure\", \"public\".\"job_run\".\"output\", \"public\".\"job_run\".\"idempotency_key\"",
+          "callsDelta": 2684,
+          "totalMsDelta": 707.5395939999617
+        },
+        {
+          "query": "SELECT $1 AS one FROM \"workspace\" w JOIN \"organization_membership\" om ON om.\"organizationId\" = w.\"organizationId\" WHERE w.\"id\" = $2 AND om.\"userId\" = $3 AND om.\"role\" IN ($4 /*, ... */) LIMIT $5",
+          "callsDelta": 9123,
+          "totalMsDelta": 684.2866839999987
+        }
+      ],
+      "entered": [
+        "SELECT w.\"id\", w.\"kind\"::text AS \"kind\", w.\"type\"::text AS \"type\", w.\"key\", w.\"identifier\", w.\"title\", w.\"status\", w.\"ciState\", w.\"fixReason\"::text AS \"fixReason\", w.\"priority\"::text AS \"priority\", w.\"assigneeId\", w.\"reporterId\", w.\"dueDate\", w.\"estimateMinutes\", w.\"storyPoints\", w.\"updatedAt\", (w.\"descriptionMd\" IS NOT NULL AND w.\"descriptionMd\" <> $5) AS \"hasDescription\", w.\"obsolescence\"::text AS \"obsolescence\", w.\"obsolescenceNoteMd\", w.\"publicChildrenHidden\" FROM \"work_item\" w LEFT JOIN \"user\" au ON au.\"id\" = w.\"assigneeId\" LEFT JOIN \"user\" ru ON ru.\"id\" = w.\"reporterId\" LEFT JOIN \"workflow_status\" ws ON ws.\"project_id\" = w.\"projectId\" AND ws.\"key\" = w.\"status\" WHERE w.\"projectId\" = $1 AND w.\"workspaceId\" = $2 AND w.\"archivedAt\" IS NULL AND w.\"triagedAt\" IS NULL AND $6 AND ($7) ORDER BY w.\"key\" ASC NULLS LAST, w.\"key\" ASC LIMIT $3 OFFSET $4",
+        "SELECT COUNT(*) AS \"_count$_all\", \"public\".\"comment\".\"work_item_id\" FROM \"public\".\"comment\" WHERE (\"public\".\"comment\".\"work_item_id\" IN ($1) AND \"public\".\"comment\".\"workspace_id\" = $2) GROUP BY \"public\".\"comment\".\"work_item_id\" OFFSET $3",
+        "SELECT COUNT(*)::int AS \"count\" FROM \"work_item\" w WHERE w.\"projectId\" = $1 AND w.\"workspaceId\" = $2 AND w.\"archivedAt\" IS NULL AND w.\"triagedAt\" IS NULL AND $3 AND ($4)",
+        "SELECT \"public\".\"workflow_transition\".\"id\", \"public\".\"workflow_transition\".\"workspace_id\", \"public\".\"workflow_transition\".\"project_id\", \"public\".\"workflow_transition\".\"from_status_id\", \"public\".\"workflow_transition\".\"to_status_id\", \"public\".\"workflow_transition\".\"created_at\" FROM \"public\".\"workflow_transition\" WHERE (\"public\".\"workflow_transition\".\"project_id\" = $1 AND \"public\".\"workflow_transition\".\"workspace_id\" = $2) OFFSET $3",
+        "SELECT COUNT(*) AS \"_count$_all\", \"public\".\"comment\".\"work_item_id\" FROM \"public\".\"comment\" WHERE (\"public\".\"comment\".\"work_item_id\" IN ($1 /*, ... */) AND \"public\".\"comment\".\"workspace_id\" = $2) GROUP BY \"public\".\"comment\".\"work_item_id\" OFFSET $3",
+        "SELECT \"public\".\"work_item\".\"id\", \"public\".\"work_item\".\"workspaceId\", \"public\".\"work_item\".\"projectId\", \"public\".\"work_item\".\"parentId\", \"public\".\"work_item\".\"folderId\", \"public\".\"work_item\".\"kind\"::text, \"public\".\"work_item\".\"key\", \"public\".\"work_item\".\"identifier\", \"public\".\"work_item\".\"title\", \"public\".\"work_item\".\"descriptionMd\", \"public\".\"work_item\".\"explanationMd\", \"public\".\"work_item\".\"title_language\", \"public\".\"work_item\".\"description_language\", \"public\".\"work_item\".\"explanation_language\", \"public\".\"work_item\".\"explanationSource\"::text, \"public\".\"work_item\".\"status\", \"public\".\"work_item\".\"priority\"::text, \"public\".\"work_item\".\"assigneeId\", \"public\".\"work_item\".\"reporterId\", \"public\".\"work_item\".\"dueDate\", \"public\".\"work_item\".\"estimateMinutes\", \"public\".\"work_item\".\"type\"::text, \"public\".\"work_item\".\"executor\"::text, \"public\".\"work_item\".\"difficulty\"::text, \"public\".\"work_item\".\"planningSource\"::text, \"public\".\"work_item\".\"planningHarness\", \"public\".\"work_item\".\"planningModel\", \"public\".\"work_item\".\"implementationSource\"::text, \"public\".\"work_item\".\"implementationHarness\", \"public\".\"work_item\".\"implementationModel\", \"public\".\"work_item\".\"subject\", \"public\".\"work_item\".\"storyPoints\", \"public\".\"work_item\".\"position\", \"public\".\"work_item\".\"sprintId\", \"public\".\"work_item\".\"backlogRank\", \"public\".\"work_item\".\"archivedAt\", \"public\".\"work_item\".\"obsolescence\"::text, \"public\".\"work_item\".\"obsolescenceNoteMd\", \"public\".\"work_item\".\"triagedAt\", \"public\".\"work_item\".\"snoozedUntil\", \"public\".\"work_item\".\"submittedByUserId\", \"public\".\"work_item\".\"publicChildrenHidden\", \"public\".\"work_item\".\"sessionBranch\", \"public\".\"work_item\".\"targetRepo\", \"public\".\"work_item\".\"targetRepos\", \"public\".\"work_item\".\"ciState\", \"public\".\"work_item\".\"fixReason\"::text, \"public\".\"work_item\".\"fixDetail\", \"public\".\"work_item\".\"resumeState\"::text, \"public\".\"work_item\".\"resume_run_id\", \"public\".\"work_item\".\"embedding_failed_hash\", \"public\".\"work_item\".\"embedding_failed_attempts\", \"public\".\"work_item\".\"completedAt\", \"public\".\"work_item\".\"createdAt\", \"public\".\"work_item\".\"updatedAt\" FROM \"public\".\"work_item\" WHERE (\"public\".\"work_item\".\"projectId\" = $1 AND \"public\".\"work_item\".\"archivedAt\" IS NULL AND \"public\".\"work_item\".\"triagedAt\" IS NULL) ORDER BY \"public\".\"work_item\".\"key\" ASC OFFSET $2",
+        "SELECT \"public\".\"workspace\".\"id\", \"public\".\"workspace\".\"organizationId\" FROM \"public\".\"workspace\" WHERE \"public\".\"workspace\".\"id\" = $1 OFFSET $2",
+        "SELECT \"public\".\"plan\".\"id\", \"public\".\"plan\".\"workspace_id\", \"public\".\"plan\".\"project_id\", \"public\".\"plan\".\"status\"::text, \"public\".\"plan\".\"title\", \"public\".\"plan\".\"summary\", \"public\".\"plan\".\"product_name\", \"public\".\"plan\".\"source_job_id\", \"public\".\"plan\".\"origin\"::text, \"public\".\"plan\".\"created_by_id\", \"public\".\"plan\".\"author_source\"::text, \"public\".\"plan\".\"author_harness\", \"public\".\"plan\".\"author_model\", \"public\".\"plan\".\"created_at\", \"public\".\"plan\".\"planned_at\", \"public\".\"plan\".\"decided_at\", \"public\".\"plan\".\"decided_by_id\", \"public\".\"plan\".\"decision_reason\"::text, \"public\".\"plan\".\"session_id\", \"public\".\"plan\".\"last_activity_at\", \"public\".\"plan\".\"sharpened_requirement\" FROM \"public\".\"plan\" WHERE (\"public\".\"plan\".\"id\" = $1 AND \"public\".\"plan\".\"workspace_id\" = $2) LIMIT $3 OFFSET $4"
+      ],
+      "left": [
+        "SELECT \"public\".\"agent_instance_interval\".\"id\", \"public\".\"agent_instance_interval\".\"workspace_id\", \"public\".\"agent_instance_interval\".\"organization_id\", \"public\".\"agent_instance_interval\".\"agent_instance_id\", \"public\".\"agent_instance_interval\".\"run_id\", \"public\".\"agent_instance_interval\".\"run_started_at\", \"public\".\"agent_instance_interval\".\"started_at\", \"public\".\"agent_instance_interval\".\"ended_at\", \"public\".\"agent_instance_interval\".\"end_reason\"::text, \"public\".\"agent_instance_interval\".\"billable_seconds\", \"public\".\"agent_instance_interval\".\"credits\", \"public\".\"agent_instance_interval\".\"charge_reference\", \"public\".\"agent_instance_interval\".\"charge_outcome\"::text, \"public\".\"agent_instance_interval\".\"charge_detail\", \"public\".\"agent_instance_interval\".\"charge_attempts\", \"public\".\"agent_instance_interval\".\"charged_at\", \"public\".\"agent_instance_interval\".\"created_at\", \"public\".\"agent_instance_interval\".\"updated_at\" FROM \"public\".\"agent_instance_interval\" WHERE (\"public\".\"agent_instance_interval\".\"charge_outcome\" = CAST($1::text AS \"public\".\"agent_instance_charge_outcome\") AND \"public\".\"agent_instance_interval\".\"ended_at\" IS NOT NULL) ORDER BY \"public\".\"agent_instance_interval\".\"ended_at\" ASC, \"public\".\"agent_instance_interval\".\"id\" ASC LIMIT $2 OFFSET $3",
+        "SELECT \"public\".\"work_item\".\"id\", \"public\".\"work_item\".\"workspaceId\", \"public\".\"work_item\".\"projectId\", \"public\".\"work_item\".\"parentId\", \"public\".\"work_item\".\"folderId\", \"public\".\"work_item\".\"kind\"::text, \"public\".\"work_item\".\"key\", \"public\".\"work_item\".\"identifier\", \"public\".\"work_item\".\"title\", \"public\".\"work_item\".\"descriptionMd\", \"public\".\"work_item\".\"explanationMd\", \"public\".\"work_item\".\"title_language\", \"public\".\"work_item\".\"description_language\", \"public\".\"work_item\".\"explanation_language\", \"public\".\"work_item\".\"explanationSource\"::text, \"public\".\"work_item\".\"status\", \"public\".\"work_item\".\"priority\"::text, \"public\".\"work_item\".\"assigneeId\", \"public\".\"work_item\".\"reporterId\", \"public\".\"work_item\".\"dueDate\", \"public\".\"work_item\".\"estimateMinutes\", \"public\".\"work_item\".\"type\"::text, \"public\".\"work_item\".\"executor\"::text, \"public\".\"work_item\".\"difficulty\"::text, \"public\".\"work_item\".\"planningSource\"::text, \"public\".\"work_item\".\"planningHarness\", \"public\".\"work_item\".\"planningModel\", \"public\".\"work_item\".\"implementationSource\"::text, \"public\".\"work_item\".\"implementationHarness\", \"public\".\"work_item\".\"implementationModel\", \"public\".\"work_item\".\"subject\", \"public\".\"work_item\".\"storyPoints\", \"public\".\"work_item\".\"position\", \"public\".\"work_item\".\"sprintId\", \"public\".\"work_item\".\"backlogRank\", \"public\".\"work_item\".\"archivedAt\", \"public\".\"work_item\".\"obsolescence\"::text, \"public\".\"work_item\".\"obsolescenceNoteMd\", \"public\".\"work_item\".\"triagedAt\", \"public\".\"work_item\".\"snoozedUntil\", \"public\".\"work_item\".\"submittedByUserId\", \"public\".\"work_item\".\"publicChildrenHidden\", \"public\".\"work_item\".\"sessionBranch\", \"public\".\"work_item\".\"targetRepo\", \"public\".\"work_item\".\"targetRepos\", \"public\".\"work_item\".\"ciState\", \"public\".\"work_item\".\"fixReason\"::text, \"public\".\"work_item\".\"fixDetail\", \"public\".\"work_item\".\"resumeState\"::text, \"public\".\"work_item\".\"resume_run_id\", \"public\".\"work_item\".\"completedAt\", \"public\".\"work_item\".\"createdAt\", \"public\".\"work_item\".\"updatedAt\" FROM \"public\".\"work_item\" WHERE \"public\".\"work_item\".\"id\" IN ($1) OFFSET $2",
+        "SELECT \"public\".\"plan_change_session\".\"id\", \"public\".\"plan_change_session\".\"workspace_id\", \"public\".\"plan_change_session\".\"project_id\", \"public\".\"plan_change_session\".\"created_by_id\", \"public\".\"plan_change_session\".\"turn_count\", \"public\".\"plan_change_session\".\"scope_key\", \"public\".\"plan_change_session\".\"target_keys\", \"public\".\"plan_change_session\".\"last_job_id\", \"public\".\"plan_change_session\".\"last_submitted_at\", \"public\".\"plan_change_session\".\"last_activity_at\", \"public\".\"plan_change_session\".\"origin\"::text, \"public\".\"plan_change_session\".\"seed_gate_id\", \"public\".\"plan_change_session\".\"seed_guide_turn_id\", \"public\".\"plan_change_session\".\"ended_at\", \"public\".\"plan_change_session\".\"end_reason\"::text, \"public\".\"plan_change_session\".\"ended_by_id\", \"public\".\"plan_change_session\".\"copied_from_session_id\", \"public\".\"plan_change_session\".\"failed_at\", \"public\".\"plan_change_session\".\"failed_job_id\", \"public\".\"plan_change_session\".\"failure_reason\"::text, \"public\".\"plan_change_session\".\"failure_detail\", \"public\".\"plan_change_session\".\"failure_stop_phase\"::text, \"public\".\"plan_change_session\".\"failure_stop_ref\", \"public\".\"plan_change_session\".\"failure_stop_title\", \"public\".\"plan_change_session\".\"failure_resumable\", \"public\".\"plan_change_session\".\"awaiting_person_since\", \"public\".\"plan_change_session\".\"awaiting_person_cause\"::text, \"public\".\"plan_change_session\".\"guide_bugs_filed\", \"public\".\"plan_change_session\".\"auto_resume_count\", \"public\".\"plan_change_session\".\"last_auto_resumed_at\", \"public\".\"plan_change_session\".\"created_at\", \"public\".\"plan_change_session\".\"updated_at\" FROM \"public\".\"plan_change_session\" WHERE (\"public\".\"plan_change_session\".\"id\" = $1 AND \"public\".\"plan_change_session\".\"workspace_id\" = $2) LIMIT $3 OFFSET $4",
+        "INSERT INTO \"public\".\"board_column_status\" (\"id\",\"workspace_id\",\"project_id\",\"board_id\",\"column_id\",\"status_id\",\"created_at\") VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING \"public\".\"board_column_status\".\"id\", \"public\".\"board_column_status\".\"workspace_id\", \"public\".\"board_column_status\".\"project_id\", \"public\".\"board_column_status\".\"board_id\", \"public\".\"board_column_status\".\"column_id\", \"public\".\"board_column_status\".\"status_id\", \"public\".\"board_column_status\".\"created_at\"",
+        "SELECT COUNT(*) AS \"_count$_all\" FROM (SELECT \"public\".\"ci_runner_provisioning_intent\".\"id\" FROM \"public\".\"ci_runner_provisioning_intent\" WHERE (\"public\".\"ci_runner_provisioning_intent\".\"organization_id\" = $1 AND \"public\".\"ci_runner_provisioning_intent\".\"status\" IN ($2 /*, ... */)) OFFSET $3) AS \"sub\"",
+        "DELETE FROM \"public\".\"api_token\" WHERE (\"public\".\"api_token\".\"id\" = $1 AND $2=$3) RETURNING \"public\".\"api_token\".\"id\", \"public\".\"api_token\".\"user_id\", \"public\".\"api_token\".\"workspace_id\", \"public\".\"api_token\".\"label\", \"public\".\"api_token\".\"token_hash\", \"public\".\"api_token\".\"token_prefix\", \"public\".\"api_token\".\"expires_at\", \"public\".\"api_token\".\"last_used_at\", \"public\".\"api_token\".\"revoked_at\", \"public\".\"api_token\".\"scopes\", \"public\".\"api_token\".\"project_id\", \"public\".\"api_token\".\"dispatch_run_id\", \"public\".\"api_token\".\"oauth_client_id\", \"public\".\"api_token\".\"created_at\"",
+        "INSERT INTO \"public\".\"approval_gate\" (\"id\",\"workspace_id\",\"project_id\",\"work_item_id\",\"kind\",\"subject_id\",\"state\",\"subject_version\",\"routed_to_id\",\"created_at\",\"updated_at\") VALUES ($1,$2,$3,$4,CAST($5::text AS \"public\".\"approval_gate_kind\"),$6,CAST($7::text AS \"public\".\"approval_gate_state\"),$8,$9,$10,$11) ON CONFLICT DO NOTHING"
+      ]
+    }
+  },
+  "crossChecks": [
+    "mcp_rate_limited (summary.json, a Rate: passes = the sum of its values) 0 vs mcp_calls outcome limited over the run 0",
+    "run_limited (summary.json) unmeasured vs run_steps outcome limited over the run 0",
+    "1597 judged samples fell outside the steady window and were not judged"
+  ]
+}

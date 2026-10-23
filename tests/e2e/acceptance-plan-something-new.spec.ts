@@ -7,8 +7,9 @@
 // empty session in place — the overlay never closes. On the project thread the
 // person's WORDS are ANSWERED like any turn (AMENDMENT 5 · MOTIR-9231) and write no
 // confirm; the control there raises it, and Confirm opens another new session.
-// Neither earlier session reached planning, so Plans lists neither (MOTIR-9217:
-// a conversation that never proposed a plan is a question that was answered).
+// The card session reached planning — a card's first turn always opens a plan — so
+// Plans lists it; the project thread only asked, so Plans does not (MOTIR-9217: a
+// conversation that never proposed a plan is a question that was answered).
 //
 // Runs under playwright.acceptance.config.ts (MOTIR_CLOUD + video: 'on'), where
 // the motir-ai JOBS boundary is mocked UNDER the routes (`lib/test-ai-jobs-mock.ts`).
@@ -325,21 +326,21 @@ test('Plan something new closes the session, gives the card back, and opens a ne
   );
 
   await chapter(
-    'Plans: neither earlier session reached planning, so neither is listed',
+    'Plans: the card session reached planning and is listed, the project thread is not',
     async () => {
-      // Both sessions ended `restarted` holding no plan — the card's was a turn the
-      // planner had not yet answered with a plan, the project thread's only questions —
-      // and the Plans list serves only sessions that reached planning (MOTIR-9217).
-      for (const id of [cardSessionId, projectSessionId]) {
-        expect(await planCount(id)).toBe(0);
-      }
+      // A card's first turn is a planning submit, so the card session holds the plan
+      // it opened and ended `restarted` (MOTIR-9303's recorded deviation). The project
+      // thread asked questions only and holds none. The Plans list serves only sessions
+      // holding a plan (MOTIR-9217 · MOTIR-9300), so it lists the first and not the second.
+      expect(await planCount(cardSessionId)).toBe(1);
+      expect(await sessionRow(cardSessionId)).toMatchObject({ endReason: 'restarted' });
+      expect(await planCount(projectSessionId)).toBe(0);
       await page.goto('/plans');
       await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toBeVisible({
         timeout: FIRST_PAINT_MS,
       });
-      for (const id of [cardSessionId, projectSessionId]) {
-        await expect(page.locator(`[data-session-row="${id}"]`)).toHaveCount(0);
-      }
+      await expect(page.locator(`[data-session-row="${cardSessionId}"]`)).toHaveCount(1);
+      await expect(page.locator(`[data-session-row="${projectSessionId}"]`)).toHaveCount(0);
       await beat();
     },
   );
