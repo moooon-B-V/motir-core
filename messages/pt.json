@@ -6438,7 +6438,7 @@
       "creditsUnit": "créditos",
       "rate": "O tempo de máquina custa 1 crédito por minuto em execução. O armazenamento custa 10 créditos por agente por dia, hibernado ou não. Ambos são debitados do seu saldo do Motir AI.",
       "zero": "Nenhum agente foi executado ou existiu neste mês. O tempo de máquina custa 1 crédito por minuto em execução. O armazenamento custa 10 créditos por agente por dia, hibernado ou não.",
-      "noPlan": "Agentes exigem um plano de IA pago (Standard, Pro, Max ou Enterprise).",
+      "noPlan": "Agentes exigem um plano de IA pago.",
       "choosePlan": "Escolher um plano de IA",
       "unavailable": "Os números dos agentes não estão disponíveis no momento. Seus agentes continuam sendo cobrados — o problema é na exibição, não no faturamento.",
       "unavailableValue": "Indisponível"
@@ -12114,7 +12114,7 @@
       "goose": "Usa a sua própria chave do provedor de modelos. Para modelos Claude, sua chave de API da Anthropic."
     },
     "refusal": {
-      "aiPlanRequired": "Os agentes precisam de um plano de IA pago (Standard, Pro, Max ou Enterprise). <link>Escolha um plano de IA</link> para criar ou despertar um.",
+      "aiPlanRequired": "Os agentes precisam de um plano de IA pago. <link>Escolha um plano de IA</link> para criar ou despertar um.",
       "aiPlanUnknown": "O Motir não conseguiu verificar o plano de IA da sua organização agora. Tente novamente em instantes.",
       "credits": "Sua organização está sem créditos. Os agentes usam créditos enquanto rodam e pelo armazenamento todos os dias, hibernados ou não. <link>Adicione créditos</link> para criar ou despertar um agente.",
       "creditsUnknown": "O Motir não conseguiu verificar os créditos da sua organização agora. Tente novamente em instantes.",

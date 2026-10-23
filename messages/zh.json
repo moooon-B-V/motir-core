@@ -6438,7 +6438,7 @@
       "creditsUnit": "积分",
       "rate": "机器时长按每运行一分钟 1 积分计费。存储按每个智能体每天 10 积分计费，无论是否休眠。两者都从你的 Motir AI 余额中扣除。",
       "zero": "本月没有智能体运行或存在。机器时长按每运行一分钟 1 积分计费。存储按每个智能体每天 10 积分计费，无论是否休眠。",
-      "noPlan": "智能体需要付费 AI 方案（Standard、Pro、Max 或 Enterprise）。",
+      "noPlan": "智能体需要付费 AI 方案。",
       "choosePlan": "选择 AI 方案",
       "unavailable": "智能体数据暂时无法显示。你的智能体仍在计费——这是显示问题，不是计费问题。",
       "unavailableValue": "不可用"
@@ -12108,7 +12108,7 @@
       "goose": "使用你自己的模型服务商密钥。使用 Claude 模型时，用你的 Anthropic API 密钥。"
     },
     "refusal": {
-      "aiPlanRequired": "智能体需要付费 AI 套餐（Standard、Pro、Max 或 Enterprise）。<link>选择 AI 套餐</link>后即可创建或唤醒智能体。",
+      "aiPlanRequired": "智能体需要付费 AI 套餐。<link>选择 AI 套餐</link>后即可创建或唤醒智能体。",
       "aiPlanUnknown": "Motir 暂时无法查询你的组织的 AI 套餐。请稍后重试。",
       "credits": "你的组织额度已用完。智能体运行时消耗额度，其存储每天也消耗额度，无论是否休眠。<link>充值额度</link>后即可创建或唤醒智能体。",
       "creditsUnknown": "Motir 暂时无法查询你的组织额度。请稍后重试。",

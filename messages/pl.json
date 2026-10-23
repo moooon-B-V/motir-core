@@ -6438,7 +6438,7 @@
       "creditsUnit": "kredytów",
       "rate": "Czas maszynowy to 1 kredyt za minutę działania. Miejsce na dane to 10 kredytów na agenta dziennie, niezależnie od tego, czy jest uśpiony. Oba koszty są pobierane z salda Motir AI.",
       "zero": "W tym miesiącu żaden agent nie działał ani nie istniał. Czas maszynowy to 1 kredyt za minutę działania. Miejsce na dane to 10 kredytów na agenta dziennie, niezależnie od tego, czy jest uśpiony.",
-      "noPlan": "Agenci wymagają płatnego planu AI (Standard, Pro, Max lub Enterprise).",
+      "noPlan": "Agenci wymagają płatnego planu AI.",
       "choosePlan": "Wybierz plan AI",
       "unavailable": "Dane o agentach są teraz niedostępne. Agenci są nadal rozliczani — dotyczy to wyświetlania, a nie rozliczeń.",
       "unavailableValue": "Niedostępne"
@@ -12114,7 +12114,7 @@
       "goose": "Używa Twojego własnego klucza dostawcy modeli. Dla modeli Claude — Twojego klucza API Anthropic."
     },
     "refusal": {
-      "aiPlanRequired": "Agenci wymagają płatnego planu AI (Standard, Pro, Max lub Enterprise). <link>Wybierz plan AI</link>, aby utworzyć lub wybudzić agenta.",
+      "aiPlanRequired": "Agenci wymagają płatnego planu AI. <link>Wybierz plan AI</link>, aby utworzyć lub wybudzić agenta.",
       "aiPlanUnknown": "Motir nie mógł teraz sprawdzić planu AI Twojej organizacji. Spróbuj ponownie za chwilę.",
       "credits": "Twojej organizacji skończyły się kredyty. Agenci zużywają kredyty podczas działania oraz codziennie za przestrzeń dyskową, także w uśpieniu. <link>Dodaj kredyty</link>, aby utworzyć lub wybudzić agenta.",
       "creditsUnknown": "Motir nie mógł teraz sprawdzić kredytów Twojej organizacji. Spróbuj ponownie za chwilę.",

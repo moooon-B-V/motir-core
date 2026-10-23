@@ -6438,7 +6438,7 @@
       "creditsUnit": "Credits",
       "rate": "Rechenzeit kostet 1 Credit pro Laufminute. Speicher kostet 10 Credits pro Agent und Tag, ob schlafend oder nicht. Beides wird von Ihrem Motir AI-Guthaben abgebucht.",
       "zero": "In diesem Monat lief oder existierte kein Agent. Rechenzeit kostet 1 Credit pro Laufminute. Speicher kostet 10 Credits pro Agent und Tag, ob schlafend oder nicht.",
-      "noPlan": "Agenten erfordern einen kostenpflichtigen AI-Plan (Standard, Pro, Max oder Enterprise).",
+      "noPlan": "Agenten erfordern einen kostenpflichtigen AI-Plan.",
       "choosePlan": "AI-Plan wählen",
       "unavailable": "Die Agentenzahlen sind gerade nicht verfügbar. Ihre Agenten werden weiterhin berechnet – betroffen ist nur die Anzeige, nicht die Abrechnung.",
       "unavailableValue": "Nicht verfügbar"
@@ -12114,7 +12114,7 @@
       "goose": "Verwendet Ihren eigenen Schlüssel des Modellanbieters. Für Claude-Modelle Ihren Anthropic-API-Schlüssel."
     },
     "refusal": {
-      "aiPlanRequired": "Agenten erfordern einen kostenpflichtigen AI-Plan (Standard, Pro, Max oder Enterprise). <link>Wählen Sie einen AI-Plan</link>, um einen Agenten zu erstellen oder aufzuwecken.",
+      "aiPlanRequired": "Agenten erfordern einen kostenpflichtigen AI-Plan. <link>Wählen Sie einen AI-Plan</link>, um einen Agenten zu erstellen oder aufzuwecken.",
       "aiPlanUnknown": "Motir konnte den AI-Plan Ihrer Organisation gerade nicht prüfen. Versuchen Sie es gleich noch einmal.",
       "credits": "Ihrer Organisation sind die Credits ausgegangen. Agenten verbrauchen Credits, solange sie laufen, und täglich für ihren Speicher, ob im Ruhezustand oder nicht. <link>Fügen Sie Credits hinzu</link>, um einen Agenten zu erstellen oder aufzuwecken.",
       "creditsUnknown": "Motir konnte die Credits Ihrer Organisation gerade nicht prüfen. Versuchen Sie es gleich noch einmal.",

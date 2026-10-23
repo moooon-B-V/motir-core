@@ -6438,7 +6438,7 @@
       "creditsUnit": "crediti",
       "rate": "Il tempo macchina costa 1 credito per minuto di esecuzione. Lo spazio di archiviazione costa 10 crediti per agente al giorno, che sia inattivo o no. Entrambi vengono scalati dal tuo saldo Motir AI.",
       "zero": "Nessun agente è stato eseguito o è esistito questo mese. Il tempo macchina costa 1 credito per minuto di esecuzione. Lo spazio di archiviazione costa 10 crediti per agente al giorno, che sia inattivo o no.",
-      "noPlan": "Gli agenti richiedono un piano AI a pagamento (Standard, Pro, Max o Enterprise).",
+      "noPlan": "Gli agenti richiedono un piano AI a pagamento.",
       "choosePlan": "Scegli un piano AI",
       "unavailable": "I dati degli agenti non sono disponibili al momento. I tuoi agenti continuano a essere addebitati: il problema riguarda la visualizzazione, non la fatturazione.",
       "unavailableValue": "Non disponibile"
@@ -12114,7 +12114,7 @@
       "goose": "Usa la tua chiave del fornitore di modelli. Per i modelli Claude, la tua chiave API Anthropic."
     },
     "refusal": {
-      "aiPlanRequired": "Gli agenti richiedono un piano AI a pagamento (Standard, Pro, Max o Enterprise). <link>Scegli un piano AI</link> per crearne o risvegliarne uno.",
+      "aiPlanRequired": "Gli agenti richiedono un piano AI a pagamento. <link>Scegli un piano AI</link> per crearne o risvegliarne uno.",
       "aiPlanUnknown": "Motir non è riuscito a verificare il piano AI della tua organizzazione in questo momento. Riprova tra poco.",
       "credits": "La tua organizzazione ha esaurito i crediti. Gli agenti consumano crediti mentre sono in funzione e ogni giorno per lo spazio di archiviazione, ibernati o no. <link>Aggiungi crediti</link> per creare o risvegliare un agente.",
       "creditsUnknown": "Motir non è riuscito a verificare i crediti della tua organizzazione in questo momento. Riprova tra poco.",

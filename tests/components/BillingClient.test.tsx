@@ -1077,9 +1077,7 @@ describe('BillingClient — the Agents line', () => {
     );
 
     const line = within(agentsLine());
-    expect(
-      line.getByText(/Agents need a paid AI plan \(Standard, Pro, Max or Enterprise\)\./),
-    ).toBeTruthy();
+    expect(line.getByText(/Agents need a paid AI plan\./)).toBeTruthy();
     expect(line.queryByText('Machine time')).toBeNull();
     expect(line.queryByText('Per use')).toBeNull();
 

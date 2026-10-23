@@ -6438,7 +6438,7 @@
       "creditsUnit": "crédits",
       "rate": "Le temps machine coûte 1 crédit par minute d'exécution. Le stockage coûte 10 crédits par agent et par jour, qu'il soit en veille ou non. Les deux sont prélevés sur votre solde Motir AI.",
       "zero": "Aucun agent n'a été exécuté ni n'a existé ce mois-ci. Le temps machine coûte 1 crédit par minute d'exécution. Le stockage coûte 10 crédits par agent et par jour, qu'il soit en veille ou non.",
-      "noPlan": "Les agents nécessitent un forfait IA payant (Standard, Pro, Max ou Enterprise).",
+      "noPlan": "Les agents nécessitent un forfait IA payant.",
       "choosePlan": "Choisir un forfait IA",
       "unavailable": "Les chiffres des agents ne sont pas disponibles pour le moment. Vos agents sont toujours facturés — seul l'affichage est concerné, pas la facturation.",
       "unavailableValue": "Indisponible"
@@ -12114,7 +12114,7 @@
       "goose": "Utilise votre propre clé de fournisseur de modèles. Pour les modèles Claude, votre clé API Anthropic."
     },
     "refusal": {
-      "aiPlanRequired": "Les agents nécessitent un forfait IA payant (Standard, Pro, Max ou Enterprise). <link>Choisissez un forfait IA</link> pour en créer ou en réveiller un.",
+      "aiPlanRequired": "Les agents nécessitent un forfait IA payant. <link>Choisissez un forfait IA</link> pour en créer ou en réveiller un.",
       "aiPlanUnknown": "Motir n'a pas pu vérifier le forfait IA de votre organisation pour le moment. Réessayez dans un instant.",
       "credits": "Votre organisation n'a plus de crédits. Les agents consomment des crédits pendant leur exécution et chaque jour pour leur stockage, en veille ou non. <link>Ajoutez des crédits</link> pour créer ou réveiller un agent.",
       "creditsUnknown": "Motir n'a pas pu vérifier les crédits de votre organisation pour le moment. Réessayez dans un instant.",

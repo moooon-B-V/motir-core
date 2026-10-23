@@ -6438,7 +6438,7 @@
       "creditsUnit": "credits",
       "rate": "Machinetijd kost 1 credit per draaiende minuut. Opslag kost 10 credits per agent per dag, of die nu slaapt of niet. Beide worden van je Motir AI-saldo afgeschreven.",
       "zero": "Er hebben deze maand geen agents gedraaid of bestaan. Machinetijd kost 1 credit per draaiende minuut. Opslag kost 10 credits per agent per dag, of die nu slaapt of niet.",
-      "noPlan": "Agents vereisen een betaald AI-abonnement (Standard, Pro, Max of Enterprise).",
+      "noPlan": "Agents vereisen een betaald AI-abonnement.",
       "choosePlan": "Een AI-abonnement kiezen",
       "unavailable": "Agentcijfers zijn nu niet beschikbaar. Je agents worden nog steeds in rekening gebracht — dit gaat om de weergave, niet om de facturering.",
       "unavailableValue": "Niet beschikbaar"
@@ -12114,7 +12114,7 @@
       "goose": "Gebruikt je eigen sleutel van een modelaanbieder. Voor Claude-modellen je Anthropic API-sleutel."
     },
     "refusal": {
-      "aiPlanRequired": "Agents vereisen een betaald AI-abonnement (Standard, Pro, Max of Enterprise). <link>Kies een AI-abonnement</link> om er een te maken of te wekken.",
+      "aiPlanRequired": "Agents vereisen een betaald AI-abonnement. <link>Kies een AI-abonnement</link> om er een te maken of te wekken.",
       "aiPlanUnknown": "Motir kon het AI-abonnement van je organisatie nu niet controleren. Probeer het zo opnieuw.",
       "credits": "Je organisatie heeft geen credits meer. Agents gebruiken credits terwijl ze draaien en elke dag voor hun opslag, slapend of niet. <link>Voeg credits toe</link> om een agent te maken of te wekken.",
       "creditsUnknown": "Motir kon de credits van je organisatie nu niet controleren. Probeer het zo opnieuw.",

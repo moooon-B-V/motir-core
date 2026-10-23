@@ -64,9 +64,7 @@ export type AiPlanBand = 'ladder' | 'larger_pool';
  */
 export interface AiPlanCatalogEntry {
   /**
-   * The `PlanTier.key` (matches the usage read's `tier.key`). An org on a tier the
-   * catalog does not list (a staff-set `enterprise`) still reads its tier from
-   * motir-ai; it simply has no storefront card. A larger pool's key is
+   * The `PlanTier.key` (matches the usage read's `tier.key`). A larger pool's key is
    * `pool_<N>k` — the template member fixes the SHAPE only; which rungs exist is the
    * array below, never this type.
    */
@@ -278,8 +276,6 @@ export const BILLING_CATALOG: BillingCatalog = {
       includedTrackerSeats: 1,
       band: 'larger_pool',
     },
-    // No Enterprise card (MOTIR-8390). An org staff set to the `enterprise` tier
-    // keeps it in motir-ai; it just has nothing to buy here.
   ],
   seatPlan: {
     name: 'Motir',
