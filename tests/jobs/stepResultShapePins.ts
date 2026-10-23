@@ -593,6 +593,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/fleetAttribution.ts',
     shape: 'number',
   },
+  'sweep-vanished-in-flight': {
+    file: 'lib/jobs/definitions/fleetAttribution.ts',
+    shape: 'number',
+  },
   'ci-live-charge': {
     file: 'lib/jobs/definitions/ciLiveCharge.ts',
     shape:

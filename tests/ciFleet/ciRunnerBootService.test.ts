@@ -865,12 +865,145 @@ describe('the REAPER — the backstop for the orchestrator crashing mid-flight',
     expect(settled.failureDetail).toContain('de-registered');
   });
 
+  describe('an in-flight intent whose container is already gone (MOTIR-9347)', () => {
+    const LONG_AGO = () => new Date(Date.now() - 3 * 60 * 60_000);
+
+    /** An intent left `running` by a supervision that never settled it, naming a
+     *  container the provider no longer holds — the 88 production rows. */
+    async function seedOrphanedRunning(
+      fx: Fixture,
+      overrides: { containerId?: string; startedAt?: Date | null; bootedAt?: Date } = {},
+    ) {
+      const intent = await seedIntent(fx);
+      return adminDb.ciRunnerProvisioningIntent.update({
+        where: { id: intent.id },
+        data: {
+          status: 'running',
+          containerProvider: 'fake',
+          containerId: overrides.containerId ?? `gone-${intent.id}`,
+          containerRegion: 'iad',
+          githubRunnerId: 9101,
+          runnerName: 'motir-orphan',
+          bootedAt: overrides.bootedAt ?? LONG_AGO(),
+          startedAt: overrides.startedAt ?? null,
+        },
+      });
+    }
+
+    async function inFlightCount(organizationId: string) {
+      return withSystemContext((tx) =>
+        ciRunnerProvisioningIntentRepository.countInFlightForOrganization(organizationId, tx),
+      );
+    }
+
+    it('settles it, names the missing container, and de-registers its runner', async () => {
+      const fx = await seedTenant();
+      const intent = await seedOrphanedRunning(fx);
+      expect(await inFlightCount(fx.organizationId)).toBe(1);
+
+      expect(await ciRunnerBootService.sweepVanishedInFlight()).toBe(1);
+
+      const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+        where: { id: intent.id },
+      });
+      expect(settled.status).toBe('failed');
+      expect(settled.teardownReason).toBe('provision_failed');
+      expect(settled.failureDetail).toContain(`container ${intent.containerId} no longer exists`);
+      expect(deleteRunnerCalls()).toHaveLength(1);
+      expect(await inFlightCount(fx.organizationId)).toBe(0);
+    });
+
+    it('treats a machine the provider still READS as destroyed as gone', async () => {
+      // Fly answers a destroyed machine with `state: destroyed` before its read
+      // 404s, and the inventory no longer lists it — the production case.
+      const fx = await seedTenant();
+      const intent = await seedOrphanedRunning(fx);
+      vi.spyOn(fakeOrchestrator, 'describe').mockResolvedValue({
+        handleId: intent.containerId!,
+        exists: true,
+        state: 'destroyed',
+        terminal: true,
+        createdAt: LONG_AGO(),
+        startedAt: null,
+        stoppedAt: null,
+        exitCode: null,
+      });
+
+      expect(await ciRunnerBootService.sweepVanishedInFlight()).toBe(1);
+
+      const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+        where: { id: intent.id },
+      });
+      expect(settled.status).toBe('failed');
+    });
+
+    it('settles one that had STARTED as job_timed_out', async () => {
+      const fx = await seedTenant();
+      const intent = await seedOrphanedRunning(fx, { startedAt: LONG_AGO() });
+
+      expect(await ciRunnerBootService.sweepVanishedInFlight()).toBe(1);
+
+      const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+        where: { id: intent.id },
+      });
+      expect(settled.teardownReason).toBe('job_timed_out');
+    });
+
+    it('leaves one whose container STILL EXISTS to the machine-driven kill', async () => {
+      const fx = await seedTenant();
+      fakeOrchestrator.setBootBehaviour('hang');
+      const pending = await seedIntent(fx);
+      const booted = await ciRunnerBootService.bootIntent(pending.id, FAST);
+      if (booted.phase !== 'supervising') throw new Error('unreachable');
+      await adminDb.ciRunnerProvisioningIntent.update({
+        where: { id: pending.id },
+        data: { bootedAt: LONG_AGO() },
+      });
+
+      expect(await ciRunnerBootService.sweepVanishedInFlight()).toBe(0);
+
+      const row = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+        where: { id: pending.id },
+      });
+      expect(row.status).toBe('running');
+      expect(deleteRunnerCalls()).toHaveLength(0);
+    });
+
+    it('leaves one still inside its own end alone, container or not', async () => {
+      const fx = await seedTenant();
+      const intent = await seedOrphanedRunning(fx, { bootedAt: new Date() });
+
+      expect(await ciRunnerBootService.sweepVanishedInFlight()).toBe(0);
+
+      const row = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+        where: { id: intent.id },
+      });
+      expect(row.status).toBe('running');
+    });
+
+    it('never reads an unreadable provider as a missing container', async () => {
+      const fx = await seedTenant();
+      const intent = await seedOrphanedRunning(fx);
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      vi.spyOn(fakeOrchestrator, 'describe').mockRejectedValue(new Error('provider 500'));
+
+      expect(await ciRunnerBootService.sweepVanishedInFlight()).toBe(0);
+
+      const row = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+        where: { id: intent.id },
+      });
+      expect(row.status).toBe('running');
+      expect(deleteRunnerCalls()).toHaveLength(0);
+    });
+  });
+
   it('is inert on a deployment with no orchestrator', async () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
     vi.stubEnv('FLY_FLEET_API_TOKEN', '');
     vi.stubEnv('FLY_FLEET_APP', '');
     vi.stubEnv('MOTIR_RUNNER_IMAGE', '');
     expect(await ciRunnerBootService.sweepStaleClaims()).toBe(0);
+    expect(await ciRunnerBootService.sweepVanishedInFlight()).toBe(0);
     expect(
       await ciRunnerBootService.reapContainer({
         provider: 'fly',
