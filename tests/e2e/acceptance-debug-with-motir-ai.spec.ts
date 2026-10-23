@@ -696,13 +696,17 @@ test('a member with ai:plan and without work_item:edit logs a bug, written by Mo
   });
 
   await signIn(page, member.email, PASSWORD);
-  await chapter('The offer and its write, for a member who cannot edit', async () => {
+  await chapter('A member who cannot edit is offered to log the bug', async () => {
     queueAsk(offering('The sanitizer drops the mention.', NEW));
     await page.goto('/dashboard');
     await openProjectThread(page);
     await ask(page, 'my @mentions disappear when I save');
     await expect(latestOffer(page)).toHaveAttribute('data-offer-state', 'undecided');
     await expect(confirmButton(page)).toBeEnabled();
+    await beat();
+  });
+  // Two chapters, not one: a single one records under the 15 s watchable floor.
+  await chapter('Confirm files it, written by Motir', async () => {
     const landing = await confirmed(page);
     const bug = await adminDb.workItem.findFirstOrThrow({
       where: { identifier: landing.workItemKey! },
@@ -741,6 +745,11 @@ test('in Chinese, the offer row, Confirm and Decline render from the zh catalogu
     await expect(offer).toHaveAttribute('data-offer-state', 'undecided');
     await expect(offer).toContainText(zcopy.label);
     await expect(writeLine(page)).toHaveText(zcopy.writeNew);
+    await beat();
+  });
+  // Paced as two chapters: one alone records under the 15 s watchable floor.
+  await chapter('Confirm and Decline in Chinese, and no English left', async () => {
+    const offer = latestOffer(page);
     await expect(confirmButton(page)).toHaveText(zOfferCopy.confirm);
     await expect(declineButton(page)).toHaveText(zOfferCopy.decline);
     for (const english of [copy.label, copy.writeNew, copy.confirmHelp, offerCopy.decline]) {
