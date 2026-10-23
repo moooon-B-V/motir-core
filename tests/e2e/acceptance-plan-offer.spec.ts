@@ -298,9 +298,14 @@ test('the plan offer — a question, the offer, Decline, a typed yes, plan this,
       withPlanningOverlay('/dashboard', { kind: 'project', sessionId: conversationId }),
     );
     await expect(rail(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
+    // Exactly one offer reads confirmed, and it is the latest. (A `filter({ has })`
+    // locator is resolved INSIDE each offer, so a rail-rooted one there matched
+    // nothing — MOTIR-9344.)
     await expect(
-      offers(page).filter({ has: rail(page).getByTestId('plan-offer-confirmed') }),
+      rail(page).locator('[data-testid="plan-offer"][data-offer-state="confirmed"]'),
     ).toHaveCount(1);
+    await expect(latestOffer(page)).toHaveAttribute('data-offer-state', 'confirmed');
+    await expect(latestOffer(page).getByTestId('plan-offer-confirmed')).toBeVisible();
     await expect(confirmButton(page)).toHaveCount(0);
     await page.goto('/plans');
     await expect(sessionsList(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
