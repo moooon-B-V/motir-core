@@ -7,9 +7,9 @@ import { listImageTags } from '../src/index';
 // the way `probeImagePull`'s are: a list, a refusal, and "could not ask", the last
 // of which must never read as an empty list.
 
-const REPO = 'ghcr.io/moooon-b-v/motir-sandbox';
+const REPO = 'ghcr.io/motir-co/motir-sandbox';
 const CHALLENGE =
-  'Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:moooon-b-v/motir-sandbox:pull"';
+  'Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:motir-co/motir-sandbox:pull"';
 
 function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -35,7 +35,7 @@ describe('listImageTags', () => {
         if (!auth) return json(401, {}, { 'www-authenticate': CHALLENGE });
         expect(auth).toBe('Bearer anon');
         return json(200, {
-          name: 'moooon-b-v/motir-sandbox',
+          name: 'motir-co/motir-sandbox',
           tags: ['claude', 'claude-0.4.0', 'claude-0.5.0', 7],
         });
       }),
@@ -43,12 +43,12 @@ describe('listImageTags', () => {
     expect(await listImageTags(REPO)).toEqual({
       ok: true,
       registry: 'ghcr.io',
-      repository: 'moooon-b-v/motir-sandbox',
+      repository: 'motir-co/motir-sandbox',
       tags: ['claude', 'claude-0.4.0', 'claude-0.5.0'],
     });
-    expect(urls[0]).toBe('https://ghcr.io/v2/moooon-b-v/motir-sandbox/tags/list?n=1000');
+    expect(urls[0]).toBe('https://ghcr.io/v2/motir-co/motir-sandbox/tags/list?n=1000');
     const token = new URL(urls[1]!);
-    expect(token.searchParams.get('scope')).toBe('repository:moooon-b-v/motir-sandbox:pull');
+    expect(token.searchParams.get('scope')).toBe('repository:motir-co/motir-sandbox:pull');
   });
 
   it('answers a registry needing no token, and a body with no tags as an empty list', async () => {

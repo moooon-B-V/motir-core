@@ -73,7 +73,7 @@ async function agent(opts: {
       ownerId: fx.ownerId,
       name: `agent-${seq}`,
       profileId: 'claude',
-      imageTag: 'ghcr.io/moooon-b-v/motir-sandbox:claude',
+      imageTag: 'ghcr.io/motir-co/motir-sandbox:claude',
       imageDigest: 'sha256:0',
       region: 'iad',
       state: opts.state ?? 'running',

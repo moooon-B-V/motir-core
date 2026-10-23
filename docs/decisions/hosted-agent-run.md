@@ -169,11 +169,11 @@ Every credential's expiry is derived from the timeout — ~~90 minutes~~ the 12-
 
 ### 6 · motir-core's configuration names
 
-| Name                        | Holds                                            | Notes                                                                                             |
-| --------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `MOTIR_GATEWAY_URL`         | the gateway's origin, no trailing `/v1`          | the same name and meaning as the gateway's egress contract, so the container receives it verbatim |
-| `MOTIR_RUN_KEY_MINT_SECRET` | the mint secret                                  | the same name the gateway reads, character for character                                          |
-| `MOTIR_HOSTED_AGENT_IMAGE`  | `ghcr.io/moooon-b-v/motir-hosted-agent@sha256:…` | **a digest, never a tag**, so a publish cannot change what a running deployment boots             |
+| Name                        | Holds                                          | Notes                                                                                             |
+| --------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `MOTIR_GATEWAY_URL`         | the gateway's origin, no trailing `/v1`        | the same name and meaning as the gateway's egress contract, so the container receives it verbatim |
+| `MOTIR_RUN_KEY_MINT_SECRET` | the mint secret                                | the same name the gateway reads, character for character                                          |
+| `MOTIR_HOSTED_AGENT_IMAGE`  | `ghcr.io/motir-co/motir-hosted-agent@sha256:…` | **a digest, never a tag**, so a publish cannot change what a running deployment boots             |
 
 All three are server-only: no public-env prefix, and never serialized to the browser. **There is no model variable:** the model is the dispatcher's choice, validated against motir-ai's list (§7). _(Re-read 2026-10-01, MOTIR-7206: still true with a second provider. The provider travels with the offered model, not in configuration.)_
 

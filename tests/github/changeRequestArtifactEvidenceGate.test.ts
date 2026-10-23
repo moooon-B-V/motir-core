@@ -290,7 +290,7 @@ describe('the gate is not weakened — what still completes on merge', () => {
     const s = await makeScenario('ae-satisfied@example.com');
     await commentsService.addComment(
       s.item.id,
-      { bodyMd: 'Released `ghcr.io/moooon-b-v/acme@sha256:446c692d1f4a9b0c2e11` — release 18.' },
+      { bodyMd: 'Released `ghcr.io/motir-co/acme@sha256:446c692d1f4a9b0c2e11` — release 18.' },
       s.ctx,
     );
 

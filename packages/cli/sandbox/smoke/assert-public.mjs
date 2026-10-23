@@ -3,7 +3,7 @@
 // CAN A STRANGER PULL THE IMAGE THE DOCS TELL THEM TO PULL? (MOTIR-2010)
 //
 // `docs/cli.md` § The sandbox opens with the words "Pull and go — no checkout,
-// no build" over a `docker run ghcr.io/moooon-b-v/motir-sandbox:claude`. That
+// no build" over a `docker run ghcr.io/motir-co/motir-sandbox:claude`. That
 // sentence is a claim about a registry's ACCESS CONTROL, and nothing in the
 // release lane ever tested it. So `cli-v0.1.0` published nine images, recorded
 // nine digests in the README, went green — and the package was PRIVATE. Every
@@ -49,7 +49,7 @@
 //
 // Usage:
 //   assert-public.mjs --image <registry/repo> --digests <dir> [--names a,b,c]
-//   assert-public.mjs --ref ghcr.io/moooon-b-v/motir-sandbox:claude [--ref …]
+//   assert-public.mjs --ref ghcr.io/motir-co/motir-sandbox:claude [--ref …]
 //
 // `--digests <dir>` is the release lane's form: one file per published name,
 // each holding that image's `sha256:…`, exactly as the push jobs upload them.
@@ -382,7 +382,7 @@ export async function main(argv, io) {
         `::error::${summary}. The images are not obtainable by the users docs/cli.md is ` +
           `written for. FIX: GitHub → the moooon-B-V org → Packages → motir-sandbox → ` +
           `Package settings → Change visibility → Public. It is ONE package (every profile ` +
-          `tag shares the repository scope repository:moooon-b-v/motir-sandbox:pull), so one ` +
+          `tag shares the repository scope repository:motir-co/motir-sandbox:pull), so one ` +
           `flip covers every tag — and the flip is IRREVERSIBLE ` +
           `(docs/decisions/fleet-image-pull.md §4.1).`,
       );

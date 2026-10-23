@@ -152,7 +152,7 @@ function agent(profileId: string): AgentInstanceListItemDto {
     projectId: 'p1',
     profileId,
     profileName: PROFILE_NAMES[profileId] ?? profileId,
-    imageTag: `ghcr.io/moooon-b-v/motir-sandbox:${profileId}`,
+    imageTag: `ghcr.io/motir-co/motir-sandbox:${profileId}`,
     imageDigest: 'sha256:abc',
     region: 'iad',
     state: 'running',

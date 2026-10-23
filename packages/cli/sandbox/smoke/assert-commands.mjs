@@ -98,9 +98,9 @@
 // The end-to-end pipeline has a HISTORICAL control too, and it is the strongest
 // evidence this check has — but deliberately NOT wired into the run:
 //
-//   $ node assert-commands.mjs --ref ghcr.io/moooon-b-v/motir-sandbox:claude
+//   $ node assert-commands.mjs --ref ghcr.io/motir-co/motir-sandbox:claude
 //     PRESENT … [linux/amd64] cli 0.2.0 · PRESENT … [linux/arm64] cli 0.2.0 → 0
-//   $ node assert-commands.mjs --ref ghcr.io/moooon-b-v/motir-sandbox:claude-0.1.0
+//   $ node assert-commands.mjs --ref ghcr.io/motir-co/motir-sandbox:claude-0.1.0
 //     MISSING … login (both architectures), cli 0.1.0                       → 1
 //
 // `:claude-0.1.0` is the artifact MOTIR-2131 was filed about, still published, and
@@ -120,7 +120,7 @@
 // how a broken probe starts reporting reassuring answers.
 //
 // Usage:
-//   assert-commands.mjs --ref ghcr.io/moooon-b-v/motir-sandbox:claude [--ref …]
+//   assert-commands.mjs --ref ghcr.io/motir-co/motir-sandbox:claude [--ref …]
 //   assert-commands.mjs --image <registry/repo> --digests <dir> [--names a,b]
 //   assert-commands.mjs --ref <ref> --guide <path to lib/apiDocs/sandbox.ts>
 //

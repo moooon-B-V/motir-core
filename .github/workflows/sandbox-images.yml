@@ -36,10 +36,10 @@ on:
 
 env:
   # OCI repository names are lowercase-only, so the `moooon-B-V` org is spelled
-  # lowercase here — `ghcr.io/moooon-B-V/...` is not a pullable reference at all,
+  # lowercase here — `ghcr.io/Motir-Co/...` is not a pullable reference at all,
   # docker rejects it before any network call. Hardcoded rather than derived from
   # `github.repository_owner` for exactly that reason.
-  IMAGE: ghcr.io/moooon-b-v/motir-sandbox
+  IMAGE: ghcr.io/motir-co/motir-sandbox
   # Where each job writes the digest of what it pushed, for the verify job to
   # pull back by digest. One file per job so the matrix legs cannot collide.
   DIGESTS: /tmp/sandbox-digests
@@ -160,8 +160,8 @@ jobs:
           # pull that fails must not fail the build, since the delta is a
           # courtesy and the absolute number is the deliverable.
           before=''
-          if docker pull --quiet ghcr.io/moooon-b-v/motir-sandbox:base >/dev/null 2>&1; then
-            before="$(docker image inspect ghcr.io/moooon-b-v/motir-sandbox:base --format '{{.Size}}')"
+          if docker pull --quiet ghcr.io/motir-co/motir-sandbox:base >/dev/null 2>&1; then
+            before="$(docker image inspect ghcr.io/motir-co/motir-sandbox:base --format '{{.Size}}')"
           fi
 
           {

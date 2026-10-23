@@ -22,6 +22,7 @@ import {
   NOT_OFFERED_AGENT_PROFILES,
   OFFERED_AGENT_PROFILES,
   profileDisplayName,
+  SANDBOX_IMAGE_REPOSITORY,
   sandboxImageTag,
 } from '@/lib/agentInstances/profiles';
 import {
@@ -153,13 +154,20 @@ describe('the digest pin', () => {
   });
 
   it('pins a tag to repository@digest', () => {
-    expect(pinnedImageReference('ghcr.io/moooon-b-v/motir-sandbox:claude', 'sha256:abc')).toBe(
-      'ghcr.io/moooon-b-v/motir-sandbox@sha256:abc',
+    expect(pinnedImageReference('ghcr.io/motir-co/motir-sandbox:claude', 'sha256:abc')).toBe(
+      'ghcr.io/motir-co/motir-sandbox@sha256:abc',
     );
   });
 });
 
 describe('profiles and caps', () => {
+  // GHCR does not follow a GitHub org rename: the old `moooon-b-v` path refuses
+  // every pull (MOTIR-9346), so the repository must name the org's current owner.
+  it('pulls the sandbox from the motir-co registry path', () => {
+    expect(SANDBOX_IMAGE_REPOSITORY).toBe('ghcr.io/motir-co/motir-sandbox');
+    expect(sandboxImageTag('claude')).toBe('ghcr.io/motir-co/motir-sandbox:claude');
+  });
+
   it('offers exactly §9’s six and names the two it does not', () => {
     expect(isOfferedProfile('claude')).toBe(true);
     expect(isOfferedProfile('cursor')).toBe(false);
