@@ -15009,9 +15009,7 @@
       },
       "youAnswered": "你的回答",
       "plannersAssumption": "规划者的假设",
-      "writing": "正在把你的回答写入计划的需求和 <item></item>…",
       "writingPlanOnly": "正在把你的回答写入计划的需求…",
-      "written": "已写入计划的需求和 <item></item>。",
       "writtenPlanOnly": "已写入计划的需求。",
       "failed": "你的回答没有写入。它们仍保留在这里。",
       "copy": "复制回答"

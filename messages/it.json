@@ -15015,9 +15015,7 @@
       },
       "youAnswered": "La tua risposta",
       "plannersAssumption": "Ipotesi del pianificatore",
-      "writing": "Scrittura delle risposte nel requisito del piano e in <item></item>…",
       "writingPlanOnly": "Scrittura delle risposte nel requisito del piano…",
-      "written": "Scritto nel requisito del piano e in <item></item>.",
       "writtenPlanOnly": "Scritto nel requisito del piano.",
       "failed": "Le tue risposte non sono state scritte. Sono ancora qui.",
       "copy": "Copia le risposte"

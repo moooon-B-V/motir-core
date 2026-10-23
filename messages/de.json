@@ -15015,9 +15015,7 @@
       },
       "youAnswered": "Ihre Antwort",
       "plannersAssumption": "Annahme des Planers",
-      "writing": "Ihre Antworten werden in die Anforderung des Plans und in <item></item> geschrieben…",
       "writingPlanOnly": "Ihre Antworten werden in die Anforderung des Plans geschrieben…",
-      "written": "In die Anforderung des Plans und in <item></item> geschrieben.",
       "writtenPlanOnly": "In die Anforderung des Plans geschrieben.",
       "failed": "Ihre Antworten wurden nicht geschrieben. Sie sind weiterhin hier.",
       "copy": "Antworten kopieren"

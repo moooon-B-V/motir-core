@@ -15009,9 +15009,7 @@
       },
       "youAnswered": "내 답변",
       "plannersAssumption": "플래너의 가정",
-      "writing": "답변을 계획의 요구사항과 <item></item>에 기록하는 중…",
       "writingPlanOnly": "답변을 계획의 요구사항에 기록하는 중…",
-      "written": "계획의 요구사항과 <item></item>에 기록했습니다.",
       "writtenPlanOnly": "계획의 요구사항에 기록했습니다.",
       "failed": "답변이 기록되지 않았습니다. 답변은 여기에 그대로 있습니다.",
       "copy": "답변 복사"

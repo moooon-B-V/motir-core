@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
-import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
@@ -131,10 +131,11 @@ describe('POST /api/ai/sharpen', () => {
 
   it.each([
     ['invalid JSON', '{nope'],
-    ['no planId, itemKey or sessionId', '{}'],
+    ['no planId, conversationId or sessionId', '{}'],
+    ['the retired itemKey (MOTIR-9314)', JSON.stringify({ itemKey: 'PROD-1' })],
     ['a turnId without a sessionId', JSON.stringify({ turnId: 't' })],
     ['an unknown action', JSON.stringify({ sessionId: 's', action: 'shout' })],
-    ['both planId and itemKey', JSON.stringify({ planId: 'p', itemKey: 'PROD-1' })],
+    ['both planId and conversationId', JSON.stringify({ planId: 'p', conversationId: 'c' })],
   ])('400 for %s', async (_label, raw) => {
     expect((await POST(post('/api/ai/sharpen', raw))).status).toBe(400);
   });
@@ -170,17 +171,31 @@ describe('POST /api/ai/sharpen', () => {
     expect(((await inFlight.json()) as { code: string }).code).toBe('SHARPEN_TURN_IN_FLIGHT');
   });
 
-  it('409 SHARPEN_TARGET_CLOSED for a done item; 404 for an unknown key', async () => {
-    const item = await createTestWorkItem(fx, { kind: 'task', title: 'Export' });
-    await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'done' } });
+  it('409 SHARPEN_TARGET_CLOSED for an ended conversation; 404 for an unknown one', async () => {
+    const ended = await adminDb.planChangeSession.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        createdById: fx.ownerId,
+        endedAt: new Date(),
+        endReason: 'idle',
+      },
+    });
+    await adminDb.planChangeTurn.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        sessionId: ended.id,
+        seq: 0,
+        role: 'user',
+        body: 'Export',
+      },
+    });
     const closed = await POST(
-      post('/api/ai/sharpen', JSON.stringify({ itemKey: item.identifier })),
+      post('/api/ai/sharpen', JSON.stringify({ conversationId: ended.id })),
     );
     expect(closed.status).toBe(409);
     expect(((await closed.json()) as { code: string }).code).toBe('SHARPEN_TARGET_CLOSED');
-    const missing = await POST(
-      post('/api/ai/sharpen', JSON.stringify({ itemKey: `${fx.projectIdentifier}-999` })),
-    );
+    const missing = await POST(post('/api/ai/sharpen', JSON.stringify({ conversationId: 'nope' })));
     expect(missing.status).toBe(404);
   });
 });

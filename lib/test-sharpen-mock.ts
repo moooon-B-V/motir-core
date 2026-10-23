@@ -75,7 +75,7 @@ export interface SharpenWriteBackRecord {
 
 /** The control file: the spec writes the fixtures, the seam appends the journals. */
 export interface SharpenControl {
-  /** Fixtures keyed by the session's scope ref — a plan id or a work-item key. */
+  /** Fixtures keyed by the session's scope ref — a plan id or a conversation id. */
   targets?: Record<string, SharpenTargetFixture>;
   /** For a target with no entry. Absent ⇒ `determinate`. */
   default?: SharpenTargetFixture;
@@ -184,7 +184,7 @@ export function recordAction(ctx: SharpenJobContext): {
 /** The write-back body — `buildSharpenWriteBack`, byte for byte. */
 export function buildWriteBack(
   jobId: string,
-  scope: SharpenJobContext['scope'],
+  planId: string,
   settled: SettledAnswer[],
   assumptions: SharpenAssumption[],
 ): SharpeningWriteBackInput {
@@ -196,7 +196,7 @@ export function buildWriteBack(
   }
   return {
     jobId,
-    scope: scope.kind === 'plan' ? { planId: scope.ref } : { workItemKey: scope.ref },
+    scope: { planId },
     requirement,
     plannerAssumptions: assumptions.map((a) => ({
       question: a.question,
@@ -223,9 +223,11 @@ export function planSharpenTurn(
     return {
       failed: false,
       turn: { kind, question: null, ...recorded, writeBack: null },
-      writeBack: nothing
-        ? null
-        : buildWriteBack(jobId, ctx.scope, recorded.settled, recorded.assumptions),
+      // A conversation has no plan yet, so it owes no write-back (MOTIR-9314).
+      writeBack:
+        nothing || ctx.scope.kind !== 'plan'
+          ? null
+          : buildWriteBack(jobId, ctx.scope.ref, recorded.settled, recorded.assumptions),
     };
   };
   if (ctx.action === 'stop') return end('stopped');

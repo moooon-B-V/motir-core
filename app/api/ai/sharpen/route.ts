@@ -11,16 +11,17 @@ import { badRequest, mapSharpenError, NO_STORE } from './_errors';
 // POST /api/ai/sharpen — the SHARPEN door (Task MOTIR-1101 · Subtask MOTIR-8181).
 //
 // Three bodies, one door, like the Guide me through door:
-//   { planId } | { itemKey }                      — OPEN a Sharpen session on a plan
-//                                                   or a work item (resumes the
-//                                                   caller's open one, sending nothing)
+//   { planId } | { conversationId }               — OPEN a Sharpen session on a plan
+//                                                   or a plan-change conversation
+//                                                   (resumes the caller's open one,
+//                                                   sending nothing)
 //   { sessionId, action, readingId?, text? }      — ACT on the pending question:
 //                                                   answer | own_words | skip |
 //                                                   you_decide | stop
 //   { sessionId, turnId }                         — RE-RUN a turn whose submit or
 //                                                   job failed (replay-safe)
 //
-// GET /api/ai/sharpen?planId= | ?itemKey= — the caller's OPEN session on that
+// GET /api/ai/sharpen?planId= | ?conversationId= — the caller's OPEN session on that
 // target, or `null`.
 //
 // HTTP only (CLAUDE.md 4-layer): parse, call ONE service method, map typed
@@ -50,7 +51,7 @@ export async function POST(req: Request): Promise<Response> {
   const sessionId = readSessionId(body.sessionId);
   const turnId = nonEmpty(body.turnId);
   const planId = nonEmpty(body.planId);
-  const itemKey = nonEmpty(body.itemKey);
+  const conversationId = nonEmpty(body.conversationId);
 
   try {
     if (turnId) {
@@ -79,11 +80,16 @@ export async function POST(req: Request): Promise<Response> {
       );
       return NextResponse.json(result, { headers: NO_STORE });
     }
-    if (planId && itemKey) return badRequest('Name a `planId` or an `itemKey`, not both.');
-    if (!planId && !itemKey) {
-      return badRequest('One of `planId`, `itemKey` or `sessionId` is required.');
+    if (planId && conversationId) {
+      return badRequest('Name a `planId` or a `conversationId`, not both.');
     }
-    const result = await aiSharpenService.open(planId ? { planId } : { itemKey: itemKey! }, ctx);
+    if (!planId && !conversationId) {
+      return badRequest('One of `planId`, `conversationId` or `sessionId` is required.');
+    }
+    const result = await aiSharpenService.open(
+      planId ? { planId } : { conversationId: conversationId! },
+      ctx,
+    );
     return NextResponse.json(result, { headers: NO_STORE });
   } catch (err) {
     const mapped = mapSharpenError(err);
@@ -100,13 +106,13 @@ export async function GET(req: Request): Promise<Response> {
 
   const params = new URL(req.url).searchParams;
   const planId = nonEmpty(params.get('planId'));
-  const itemKey = nonEmpty(params.get('itemKey'));
-  if (Boolean(planId) === Boolean(itemKey)) {
-    return badRequest('Exactly one of `planId` or `itemKey` is required.');
+  const conversationId = nonEmpty(params.get('conversationId'));
+  if (Boolean(planId) === Boolean(conversationId)) {
+    return badRequest('Exactly one of `planId` or `conversationId` is required.');
   }
   try {
     const session = await aiSharpenService.getOpenFor(
-      planId ? { planId } : { itemKey: itemKey! },
+      planId ? { planId } : { conversationId: conversationId! },
       ctx,
     );
     return NextResponse.json(session, { headers: NO_STORE });

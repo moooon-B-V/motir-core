@@ -48,7 +48,6 @@ export function inFlightTurn(turns: readonly SharpenTurn[]): SharpenTurn | null 
 export function toSharpenSessionDto(
   row: SharpenSession,
   turns: readonly SharpenTurn[],
-  itemKey: string | null,
 ): SharpenSessionDto {
   const inFlight = inFlightTurn(turns);
   return {
@@ -56,7 +55,7 @@ export function toSharpenSessionDto(
     scope:
       row.scopeKind === 'plan'
         ? { kind: 'plan', planId: row.planId ?? undefined }
-        : { kind: 'work_item', itemKey: itemKey ?? undefined },
+        : { kind: 'conversation', conversationId: row.planChangeSessionId ?? undefined },
     status: row.status,
     endReason: row.endReason,
     pendingQuestion: (row.pendingQuestion as SharpenQuestion | null) ?? null,

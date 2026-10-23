@@ -15012,9 +15012,7 @@
       },
       "youAnswered": "あなたの回答",
       "plannersAssumption": "プランナーの仮定",
-      "writing": "回答を計画の要件と <item></item> に書き込んでいます…",
       "writingPlanOnly": "回答を計画の要件に書き込んでいます…",
-      "written": "計画の要件と <item></item> に書き込みました。",
       "writtenPlanOnly": "計画の要件に書き込みました。",
       "failed": "回答は書き込まれませんでした。回答はここに残っています。",
       "copy": "回答をコピー"

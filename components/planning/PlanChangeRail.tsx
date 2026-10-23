@@ -1194,7 +1194,6 @@ export function PlanChangeRail({
             session={grill.session}
             pending={grill.pending}
             error={grill.error}
-            cardKey={state.session?.targetKeys[0] ?? null}
             {...(question ? {} : { anchorId: PENDING_QUESTION_ID })}
             onAct={(action, opts) => {
               setGrillOwnWords(false);

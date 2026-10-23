@@ -16,11 +16,10 @@ import {
   act,
   answerLine,
   ask,
-  assumptionLine,
+  cardBody,
   composer,
   conversationPhase,
   declareSharpen,
-  expectCardCarries,
   grillExplanation,
   grillHelp,
   grillSwitch,
@@ -90,6 +89,7 @@ test('Grill me: the planner asks before it plans — pick, skip, stop, and the a
   const posts = recordSharpenPosts(page);
   let planId = '';
   const picked = Q1.readings[1]!;
+  const cardBefore = await cardBody(seed.storyKey);
 
   await chapter('Plan from a card — Grill me is there, and off', async () => {
     await openPlanningFromCard(page, seed.storyKey, FIRST_PAINT_MS);
@@ -158,14 +158,8 @@ test('Grill me: the planner asks before it plans — pick, skip, stop, and the a
     ]);
   });
 
-  await chapter('Reload the card — the answers are on it', async () => {
-    await expectCardCarries(
-      page,
-      seed.storyKey,
-      [answerLine(Q1, picked.label)],
-      [assumptionLine(Q2)],
-      FIRST_PAINT_MS,
-    );
+  await chapter('The card is untouched — the answers live in the plan', async () => {
+    expect(await cardBody(seed.storyKey)).toBe(cardBefore);
     await beat();
   });
 });

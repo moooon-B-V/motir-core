@@ -15015,9 +15015,7 @@
       },
       "youAnswered": "You answered",
       "plannersAssumption": "Planner's assumption",
-      "writing": "Writing your answers to the plan's requirement and to <item></item>…",
       "writingPlanOnly": "Writing your answers to the plan's requirement…",
-      "written": "Written to the plan's requirement and to <item></item>.",
       "writtenPlanOnly": "Written to the plan's requirement.",
       "failed": "Your answers weren't written. They are still here.",
       "copy": "Copy answers"

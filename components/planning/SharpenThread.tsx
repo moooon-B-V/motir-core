@@ -25,8 +25,6 @@ export interface SharpenThreadProps {
   session: SharpenSessionDto;
   pending: boolean;
   error: GrillError;
-  /** The card the run is planning (its conversation's anchor), or null. */
-  cardKey: string | null;
   /** The pending-question anchor, when the run itself is not waiting on a question. */
   anchorId?: string;
   onAct: (action: Exclude<SharpenAction, 'start' | 'stop'>, opts?: { readingId?: string }) => void;
@@ -85,7 +83,6 @@ export function SharpenThread({
   session,
   pending,
   error,
-  cardKey,
   anchorId,
   onAct,
   onStop,
@@ -219,9 +216,7 @@ export function SharpenThread({
           ) : (
             <Marker testId="sharpen-completed">{t('markers.completed')}</Marker>
           )}
-          {session.endReason !== 'nothing_to_ask' ? (
-            <SharpenSummary session={session} cardKey={cardKey} />
-          ) : null}
+          {session.endReason !== 'nothing_to_ask' ? <SharpenSummary session={session} /> : null}
         </>
       ) : null}
     </div>
