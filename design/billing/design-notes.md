@@ -1994,8 +1994,10 @@ full page width (point 7).**
    Recommended and never carries the Calculator's mark. The Need more credits? callout is unchanged
    and still names Max ×2's pool.
 2. **The Host entitlement lines (panels 1–2).** Under the shipped "Everything in Max ×2, plus",
-   two feature lines name the three AWS accounts and the shared-pool limits that hold until their
-   quotas are granted.
+   two feature lines say that Motir runs the project autonomously and that CI runners, agent runs,
+   the indexer and hosted agents each get dedicated pools. (Revised after review: the line about
+   Max's limits until the account quotas are granted is dropped, and the AWS-accounts line is
+   shortened to the dedicated pools.)
 3. **Choosing Host (panels 3–4).** Choose Host starts one quantity-1 Checkout on the page's
    cadence, with the shipped redirecting state. A member without billing rights sees Upgrade to Host
    disabled, described by the shipped `plans.upgrade.disabledReason`.
@@ -2018,11 +2020,11 @@ full page width (point 7).**
 
 ### Copy — new keys in the `billing` namespace (en)
 
-| Key                         | en                                                                                                                                                                                                                                            |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `plans.tiers.host.useCase`  | Motir at fleet scale, on AWS accounts of your own.                                                                                                                                                                                            |
-| `plans.tiers.host.prev`     | Max ×2                                                                                                                                                                                                                                        |
-| `plans.tiers.host.features` | 1. Three AWS accounts of your organization's own: one for CI runners, one for agent runs, and one shared by the indexer and the hosted agents · 2. Until each account's quotas are granted, Host runs at Max's limits on Motir's shared pools |
+| Key                         | en                                                                                                                     |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `plans.tiers.host.useCase`  | Motir at fleet scale, on AWS accounts of your own.                                                                     |
+| `plans.tiers.host.prev`     | Max ×2                                                                                                                 |
+| `plans.tiers.host.features` | 1. Motir runs your project autonomously · 2. Dedicated pools for CI runners, agent runs, the indexer and hosted agents |
 
 Every other string is shipped: `plans.{ctaChoose, ctaUpgrade, ctaCurrent, everythingIn,
 ladder.multiple, seatIncluded}`, and the `plans.upgrade.*` and `plans.downgrade.*` dialog keys (the pending
