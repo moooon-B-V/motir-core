@@ -11647,5 +11647,14 @@
   "titleTranslation.noCredit": "Titles stay in their original language because your organization has no credit left.",
   "titleTranslation.pendingMark": "Translating",
   "titleTranslation.showOriginal": "Show original",
-  "titleTranslation.showTranslation": "Show translation"
+  "titleTranslation.showTranslation": "Show translation",
+  "planningWorkspace.grill.control.popover.beforePlanning": "Before any plan exists, Motir AI asks its questions before it offers to plan, and the offer shows what you settled.",
+  "planningWorkspace.grill.control.hintBeforePlanning": "When Motir AI would offer to plan, it asks its questions first.",
+  "planningWorkspace.planOffer.held": "Motir AI will offer to plan when these questions are done.",
+  "planningWorkspace.planOffer.settledHeading": "What your answers settled",
+  "planningWorkspace.planOffer.clearEnough": "Clear enough to plan as stated.",
+  "planningWorkspace.planOffer.nothingSettled": "Nothing was settled, so the request is planned as stated.",
+  "sharpen.conversation.nothingToAsk": "I have nothing to ask — this is clear enough to plan as stated.",
+  "sharpen.conversation.stoppedNoAnswer": "You stopped the grilling before any answer.",
+  "sharpen.conversation.switchedOff": "You turned Grill me off, so the questions stopped."
 }

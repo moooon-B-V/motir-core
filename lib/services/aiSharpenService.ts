@@ -779,4 +779,18 @@ export const aiSharpenService = {
     const target = await resolveTarget({ conversationId }, ctx);
     return withWorkspaceContext(bindCtx(ctx), (tx) => settledOnConversation(target.ref, ctx, tx));
   },
+
+  /**
+   * The caller's LATEST grilling on a conversation as the rail draws it (MOTIR-9316),
+   * open or ended, or null. The read behind `getSettledForConversation`, so the rail
+   * that lists what was settled after a reload reads the same session the plan
+   * submit carries.
+   */
+  async getLatestForConversation(
+    conversationId: string,
+    ctx: ProjectContext,
+  ): Promise<SharpenSessionDto | null> {
+    const latest = await aiSharpenService.getSettledForConversation(conversationId, ctx);
+    return latest ? loadDto(latest.sessionId, ctx) : null;
+  },
 };

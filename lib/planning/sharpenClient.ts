@@ -94,3 +94,12 @@ export function getOpenSharpen(target: SharpenTarget, signal?: AbortSignal) {
       : `conversationId=${encodeURIComponent(target.conversationId)}`;
   return call<SharpenSessionDto | null>(`/api/ai/sharpen?${query}`, { method: 'GET' }, signal);
 }
+
+/** The caller's LATEST session on a conversation, open or ended, or null. */
+export function getLatestConversationSharpen(conversationId: string, signal?: AbortSignal) {
+  return call<SharpenSessionDto | null>(
+    `/api/ai/sharpen?conversationId=${encodeURIComponent(conversationId)}&latest=1`,
+    { method: 'GET' },
+    signal,
+  );
+}

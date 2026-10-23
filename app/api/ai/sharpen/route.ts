@@ -22,7 +22,9 @@ import { badRequest, mapSharpenError, NO_STORE } from './_errors';
 //                                                   job failed (replay-safe)
 //
 // GET /api/ai/sharpen?planId= | ?conversationId= — the caller's OPEN session on that
-// target, or `null`.
+// target, or `null`. `?conversationId=&latest=1` answers their LATEST session there,
+// open or ended (MOTIR-9316): the rail lists what an ended grilling settled after a
+// reload.
 //
 // HTTP only (CLAUDE.md 4-layer): parse, call ONE service method, map typed
 // errors. No `db`, no repository, no `motir-ai` import.
@@ -110,11 +112,17 @@ export async function GET(req: Request): Promise<Response> {
   if (Boolean(planId) === Boolean(conversationId)) {
     return badRequest('Exactly one of `planId` or `conversationId` is required.');
   }
+  const latest = params.get('latest') === '1';
+  if (latest && !conversationId) {
+    return badRequest('`latest` is read with a `conversationId`.');
+  }
   try {
-    const session = await aiSharpenService.getOpenFor(
-      planId ? { planId } : { conversationId: conversationId! },
-      ctx,
-    );
+    const session = latest
+      ? await aiSharpenService.getLatestForConversation(conversationId!, ctx)
+      : await aiSharpenService.getOpenFor(
+          planId ? { planId } : { conversationId: conversationId! },
+          ctx,
+        );
     return NextResponse.json(session, { headers: NO_STORE });
   } catch (err) {
     const mapped = mapSharpenError(err);

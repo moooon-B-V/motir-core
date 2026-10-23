@@ -226,6 +226,41 @@ describe('the reads', () => {
   it('GET without exactly one target is a 400', async () => {
     expect((await GET(new Request(`${BASE}/api/ai/sharpen`))).status).toBe(400);
   });
+
+  it('GET ?conversationId=&latest=1 answers the latest session there; `latest` needs a conversation (MOTIR-9316)', async () => {
+    const conversation = await adminDb.planChangeSession.create({
+      data: { workspaceId: fx.workspaceId, projectId: fx.projectId, createdById: fx.ownerId },
+    });
+    await adminDb.planChangeTurn.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        sessionId: conversation.id,
+        seq: 0,
+        role: 'user',
+        body: 'Add a CSV export',
+      },
+    });
+    const latestUrl = `${BASE}/api/ai/sharpen?conversationId=${conversation.id}&latest=1`;
+    const none = await GET(new Request(latestUrl));
+    expect(none.status).toBe(200);
+    expect(await none.json()).toBeNull();
+
+    const opened = (await (
+      await POST(post('/api/ai/sharpen', JSON.stringify({ conversationId: conversation.id })))
+    ).json()) as { session: { id: string } };
+    const open = (await (await GET(new Request(latestUrl))).json()) as {
+      id: string;
+      status: string;
+      scope: { kind: string };
+    };
+    expect(open.id).toBe(opened.session.id);
+    expect(open.status).toBe('open');
+    expect(open.scope.kind).toBe('conversation');
+
+    const planId = await plannedPlan();
+    const onPlan = await GET(new Request(`${BASE}/api/ai/sharpen?planId=${planId}&latest=1`));
+    expect(onPlan.status).toBe(400);
+  });
 });
 
 describe('POST /api/ai/sharpen/settle', () => {
