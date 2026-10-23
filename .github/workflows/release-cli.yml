@@ -23,7 +23,7 @@
 # Auth is OIDC "Trusted Publishing": GitHub mints a short-lived id-token that npm
 # exchanges for a one-time publish credential, so there is NO long-lived
 # `NPM_TOKEN` secret to leak, rotate, or silently let expire. It requires a
-# Trusted Publisher configured on npmjs.com for this package (org `moooon-B-V` /
+# Trusted Publisher configured on npmjs.com for this package (org `motir-co` /
 # repo `motir-core` / this workflow filename) — provisioned by MOTIR-1891.
 #
 # WHY the lane moved off the token it shipped with: the `cli-v0.1.0` tag push on

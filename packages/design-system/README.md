@@ -213,7 +213,7 @@ package-scoped git tag. There is no manual `npm publish` in the normal path.
 **Auth:** the publish step uses **OIDC Trusted Publishing** — no `NPM_TOKEN` secret.
 GitHub mints a short-lived id-token (`id-token: write`) that npm exchanges for a
 one-time publish credential, gated by a Trusted Publisher configured on npmjs.com
-for this package (org `moooon-B-V` / repo `motir-core` / this workflow filename).
+for this package (org `motir-co` / repo `motir-core` / this workflow filename).
 npm provenance is auto-generated on a Trusted Publish (the `repository` field in
 this `package.json` satisfies its requirement).
 
