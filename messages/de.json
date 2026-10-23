@@ -1030,46 +1030,6 @@
       "renew": "Wenn Sie den KI-Plan vor dem {date} verlängern, wird die Löschung abgebrochen. Bis dahin können Ihre Agents weder erstellt noch aufgeweckt werden, und ihr Speicher wird weiterhin täglich berechnet.",
       "openBilling": "KI-Plan verlängern",
       "footer": "Sie erhalten diese E-Mail, weil Sie Agents in dieser Organisation besitzen."
-    },
-    "enterpriseRequestReceived": {
-      "subject": "Enterprise-Anfrage von {organization}",
-      "preview": "{requester} hat für {organization} nach Enterprise gefragt",
-      "greeting": "Hallo,",
-      "lede": "{requester} ({email}) hat für {organization} nach dem Enterprise-Plan gefragt.",
-      "needsHeading": "Was uns mitgeteilt wurde",
-      "cardsPerDay": "Arbeitselemente pro Tag: etwa {count}",
-      "parallelAgents": "Parallele Agenten: {count}",
-      "agentPath": "Welche Agenten: {value}",
-      "autonomy": "Selbstständig laufen: {value}",
-      "startWhen": "Gewünschter Start: {value}",
-      "teamSize": "Teamgröße: {value}",
-      "noNeeds": "Alle optionalen Fragen wurden leer gelassen.",
-      "contact": "Erreichbar unter: {contact}",
-      "noteHeading": "Die Notiz",
-      "openRequest": "Anfrage öffnen",
-      "footer": "Sie erhalten diese E-Mail, weil Sie zu den Plattform-Mitarbeitenden von Motir gehören.",
-      "agentPathValue": {
-        "hosted": "Gehostete Agenten von Motir",
-        "own": "Eigene Agenten",
-        "both": "Beides"
-      },
-      "autonomyValue": {
-        "autonomous_lead": "Das Projekt rund um die Uhr selbstständig betreiben",
-        "volume_only": "Viele Läufe, die sie selbst starten",
-        "unsure": "Noch unklar"
-      },
-      "startWhenValue": {
-        "now": "Sofort",
-        "within_month": "Innerhalb eines Monats",
-        "within_quarter": "Innerhalb eines Quartals",
-        "exploring": "Nur informieren"
-      },
-      "teamSizeValue": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      }
     }
   },
   "auth": {
@@ -6478,7 +6438,7 @@
       "creditsUnit": "Credits",
       "rate": "Rechenzeit kostet 1 Credit pro Laufminute. Speicher kostet 10 Credits pro Agent und Tag, ob schlafend oder nicht. Beides wird von Ihrem Motir AI-Guthaben abgebucht.",
       "zero": "In diesem Monat lief oder existierte kein Agent. Rechenzeit kostet 1 Credit pro Laufminute. Speicher kostet 10 Credits pro Agent und Tag, ob schlafend oder nicht.",
-      "noPlan": "Agenten erfordern einen kostenpflichtigen AI-Plan (Standard, Pro, Max oder Enterprise).",
+      "noPlan": "Agenten erfordern einen kostenpflichtigen AI-Plan.",
       "choosePlan": "AI-Plan wählen",
       "unavailable": "Die Agentenzahlen sind gerade nicht verfügbar. Ihre Agenten werden weiterhin berechnet – betroffen ist nur die Anzeige, nicht die Abrechnung.",
       "unavailableValue": "Nicht verfügbar"
@@ -9884,7 +9844,6 @@
       "navAiPlanning": "AI-Planung",
       "navPlanningLessons": "Planungslektionen",
       "navIdeas": "Ideen",
-      "navEnterpriseRequests": "Enterprise-Anfragen",
       "navRunModels": "Modelle für gehostete Läufe",
       "navFleetSettings": "Flotteneinstellungen"
     },
@@ -10071,9 +10030,6 @@
               "enable": "Flotten-CI eingeschaltet",
               "disable": "Flotten-CI ausgeschaltet"
             }
-          },
-          "enterprise_request": {
-            "transition": "Enterprise-Anfrage verschoben"
           },
           "idea": {
             "add": "Idee hinzugefügt",
@@ -11671,152 +11627,6 @@
         "body": "motir-ai hat nicht geantwortet, daher ist unbekannt, ob jedes aufgeführte Modell angeboten wird, und es wird keine Liste angezeigt. Es hat sich nichts geändert."
       }
     },
-    "enterpriseRequests": {
-      "breadcrumb": "Plattform · Enterprise-Anfragen",
-      "title": "Enterprise-Anfragen",
-      "subtitle": "Was Organisationen über „Vertrieb kontaktieren“ beim Enterprise-Plan gesendet haben. Bearbeiten Sie jede Anfrage von „Neu“ bis „Gewonnen“ oder „Verloren“; jeder Schritt wird mit der ausführenden Person protokolliert.",
-      "auditLead": "Eine Anfrage sind Kundendaten.",
-      "auditBody": "Das Laden dieser Liste und das Öffnen einer Anfrage sind mandantenübergreifende Lesezugriffe und werden im Audit-Log erfasst.",
-      "cardTitle": "Anfragen",
-      "count": {
-        "loading": "Neueste zuerst.",
-        "open": "Neueste zuerst. <b>{count} offen</b> – neu, kontaktiert oder Angebot gesendet.",
-        "state": "Neueste zuerst. <b>{count} {state}</b>.",
-        "all": "Neueste zuerst. <b>{count} insgesamt</b>."
-      },
-      "filterLabel": "Anfragen nach Status filtern",
-      "filter": {
-        "open": "Offen",
-        "all": "Alle"
-      },
-      "status": {
-        "new": "Neu",
-        "contacted": "Kontaktiert",
-        "offer_sent": "Angebot gesendet",
-        "won": "Gewonnen",
-        "lost": "Verloren"
-      },
-      "stateWord": {
-        "open": "offen",
-        "new": "neu",
-        "contacted": "kontaktiert",
-        "offer_sent": "Angebot gesendet",
-        "won": "gewonnen",
-        "lost": "verloren"
-      },
-      "col": {
-        "organisation": "Organisation",
-        "requester": "Anfragende Person",
-        "sent": "Gesendet",
-        "needs": "Bedarf",
-        "state": "Status"
-      },
-      "tierWhenSent": "beim Senden auf {tier}",
-      "requesterGone": "Konto gelöscht",
-      "needs": {
-        "cardsPerDay": "<b>{n}</b> Elemente/Tag",
-        "cardsPerDayNone": "Elemente/Tag –",
-        "agents": "<b>{n}</b> Agenten",
-        "agentsNone": "Agenten –",
-        "agentPathNone": "welche Agenten –",
-        "autonomyNone": "selbstständig –"
-      },
-      "agentPath": {
-        "hosted": "Von Motir gehostet",
-        "own": "Eigene",
-        "both": "Beides"
-      },
-      "autonomy": {
-        "autonomous_lead": "Läuft selbstständig",
-        "volume_only": "Nur Volumen",
-        "unsure": "Unklar"
-      },
-      "startWhen": {
-        "now": "Sofort",
-        "within_month": "Innerhalb eines Monats",
-        "within_quarter": "Innerhalb eines Quartals",
-        "exploring": "Nur informieren"
-      },
-      "teamSize": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      },
-      "notAnswered": "Nicht beantwortet",
-      "pager": {
-        "label": "Seiten der Anfragen",
-        "note": "Neueste zuerst · 50 pro Seite",
-        "range": "{from}–{to} von {total}",
-        "newer": "Neuere",
-        "older": "Ältere"
-      },
-      "empty": {
-        "title": "Noch keine Enterprise-Anfragen",
-        "body": "Wenn der Inhaber einer Organisation beim Enterprise-Plan auf „Vertrieb kontaktieren“ klickt, landet die Anfrage hier und die Plattform-Mitarbeitenden erhalten eine E-Mail."
-      },
-      "emptyFilter": {
-        "title": "Keine Anfragen mit Status „{state}“",
-        "body": "Derzeit hat keine Anfrage den Status „{state}“.",
-        "action": "Offene Anfragen anzeigen",
-        "actionAll": "Alle Anfragen anzeigen"
-      },
-      "error": {
-        "title": "Die Anfragen konnten nicht geladen werden",
-        "body": "Beim Lesen der Anfragen ist ein Fehler aufgetreten, daher wird keine angezeigt. Es wurde nichts geändert.",
-        "retry": "Erneut versuchen"
-      },
-      "detail": {
-        "back": "Zurück zu den Anfragen",
-        "sent": "Gesendet am {date}",
-        "requestTitle": "Die Anfrage",
-        "orgLink": "{org} in Mandanten öffnen",
-        "field": {
-          "organisation": "Organisation",
-          "requester": "Anfragende Person",
-          "contact": "Kontakt",
-          "sent": "Gesendet",
-          "cardsPerDay": "Arbeitselemente pro Tag",
-          "parallelAgents": "Parallele Agenten",
-          "agentPath": "Welche Agenten",
-          "autonomy": "Läuft selbstständig",
-          "startWhen": "Start",
-          "teamSize": "Teamgröße",
-          "note": "Notiz"
-        }
-      },
-      "move": {
-        "title": "Verschieben nach",
-        "stateTitle": "Status",
-        "contacted": "Als kontaktiert markieren",
-        "offer_sent": "Als „Angebot gesendet“ markieren",
-        "won": "Als gewonnen markieren",
-        "lost": "Als verloren markieren",
-        "hint": {
-          "new": "Als Nächstes: Sie haben die anfragende Person kontaktiert.",
-          "contacted": "Als Nächstes: Sie haben ein Angebot gesendet.",
-          "offer_sent": "Als Nächstes: Das Angebot wurde angenommen – oder die Anfrage ist verloren.",
-          "closes": "„Gewonnen“ und „Verloren“ schließen die Anfrage."
-        },
-        "failed": "Die Anfrage konnte nicht verschoben werden. Es wurde nichts geändert; versuchen Sie es erneut."
-      },
-      "closed": "<b>Am {date} als „{state}“ geschlossen.</b> Eine geschlossene Anfrage kann nicht mehr verschoben werden. Die Organisation kann über ihre Abrechnungsseite eine neue senden.",
-      "readOnly": "<b>Für den Support schreibgeschützt.</b> Das Verschieben einer Anfrage ist Aufgabe eines Operators oder Superadmins; Sie können hier und im Verlauf alles lesen.",
-      "confirm": {
-        "title": "Diese Anfrage als „{state}“ markieren?",
-        "body": "Die Anfrage von {org} wird als <b>{state}</b> geschlossen und kann nicht mehr verschoben werden. Die Organisation kann über ihre Abrechnungsseite eine neue Anfrage senden.",
-        "cancel": "Abbrechen"
-      },
-      "stale": "<b>Nicht geändert – jemand anderes hat diese Anfrage zuerst verschoben.</b> {who} hat sie gerade als <b>{state}</b> markiert, daher wurde Ihr „{action}“ abgelehnt und nichts protokolliert. Die Seite zeigt jetzt den aktuellen Status; wählen Sie erneut.",
-      "staleUnknown": "<b>Nicht geändert – jemand anderes hat diese Anfrage zuerst verschoben.</b> Sie ist jetzt <b>{state}</b>, daher wurde Ihr „{action}“ abgelehnt und nichts protokolliert. Die Seite zeigt jetzt den aktuellen Status; wählen Sie erneut.",
-      "history": {
-        "title": "Verlauf",
-        "order": "älteste zuerst",
-        "sent": "Gesendet als",
-        "to": "nach",
-        "requesterOf": "{name} ({org})"
-      }
-    },
     "ideas": {
       "breadcrumb": "Betrieb · Ideen",
       "title": "Ideen",
@@ -12338,7 +12148,7 @@
       "goose": "Verwendet Ihren eigenen Schlüssel des Modellanbieters. Für Claude-Modelle Ihren Anthropic-API-Schlüssel."
     },
     "refusal": {
-      "aiPlanRequired": "Agenten erfordern einen kostenpflichtigen AI-Plan (Standard, Pro, Max oder Enterprise). <link>Wählen Sie einen AI-Plan</link>, um einen Agenten zu erstellen oder aufzuwecken.",
+      "aiPlanRequired": "Agenten erfordern einen kostenpflichtigen AI-Plan. <link>Wählen Sie einen AI-Plan</link>, um einen Agenten zu erstellen oder aufzuwecken.",
       "aiPlanUnknown": "Motir konnte den AI-Plan Ihrer Organisation gerade nicht prüfen. Versuchen Sie es gleich noch einmal.",
       "credits": "Ihrer Organisation sind die Credits ausgegangen. Agenten verbrauchen Credits, solange sie laufen, und täglich für ihren Speicher, ob im Ruhezustand oder nicht. <link>Fügen Sie Credits hinzu</link>, um einen Agenten zu erstellen oder aufzuwecken.",
       "creditsUnknown": "Motir konnte die Credits Ihrer Organisation gerade nicht prüfen. Versuchen Sie es gleich noch einmal.",

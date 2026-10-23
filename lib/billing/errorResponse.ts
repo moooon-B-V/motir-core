@@ -10,8 +10,6 @@ import {
   BillingForbiddenError,
   BillingPlanChangeRefusedError,
   BillingNotAvailableError,
-  EnterpriseRequestOpenError,
-  EnterpriseRequestValidationError,
   EntitlementExceededError,
   InvalidBillingQuantityError,
   LargerPoolAtOrBelowCeilingError,
@@ -73,20 +71,6 @@ export function mapBillingError(err: unknown): NextResponse | null {
     return NextResponse.json(
       { code: err.code, error: err.message, entitlement: err.entitlement, detail: err.detail },
       { status: 402 },
-    );
-  }
-  if (err instanceof EnterpriseRequestValidationError) {
-    return NextResponse.json(
-      { code: err.code, error: err.message, field: err.field },
-      { status: 400 },
-    );
-  }
-  if (err instanceof EnterpriseRequestOpenError) {
-    // One open Enterprise request per org (MOTIR-7605). The open request's id
-    // rides along so the card can show it rather than a second form.
-    return NextResponse.json(
-      { code: err.code, error: err.message, openRequestId: err.openRequestId },
-      { status: 409 },
     );
   }
   if (err instanceof OrganizationClosingError) {

@@ -55,13 +55,17 @@ describe('pmTierForOrg', () => {
 });
 
 describe('PM_ENTITLEMENTS.meta', () => {
-  it('lifts every scale cap (its own row, distinct from enterprise)', () => {
+  it('lifts every scale cap (the internal, never-billed tier)', () => {
     const meta = entitlementsFor('meta');
     expect(meta.maxWorkItems).toBeNull();
     expect(meta.maxProjects).toBeNull();
     expect(meta.maxWorkspaces).toBeNull();
     expect(meta.maxTotalStorageBytes).toBeNull();
     expect(PM_ENTITLEMENTS.meta).toBe(meta);
+  });
+
+  it('is one of exactly three PM tiers — Motir has no Enterprise tier (MOTIR-9388)', () => {
+    expect(Object.keys(PM_ENTITLEMENTS)).toEqual(['free', 'scaled', 'meta']);
   });
 });
 
@@ -72,7 +76,6 @@ describe('the custom-domain cap (Story MOTIR-3878 · `public-tenant-addresses.md
     // customers who pay. There is deliberately no `workspace_subdomains` kind.
     expect(PM_ENTITLEMENTS.free.maxCustomDomains).toBe(0);
     expect(PM_ENTITLEMENTS.scaled.maxCustomDomains).toBe(5);
-    expect(PM_ENTITLEMENTS.enterprise.maxCustomDomains).toBeNull();
     expect(PM_ENTITLEMENTS.meta.maxCustomDomains).toBeNull();
   });
 
