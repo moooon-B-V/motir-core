@@ -204,10 +204,10 @@ name: Acceptance tests
 #
 # THE DERIVATION lives in the `membership` gate, which already counts the lane:
 #
-#   legs = min(specs, 6), floored at 1
+#   legs = min(specs, 10), floored at 1
 #
 #   0 specs → 1 leg    (a PR against an empty lane; `push` skips entirely)
-#   1 spec  → 1 leg    2 specs → 2 legs    …    ≥ 6 → 6 legs
+#   1 spec  → 1 leg    2 specs → 2 legs    …    ≥ 10 → 10 legs
 #
 # Two things that number is chosen to protect, both of which a plain "one leg per
 # spec" would break:
@@ -215,7 +215,8 @@ name: Acceptance tests
 #     toward the serial runtime sharding replaced. MOTIR-2600 set it at 4
 #     (`[1, 2, 3, 4]` against 29 minutes of test time). MOTIR-7054 raised it
 #     to 6 when the lane reached 87 specs and a four-leg shard ran past its
-#     then 40-minute job timeout.
+#     then 40-minute job timeout. MOTIR-9352 raised it to 10 when the lane
+#     reached 156 specs and the sixth leg ran past its 55-minute timeout.
 #   • THE FLOOR of 1 keeps the rehearsal. A lane-definition PR against an empty
 #     lane runs no tests either way — what it still proves is that the harness
 #     BOOTS (the Playwright config loads, the webServer comes up, `e2e-setup`'s
@@ -490,7 +491,7 @@ jobs:
           # it held. The FLOOR is 1 rather than 0 because a run with no legs at
           # all would stop proving the harness still boots, which is the only
           # thing a lane-definition PR against an empty lane can prove.
-          MAX_LEGS=6
+          MAX_LEGS=10
           if [ "${COUNT}" -lt 1 ]; then
             LEGS=1
           elif [ "${COUNT}" -gt "${MAX_LEGS}" ]; then
@@ -505,7 +506,11 @@ jobs:
           # ran 33–37 min of Playwright each and the slowest job reached 40.9 min
           # against the shard job's then 40-minute timeout, so a green shard was
           # cancelled and the merge queue dropped its PR (MOTIR-7054). Six legs
-          # bring the same lane to ~22 min of tests per leg.
+          # brought the same lane to ~22 min of tests per leg. At 156 specs those
+          # six ran 30–51 min of tests each (252 min in all, the slowest leg
+          # ~1.2x the mean), and shard 6/6 passed all 57 of its tests and was
+          # CANCELLED at 55 during its report upload (MOTIR-9352). Ten legs are
+          # ~25 min of tests per leg and ~31 for the slowest.
           # `paste -sd, -`, not `seq -s,`: BSD `seq` puts the separator after the
           # last number too, so on a Mac the list came out `[1,]` — not JSON —
           # and tests/ci-acceptance-lane.test.ts, which runs this snippet on the
@@ -629,7 +634,9 @@ jobs:
     # MOTIR-7054 took the lasting fix, the leg cap (`MAX_LEGS`, 4 → 6): six legs
     # are ~22 min of tests plus ~5 min of setup and upload, so 55 is now ~2x on
     # a slow runner and still catches a hung leg. When the lane grows back
-    # toward it, raise the cap first, not this number.
+    # toward it, raise the cap first, not this number. It did (MOTIR-9352): at
+    # 156 specs the sixth leg ran 51 min of tests and was cancelled here, so the
+    # cap went 6 → 10 (~31 min for the slowest leg) and this number stayed.
     timeout-minutes: 55
     # BOTH edges, and each is load-bearing (MOTIR-2908):
     #   · `build` publishes the `.next/` artifact every leg downloads, and it is
@@ -644,11 +651,12 @@ jobs:
       # report — the artifact a red lane is debugged from at all (MOTIR-1706).
       fail-fast: false
       matrix:
-        # SIZED FROM THE LANE'S MEMBERSHIP (MOTIR-2908) — `[1]` … `[1, …, 6]`,
+        # SIZED FROM THE LANE'S MEMBERSHIP (MOTIR-2908) — `[1]` … `[1, …, 10]`,
         # derived by the `membership` gate above. It was a literal `[1, 2, 3, 4]`
         # from MOTIR-2600 until MOTIR-2765 gave a spec a lifecycle and MOTIR-2769
         # triaged the lane empty; four legs over ≤2 specs is not parallelism, it
-        # is four copies of the setup. The cap is 6 since MOTIR-7054.
+        # is four copies of the setup. The cap is 10 since MOTIR-9352 (6 since
+        # MOTIR-7054).
         shard: ${{ fromJSON(needs.membership.outputs.shards) }}
     # `id-token: write` is BACK, and on THIS job only (MOTIR-7253). The publish
     # step requests a GitHub OIDC token (audience `motir-acceptance-video`), which
@@ -709,8 +717,19 @@ jobs:
       # ubuntu runner ships no Chinese font, so every zh chapter recorded here
       # rendered as empty boxes, and a person cannot accept what they cannot read.
       # The assertions never saw it, because they read the DOM's text, not pixels.
-      # Probe first; install only when missing, bounded and retried the way
-      # e2e-setup's apt step is (MOTIR-2970), and clear an apt a timeout orphaned.
+      #
+      # ⚠️ NOT FROM APT (MOTIR-9350). This step used to `apt-get update && apt-get
+      # install fonts-noto-cjk` on every leg: ~100 MB from the Ubuntu mirror, six
+      # times a run, nothing cached. A slow mirror window timed out all three
+      # 300s attempts and failed a leg before a single test ran (run 39937057551,
+      # shard 2/6: `attempt 1 failed (status 124)` ×3, ~16 min, no test), and a
+      # leg that got through could still spend 10m39s here. Now the two faces
+      # the recordings use — Noto Sans CJK Regular and Bold, the same 2.004
+      # release Ubuntu 24.04's fonts-noto-cjk packages — come from the Actions
+      # cache, and only a miss fetches them: two pinned files, each checked
+      # against its sha256, with no `apt-get update` anywhere. Each .ttc is a
+      # Pan-CJK collection (SC, TC, HK, JP, KR), so zh, zh-TW, ja and ko all draw.
+      # To move the pin, change FONT_REF and both sums below AND the cache key.
       #
       # ⚠️ AND IT MUST NOT CHANGE A SINGLE LATIN GLYPH. Installed as it ships,
       # Noto CJK went ahead of the runner's own fonts, so characters the page's
@@ -719,10 +738,26 @@ jobs:
       # unrelated receipt went red on a scrolled-off line. So the families that
       # answered BEFORE the install are pinned back in front of it, and the step
       # fails if any of those fallbacks now answers differently.
+      - name: Restore the CJK font from the cache
+        id: cjk-font-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/motir-cjk-font
+          key: ${{ runner.os }}-cjk-font-noto-sans-2.004-b76b0433-faa5f365
       - name: Install a CJK font for the recordings
+        id: cjk-font
         shell: bash
+        env:
+          CACHE_HIT: ${{ steps.cjk-font-cache.outputs.cache-hit }}
+          FONT_REF: Sans2.004
+          FONT_SUMS: |
+            b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a  NotoSansCJK-Regular.ttc
+            faa5f3656a78b2e2d450d27fe8382c778bc2b6bb5ea29c986664a6a435056ceb  NotoSansCJK-Bold.ttc
         run: |
           if fc-list :lang=zh 2>/dev/null | grep -q .; then echo "a CJK font is present"; exit 0; fi
+          command -v fc-match >/dev/null || { echo "::error::fontconfig (fc-match) is not on this runner"; exit 1; }
+          FONT_DIR="$HOME/.cache/motir-cjk-font"
+          mkdir -p "$FONT_DIR"
           probe() {
             for q in sans-serif serif monospace 'sans-serif:charset=2014' 'sans-serif:charset=2026' 'monospace:charset=2014'; do
               printf '%s=%s\n' "$q" "$(fc-match -f '%{family[0]}' "$q" 2>/dev/null)"
@@ -730,20 +765,27 @@ jobs:
           }
           before="$(probe)"
           echo "fallbacks before:"; echo "$before"
-          installed=0
-          for attempt in 1 2 3; do
-            status=0
-            sudo timeout --kill-after=15s 300s bash -c \
-              'apt-get update -qq && apt-get install -y -qq --no-install-recommends fontconfig fonts-noto-cjk' \
-              || status=$?
-            if [ "$status" -eq 0 ] && fc-list :lang=zh | grep -q .; then installed=1; break; fi
-            echo "CJK font install attempt $attempt failed (status $status)"
-            sudo pkill -x apt-get || true
-            sudo pkill -x dpkg || true
-            sudo dpkg --configure -a || true
-            sleep 15
-          done
-          [ "$installed" -eq 1 ] || exit 1
+          if (cd "$FONT_DIR" && printf '%s' "$FONT_SUMS" | sha256sum --check --quiet --strict >/dev/null 2>&1); then
+            echo "CJK font restored from the cache"
+          else
+            [ "$CACHE_HIT" = "true" ] && echo "::warning::the cached CJK font failed its checksum; fetching it again"
+            while read -r sum file; do
+              [ -n "$file" ] || continue
+              url="https://raw.githubusercontent.com/notofonts/noto-cjk/${FONT_REF}/Sans/OTC/${file}"
+              if ! curl -fsSL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 180 -o "$FONT_DIR/$file" "$url"; then
+                echo "::error::could not fetch the CJK font: ${url} (expected sha256 ${sum})"; exit 1
+              fi
+              got="$(sha256sum "$FONT_DIR/$file" | cut -d' ' -f1)"
+              if [ "$got" != "$sum" ]; then
+                echo "::error::the CJK font from ${url} has sha256 ${got}, expected ${sum}"; exit 1
+              fi
+            done <<< "$FONT_SUMS"
+            echo "fetched=true" >> "$GITHUB_OUTPUT"
+          fi
+          sudo install -d -m 755 /usr/local/share/fonts/noto-cjk
+          sudo install -m 644 "$FONT_DIR"/NotoSansCJK-*.ttc /usr/local/share/fonts/noto-cjk/
+          sudo fc-cache -f >/dev/null
+          [ -n "$(fc-list :lang=zh)" ] || { echo "::error::the CJK font is installed but fontconfig finds no zh face"; exit 1; }
           # The pre-install families first again, for every generic family — the
           # CJK font then answers only the characters none of them has.
           {
@@ -760,6 +802,15 @@ jobs:
           if [ "$before" != "$after" ]; then
             echo "::error::installing the CJK font changed a Latin fallback"; exit 1
           fi
+      # Saved the moment a leg fetched, not at the job's end: a leg whose tests
+      # then fail still leaves the font for the next run. Legs that miss
+      # together race for the key, and every loser only logs a warning.
+      - name: Save the CJK font to the cache
+        if: steps.cjk-font.outputs.fetched == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/motir-cjk-font
+          key: ${{ steps.cjk-font-cache.outputs.cache-primary-key }}
 
       # WHICH specs this PR owns (restored by MOTIR-7253 from MOTIR-1937). The
       # uploader publishes a recording only when its OWN spec is in this list:
