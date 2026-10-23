@@ -1,0 +1,2780 @@
+<!doctype html>
+<!--
+  design/ai-chat/planning-workspace--history.mock.html — MOTIR-9305
+  (story MOTIR-9218, epic MOTIR-9214).
+
+  DELTA on `design/ai-chat/planning-workspace.mock.html` (the overlay and its
+  rail) and on the Plans page session list (MOTIR-6019's published design,
+  `design/ai-planning/plans-sessions--seeded.mock.html` its latest committed
+  delta), whose row vocabulary it reuses in a compact form. It holds ONLY the
+  panels that change: the History section under the rail head, its rows and
+  paging states, and opening a row inside the overlay.
+
+  Read before drawing, and mirrored here: components/planning/PlanChangeRail.tsx
+  (the aside, its head, the log, the composer slot),
+  components/planning/SessionEndParts.tsx (the end marker and the ended
+  composer slot), app/(authed)/plans/_components/SessionRow.tsx (the Plans row:
+  anchor, last active, plan-state Pill tones) and the design system's Pill.
+
+  TOKENS ARE EXTRACTED, NOT TYPED: the blocks below are the declarations of
+  packages/design-system/theme.css's @theme, [data-theme='dark'], density-step,
+  :root,[data-appearance-scope] and dark Tier-3 blocks, comments stripped.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The History section in the planning overlay</title>
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-pairing, 'Segoe UI'),
+          var(--font-script-sans, var(--font-sans-tail, sans-serif)),
+          var(--font-sans-tail, sans-serif);
+        --font-serif:
+          var(--font-serif-pairing, Georgia),
+          var(--font-script-serif, var(--font-serif-tail, serif)), var(--font-serif-tail, serif);
+        --font-mono:
+          var(--font-mono-pairing, 'SF Mono'),
+          var(--font-script-mono, var(--font-mono-tail, monospace)),
+          var(--font-mono-tail, monospace);
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --width-rail-chrome: 20px;
+        --spacing-rail-inset: 0px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      :root,
+      [data-style] {
+        --spacing-card-padding-16: round(nearest, calc(var(--spacing-card-padding) * 16 / 24), 1px);
+        --spacing-card-padding-12: round(nearest, calc(var(--spacing-card-padding) * 12 / 24), 1px);
+        --spacing-card-padding-8: round(nearest, calc(var(--spacing-card-padding) * 8 / 24), 1px);
+        --spacing-card-padding-4: round(nearest, calc(var(--spacing-card-padding) * 4 / 24), 1px);
+        --spacing-control-x-16: round(nearest, calc(var(--spacing-control-x) * 16 / 10), 1px);
+        --spacing-control-x-12: round(nearest, calc(var(--spacing-control-x) * 12 / 10), 1px);
+        --spacing-control-x-8: round(nearest, calc(var(--spacing-control-x) * 8 / 10), 1px);
+        --spacing-control-x-6: round(nearest, calc(var(--spacing-control-x) * 6 / 10), 1px);
+        --spacing-control-x-4: round(nearest, calc(var(--spacing-control-x) * 4 / 10), 1px);
+        --spacing-control-x-2: round(nearest, calc(var(--spacing-control-x) * 2 / 10), 1px);
+        --spacing-control-y-8: round(nearest, calc(var(--spacing-control-y) * 8 / 6), 1px);
+        --spacing-control-y-4: round(nearest, calc(var(--spacing-control-y) * 4 / 6), 1px);
+        --spacing-control-y-2: round(nearest, calc(var(--spacing-control-y) * 2 / 6), 1px);
+        --spacing-chip-x-8: round(nearest, calc(var(--spacing-chip-x) * 8 / 10), 1px);
+        --spacing-chip-x-6: round(nearest, calc(var(--spacing-chip-x) * 6 / 10), 1px);
+        --spacing-chip-x-4: round(nearest, calc(var(--spacing-chip-x) * 4 / 10), 1px);
+        --spacing-chip-x-2: round(nearest, calc(var(--spacing-chip-x) * 2 / 10), 1px);
+        --height-control-28: round(nearest, calc(var(--height-control) * 28 / 36), 1px);
+        --height-control-32: round(nearest, calc(var(--height-control) * 32 / 36), 1px);
+        --height-control-40: round(nearest, calc(var(--height-control) * 40 / 36), 1px);
+        --height-control-48: round(nearest, calc(var(--height-control) * 48 / 36), 1px);
+      }
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-progress-fill: var(--color-primary-fill);
+        --el-drafting: var(--el-status-in-progress);
+        --el-drafting-surface: var(--el-tint-sky);
+        --el-cta-warm: var(--el-highlight);
+        --el-cta-warm-text: var(--el-text);
+        --el-editor-focus: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
+        --el-status-in-review: var(--color-primary);
+        --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+        --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-notif-access-refused: var(--color-warning);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-on-border: var(--color-primary);
+        --el-switch-off-border: var(--color-muted-foreground);
+        --el-switch-knob: var(--color-primary-foreground);
+        --el-switch-knob-off: var(--color-muted-foreground);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+        --el-type-choice: var(--color-charcoal);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-workload-assigned: var(--color-primary);
+        --el-chart-workload-unassigned: var(--color-accent-teal);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --el-product-ai-planner: var(--color-primary);
+        --el-product-project-management: var(--color-accent-teal);
+        --el-product-project-manager: var(--color-accent);
+        --el-product-ai-debugging: var(--color-destructive);
+        --el-product-mcp: color-mix(in srgb, var(--color-primary) 55%, var(--color-destructive));
+        --el-product-cli: var(--color-charcoal);
+        --el-product-claude-code-connector: var(--color-accent-green);
+        --el-product-claude-code-plugin: color-mix(
+          in srgb,
+          var(--color-accent) 55%,
+          var(--color-accent-green)
+        );
+        --el-product-agent-fleet: color-mix(
+          in srgb,
+          var(--color-primary) 50%,
+          var(--color-accent-teal)
+        );
+        --el-product-agent-hosting: var(--color-slate);
+        --el-product-sandbox: color-mix(in srgb, var(--color-accent) 45%, var(--color-charcoal));
+        --el-logo-mark: var(--color-primary-fill);
+        --el-logo-tile: color-mix(in srgb, var(--color-primary-fill) 14%, var(--color-background));
+        --el-showcase-field: var(--color-primary);
+        --el-showcase-field-text: var(--color-background);
+        --el-showcase-field-ink: var(--color-primary);
+        --el-showcase-ground: var(--color-foreground);
+        --el-showcase-ground-text: var(--color-background);
+        --el-showcase-ground-muted: color-mix(
+          in srgb,
+          var(--color-background) 68%,
+          var(--color-foreground)
+        );
+        --el-showcase-ground-raised: color-mix(
+          in srgb,
+          var(--color-foreground) 90%,
+          var(--color-background)
+        );
+        --el-showcase-ground-rule: color-mix(
+          in srgb,
+          var(--color-foreground) 74%,
+          var(--color-background)
+        );
+        --el-showcase-highlight: color-mix(
+          in srgb,
+          var(--color-accent) 55%,
+          var(--color-background)
+        );
+        --el-showcase-decision: color-mix(
+          in srgb,
+          var(--color-accent) 70%,
+          var(--color-background)
+        );
+        --el-showcase-decision-text: var(--color-foreground);
+        --el-showcase-decision-ink: color-mix(
+          in srgb,
+          var(--color-accent) 65%,
+          var(--color-foreground)
+        );
+        --el-showcase-record: color-mix(
+          in srgb,
+          var(--color-accent-teal) 72%,
+          var(--color-foreground)
+        );
+        --el-showcase-record-text: var(--color-background);
+        --el-showcase-wash: var(--color-tint-sky);
+        --el-showcase-wash-warm: var(--color-tint-peach);
+        --el-showcase-paper: var(--color-background);
+        --el-showcase-paper-soft: var(--color-surface-soft);
+        --el-showcase-rule: var(--color-hairline);
+        --el-showcase-text: var(--color-foreground);
+        --el-showcase-muted: var(--color-slate);
+        --el-showcase-wave-1: var(--color-primary);
+        --el-showcase-wave-2: var(--color-accent-teal);
+        --el-showcase-wave-3: var(--color-accent);
+        --el-mark-wave-1: color-mix(in srgb, var(--el-showcase-wave-1) 35%, var(--el-accent-text));
+        --el-mark-wave-2: color-mix(in srgb, var(--el-showcase-wave-2) 35%, var(--el-accent-text));
+        --el-mark-wave-3: color-mix(in srgb, var(--el-showcase-wave-3) 35%, var(--el-accent-text));
+        --el-live-mark-1: var(--color-primary);
+        --el-live-mark-2: var(--color-accent-teal);
+        --el-live-mark-3: var(--color-accent);
+        --el-live-text-1: color-mix(in srgb, var(--color-primary) 60%, var(--color-foreground));
+        --el-live-text-2: color-mix(in srgb, var(--color-accent-teal) 60%, var(--color-foreground));
+        --el-live-text-3: color-mix(in srgb, var(--color-accent) 60%, var(--color-foreground));
+      }
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-cta-warm-text: var(--el-page-bg);
+        --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
+        --el-overlay-scrim: #000000a6;
+        --el-logo-mark: var(--color-primary);
+        --el-logo-tile: color-mix(in srgb, var(--color-primary) 18%, var(--color-background));
+        --el-showcase-field: color-mix(in srgb, var(--color-primary) 45%, var(--color-background));
+        --el-showcase-field-text: var(--color-foreground);
+        --el-showcase-field-ink: color-mix(
+          in srgb,
+          var(--color-primary) 75%,
+          var(--color-foreground)
+        );
+        --el-showcase-ground: var(--color-canvas);
+        --el-showcase-ground-text: var(--color-foreground);
+        --el-showcase-ground-muted: color-mix(
+          in srgb,
+          var(--color-foreground) 68%,
+          var(--color-canvas)
+        );
+        --el-showcase-ground-raised: color-mix(
+          in srgb,
+          var(--color-canvas) 86%,
+          var(--color-foreground)
+        );
+        --el-showcase-ground-rule: color-mix(
+          in srgb,
+          var(--color-canvas) 70%,
+          var(--color-foreground)
+        );
+        --el-showcase-highlight: color-mix(
+          in srgb,
+          var(--color-accent) 70%,
+          var(--color-foreground)
+        );
+        --el-showcase-decision: var(--color-accent);
+        --el-showcase-decision-text: var(--color-background);
+        --el-showcase-decision-ink: color-mix(
+          in srgb,
+          var(--color-accent) 80%,
+          var(--color-foreground)
+        );
+        --el-showcase-record: var(--color-accent-teal);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 30px 26px 44px;
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ── board chrome ─────────────────────────────────────────────── */
+      .board {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+      .boardhead h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+        letter-spacing: -0.01em;
+        color: var(--el-text-strong);
+      }
+      .boardhead p {
+        margin: 0;
+        max-width: 96ch;
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .boardhead p + p {
+        margin-top: 8px;
+      }
+      .panel {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .panel-label {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .panel-label .n {
+        display: inline-grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .panel-label h2 {
+        margin: 0;
+        font-size: 15px;
+        color: var(--el-text-strong);
+      }
+      .panel-label .cap {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .panel-body {
+        padding: 18px;
+      }
+      .cols {
+        display: grid;
+        gap: 22px;
+        align-items: start;
+      }
+      .c2 {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      }
+      .sub {
+        margin: 0 0 8px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .note {
+        margin: 10px 0 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        padding: 0 4px;
+        border-radius: var(--radius-kbd);
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+      }
+      .stage {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 20px 16px;
+        border-radius: var(--radius-card);
+        background: var(--el-canvas);
+        color: var(--el-text);
+      }
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      table.spec th {
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--el-border);
+        text-align: left;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      table.spec td {
+        padding: 7px 8px;
+        border-bottom: 1px solid var(--el-border-soft);
+        vertical-align: top;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .ic {
+        display: block;
+        width: 14px;
+        height: 14px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      /* ── the overlay frame — the canvas beside the rail (entry path) ── */
+      .frame {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 400px;
+        width: 100%;
+        min-height: 430px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-canvas);
+      }
+      .canvas-stub {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 14px 16px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .frame .rail {
+        max-width: none;
+        border-width: 0 0 0 1px;
+        border-radius: 0;
+      }
+
+      /* ── the rail — PlanChangeRail's <aside>, reproduced ──────────── */
+      .rail {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-width: 480px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        overflow: hidden;
+      }
+      .rail.floor {
+        max-width: 352px;
+      }
+      .railhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .railhead .dot {
+        width: 8px;
+        height: 8px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-success);
+      }
+      .railhead .lbl {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      /* Pill tone neutral — the mode chip */
+      .modechip {
+        margin-left: auto;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border: 1px solid var(--el-chip-border);
+        border-radius: var(--radius-badge);
+        background: var(--el-chip-bg);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+
+      /* ── NEW — the History section (MOTIR-9305) ───────────────────── */
+      .hx {
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .hx-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x-16);
+        border: 0;
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        text-align: left;
+        color: var(--el-text);
+      }
+      .hx-head .chev {
+        margin-left: auto;
+        color: var(--el-text-secondary);
+      }
+      .hx-head.is-focus {
+        border-radius: var(--radius-control);
+        box-shadow: inset 0 0 0 2px var(--focus-ring-color);
+      }
+      .hx-glyph {
+        color: var(--el-text-secondary);
+      }
+      .hx-list {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        max-height: 300px;
+        margin: 0;
+        padding: 0 8px 8px;
+        overflow-y: auto;
+        list-style: none;
+      }
+      .hx-row {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+        padding: var(--spacing-control-y-8) var(--spacing-control-x-8);
+        border-radius: var(--radius-control);
+        color: var(--el-text);
+        text-decoration: none;
+      }
+      .hx-row.is-hover {
+        background: var(--el-muted);
+      }
+      .hx-row.is-focus {
+        box-shadow: inset 0 0 0 2px var(--focus-ring-color);
+      }
+      .hx-row.is-current {
+        background: var(--el-page-bg);
+        box-shadow: inset 2px 0 0 var(--el-accent);
+      }
+      .hx-title {
+        overflow: hidden;
+        font-size: 13px;
+        line-height: 1.4;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        color: var(--el-text);
+      }
+      .hx-row.is-ended .hx-title {
+        color: var(--el-text-secondary);
+      }
+      .hx-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .hx-anchor {
+        display: inline-flex;
+        align-items: center;
+        max-width: 11rem;
+        overflow: hidden;
+        padding: 0 var(--spacing-chip-x-6);
+        border: 1px solid var(--el-chip-border);
+        border-radius: var(--radius-badge);
+        background: var(--el-chip-bg);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        color: var(--el-text-secondary);
+      }
+      .hx-sep {
+        color: var(--el-text-secondary);
+      }
+      /* Pill — the design system's, one tone per word */
+      .pl {
+        display: inline-flex;
+        align-items: center;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x-8);
+        border: 1px solid transparent;
+        border-radius: var(--radius-badge);
+        font-size: 11px;
+        font-weight: 500;
+        line-height: 1.4;
+        white-space: nowrap;
+      }
+      .tone-open {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .tone-ended {
+        background: var(--el-archived-pill-bg);
+        color: var(--el-archived-pill-text);
+      }
+      .tone-planned {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .tone-approved {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .tone-declined {
+        background: var(--el-archived-pill-bg);
+        color: var(--el-archived-pill-text);
+      }
+      .tone-writing {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .hx-skel {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: var(--spacing-control-y-8) var(--spacing-control-x-8);
+      }
+      .hx-bar {
+        height: 10px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+      }
+      .hx-bar.short {
+        width: 55%;
+      }
+      .hx-foot {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: var(--spacing-control-y-8) var(--spacing-control-x-8);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .spin {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        flex: none;
+        border: 1.5px solid var(--el-text-secondary);
+        border-top-color: transparent;
+        border-radius: 9999px;
+      }
+      .hx-end {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px var(--spacing-control-x-8) 2px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .hair {
+        height: 1px;
+        flex: 1;
+        min-width: 16px;
+        background: var(--el-border);
+      }
+      .hx-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        padding: 14px 24px 18px;
+        text-align: center;
+      }
+      .hx-empty .glyph {
+        color: var(--el-text-secondary);
+      }
+      .hx-empty b {
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .hx-empty span {
+        max-width: 34ch;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .hx-error {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y-8) var(--spacing-control-x-16);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .hx-error .glyph {
+        color: var(--el-danger-on-surface);
+      }
+      .hx-retry {
+        margin-left: auto;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-link);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+
+      /* ── the log and the composer slot, composed from the shipped rail ── */
+      .turns {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+      }
+      .turn {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .turn.u {
+        flex-direction: row-reverse;
+      }
+      .av {
+        display: inline-flex;
+        flex: none;
+        width: 28px;
+        height: 28px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .av.user {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .bub {
+        min-width: 0;
+        padding: 8px 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-chat-bubble-ai);
+        color: var(--el-text);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .turn.u .bub {
+        background: var(--el-chat-bubble-user);
+        color: var(--el-accent-text);
+      }
+      .endmark {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .endchip {
+        display: inline-flex;
+        align-items: center;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-peach);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+      }
+      .composer {
+        border-top: 1px solid var(--el-border);
+        padding: 12px;
+      }
+      .cinput {
+        min-height: var(--height-input);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-surface);
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .slot {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        border-top: 1px solid var(--el-border);
+        padding: 12px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border: 1px solid transparent;
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-accent-text);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="board">
+      <header class="boardhead">
+        <h1>
+          The planning overlay’s History section — your own past conversations in this project
+        </h1>
+        <p>
+          A collapsed <b>History</b> header sits under the rail head. Expanded, it lists the
+          conversations the viewer started in this project — every origin but guide, open or ended,
+          with or without a plan — newest activity first, 10 at a time with more on scroll. A row
+          opens its conversation in the overlay through the shipped <code>planSession</code> reopen.
+        </p>
+        <p>
+          MOTIR-9305 · amends the overlay rail and composes the Plans page row vocabulary. Notes:
+          <code>design/ai-chat/design-notes.md</code> § <i>The overlay’s History section</i>.
+        </p>
+      </header>
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">1</span>
+          <h2>
+            The entry path — the collapsed <b>History</b> header under the rail head, as the overlay
+            opens
+          </h2>
+          <span class="cap">collapsed · default</span>
+        </div>
+        <div class="panel-body">
+          <div class="frame">
+            <div class="canvas-stub">
+              <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg
+              ><span>the canvas (unchanged)</span>
+            </div>
+            <aside class="rail" aria-label="Motir AI">
+              <div class="railhead">
+                <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                ><span class="modechip">Ask about this project</span>
+              </div>
+              <section class="hx" aria-label="History">
+                <button
+                  type="button"
+                  class="hx-head is-focus"
+                  aria-expanded="false"
+                  aria-controls="hx-region"
+                >
+                  <svg class="ic hx-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                    <path d="M3 3v5h5" />
+                    <path d="M12 7v5l4 2" /></svg
+                  ><span>History</span
+                  ><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m9 18 6-6-6-6" />
+                  </svg>
+                </button>
+              </section>
+              <div class="turns" role="log">
+                <div class="turn u">
+                  <span class="av user" aria-hidden="true">Y</span>
+                  <div class="bub">Why is ACME-212 still blocked?</div>
+                </div>
+                <div class="turn">
+                  <span class="av" aria-hidden="true">M</span>
+                  <div class="bub">
+                    ACME-212 waits on ACME-209 (the import job), which is still In Progress. Nothing
+                    else holds it.
+                  </div>
+                </div>
+              </div>
+              <div class="composer"><div class="cinput">Ask Motir AI, or @ a work item…</div></div>
+            </aside>
+          </div>
+          <p class="note">
+            <b>History header</b>: one full-width row directly under the rail head and above the
+            thread, present whenever the rail is (every mode, open or ended session). Collapsed on
+            every overlay open; no count, no badge. Drawn with keyboard focus: it is a
+            <code>&lt;button aria-expanded aria-controls&gt;</code>, reached by Tab after the head
+            controls, toggled by Enter or Space. The chevron points right when collapsed and down
+            when expanded.
+          </p>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">2</span>
+          <h2>Expanded — loading the first page, then the first page</h2>
+          <span class="cap">expanded · first page</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">loading first page</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="modechip">Ask about this project</span>
+                  </div>
+                  <section class="hx" aria-label="History">
+                    <button
+                      type="button"
+                      class="hx-head"
+                      aria-expanded="true"
+                      aria-controls="hx-region"
+                    >
+                      <svg class="ic hx-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M12 7v5l4 2" /></svg
+                      ><span>History</span
+                      ><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <ul
+                      class="hx-list"
+                      id="hx-region"
+                      aria-label="Your past conversations in this project"
+                    >
+                      <li class="hx-skel" aria-hidden="true">
+                        <span class="hx-bar"></span><span class="hx-bar short"></span>
+                      </li>
+                      <li class="hx-skel" aria-hidden="true">
+                        <span class="hx-bar"></span><span class="hx-bar short"></span>
+                      </li>
+                      <li class="hx-skel" aria-hidden="true">
+                        <span class="hx-bar"></span><span class="hx-bar short"></span>
+                      </li>
+                      <li class="hx-foot">
+                        <span class="spin" aria-hidden="true"></span
+                        ><span>Loading your conversations…</span>
+                      </li>
+                    </ul>
+                  </section>
+                  <div class="turns" role="log">
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">Y</span>
+                      <div class="bub">Why is ACME-212 still blocked?</div>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+            <div>
+              <p class="sub">first page · 10 rows, newest activity first</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="modechip">Ask about this project</span>
+                  </div>
+                  <section class="hx" aria-label="History">
+                    <button
+                      type="button"
+                      class="hx-head"
+                      aria-expanded="true"
+                      aria-controls="hx-region"
+                    >
+                      <svg class="ic hx-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M12 7v5l4 2" /></svg
+                      ><span>History</span
+                      ><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <ul
+                      class="hx-list"
+                      id="hx-region"
+                      aria-label="Your past conversations in this project"
+                    >
+                      <li>
+                        <a
+                          class="hx-row is-current"
+                          href="#"
+                          aria-current="true"
+                          aria-label="Why is ACME-212 still blocked? · Open · active 4 minutes ago"
+                          ><span class="hx-title">Why is ACME-212 still blocked?</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-212">ACME-212</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 4 minutes ago</span><span class="pl tone-open">Open</span
+                            ><span class="pl tone-writing">Writing</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-hover"
+                          href="#"
+                          aria-label="Plan the CSV export for the reports page · Open · active 2 hours ago"
+                          ><span class="hx-title">Plan the CSV export for the reports page</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-188">ACME-188</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 hours ago</span><span class="pl tone-open">Open</span
+                            ><span class="pl tone-planned">Waiting for approval</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended is-focus"
+                          href="#"
+                          aria-label="What does the billing webhook retry on? · Ended · active yesterday"
+                          ><span class="hx-title">What does the billing webhook retry on?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active yesterday</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Split the onboarding checklist into two stories and move the import step after the workspace step so the first run does not wait on GitHub · Ended · active 2 days ago"
+                          ><span class="hx-title"
+                            >Split the onboarding checklist into two stories and move the import
+                            step after the workspace step so the first run does not wait on
+                            GitHub</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-140 +2">ACME-140 +2</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 days ago</span><span class="pl tone-ended">Ended</span
+                            ><span class="pl tone-approved">Approved</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Which tests cover the sprint burndown chart? · Ended · active 3 days ago"
+                          ><span class="hx-title">Which tests cover the sprint burndown chart?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 3 days ago</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Retry policy for webhook deliveries · Ended · active 5 days ago"
+                          ><span class="hx-title">Retry policy for webhook deliveries</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-97">ACME-97</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 5 days ago</span><span class="pl tone-ended">Ended</span
+                            ><span class="pl tone-declined">Declined</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Is dark-theme contrast checked anywhere in CI? · Ended · active last week"
+                          ><span class="hx-title"
+                            >Is dark-theme contrast checked anywhere in CI?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active last week</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Add a due-date reminder to the board cards · Ended · active last week"
+                          ><span class="hx-title">Add a due-date reminder to the board cards</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-63">ACME-63</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active last week</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Where is the workspace invite email rendered? · Ended · active 2 weeks ago"
+                          ><span class="hx-title"
+                            >Where is the workspace invite email rendered?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 weeks ago</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Draft the release notes story for 2.4 · Ended · active 2 weeks ago"
+                          ><span class="hx-title">Draft the release notes story for 2.4</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-51">ACME-51</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 weeks ago</span><span class="pl tone-ended">Ended</span
+                            ><span class="pl tone-approved">Approved</span></span
+                          ></a
+                        >
+                      </li>
+                    </ul>
+                  </section>
+                  <div class="turns" role="log">
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">Y</span>
+                      <div class="bub">Why is ACME-212 still blocked?</div>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+          <p class="note">
+            The list is a capped scroll region (about five rows tall) between the header and the
+            thread, so the conversation stays readable beneath it. First page is 10 rows; the region
+            scrolls inside itself. Row 2 is drawn hovered, row 3 focused. The first row is the
+            <b>currently-open row</b> (the session the overlay is showing): page-white fill and a
+            2px accent bar on its leading edge, <code>aria-current="true"</code>.
+          </p>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">3</span>
+          <h2>The session row — open, ended, holding a plan, current, and a long first turn</h2>
+          <span class="cap">row anatomy</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="modechip">Ask about this project</span>
+                  </div>
+                  <section class="hx" aria-label="History">
+                    <button
+                      type="button"
+                      class="hx-head"
+                      aria-expanded="true"
+                      aria-controls="hx-region"
+                    >
+                      <svg class="ic hx-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M12 7v5l4 2" /></svg
+                      ><span>History</span
+                      ><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <ul
+                      class="hx-list"
+                      id="hx-region"
+                      aria-label="Your past conversations in this project"
+                    >
+                      <li>
+                        <a
+                          class="hx-row is-current"
+                          href="#"
+                          aria-current="true"
+                          aria-label="Why is ACME-212 still blocked? · Open · active 4 minutes ago"
+                          ><span class="hx-title">Why is ACME-212 still blocked?</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-212">ACME-212</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 4 minutes ago</span><span class="pl tone-open">Open</span
+                            ><span class="pl tone-writing">Writing</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row"
+                          href="#"
+                          aria-label="Plan the CSV export for the reports page · Open · active 2 hours ago"
+                          ><span class="hx-title">Plan the CSV export for the reports page</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-188">ACME-188</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 hours ago</span><span class="pl tone-open">Open</span
+                            ><span class="pl tone-planned">Waiting for approval</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="What does the billing webhook retry on? · Ended · active yesterday"
+                          ><span class="hx-title">What does the billing webhook retry on?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active yesterday</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Split the onboarding checklist into two stories and move the import step after the workspace step so the first run does not wait on GitHub · Ended · active 2 days ago"
+                          ><span class="hx-title"
+                            >Split the onboarding checklist into two stories and move the import
+                            step after the workspace step so the first run does not wait on
+                            GitHub</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-140 +2">ACME-140 +2</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 days ago</span><span class="pl tone-ended">Ended</span
+                            ><span class="pl tone-approved">Approved</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Which tests cover the sprint burndown chart? · Ended · active 3 days ago"
+                          ><span class="hx-title">Which tests cover the sprint burndown chart?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 3 days ago</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Retry policy for webhook deliveries · Ended · active 5 days ago"
+                          ><span class="hx-title">Retry policy for webhook deliveries</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-97">ACME-97</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 5 days ago</span><span class="pl tone-ended">Ended</span
+                            ><span class="pl tone-declined">Declined</span></span
+                          ></a
+                        >
+                      </li>
+                    </ul>
+                  </section>
+                </aside>
+              </div>
+            </div>
+            <div>
+              <table class="spec">
+                <tr>
+                  <th>element</th>
+                  <th>what it shows</th>
+                </tr>
+                <tr>
+                  <td><b>row first-turn line</b></td>
+                  <td>
+                    the session’s first user turn, one line, ellipsis. No first turn: the latest
+                    plan’s title; neither: <i>Untitled conversation</i>. Ended rows draw it in
+                    <code>--el-text-secondary</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><b>row anchor chip</b></td>
+                  <td>
+                    the first anchor key in mono, <code>+N</code> for more, the full set in
+                    <code>title</code>; a project-wide session reads <i>Whole project</i> as plain
+                    text.
+                  </td>
+                </tr>
+                <tr>
+                  <td><b>row last-active time</b></td>
+                  <td><i>active {when}</i>, relative.</td>
+                </tr>
+                <tr>
+                  <td><b>row status pill</b></td>
+                  <td><i>Open</i> (mint) or <i>Ended</i> (archived tone).</td>
+                </tr>
+                <tr>
+                  <td>plan state</td>
+                  <td>
+                    only when the session holds a plan: the Plans page’s own state word and tone
+                    beside the status.
+                  </td>
+                </tr>
+                <tr>
+                  <td><b>ended-row treatment</b></td>
+                  <td>
+                    secondary ink on the first-turn line and the <i>Ended</i> pill. No opacity.
+                  </td>
+                </tr>
+                <tr>
+                  <td><b>currently-open-row marker</b></td>
+                  <td>page-white fill + leading accent bar, <code>aria-current</code>.</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">4</span>
+          <h2>Loading more, the end of the list, and errors</h2>
+          <span class="cap">paging states</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">loading-more footer</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="modechip">Ask about this project</span>
+                  </div>
+                  <section class="hx" aria-label="History">
+                    <button
+                      type="button"
+                      class="hx-head"
+                      aria-expanded="true"
+                      aria-controls="hx-region"
+                    >
+                      <svg class="ic hx-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M12 7v5l4 2" /></svg
+                      ><span>History</span
+                      ><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <ul
+                      class="hx-list"
+                      id="hx-region"
+                      aria-label="Your past conversations in this project"
+                    >
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Retry policy for webhook deliveries · Ended · active 5 days ago"
+                          ><span class="hx-title">Retry policy for webhook deliveries</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-97">ACME-97</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 5 days ago</span><span class="pl tone-ended">Ended</span
+                            ><span class="pl tone-declined">Declined</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Is dark-theme contrast checked anywhere in CI? · Ended · active last week"
+                          ><span class="hx-title"
+                            >Is dark-theme contrast checked anywhere in CI?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active last week</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Add a due-date reminder to the board cards · Ended · active last week"
+                          ><span class="hx-title">Add a due-date reminder to the board cards</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-63">ACME-63</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active last week</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Where is the workspace invite email rendered? · Ended · active 2 weeks ago"
+                          ><span class="hx-title"
+                            >Where is the workspace invite email rendered?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 weeks ago</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Draft the release notes story for 2.4 · Ended · active 2 weeks ago"
+                          ><span class="hx-title">Draft the release notes story for 2.4</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-51">ACME-51</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 weeks ago</span><span class="pl tone-ended">Ended</span
+                            ><span class="pl tone-approved">Approved</span></span
+                          ></a
+                        >
+                      </li>
+                      <li class="hx-foot" role="status">
+                        <span class="spin" aria-hidden="true"></span><span>Loading more…</span>
+                      </li>
+                    </ul>
+                  </section>
+                </aside>
+              </div>
+              <p class="sub">end-of-list marker</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="modechip">Ask about this project</span>
+                  </div>
+                  <section class="hx" aria-label="History">
+                    <button
+                      type="button"
+                      class="hx-head"
+                      aria-expanded="true"
+                      aria-controls="hx-region"
+                    >
+                      <svg class="ic hx-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M12 7v5l4 2" /></svg
+                      ><span>History</span
+                      ><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <ul
+                      class="hx-list"
+                      id="hx-region"
+                      aria-label="Your past conversations in this project"
+                    >
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Why does the backlog sort by rank and not by date? · Ended · active 3 months ago"
+                          ><span class="hx-title"
+                            >Why does the backlog sort by rank and not by date?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 3 months ago</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Plan the first board view · Ended · active 4 months ago"
+                          ><span class="hx-title">Plan the first board view</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-4">ACME-4</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 4 months ago</span><span class="pl tone-ended">Ended</span
+                            ><span class="pl tone-approved">Approved</span></span
+                          ></a
+                        >
+                      </li>
+                      <li class="hx-end" role="note">
+                        <span class="hair" aria-hidden="true"></span
+                        ><span>No older conversations</span
+                        ><span class="hair" aria-hidden="true"></span>
+                      </li>
+                    </ul>
+                  </section>
+                </aside>
+              </div>
+            </div>
+            <div>
+              <p class="sub">first page failed</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="modechip">Ask about this project</span>
+                  </div>
+                  <section class="hx" aria-label="History">
+                    <button
+                      type="button"
+                      class="hx-head"
+                      aria-expanded="true"
+                      aria-controls="hx-region"
+                    >
+                      <svg class="ic hx-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M12 7v5l4 2" /></svg
+                      ><span>History</span
+                      ><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <div class="hx-error" id="hx-region" role="alert">
+                      <svg class="ic glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" x2="12" y1="8" y2="12" />
+                        <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                      ><span>Couldn’t load your conversations.</span
+                      ><button type="button" class="hx-retry">Retry</button>
+                    </div>
+                  </section>
+                </aside>
+              </div>
+              <p class="sub">next page failed — loaded rows stay</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="modechip">Ask about this project</span>
+                  </div>
+                  <section class="hx" aria-label="History">
+                    <button
+                      type="button"
+                      class="hx-head"
+                      aria-expanded="true"
+                      aria-controls="hx-region"
+                    >
+                      <svg class="ic hx-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M12 7v5l4 2" /></svg
+                      ><span>History</span
+                      ><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <ul
+                      class="hx-list"
+                      id="hx-region"
+                      aria-label="Your past conversations in this project"
+                    >
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Add a due-date reminder to the board cards · Ended · active last week"
+                          ><span class="hx-title">Add a due-date reminder to the board cards</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-63">ACME-63</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active last week</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Where is the workspace invite email rendered? · Ended · active 2 weeks ago"
+                          ><span class="hx-title"
+                            >Where is the workspace invite email rendered?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 weeks ago</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Draft the release notes story for 2.4 · Ended · active 2 weeks ago"
+                          ><span class="hx-title">Draft the release notes story for 2.4</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-51">ACME-51</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 weeks ago</span><span class="pl tone-ended">Ended</span
+                            ><span class="pl tone-approved">Approved</span></span
+                          ></a
+                        >
+                      </li>
+                      <li class="hx-error" role="alert">
+                        <svg class="ic glyph" viewBox="0 0 24 24" aria-hidden="true">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" x2="12" y1="8" y2="12" />
+                          <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                        ><span>Couldn’t load more conversations.</span
+                        ><button type="button" class="hx-retry">Retry</button>
+                      </li>
+                    </ul>
+                  </section>
+                </aside>
+              </div>
+            </div>
+          </div>
+          <p class="note">
+            <b>Loading-more footer</b>: when the last row scrolls into view (or receives keyboard
+            focus) the next 10 load; a spinner row sits under the last row and the rows above do not
+            move. <b>End-of-list marker</b>: after the oldest row, a hairline-flanked
+            <i>No older conversations</i>, and nothing loads again. Errors keep every loaded row and
+            offer <i>Retry</i> inline.
+          </p>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">5</span>
+          <h2>Empty — the viewer has started no conversation in this project</h2>
+          <span class="cap">empty state</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="modechip">Ask about this project</span>
+                  </div>
+                  <section class="hx" aria-label="History">
+                    <button
+                      type="button"
+                      class="hx-head"
+                      aria-expanded="true"
+                      aria-controls="hx-region"
+                    >
+                      <svg class="ic hx-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M12 7v5l4 2" /></svg
+                      ><span>History</span
+                      ><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <div class="hx-empty" id="hx-region">
+                      <svg class="ic glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z" />
+                        <path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1" /></svg
+                      ><b>No conversations yet</b
+                      ><span
+                        >Questions you ask and plans you start in this project are listed
+                        here.</span
+                      >
+                    </div>
+                  </section>
+                  <div class="turns" role="log"></div>
+                </aside>
+              </div>
+            </div>
+            <div>
+              <p class="note">
+                <b>Empty state</b>: a centred glyph, a title and one line, inside the section —
+                never an empty list. The thread below is whatever the overlay is showing.
+              </p>
+              <p class="note">
+                <b>Visitors</b> get no History section at all: the rail head is followed directly by
+                the thread, exactly as it ships today.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">6</span>
+          <h2>Opening a row — the conversation swaps in, inside the overlay</h2>
+          <span class="cap">open · ended</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">an open session — it continues</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="modechip">Ask about this project</span>
+                  </div>
+                  <section class="hx" aria-label="History">
+                    <button
+                      type="button"
+                      class="hx-head"
+                      aria-expanded="true"
+                      aria-controls="hx-region"
+                    >
+                      <svg class="ic hx-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M12 7v5l4 2" /></svg
+                      ><span>History</span
+                      ><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <ul
+                      class="hx-list"
+                      id="hx-region"
+                      aria-label="Your past conversations in this project"
+                    >
+                      <li>
+                        <a
+                          class="hx-row is-current"
+                          href="#"
+                          aria-current="true"
+                          aria-label="Why is ACME-212 still blocked? · Open · active 4 minutes ago"
+                          ><span class="hx-title">Why is ACME-212 still blocked?</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-212">ACME-212</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 4 minutes ago</span><span class="pl tone-open">Open</span
+                            ><span class="pl tone-writing">Writing</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row"
+                          href="#"
+                          aria-label="Plan the CSV export for the reports page · Open · active 2 hours ago"
+                          ><span class="hx-title">Plan the CSV export for the reports page</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-188">ACME-188</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 hours ago</span><span class="pl tone-open">Open</span
+                            ><span class="pl tone-planned">Waiting for approval</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="What does the billing webhook retry on? · Ended · active yesterday"
+                          ><span class="hx-title">What does the billing webhook retry on?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active yesterday</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Split the onboarding checklist into two stories and move the import step after the workspace step so the first run does not wait on GitHub · Ended · active 2 days ago"
+                          ><span class="hx-title"
+                            >Split the onboarding checklist into two stories and move the import
+                            step after the workspace step so the first run does not wait on
+                            GitHub</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-140 +2">ACME-140 +2</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 days ago</span><span class="pl tone-ended">Ended</span
+                            ><span class="pl tone-approved">Approved</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Which tests cover the sprint burndown chart? · Ended · active 3 days ago"
+                          ><span class="hx-title">Which tests cover the sprint burndown chart?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 3 days ago</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                    </ul>
+                  </section>
+                  <div class="turns" role="log">
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">Y</span>
+                      <div class="bub">Why is ACME-212 still blocked?</div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true">M</span>
+                      <div class="bub">
+                        ACME-212 waits on ACME-209 (the import job), which is still In Progress.
+                        Nothing else holds it.
+                      </div>
+                    </div>
+                  </div>
+                  <div class="composer">
+                    <div class="cinput">Ask Motir AI, or @ a work item…</div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+            <div>
+              <p class="sub">an ended session — read-only, Start a new session carries it</p>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="modechip">Ask about this project</span>
+                  </div>
+                  <section class="hx" aria-label="History">
+                    <button
+                      type="button"
+                      class="hx-head"
+                      aria-expanded="true"
+                      aria-controls="hx-region"
+                    >
+                      <svg class="ic hx-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M12 7v5l4 2" /></svg
+                      ><span>History</span
+                      ><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <ul
+                      class="hx-list"
+                      id="hx-region"
+                      aria-label="Your past conversations in this project"
+                    >
+                      <li>
+                        <a
+                          class="hx-row"
+                          href="#"
+                          aria-label="Why is ACME-212 still blocked? · Open · active 4 minutes ago"
+                          ><span class="hx-title">Why is ACME-212 still blocked?</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-212">ACME-212</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 4 minutes ago</span><span class="pl tone-open">Open</span
+                            ><span class="pl tone-writing">Writing</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row"
+                          href="#"
+                          aria-label="Plan the CSV export for the reports page · Open · active 2 hours ago"
+                          ><span class="hx-title">Plan the CSV export for the reports page</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-188">ACME-188</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 hours ago</span><span class="pl tone-open">Open</span
+                            ><span class="pl tone-planned">Waiting for approval</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended is-current"
+                          href="#"
+                          aria-current="true"
+                          aria-label="What does the billing webhook retry on? · Ended · active yesterday"
+                          ><span class="hx-title">What does the billing webhook retry on?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active yesterday</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Split the onboarding checklist into two stories and move the import step after the workspace step so the first run does not wait on GitHub · Ended · active 2 days ago"
+                          ><span class="hx-title"
+                            >Split the onboarding checklist into two stories and move the import
+                            step after the workspace step so the first run does not wait on
+                            GitHub</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-140 +2">ACME-140 +2</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 days ago</span><span class="pl tone-ended">Ended</span
+                            ><span class="pl tone-approved">Approved</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Which tests cover the sprint burndown chart? · Ended · active 3 days ago"
+                          ><span class="hx-title">Which tests cover the sprint burndown chart?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 3 days ago</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                    </ul>
+                  </section>
+                  <div class="turns" role="log">
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">Y</span>
+                      <div class="bub">What does the billing webhook retry on?</div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true">M</span>
+                      <div class="bub">
+                        It retries on any 5xx and on a timeout, five times with backoff. A 4xx is
+                        not retried.
+                      </div>
+                    </div>
+                    <div class="endmark" role="note">
+                      <span class="hair" aria-hidden="true"></span
+                      ><span class="endchip">Closed</span
+                      ><span>no activity for 30 minutes · yesterday</span
+                      ><span class="hair" aria-hidden="true"></span>
+                    </div>
+                  </div>
+                  <div class="slot">
+                    <span
+                      >Your conversation so far is copied into the new session. Nothing is sent
+                      until you write.</span
+                    ><span class="btn"
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M9.94 14.06 2 22" />
+                        <path
+                          d="m12 2 2.1 6.4L20.5 10.5l-6.4 2.1L12 19l-2.1-6.4L3.5 10.5l6.4-2.1z"
+                        /></svg
+                      >Start a new session</span
+                    >
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+          <p class="note">
+            Clicking a row writes the overlay’s <code>planSession</code> address (the shipped
+            reopen), so the thread below swaps to that conversation and the row becomes the current
+            one; the overlay, canvas frame and History state stay put. An ended session shows the
+            shipped end marker and the shipped ended composer slot (copy offered where the shipped
+            copy rules offer it, the read-only line otherwise) — composed here, not redrawn.
+          </p>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">7</span>
+          <h2>Dark parity — collapsed, expanded and an ended session opened</h2>
+          <span class="cap">data-theme="dark"</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <div class="stage" data-theme="dark" data-appearance-scope>
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="modechip">Ask about this project</span>
+                  </div>
+                  <section class="hx" aria-label="History">
+                    <button
+                      type="button"
+                      class="hx-head"
+                      aria-expanded="false"
+                      aria-controls="hx-region"
+                    >
+                      <svg class="ic hx-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M12 7v5l4 2" /></svg
+                      ><span>History</span
+                      ><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                    </button>
+                  </section>
+                  <div class="turns" role="log">
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">Y</span>
+                      <div class="bub">Why is ACME-212 still blocked?</div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true">M</span>
+                      <div class="bub">
+                        ACME-212 waits on ACME-209 (the import job), which is still In Progress.
+                        Nothing else holds it.
+                      </div>
+                    </div>
+                  </div>
+                  <div class="composer">
+                    <div class="cinput">Ask Motir AI, or @ a work item…</div>
+                  </div>
+                </aside>
+              </div>
+              <div class="stage" data-theme="dark" data-appearance-scope>
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="modechip">Ask about this project</span>
+                  </div>
+                  <section class="hx" aria-label="History">
+                    <button
+                      type="button"
+                      class="hx-head"
+                      aria-expanded="true"
+                      aria-controls="hx-region"
+                    >
+                      <svg class="ic hx-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M12 7v5l4 2" /></svg
+                      ><span>History</span
+                      ><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <ul
+                      class="hx-list"
+                      id="hx-region"
+                      aria-label="Your past conversations in this project"
+                    >
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Why does the backlog sort by rank and not by date? · Ended · active 3 months ago"
+                          ><span class="hx-title"
+                            >Why does the backlog sort by rank and not by date?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 3 months ago</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Plan the first board view · Ended · active 4 months ago"
+                          ><span class="hx-title">Plan the first board view</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-4">ACME-4</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 4 months ago</span><span class="pl tone-ended">Ended</span
+                            ><span class="pl tone-approved">Approved</span></span
+                          ></a
+                        >
+                      </li>
+                      <li class="hx-end" role="note">
+                        <span class="hair" aria-hidden="true"></span
+                        ><span>No older conversations</span
+                        ><span class="hair" aria-hidden="true"></span>
+                      </li>
+                    </ul>
+                  </section>
+                </aside>
+              </div>
+            </div>
+            <div>
+              <div class="stage" data-theme="dark" data-appearance-scope>
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="modechip">Ask about this project</span>
+                  </div>
+                  <section class="hx" aria-label="History">
+                    <button
+                      type="button"
+                      class="hx-head"
+                      aria-expanded="true"
+                      aria-controls="hx-region"
+                    >
+                      <svg class="ic hx-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M12 7v5l4 2" /></svg
+                      ><span>History</span
+                      ><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <ul
+                      class="hx-list"
+                      id="hx-region"
+                      aria-label="Your past conversations in this project"
+                    >
+                      <li>
+                        <a
+                          class="hx-row"
+                          href="#"
+                          aria-label="Why is ACME-212 still blocked? · Open · active 4 minutes ago"
+                          ><span class="hx-title">Why is ACME-212 still blocked?</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-212">ACME-212</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 4 minutes ago</span><span class="pl tone-open">Open</span
+                            ><span class="pl tone-writing">Writing</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row"
+                          href="#"
+                          aria-label="Plan the CSV export for the reports page · Open · active 2 hours ago"
+                          ><span class="hx-title">Plan the CSV export for the reports page</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-188">ACME-188</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 hours ago</span><span class="pl tone-open">Open</span
+                            ><span class="pl tone-planned">Waiting for approval</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended is-current"
+                          href="#"
+                          aria-current="true"
+                          aria-label="What does the billing webhook retry on? · Ended · active yesterday"
+                          ><span class="hx-title">What does the billing webhook retry on?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active yesterday</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Split the onboarding checklist into two stories and move the import step after the workspace step so the first run does not wait on GitHub · Ended · active 2 days ago"
+                          ><span class="hx-title"
+                            >Split the onboarding checklist into two stories and move the import
+                            step after the workspace step so the first run does not wait on
+                            GitHub</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-140 +2">ACME-140 +2</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 days ago</span><span class="pl tone-ended">Ended</span
+                            ><span class="pl tone-approved">Approved</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Which tests cover the sprint burndown chart? · Ended · active 3 days ago"
+                          ><span class="hx-title">Which tests cover the sprint burndown chart?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 3 days ago</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                    </ul>
+                  </section>
+                  <div class="turns" role="log">
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">Y</span>
+                      <div class="bub">What does the billing webhook retry on?</div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true">M</span>
+                      <div class="bub">
+                        It retries on any 5xx and on a timeout, five times with backoff. A 4xx is
+                        not retried.
+                      </div>
+                    </div>
+                    <div class="endmark" role="note">
+                      <span class="hair" aria-hidden="true"></span
+                      ><span class="endchip">Closed</span
+                      ><span>no activity for 30 minutes · yesterday</span
+                      ><span class="hair" aria-hidden="true"></span>
+                    </div>
+                  </div>
+                  <div class="slot">
+                    <span
+                      >Your conversation so far is copied into the new session. Nothing is sent
+                      until you write.</span
+                    ><span class="btn"
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M9.94 14.06 2 22" />
+                        <path
+                          d="m12 2 2.1 6.4L20.5 10.5l-6.4 2.1L12 19l-2.1-6.4L3.5 10.5l6.4-2.1z"
+                        /></svg
+                      >Start a new session</span
+                    >
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">8</span>
+          <h2>The narrow width — the rail at its 352px floor</h2>
+          <span class="cap">truncation</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <div class="stage">
+                <aside class="rail floor" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="modechip">Ask about this project</span>
+                  </div>
+                  <section class="hx" aria-label="History">
+                    <button
+                      type="button"
+                      class="hx-head"
+                      aria-expanded="true"
+                      aria-controls="hx-region"
+                    >
+                      <svg class="ic hx-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M12 7v5l4 2" /></svg
+                      ><span>History</span
+                      ><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <ul
+                      class="hx-list"
+                      id="hx-region"
+                      aria-label="Your past conversations in this project"
+                    >
+                      <li>
+                        <a
+                          class="hx-row is-current"
+                          href="#"
+                          aria-current="true"
+                          aria-label="Why is ACME-212 still blocked? · Open · active 4 minutes ago"
+                          ><span class="hx-title">Why is ACME-212 still blocked?</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-212">ACME-212</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 4 minutes ago</span><span class="pl tone-open">Open</span
+                            ><span class="pl tone-writing">Writing</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row"
+                          href="#"
+                          aria-label="Plan the CSV export for the reports page · Open · active 2 hours ago"
+                          ><span class="hx-title">Plan the CSV export for the reports page</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-188">ACME-188</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 hours ago</span><span class="pl tone-open">Open</span
+                            ><span class="pl tone-planned">Waiting for approval</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="What does the billing webhook retry on? · Ended · active yesterday"
+                          ><span class="hx-title">What does the billing webhook retry on?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active yesterday</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Split the onboarding checklist into two stories and move the import step after the workspace step so the first run does not wait on GitHub · Ended · active 2 days ago"
+                          ><span class="hx-title"
+                            >Split the onboarding checklist into two stories and move the import
+                            step after the workspace step so the first run does not wait on
+                            GitHub</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-140 +2">ACME-140 +2</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 2 days ago</span><span class="pl tone-ended">Ended</span
+                            ><span class="pl tone-approved">Approved</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Which tests cover the sprint burndown chart? · Ended · active 3 days ago"
+                          ><span class="hx-title">Which tests cover the sprint burndown chart?</span
+                          ><span class="hx-meta"
+                            ><span>Whole project</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 3 days ago</span
+                            ><span class="pl tone-ended">Ended</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="Retry policy for webhook deliveries · Ended · active 5 days ago"
+                          ><span class="hx-title">Retry policy for webhook deliveries</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-97">ACME-97</span
+                            ><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>active 5 days ago</span><span class="pl tone-ended">Ended</span
+                            ><span class="pl tone-declined">Declined</span></span
+                          ></a
+                        >
+                      </li>
+                    </ul>
+                  </section>
+                </aside>
+              </div>
+            </div>
+            <div>
+              <p class="note">
+                At 352px the first-turn line truncates with an ellipsis (the full text rides the
+                row’s accessible name), the anchor chip caps at 11rem with its own ellipsis, and the
+                meta line wraps before anything shrinks: the pills drop to a second line rather than
+                clip.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">9</span>
+          <h2>Chinese — the expanded section in zh</h2>
+          <span class="cap">zh</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <div class="stage">
+                <aside class="rail" aria-label="Motir AI">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span
+                    ><span class="modechip">询问此项目</span>
+                  </div>
+                  <section class="hx" aria-label="历史记录">
+                    <button
+                      type="button"
+                      class="hx-head"
+                      aria-expanded="true"
+                      aria-controls="hx-region"
+                    >
+                      <svg class="ic hx-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M12 7v5l4 2" /></svg
+                      ><span>历史记录</span
+                      ><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <ul class="hx-list" id="hx-region" aria-label="你在此项目中的过往对话">
+                      <li>
+                        <a
+                          class="hx-row is-current"
+                          href="#"
+                          aria-current="true"
+                          aria-label="为什么 ACME-212 仍然被阻塞？ · Open · 4分钟前活跃"
+                          ><span class="hx-title">为什么 ACME-212 仍然被阻塞？</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-212">ACME-212</span
+                            ><span class="hx-sep" aria-hidden="true">·</span><span>4分钟前活跃</span
+                            ><span class="pl tone-open">进行中</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row"
+                          href="#"
+                          aria-label="为报表页面规划 CSV 导出 · Open · 2小时前活跃"
+                          ><span class="hx-title">为报表页面规划 CSV 导出</span
+                          ><span class="hx-meta"
+                            ><span class="hx-anchor" title="ACME-188">ACME-188</span
+                            ><span class="hx-sep" aria-hidden="true">·</span><span>2小时前活跃</span
+                            ><span class="pl tone-open">进行中</span
+                            ><span class="pl tone-planned">等待批准</span></span
+                          ></a
+                        >
+                      </li>
+                      <li>
+                        <a
+                          class="hx-row is-ended"
+                          href="#"
+                          aria-label="账单 webhook 会在什么情况下重试？ · Ended · 昨天活跃"
+                          ><span class="hx-title">账单 webhook 会在什么情况下重试？</span
+                          ><span class="hx-meta"
+                            ><span>整个项目</span><span class="hx-sep" aria-hidden="true">·</span
+                            ><span>昨天活跃</span><span class="pl tone-ended">已结束</span></span
+                          ></a
+                        >
+                      </li>
+                      <li class="hx-end" role="note">
+                        <span class="hair" aria-hidden="true"></span><span>没有更早的对话</span
+                        ><span class="hair" aria-hidden="true"></span>
+                      </li>
+                    </ul>
+                  </section>
+                </aside>
+              </div>
+            </div>
+            <div>
+              <p class="note">
+                Every new string is in the notes’ copy index
+                (<code>planningWorkspace.history.*</code>) with its zh twin; the row’s anchor,
+                last-active and plan-state words reuse the Plans page’s shipped
+                <code>aiPlanning.sessions.*</code> keys.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

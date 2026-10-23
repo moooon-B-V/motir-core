@@ -8490,6 +8490,21 @@
       "following": "正在跟随规划者",
       "resume": "跟随规划者",
       "resumedAnnouncement": "已重新跟随规划者"
+    },
+    "history": {
+      "header": "历史记录",
+      "regionAria": "你在此项目中的过往对话",
+      "status": {
+        "open": "进行中",
+        "ended": "已结束"
+      },
+      "loading": "正在加载你的对话…",
+      "loadingMore": "正在加载更多…",
+      "end": "没有更早的对话",
+      "emptyTitle": "还没有对话",
+      "emptyBody": "你在此项目中的提问和开始的规划会列在这里。",
+      "error": "无法加载你的对话。",
+      "rowAria": "{title} · {status} · {when}活跃"
     }
   },
   "codeHealth": {
