@@ -22,7 +22,7 @@ pull request; published by `.github/workflows/release-runner-image.yml` on a
 The fleet consumes a **digest**, never a tag:
 
 ```
-MOTIR_RUNNER_IMAGE=ghcr.io/moooon-b-v/motir-ci-runner@sha256:<64 hex>
+MOTIR_RUNNER_IMAGE=ghcr.io/motir-co/motir-ci-runner@sha256:<64 hex>
 ```
 
 §7.2 of `docs/decisions/ci-runner-fleet.md` requires it: these containers run

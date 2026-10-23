@@ -113,7 +113,7 @@ export function livenessCommandFor(profileId: string): readonly string[] {
 }
 
 /** The published sandbox image repository (public; `fleet-image-pull.md` §0). */
-export const SANDBOX_IMAGE_REPOSITORY = 'ghcr.io/moooon-b-v/motir-sandbox';
+export const SANDBOX_IMAGE_REPOSITORY = 'ghcr.io/motir-co/motir-sandbox';
 
 /** The moving tag a profile's image is published under — pinned to a DIGEST at create (§1). */
 export function sandboxImageTag(profileId: string): string {

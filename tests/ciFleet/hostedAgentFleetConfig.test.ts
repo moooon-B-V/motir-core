@@ -20,13 +20,13 @@ const FLEET_VARS = [
   HOSTED_AGENT_IMAGE_ENV_VAR,
 ];
 
-const DIGEST_IMAGE = 'ghcr.io/moooon-b-v/motir-hosted-agent@sha256:' + 'c'.repeat(64);
+const DIGEST_IMAGE = 'ghcr.io/motir-co/motir-hosted-agent@sha256:' + 'c'.repeat(64);
 
 function configureFlyFleet(): void {
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
   vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly-token');
   vi.stubEnv('FLY_FLEET_APP', 'motir-fleet-app');
-  vi.stubEnv('MOTIR_RUNNER_IMAGE', 'ghcr.io/moooon-b-v/motir-ci-runner@sha256:' + 'a'.repeat(64));
+  vi.stubEnv('MOTIR_RUNNER_IMAGE', 'ghcr.io/motir-co/motir-ci-runner@sha256:' + 'a'.repeat(64));
 }
 
 beforeEach(() => {
@@ -70,7 +70,7 @@ describe('hostedAgentFleetConfig', () => {
 
   it('refuses an image pinned by a tag', () => {
     configureFlyFleet();
-    vi.stubEnv(HOSTED_AGENT_IMAGE_ENV_VAR, 'ghcr.io/moooon-b-v/motir-hosted-agent:latest');
+    vi.stubEnv(HOSTED_AGENT_IMAGE_ENV_VAR, 'ghcr.io/motir-co/motir-hosted-agent:latest');
     expect(() => hostedAgentFleetConfig()).toThrow(/pinned by digest/);
   });
 

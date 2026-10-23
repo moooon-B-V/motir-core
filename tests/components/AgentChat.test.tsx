@@ -125,7 +125,7 @@ function agent(over: Partial<AgentInstanceListItemDto> = {}): AgentInstanceListI
     projectId: 'p1',
     profileId: 'claude',
     profileName: 'Claude Code',
-    imageTag: 'ghcr.io/moooon-b-v/motir-sandbox:claude',
+    imageTag: 'ghcr.io/motir-co/motir-sandbox:claude',
     imageDigest: 'sha256:abc',
     region: 'iad',
     state: 'running',

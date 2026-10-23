@@ -34,7 +34,7 @@ images.
 **What ships today** (rung 2, `motir-core` `origin/main` at `e07585f29`):
 
 1. **An agent is pinned to a digest.** `lib/agentInstances/imageDigest.ts` resolves
-   `ghcr.io/moooon-b-v/motir-sandbox:<profile>` to a digest through the anonymous `probeImagePull`.
+   `ghcr.io/motir-co/motir-sandbox:<profile>` to a digest through the anonymous `probeImagePull`.
    The machine boots `…@sha256:<digest>`. `model AgentInstance` keeps `imageTag` and `imageDigest`,
    and **no version**.
 2. **The images carry no version label.** The Dockerfile's `LABEL` block has a title, description,

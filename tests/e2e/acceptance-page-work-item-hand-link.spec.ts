@@ -2,6 +2,7 @@ import type { Locator, Page, Response } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { expectSettledVisible } from './_helpers/settle';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -187,8 +188,17 @@ const indicatorOf = (page: Page) => toolbarOf(page).getByRole('status');
 const mentionPickerOf = (page: Page) =>
   page.getByRole('listbox', { name: 'Mention a work item', exact: true });
 
-/** The work item's Pages section — found by fragment id, everything inside by role. */
-const pagesSectionOf = (page: Page) => page.locator('#pages');
+/**
+ * The work item's Pages section — found by fragment id, everything inside by role.
+ *
+ * ⚠️ VISIBLE copies only (MOTIR-9353). The page renders the section once
+ * (`LateLowerSections`), but it streams behind the late stack's `<Suspense>`, so the
+ * DOM can briefly hold a SECOND, hidden `#pages` — React's staging block or the
+ * outgoing subtree (`docs/decisions/page-rooted-locator-disposition.md` § *The
+ * defect*). An id locator does not filter on visibility, so a bare `#pages` resolved
+ * both and died on strict mode in a Viewer run that passed on `main` the same hour.
+ */
+const pagesSectionOf = (page: Page) => page.locator('#pages').filter({ visible: true });
 const linkDoorOf = (page: Page) =>
   pagesSectionOf(page).getByRole('button', { name: LINK_DOOR, exact: true });
 const searchBoxOf = (page: Page) =>
@@ -258,6 +268,10 @@ async function openItem(page: Page, item: { id: string; key: string }): Promise<
   expect((await page.goto(`/items/${item.key}`))?.status()).toBe(200);
   expect((await read).status()).toBe(200);
   const section = pagesSectionOf(page);
+  // Settle on ONE visible section before acting on it: a transient VISIBLE double
+  // (the outgoing subtree) passes the filter too, and `scrollIntoViewIfNeeded`
+  // throws on it rather than retrying.
+  await expectSettledVisible(section);
   await expect(section.getByRole('heading', { name: 'Pages', level: 2 })).toBeVisible();
   await section.scrollIntoViewIfNeeded();
   return section;

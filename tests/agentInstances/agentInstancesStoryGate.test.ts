@@ -503,7 +503,7 @@ describe('3b · the edges, staged in the database', () => {
         ownerId: fx.ownerId,
         name,
         profileId: 'claude',
-        imageTag: 'ghcr.io/moooon-b-v/motir-sandbox:claude',
+        imageTag: 'ghcr.io/motir-co/motir-sandbox:claude',
         imageDigest: 'sha256:0',
         region: 'iad',
         state,

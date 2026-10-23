@@ -337,7 +337,7 @@ async function agentFor(fx: Fixture, createdAt: Date) {
       ownerId: fx.ownerId,
       name: `agent-${agentSeq}`,
       profileId: 'claude',
-      imageTag: 'ghcr.io/moooon-b-v/motir-sandbox:claude',
+      imageTag: 'ghcr.io/motir-co/motir-sandbox:claude',
       imageDigest: 'sha256:0',
       region: 'iad',
       state: 'running',

@@ -86,7 +86,7 @@ function createInstance(f: Fixture, over: { name?: string; ownerId?: string } = 
         ownerId: over.ownerId ?? f.ownerId,
         name: over.name ?? 'yue-claude',
         profileId: 'claude',
-        imageTag: 'ghcr.io/moooon-b-v/motir-sandbox:claude',
+        imageTag: 'ghcr.io/motir-co/motir-sandbox:claude',
         imageDigest: 'sha256:' + 'a'.repeat(64),
         region: 'iad',
       },

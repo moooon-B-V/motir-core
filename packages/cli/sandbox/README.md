@@ -41,7 +41,7 @@ docker run --rm -it \
   -v "$PWD:/workspace" \
   -e MOTIR_TOKEN -e MOTIR_SERVER \
   -v "$HOME/.claude:/home/node/.claude:ro" \
-  ghcr.io/moooon-b-v/motir-sandbox:claude \
+  ghcr.io/motir-co/motir-sandbox:claude \
   motir auto --agent "claude --dangerously-skip-permissions"
 ```
 
@@ -99,7 +99,7 @@ before anything fails deeper in.
 
 ## Published images
 
-`ghcr.io/moooon-b-v/motir-sandbox`, one tag per profile plus the agent-less
+`ghcr.io/motir-co/motir-sandbox`, one tag per profile plus the agent-less
 base, built for **linux/amd64 + linux/arm64** (Apple Silicon is a first-class
 BYOK dev machine). Each tag exists in two forms:
 
@@ -117,7 +117,7 @@ docker run --rm -it \
   -v "$PWD:/workspace" \
   -e MOTIR_TOKEN -e MOTIR_SERVER \
   -v "$HOME/.claude:/home/node/.claude:ro" \
-  ghcr.io/moooon-b-v/motir-sandbox@sha256:<digest> \
+  ghcr.io/motir-co/motir-sandbox@sha256:<digest> \
   motir auto --agent "claude --dangerously-skip-permissions"
 ```
 
@@ -138,7 +138,7 @@ fails the release rather than being written. The registry is still the authority
 and still one command away:
 
 ```sh
-docker buildx imagetools inspect ghcr.io/moooon-b-v/motir-sandbox:claude
+docker buildx imagetools inspect ghcr.io/motir-co/motir-sandbox:claude
 ```
 
 <!-- sandbox-digests:release cli-v0.13.1 -->
@@ -163,10 +163,10 @@ with a token minted from the anonymous endpoint — no `Authorization` on the
 token request, so it is the answer a stranger gets, not the publisher's:
 
 ```sh
-TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:moooon-b-v/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:motir-co/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
 curl -sI -H "Authorization: Bearer $TOKEN" \
   -H 'Accept: application/vnd.oci.image.index.v1+json' \
-  https://ghcr.io/v2/moooon-b-v/motir-sandbox/manifests/claude-0.13.1 | grep -i docker-content-digest
+  https://ghcr.io/v2/motir-co/motir-sandbox/manifests/claude-0.13.1 | grep -i docker-content-digest
 ```
 
 Two things CHECKED rather than assumed, by the release lane that wrote this
@@ -176,17 +176,17 @@ differs from its `cli-v0.13.0` row** (9 of 9) — an unchanged digest across a
 version bump would mean a variant did not actually rebuild, which is a finding,
 not a formatting detail.
 
-| Tag                                            | Digest                                                                    |
-| ---------------------------------------------- | ------------------------------------------------------------------------- |
-| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:7275ea88cb5089b44c2154b0b0848da85471e67419ec15c03973396d51a72bcf` |
-| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:594b7e2973ab394afc1729003d5921a470812aa71c98b505918ad42b48a3602c` |
-| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:407935723306a4e7f346d017e4e081f2b2d3a7fcc3ff3c2ced4757f3afef0a05` |
-| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:6ce2e2d87a84a40c1e2bdb0d7386c335b662817ea942b709f218918490367a32` |
-| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:0436bf3474e8990a2644adffd16c7b888a61167679f05c33ff1b414eb9c19cc7` |
-| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:0fee99b3812a79b76640417b86f06ae3c921502cca7c12ced7e7a356d55319b4` |
-| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:4bb71fcc848f5481345ff64406bfcbef3489274ae1dd513ebd64cbe9655c8d8e` |
-| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:b83948a1566ee3a3549e2a40269252578f8a828a97986122f783929e02193c58` |
-| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:6ea4f0e8bf55f03f224f283ef69af4f9388930764e5d550f3e66278688799029` |
+| Tag                                          | Digest                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/motir-co/motir-sandbox:base`        | `sha256:7275ea88cb5089b44c2154b0b0848da85471e67419ec15c03973396d51a72bcf` |
+| `ghcr.io/motir-co/motir-sandbox:claude`      | `sha256:594b7e2973ab394afc1729003d5921a470812aa71c98b505918ad42b48a3602c` |
+| `ghcr.io/motir-co/motir-sandbox:codex`       | `sha256:407935723306a4e7f346d017e4e081f2b2d3a7fcc3ff3c2ced4757f3afef0a05` |
+| `ghcr.io/motir-co/motir-sandbox:opencode`    | `sha256:6ce2e2d87a84a40c1e2bdb0d7386c335b662817ea942b709f218918490367a32` |
+| `ghcr.io/motir-co/motir-sandbox:kimi`        | `sha256:0436bf3474e8990a2644adffd16c7b888a61167679f05c33ff1b414eb9c19cc7` |
+| `ghcr.io/motir-co/motir-sandbox:antigravity` | `sha256:0fee99b3812a79b76640417b86f06ae3c921502cca7c12ced7e7a356d55319b4` |
+| `ghcr.io/motir-co/motir-sandbox:cursor`      | `sha256:4bb71fcc848f5481345ff64406bfcbef3489274ae1dd513ebd64cbe9655c8d8e` |
+| `ghcr.io/motir-co/motir-sandbox:aider`       | `sha256:b83948a1566ee3a3549e2a40269252578f8a828a97986122f783929e02193c58` |
+| `ghcr.io/motir-co/motir-sandbox:goose`       | `sha256:6ea4f0e8bf55f03f224f283ef69af4f9388930764e5d550f3e66278688799029` |
 
 <!-- sandbox-digests:release cli-v0.13.0 -->
 
@@ -212,10 +212,10 @@ with a token minted from the anonymous endpoint — no `Authorization` on the
 token request, so it is the answer a stranger gets, not the publisher's:
 
 ```sh
-TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:moooon-b-v/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:motir-co/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
 curl -sI -H "Authorization: Bearer $TOKEN" \
   -H 'Accept: application/vnd.oci.image.index.v1+json' \
-  https://ghcr.io/v2/moooon-b-v/motir-sandbox/manifests/claude-0.13.0 | grep -i docker-content-digest
+  https://ghcr.io/v2/motir-co/motir-sandbox/manifests/claude-0.13.0 | grep -i docker-content-digest
 ```
 
 Two things CHECKED rather than assumed, by the release lane that wrote this
@@ -225,17 +225,17 @@ differs from its `cli-v0.12.0` row** (9 of 9) — an unchanged digest across a
 version bump would mean a variant did not actually rebuild, which is a finding,
 not a formatting detail.
 
-| Tag                                            | Digest                                                                    |
-| ---------------------------------------------- | ------------------------------------------------------------------------- |
-| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:3c926e6875088d41c3096d59d990021a95b55f4b652577151fe3dee4a5902b87` |
-| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:53ff5f584226c9fa4d0bdcc980ef7fbd64de67b1a07e329c14d20378b7495064` |
-| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:d2883be04617c11babfe6e61e28b185e2d1a3d1956f0af2419abde3bd31e0727` |
-| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:e0091779c989cb21fbe090caee5e92a99049126c5aa2cb97607f01483df976b4` |
-| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:fbd760e11b6dca6575024a09d7a3c11ae2173066fa336b7598a3a687b360f95f` |
-| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:fdd1b5bb4404d9725d44b78e6f5fc7da13a1fa36c0db1c4bbda96448f92bcd52` |
-| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:98db4e2b31cfb45f9bca78395351e82a3172421af6eb8b43d332e0bf84c63d94` |
-| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:bcc478f2979c66212e4e0bd004f77e237e321829df5582abac44b109c181f892` |
-| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:d4b4ffa9183dd55b6817200a2f569cc9778d158a3e4957f65aaa345e56957479` |
+| Tag                                          | Digest                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/motir-co/motir-sandbox:base`        | `sha256:3c926e6875088d41c3096d59d990021a95b55f4b652577151fe3dee4a5902b87` |
+| `ghcr.io/motir-co/motir-sandbox:claude`      | `sha256:53ff5f584226c9fa4d0bdcc980ef7fbd64de67b1a07e329c14d20378b7495064` |
+| `ghcr.io/motir-co/motir-sandbox:codex`       | `sha256:d2883be04617c11babfe6e61e28b185e2d1a3d1956f0af2419abde3bd31e0727` |
+| `ghcr.io/motir-co/motir-sandbox:opencode`    | `sha256:e0091779c989cb21fbe090caee5e92a99049126c5aa2cb97607f01483df976b4` |
+| `ghcr.io/motir-co/motir-sandbox:kimi`        | `sha256:fbd760e11b6dca6575024a09d7a3c11ae2173066fa336b7598a3a687b360f95f` |
+| `ghcr.io/motir-co/motir-sandbox:antigravity` | `sha256:fdd1b5bb4404d9725d44b78e6f5fc7da13a1fa36c0db1c4bbda96448f92bcd52` |
+| `ghcr.io/motir-co/motir-sandbox:cursor`      | `sha256:98db4e2b31cfb45f9bca78395351e82a3172421af6eb8b43d332e0bf84c63d94` |
+| `ghcr.io/motir-co/motir-sandbox:aider`       | `sha256:bcc478f2979c66212e4e0bd004f77e237e321829df5582abac44b109c181f892` |
+| `ghcr.io/motir-co/motir-sandbox:goose`       | `sha256:d4b4ffa9183dd55b6817200a2f569cc9778d158a3e4957f65aaa345e56957479` |
 
 <!-- sandbox-digests:release cli-v0.12.0 -->
 
@@ -261,10 +261,10 @@ with a token minted from the anonymous endpoint — no `Authorization` on the
 token request, so it is the answer a stranger gets, not the publisher's:
 
 ```sh
-TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:moooon-b-v/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:motir-co/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
 curl -sI -H "Authorization: Bearer $TOKEN" \
   -H 'Accept: application/vnd.oci.image.index.v1+json' \
-  https://ghcr.io/v2/moooon-b-v/motir-sandbox/manifests/claude-0.12.0 | grep -i docker-content-digest
+  https://ghcr.io/v2/motir-co/motir-sandbox/manifests/claude-0.12.0 | grep -i docker-content-digest
 ```
 
 Two things CHECKED rather than assumed, by the release lane that wrote this
@@ -274,17 +274,17 @@ differs from its `cli-v0.11.1` row** (9 of 9) — an unchanged digest across a
 version bump would mean a variant did not actually rebuild, which is a finding,
 not a formatting detail.
 
-| Tag                                            | Digest                                                                    |
-| ---------------------------------------------- | ------------------------------------------------------------------------- |
-| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:f4df2b0ae90c6e2c9d34b4772008894d1b6bfd25d1b542a5e944c24ddd6fc90d` |
-| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:1710a703b7c4af579013da389a53b7304e2ac377858248b378fcf24b01f3a7b4` |
-| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:f8f6b4d1d78b6391afb62be6ae7ef04fc958d2dc869d1f542028a30957b91740` |
-| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:4210eb3d52c78a23b75c29ac36efdcc6907b49a90fd74e4cb09586df3285c797` |
-| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:e3b9dc45c11652a0df6996329f353eb8e3bdc2755097f0ba322c270d91d69d7e` |
-| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:03f1957fc4a97d4faec28ff4bfa00177edfaf3d50b5328f4c953832c91d2eeef` |
-| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:8290f433f8a9d6f2b1dc56d44ef791242cbb51876c2b24408fba0479749a88b5` |
-| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:1535285c9646ea58df4500f68300ef06dff775007a0b5986bb6bb6826459400c` |
-| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:917857420aa96932f598b03b3ce28263274e06af22af3aa1ab721489abfe283c` |
+| Tag                                          | Digest                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/motir-co/motir-sandbox:base`        | `sha256:f4df2b0ae90c6e2c9d34b4772008894d1b6bfd25d1b542a5e944c24ddd6fc90d` |
+| `ghcr.io/motir-co/motir-sandbox:claude`      | `sha256:1710a703b7c4af579013da389a53b7304e2ac377858248b378fcf24b01f3a7b4` |
+| `ghcr.io/motir-co/motir-sandbox:codex`       | `sha256:f8f6b4d1d78b6391afb62be6ae7ef04fc958d2dc869d1f542028a30957b91740` |
+| `ghcr.io/motir-co/motir-sandbox:opencode`    | `sha256:4210eb3d52c78a23b75c29ac36efdcc6907b49a90fd74e4cb09586df3285c797` |
+| `ghcr.io/motir-co/motir-sandbox:kimi`        | `sha256:e3b9dc45c11652a0df6996329f353eb8e3bdc2755097f0ba322c270d91d69d7e` |
+| `ghcr.io/motir-co/motir-sandbox:antigravity` | `sha256:03f1957fc4a97d4faec28ff4bfa00177edfaf3d50b5328f4c953832c91d2eeef` |
+| `ghcr.io/motir-co/motir-sandbox:cursor`      | `sha256:8290f433f8a9d6f2b1dc56d44ef791242cbb51876c2b24408fba0479749a88b5` |
+| `ghcr.io/motir-co/motir-sandbox:aider`       | `sha256:1535285c9646ea58df4500f68300ef06dff775007a0b5986bb6bb6826459400c` |
+| `ghcr.io/motir-co/motir-sandbox:goose`       | `sha256:917857420aa96932f598b03b3ce28263274e06af22af3aa1ab721489abfe283c` |
 
 <!-- sandbox-digests:release cli-v0.11.1 -->
 
@@ -310,10 +310,10 @@ with a token minted from the anonymous endpoint — no `Authorization` on the
 token request, so it is the answer a stranger gets, not the publisher's:
 
 ```sh
-TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:moooon-b-v/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:motir-co/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
 curl -sI -H "Authorization: Bearer $TOKEN" \
   -H 'Accept: application/vnd.oci.image.index.v1+json' \
-  https://ghcr.io/v2/moooon-b-v/motir-sandbox/manifests/claude-0.11.1 | grep -i docker-content-digest
+  https://ghcr.io/v2/motir-co/motir-sandbox/manifests/claude-0.11.1 | grep -i docker-content-digest
 ```
 
 Two things CHECKED rather than assumed, by the release lane that wrote this
@@ -323,17 +323,17 @@ differs from its `cli-v0.9.0` row** (9 of 9) — an unchanged digest across a
 version bump would mean a variant did not actually rebuild, which is a finding,
 not a formatting detail.
 
-| Tag                                            | Digest                                                                    |
-| ---------------------------------------------- | ------------------------------------------------------------------------- |
-| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:c383973ad8d36d4cbf8de8c667a44ba895acd3bf52417d73b63d2724a5e4ca77` |
-| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:5a9583786415e2d4d87c4f640d15bd3f3d6a5fbe55053acf060652144b6e5e30` |
-| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:50479c3fb6b8ec3867880ad8dec87c8cc71a49fad5cde031e3db661029705ecc` |
-| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:0db29a92ba66760e83f2d0f3474cdedab1c289f535f2005850c5ff57e442f980` |
-| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:37583af67e32c2731436246c3b1bd10a814857d931eb56e70558e6f95bba9857` |
-| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:2e13b39153ebd801dd11371280d18922712fd0716deaa218638c8515016b91a2` |
-| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:91133afa7cf0d3450b5a902087c22ebe00e58b9cda72ccc77fc764480e197572` |
-| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:e89d1f5bc22ce305daa248b5456b40164b72ea25ed0183b77f24b56e530ea8a5` |
-| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:8bcd74275f5f7fab436dfc6f49be9f239deee019a4fedc3f386d23d46aae5033` |
+| Tag                                          | Digest                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/motir-co/motir-sandbox:base`        | `sha256:c383973ad8d36d4cbf8de8c667a44ba895acd3bf52417d73b63d2724a5e4ca77` |
+| `ghcr.io/motir-co/motir-sandbox:claude`      | `sha256:5a9583786415e2d4d87c4f640d15bd3f3d6a5fbe55053acf060652144b6e5e30` |
+| `ghcr.io/motir-co/motir-sandbox:codex`       | `sha256:50479c3fb6b8ec3867880ad8dec87c8cc71a49fad5cde031e3db661029705ecc` |
+| `ghcr.io/motir-co/motir-sandbox:opencode`    | `sha256:0db29a92ba66760e83f2d0f3474cdedab1c289f535f2005850c5ff57e442f980` |
+| `ghcr.io/motir-co/motir-sandbox:kimi`        | `sha256:37583af67e32c2731436246c3b1bd10a814857d931eb56e70558e6f95bba9857` |
+| `ghcr.io/motir-co/motir-sandbox:antigravity` | `sha256:2e13b39153ebd801dd11371280d18922712fd0716deaa218638c8515016b91a2` |
+| `ghcr.io/motir-co/motir-sandbox:cursor`      | `sha256:91133afa7cf0d3450b5a902087c22ebe00e58b9cda72ccc77fc764480e197572` |
+| `ghcr.io/motir-co/motir-sandbox:aider`       | `sha256:e89d1f5bc22ce305daa248b5456b40164b72ea25ed0183b77f24b56e530ea8a5` |
+| `ghcr.io/motir-co/motir-sandbox:goose`       | `sha256:8bcd74275f5f7fab436dfc6f49be9f239deee019a4fedc3f386d23d46aae5033` |
 
 <!-- sandbox-digests:release cli-v0.9.0 -->
 
@@ -359,10 +359,10 @@ with a token minted from the anonymous endpoint — no `Authorization` on the
 token request, so it is the answer a stranger gets, not the publisher's:
 
 ```sh
-TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:moooon-b-v/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:motir-co/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
 curl -sI -H "Authorization: Bearer $TOKEN" \
   -H 'Accept: application/vnd.oci.image.index.v1+json' \
-  https://ghcr.io/v2/moooon-b-v/motir-sandbox/manifests/claude-0.9.0 | grep -i docker-content-digest
+  https://ghcr.io/v2/motir-co/motir-sandbox/manifests/claude-0.9.0 | grep -i docker-content-digest
 ```
 
 Two things CHECKED rather than assumed, by the release lane that wrote this
@@ -372,17 +372,17 @@ differs from its `cli-v0.8.0` row** (9 of 9) — an unchanged digest across a
 version bump would mean a variant did not actually rebuild, which is a finding,
 not a formatting detail.
 
-| Tag                                            | Digest                                                                    |
-| ---------------------------------------------- | ------------------------------------------------------------------------- |
-| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:9508103c4a12f4b35cc7495dd65b60b73d949cfeb9a59454ac2a472360c453fa` |
-| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:9124810e42305b896c5a808cdf1864f43b7f21ae23e53551ad68a0eef61facba` |
-| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:2a4d293f9c2bddb367f1213d6635df49d746c9b45b1b544e7f3294ae1d6e4041` |
-| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:3590bc9c15ad2995122f1c24e6a19aa4dd3d9dfa643ef5f6de117b9be5746b28` |
-| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:853ed13bd54389d1eee6f172789b8acd497a521d806fd00bb6fb548d7bee945b` |
-| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:dca709bb335f1fe0894c61365808e4eea804597681296cec7146ecda52d8c5b3` |
-| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:8361a914b4304df44e11a1aa56046cbdf27bc062f524cf4334bae6c465398f02` |
-| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:c44578c1b130326ca8d977e23495cafcaa49966cce6f2682e4a9afe1f22844b3` |
-| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:a3f958ff5de5a3bec713f43bcff46dd1498f69c11236e8f1c2a9eb67c922051f` |
+| Tag                                          | Digest                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/motir-co/motir-sandbox:base`        | `sha256:9508103c4a12f4b35cc7495dd65b60b73d949cfeb9a59454ac2a472360c453fa` |
+| `ghcr.io/motir-co/motir-sandbox:claude`      | `sha256:9124810e42305b896c5a808cdf1864f43b7f21ae23e53551ad68a0eef61facba` |
+| `ghcr.io/motir-co/motir-sandbox:codex`       | `sha256:2a4d293f9c2bddb367f1213d6635df49d746c9b45b1b544e7f3294ae1d6e4041` |
+| `ghcr.io/motir-co/motir-sandbox:opencode`    | `sha256:3590bc9c15ad2995122f1c24e6a19aa4dd3d9dfa643ef5f6de117b9be5746b28` |
+| `ghcr.io/motir-co/motir-sandbox:kimi`        | `sha256:853ed13bd54389d1eee6f172789b8acd497a521d806fd00bb6fb548d7bee945b` |
+| `ghcr.io/motir-co/motir-sandbox:antigravity` | `sha256:dca709bb335f1fe0894c61365808e4eea804597681296cec7146ecda52d8c5b3` |
+| `ghcr.io/motir-co/motir-sandbox:cursor`      | `sha256:8361a914b4304df44e11a1aa56046cbdf27bc062f524cf4334bae6c465398f02` |
+| `ghcr.io/motir-co/motir-sandbox:aider`       | `sha256:c44578c1b130326ca8d977e23495cafcaa49966cce6f2682e4a9afe1f22844b3` |
+| `ghcr.io/motir-co/motir-sandbox:goose`       | `sha256:a3f958ff5de5a3bec713f43bcff46dd1498f69c11236e8f1c2a9eb67c922051f` |
 
 <!-- sandbox-digests:release cli-v0.8.0 -->
 
@@ -408,10 +408,10 @@ with a token minted from the anonymous endpoint — no `Authorization` on the
 token request, so it is the answer a stranger gets, not the publisher's:
 
 ```sh
-TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:moooon-b-v/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:motir-co/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
 curl -sI -H "Authorization: Bearer $TOKEN" \
   -H 'Accept: application/vnd.oci.image.index.v1+json' \
-  https://ghcr.io/v2/moooon-b-v/motir-sandbox/manifests/claude-0.8.0 | grep -i docker-content-digest
+  https://ghcr.io/v2/motir-co/motir-sandbox/manifests/claude-0.8.0 | grep -i docker-content-digest
 ```
 
 Two things CHECKED rather than assumed, by the release lane that wrote this
@@ -421,17 +421,17 @@ differs from its `cli-v0.7.0` row** (9 of 9) — an unchanged digest across a
 version bump would mean a variant did not actually rebuild, which is a finding,
 not a formatting detail.
 
-| Tag                                            | Digest                                                                    |
-| ---------------------------------------------- | ------------------------------------------------------------------------- |
-| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:c9f3f4a92db797c947bcf1a0b94de52c7d121d616ab82e4547bae4907d2c345e` |
-| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:a4818309f70e055199c09d49294ee21696eaf087eb604c09d9e124f9015461d5` |
-| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:3bfbc772972b21c108d8fc43116e1e83a245620dccf539738dd37c83cbb5b70a` |
-| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:18cbbf04cf52bf7588662a2c3e42b4b3d0ed7cbba5e80a8ee72ebc70778e1770` |
-| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:9d552be5672602f36a5e97a6dbb3961c3f52fbd8d716ad54ed03a9c40cdf3d29` |
-| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:50241c4f86fb8cfd28593f57081084db7bd337abda5821780aeaec0d218a302b` |
-| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:65486618f4532cfde4c1d7d05fd30e87e6d565a605daf243d93d8efc74dea2e3` |
-| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:ab9ff288c6ad8bd9358e74f1ebe0e0ad52f594de3b90f660e9b57bfbef35cc82` |
-| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:5bcdf6fa8aed094190768f74a37525571dbf993c2471e17bd2405a89331eeb52` |
+| Tag                                          | Digest                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/motir-co/motir-sandbox:base`        | `sha256:c9f3f4a92db797c947bcf1a0b94de52c7d121d616ab82e4547bae4907d2c345e` |
+| `ghcr.io/motir-co/motir-sandbox:claude`      | `sha256:a4818309f70e055199c09d49294ee21696eaf087eb604c09d9e124f9015461d5` |
+| `ghcr.io/motir-co/motir-sandbox:codex`       | `sha256:3bfbc772972b21c108d8fc43116e1e83a245620dccf539738dd37c83cbb5b70a` |
+| `ghcr.io/motir-co/motir-sandbox:opencode`    | `sha256:18cbbf04cf52bf7588662a2c3e42b4b3d0ed7cbba5e80a8ee72ebc70778e1770` |
+| `ghcr.io/motir-co/motir-sandbox:kimi`        | `sha256:9d552be5672602f36a5e97a6dbb3961c3f52fbd8d716ad54ed03a9c40cdf3d29` |
+| `ghcr.io/motir-co/motir-sandbox:antigravity` | `sha256:50241c4f86fb8cfd28593f57081084db7bd337abda5821780aeaec0d218a302b` |
+| `ghcr.io/motir-co/motir-sandbox:cursor`      | `sha256:65486618f4532cfde4c1d7d05fd30e87e6d565a605daf243d93d8efc74dea2e3` |
+| `ghcr.io/motir-co/motir-sandbox:aider`       | `sha256:ab9ff288c6ad8bd9358e74f1ebe0e0ad52f594de3b90f660e9b57bfbef35cc82` |
+| `ghcr.io/motir-co/motir-sandbox:goose`       | `sha256:5bcdf6fa8aed094190768f74a37525571dbf993c2471e17bd2405a89331eeb52` |
 
 <!-- sandbox-digests:release cli-v0.7.0 -->
 
@@ -457,10 +457,10 @@ with a token minted from the anonymous endpoint — no `Authorization` on the
 token request, so it is the answer a stranger gets, not the publisher's:
 
 ```sh
-TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:moooon-b-v/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:motir-co/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
 curl -sI -H "Authorization: Bearer $TOKEN" \
   -H 'Accept: application/vnd.oci.image.index.v1+json' \
-  https://ghcr.io/v2/moooon-b-v/motir-sandbox/manifests/claude-0.7.0 | grep -i docker-content-digest
+  https://ghcr.io/v2/motir-co/motir-sandbox/manifests/claude-0.7.0 | grep -i docker-content-digest
 ```
 
 Two things CHECKED rather than assumed, by the release lane that wrote this
@@ -470,17 +470,17 @@ differs from its `cli-v0.6.0` row** (9 of 9) — an unchanged digest across a
 version bump would mean a variant did not actually rebuild, which is a finding,
 not a formatting detail.
 
-| Tag                                            | Digest                                                                    |
-| ---------------------------------------------- | ------------------------------------------------------------------------- |
-| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:120f90cc92008e54497d5013b3a14ecccec6d4d4bd80f06705070c1b8635b505` |
-| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:193902fb6e811239504f011f0b626c05295596412710ddd7bf15b8b3c9afbb3d` |
-| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:84da208e6207c4a1f777168f49eaef654b812e0c46f000bf21c2053a79de845b` |
-| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:3cc98365c466d42c01e72bd1b0b9d48081d4a5aeb048a54ec61b1ae3d590b26e` |
-| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:b34e4cccc60afcd4b371a1f48f2094b8c7f797519c77ef02c3920214bf38a072` |
-| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:c56e2eca460b6dc4e5a08934ce967103033146145a3b8657ad8d1b4b361e217d` |
-| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:b1e5db49c9dea0fff6203b4470fe1ae0b1c0a57019dca9bf344e52b0717605b7` |
-| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:3f64ef5f9add480cdaded6d24a68acc8269814a98acf1cd91f8fde0064d58b21` |
-| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:4bc52567af985c116d75451465ff085a4b47a64244960a42b09830bee7ac2be1` |
+| Tag                                          | Digest                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/motir-co/motir-sandbox:base`        | `sha256:120f90cc92008e54497d5013b3a14ecccec6d4d4bd80f06705070c1b8635b505` |
+| `ghcr.io/motir-co/motir-sandbox:claude`      | `sha256:193902fb6e811239504f011f0b626c05295596412710ddd7bf15b8b3c9afbb3d` |
+| `ghcr.io/motir-co/motir-sandbox:codex`       | `sha256:84da208e6207c4a1f777168f49eaef654b812e0c46f000bf21c2053a79de845b` |
+| `ghcr.io/motir-co/motir-sandbox:opencode`    | `sha256:3cc98365c466d42c01e72bd1b0b9d48081d4a5aeb048a54ec61b1ae3d590b26e` |
+| `ghcr.io/motir-co/motir-sandbox:kimi`        | `sha256:b34e4cccc60afcd4b371a1f48f2094b8c7f797519c77ef02c3920214bf38a072` |
+| `ghcr.io/motir-co/motir-sandbox:antigravity` | `sha256:c56e2eca460b6dc4e5a08934ce967103033146145a3b8657ad8d1b4b361e217d` |
+| `ghcr.io/motir-co/motir-sandbox:cursor`      | `sha256:b1e5db49c9dea0fff6203b4470fe1ae0b1c0a57019dca9bf344e52b0717605b7` |
+| `ghcr.io/motir-co/motir-sandbox:aider`       | `sha256:3f64ef5f9add480cdaded6d24a68acc8269814a98acf1cd91f8fde0064d58b21` |
+| `ghcr.io/motir-co/motir-sandbox:goose`       | `sha256:4bc52567af985c116d75451465ff085a4b47a64244960a42b09830bee7ac2be1` |
 
 <!-- sandbox-digests:release cli-v0.6.0 -->
 
@@ -506,10 +506,10 @@ with a token minted from the anonymous endpoint — no `Authorization` on the
 token request, so it is the answer a stranger gets, not the publisher's:
 
 ```sh
-TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:moooon-b-v/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:motir-co/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
 curl -sI -H "Authorization: Bearer $TOKEN" \
   -H 'Accept: application/vnd.oci.image.index.v1+json' \
-  https://ghcr.io/v2/moooon-b-v/motir-sandbox/manifests/claude-0.6.0 | grep -i docker-content-digest
+  https://ghcr.io/v2/motir-co/motir-sandbox/manifests/claude-0.6.0 | grep -i docker-content-digest
 ```
 
 Two things CHECKED rather than assumed, by the release lane that wrote this
@@ -519,17 +519,17 @@ differs from its `cli-v0.5.1` row** (9 of 9) — an unchanged digest across a
 version bump would mean a variant did not actually rebuild, which is a finding,
 not a formatting detail.
 
-| Tag                                            | Digest                                                                    |
-| ---------------------------------------------- | ------------------------------------------------------------------------- |
-| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:1219b9f93d16f907f363f8948d14b1ea0658f2c80dc381aa6a3a3f420f57ac1a` |
-| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:f05759631bc44b7595b2e25c78562c047d6d951282cfdfc90e11180570c24ac6` |
-| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:e97c5de30d17bae9ec4cd61a9a6da23b9b014cb08ada789b111781dc5bc80552` |
-| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:69531ab96bce16494abbb3c4daaa3b60587d400a69587cbe14a11913d3b2f5b4` |
-| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:f71e5b61ffeb4f37836d4fd85978b0b35cb1122cc2d3a7cda7126ab656878b77` |
-| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:9476b220719e01a678e4c36eec623d9de4020fb3ec3b21558a2068e3a9c2fd10` |
-| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:6321c595ba363dbe8783d6367fcaa19dc655a426cd879e35915a689dedd459f3` |
-| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:d022566c3e9e6ef6cc797018391ab72ae04a830ed271f0995854b629ab32aa67` |
-| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:a8f0f7577b24e00110b74946f4cd0bfd1186b358ffe6d2b1da08d9aba294d38d` |
+| Tag                                          | Digest                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/motir-co/motir-sandbox:base`        | `sha256:1219b9f93d16f907f363f8948d14b1ea0658f2c80dc381aa6a3a3f420f57ac1a` |
+| `ghcr.io/motir-co/motir-sandbox:claude`      | `sha256:f05759631bc44b7595b2e25c78562c047d6d951282cfdfc90e11180570c24ac6` |
+| `ghcr.io/motir-co/motir-sandbox:codex`       | `sha256:e97c5de30d17bae9ec4cd61a9a6da23b9b014cb08ada789b111781dc5bc80552` |
+| `ghcr.io/motir-co/motir-sandbox:opencode`    | `sha256:69531ab96bce16494abbb3c4daaa3b60587d400a69587cbe14a11913d3b2f5b4` |
+| `ghcr.io/motir-co/motir-sandbox:kimi`        | `sha256:f71e5b61ffeb4f37836d4fd85978b0b35cb1122cc2d3a7cda7126ab656878b77` |
+| `ghcr.io/motir-co/motir-sandbox:antigravity` | `sha256:9476b220719e01a678e4c36eec623d9de4020fb3ec3b21558a2068e3a9c2fd10` |
+| `ghcr.io/motir-co/motir-sandbox:cursor`      | `sha256:6321c595ba363dbe8783d6367fcaa19dc655a426cd879e35915a689dedd459f3` |
+| `ghcr.io/motir-co/motir-sandbox:aider`       | `sha256:d022566c3e9e6ef6cc797018391ab72ae04a830ed271f0995854b629ab32aa67` |
+| `ghcr.io/motir-co/motir-sandbox:goose`       | `sha256:a8f0f7577b24e00110b74946f4cd0bfd1186b358ffe6d2b1da08d9aba294d38d` |
 
 <!-- sandbox-digests:release cli-v0.5.1 -->
 
@@ -555,10 +555,10 @@ with a token minted from the anonymous endpoint — no `Authorization` on the
 token request, so it is the answer a stranger gets, not the publisher's:
 
 ```sh
-TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:moooon-b-v/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:motir-co/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
 curl -sI -H "Authorization: Bearer $TOKEN" \
   -H 'Accept: application/vnd.oci.image.index.v1+json' \
-  https://ghcr.io/v2/moooon-b-v/motir-sandbox/manifests/claude-0.5.1 | grep -i docker-content-digest
+  https://ghcr.io/v2/motir-co/motir-sandbox/manifests/claude-0.5.1 | grep -i docker-content-digest
 ```
 
 Two things CHECKED rather than assumed, by the release lane that wrote this
@@ -568,17 +568,17 @@ differs from its `cli-v0.4.0` row** (9 of 9) — an unchanged digest across a
 version bump would mean a variant did not actually rebuild, which is a finding,
 not a formatting detail.
 
-| Tag                                            | Digest                                                                    |
-| ---------------------------------------------- | ------------------------------------------------------------------------- |
-| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:fdd126c14ed70a1a582517aa511510d26c8fb19ab42d1bc56f06f3fcbe555cc2` |
-| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:a4c4f0079688585ad2a1474ce8399e51ce2723f7ce671808b7d06de30ffb8807` |
-| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:05125001a2c93f50a50d4f5e29a30850b2bff9b5adb4363a20a2155f3419c625` |
-| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:f38f5cb40ba573316cbda80850337f08e4f348b07b634a376b459df4d42e4f8e` |
-| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:2c2019e2e84e61d7aedf150620dba6116d552b4aa2ddf9eef50e65df567c9649` |
-| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:0c70a825a6163bcfffe10c1e554570aeb768af25448f2f9680ef4e0ad29d06e1` |
-| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:5ff54021e619b8388c6664204f638a80378f4f9bace423affb4482d5c077a02f` |
-| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:e36abb1db91b727e46349c362e44af828270e78d0b5ea1840dfe96e8c53d9925` |
-| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:9e7ef6667e77a0e06b8400e091b018064060f5a4915b21c1f9f43c501147864e` |
+| Tag                                          | Digest                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/motir-co/motir-sandbox:base`        | `sha256:fdd126c14ed70a1a582517aa511510d26c8fb19ab42d1bc56f06f3fcbe555cc2` |
+| `ghcr.io/motir-co/motir-sandbox:claude`      | `sha256:a4c4f0079688585ad2a1474ce8399e51ce2723f7ce671808b7d06de30ffb8807` |
+| `ghcr.io/motir-co/motir-sandbox:codex`       | `sha256:05125001a2c93f50a50d4f5e29a30850b2bff9b5adb4363a20a2155f3419c625` |
+| `ghcr.io/motir-co/motir-sandbox:opencode`    | `sha256:f38f5cb40ba573316cbda80850337f08e4f348b07b634a376b459df4d42e4f8e` |
+| `ghcr.io/motir-co/motir-sandbox:kimi`        | `sha256:2c2019e2e84e61d7aedf150620dba6116d552b4aa2ddf9eef50e65df567c9649` |
+| `ghcr.io/motir-co/motir-sandbox:antigravity` | `sha256:0c70a825a6163bcfffe10c1e554570aeb768af25448f2f9680ef4e0ad29d06e1` |
+| `ghcr.io/motir-co/motir-sandbox:cursor`      | `sha256:5ff54021e619b8388c6664204f638a80378f4f9bace423affb4482d5c077a02f` |
+| `ghcr.io/motir-co/motir-sandbox:aider`       | `sha256:e36abb1db91b727e46349c362e44af828270e78d0b5ea1840dfe96e8c53d9925` |
+| `ghcr.io/motir-co/motir-sandbox:goose`       | `sha256:9e7ef6667e77a0e06b8400e091b018064060f5a4915b21c1f9f43c501147864e` |
 
 <!-- sandbox-digests:release cli-v0.4.0 -->
 
@@ -604,10 +604,10 @@ with a token minted from the anonymous endpoint — no `Authorization` on the
 token request, so it is the answer a stranger gets, not the publisher's:
 
 ```sh
-TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:moooon-b-v/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:motir-co/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
 curl -sI -H "Authorization: Bearer $TOKEN" \
   -H 'Accept: application/vnd.oci.image.index.v1+json' \
-  https://ghcr.io/v2/moooon-b-v/motir-sandbox/manifests/claude-0.4.0 | grep -i docker-content-digest
+  https://ghcr.io/v2/motir-co/motir-sandbox/manifests/claude-0.4.0 | grep -i docker-content-digest
 ```
 
 Two things CHECKED rather than assumed, by the release lane that wrote this
@@ -617,17 +617,17 @@ differs from its `cli-v0.3.0` row** (9 of 9) — an unchanged digest across a
 version bump would mean a variant did not actually rebuild, which is a finding,
 not a formatting detail.
 
-| Tag                                            | Digest                                                                    |
-| ---------------------------------------------- | ------------------------------------------------------------------------- |
-| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:f9cbcb5b8dfa560629c198a3c042235bb881a1669d3fa000824618a655f9259c` |
-| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:f602e5b9dec6cfc0b372dff83bc47b39cc2f56382ef34154a182c02d536a5c07` |
-| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:f8d508ba42a608acc23d86414e5428bc43bfc0f520f24766ce084b17961bad0f` |
-| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:555633be498751ad1ec02bd2212eb93b086125cffa0fe0ac84fa2e85ebd47cc5` |
-| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:a93952c5247d6cf37591928490db8c678a2698e94bde7b61b50bf7ad2854ec15` |
-| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:9513e74d5453587f7071e100ee69a542b3a37c51e4be0cac0ead8aed4c770f62` |
-| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:981b76ee2da55226b30977cd183c62d063594e5086542e4b8b8675f2271271b0` |
-| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:6b95949017c8a12d996da37e6619ffbbb9f359c0f8ef71b63c5de22e4e8f1bed` |
-| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:c7257e4727d5c4301fcfcb737baccb7583d532a2f8d23ef5d7272073f0d3d9cd` |
+| Tag                                          | Digest                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/motir-co/motir-sandbox:base`        | `sha256:f9cbcb5b8dfa560629c198a3c042235bb881a1669d3fa000824618a655f9259c` |
+| `ghcr.io/motir-co/motir-sandbox:claude`      | `sha256:f602e5b9dec6cfc0b372dff83bc47b39cc2f56382ef34154a182c02d536a5c07` |
+| `ghcr.io/motir-co/motir-sandbox:codex`       | `sha256:f8d508ba42a608acc23d86414e5428bc43bfc0f520f24766ce084b17961bad0f` |
+| `ghcr.io/motir-co/motir-sandbox:opencode`    | `sha256:555633be498751ad1ec02bd2212eb93b086125cffa0fe0ac84fa2e85ebd47cc5` |
+| `ghcr.io/motir-co/motir-sandbox:kimi`        | `sha256:a93952c5247d6cf37591928490db8c678a2698e94bde7b61b50bf7ad2854ec15` |
+| `ghcr.io/motir-co/motir-sandbox:antigravity` | `sha256:9513e74d5453587f7071e100ee69a542b3a37c51e4be0cac0ead8aed4c770f62` |
+| `ghcr.io/motir-co/motir-sandbox:cursor`      | `sha256:981b76ee2da55226b30977cd183c62d063594e5086542e4b8b8675f2271271b0` |
+| `ghcr.io/motir-co/motir-sandbox:aider`       | `sha256:6b95949017c8a12d996da37e6619ffbbb9f359c0f8ef71b63c5de22e4e8f1bed` |
+| `ghcr.io/motir-co/motir-sandbox:goose`       | `sha256:c7257e4727d5c4301fcfcb737baccb7583d532a2f8d23ef5d7272073f0d3d9cd` |
 
 <!-- sandbox-digests:release cli-v0.3.0 -->
 
@@ -658,10 +658,10 @@ with a token minted from the anonymous endpoint — no `Authorization` on the to
 request, so it is the answer a stranger gets, not the publisher's:
 
 ```sh
-TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:moooon-b-v/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:motir-co/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
 curl -sI -H "Authorization: Bearer $TOKEN" \
   -H 'Accept: application/vnd.oci.image.index.v1+json' \
-  https://ghcr.io/v2/moooon-b-v/motir-sandbox/manifests/claude-0.3.0 | grep -i docker-content-digest
+  https://ghcr.io/v2/motir-co/motir-sandbox/manifests/claude-0.3.0 | grep -i docker-content-digest
 ```
 
 Two things that check rather than assume, both verified at transcription time:
@@ -671,17 +671,17 @@ each moving `:<profile>` tag resolves to the **same** manifest as its
 mean a variant did not actually rebuild, which is a finding, not a formatting
 detail.
 
-| Tag                                            | Digest                                                                    |
-| ---------------------------------------------- | ------------------------------------------------------------------------- |
-| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:f44c37d71abc267789ac8835d88846b50bd63c498d6729af25062c77035d6cfa` |
-| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:9d7222cb3700a96effe39c1f0cc7074df79138ee795b396bafb4bef1d4395f7e` |
-| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:ef3e1465f4d76e5a0f5fed6047486462078ef3c44e45f3c3bbd78a1a1a4bc2b8` |
-| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:bf3baebd0f4c2e337a58eaa3a9a505775548355f2b5396eaceb7725c2c5f433f` |
-| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:d705e5f6c8c1065676b3e1a9167b2389c60564711b712056636594eef8437cc8` |
-| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:00d8709bbcbcf00e39051cb0cf7feac2348f7227c79f170931408344bc66ffb2` |
-| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:7f0aa72d0edfaa232476a5584393c7e467edafb766fccc37554043619a055e2f` |
-| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:f24cd73e6dde5d9a17035e18eeb7ab460724616227fb688c0f5c01dab3c914fb` |
-| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:1439af41696f590095f3d7444f2bd0958cbff7b5bc8adddd5f61cf00213a7915` |
+| Tag                                          | Digest                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/motir-co/motir-sandbox:base`        | `sha256:f44c37d71abc267789ac8835d88846b50bd63c498d6729af25062c77035d6cfa` |
+| `ghcr.io/motir-co/motir-sandbox:claude`      | `sha256:9d7222cb3700a96effe39c1f0cc7074df79138ee795b396bafb4bef1d4395f7e` |
+| `ghcr.io/motir-co/motir-sandbox:codex`       | `sha256:ef3e1465f4d76e5a0f5fed6047486462078ef3c44e45f3c3bbd78a1a1a4bc2b8` |
+| `ghcr.io/motir-co/motir-sandbox:opencode`    | `sha256:bf3baebd0f4c2e337a58eaa3a9a505775548355f2b5396eaceb7725c2c5f433f` |
+| `ghcr.io/motir-co/motir-sandbox:kimi`        | `sha256:d705e5f6c8c1065676b3e1a9167b2389c60564711b712056636594eef8437cc8` |
+| `ghcr.io/motir-co/motir-sandbox:antigravity` | `sha256:00d8709bbcbcf00e39051cb0cf7feac2348f7227c79f170931408344bc66ffb2` |
+| `ghcr.io/motir-co/motir-sandbox:cursor`      | `sha256:7f0aa72d0edfaa232476a5584393c7e467edafb766fccc37554043619a055e2f` |
+| `ghcr.io/motir-co/motir-sandbox:aider`       | `sha256:f24cd73e6dde5d9a17035e18eeb7ab460724616227fb688c0f5c01dab3c914fb` |
+| `ghcr.io/motir-co/motir-sandbox:goose`       | `sha256:1439af41696f590095f3d7444f2bd0958cbff7b5bc8adddd5f61cf00213a7915` |
 
 ### Release `cli-v0.2.0`
 
@@ -699,10 +699,10 @@ with a token minted from the anonymous endpoint — no `Authorization` on the to
 request, so it is the answer a stranger gets, not the publisher's:
 
 ```sh
-TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:moooon-b-v/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:motir-co/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
 curl -sI -H "Authorization: Bearer $TOKEN" \
   -H 'Accept: application/vnd.oci.image.index.v1+json' \
-  https://ghcr.io/v2/moooon-b-v/motir-sandbox/manifests/claude-0.2.0 | grep -i docker-content-digest
+  https://ghcr.io/v2/motir-co/motir-sandbox/manifests/claude-0.2.0 | grep -i docker-content-digest
 ```
 
 Two things that check rather than assume, both verified at transcription time:
@@ -712,17 +712,17 @@ each moving `:<profile>` tag resolves to the **same** manifest as its
 mean a variant did not actually rebuild, which is a finding, not a formatting
 detail.
 
-| Tag                                            | Digest                                                                    |
-| ---------------------------------------------- | ------------------------------------------------------------------------- |
-| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:518925114ac46bd3dbb061f947422b74773bbf83ee3a6a636d683a1f52ef6190` |
-| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:44d90222195f6bb6665fd8a9bf84bd631db41d39a1b77af473cb9878dc853904` |
-| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:74a585bbb4c8d0d228a2bc6e3b48d165f75e2ff612e0b62a443ed1ba6d9ef25c` |
-| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:594adcab904b75ff96b12f8120f2ce5aceb26b6a1cd941ecfdbf697d9986d783` |
-| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:bb3e40d8588c042b5e4bf990cdebee506c2e5f78255e483e58f51760a9230ecb` |
-| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:5609b0375bbf2e4b24f769b0884e8d1bfc0a822b204aab5f475cb5aaa6913d9b` |
-| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:534522c6571904961a5384252b90b14cb4770fbdf2dfe2f8797560bcc5a21bfd` |
-| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:846876bb174fd84fa353a57bc2a7b27748a0abac0b84e2d0e7377e6f5922f915` |
-| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:2a6a1f547fe4a918a967d0a98b592e7b2659d7b5e31f03996ab9ce1c92a24f95` |
+| Tag                                          | Digest                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/motir-co/motir-sandbox:base`        | `sha256:518925114ac46bd3dbb061f947422b74773bbf83ee3a6a636d683a1f52ef6190` |
+| `ghcr.io/motir-co/motir-sandbox:claude`      | `sha256:44d90222195f6bb6665fd8a9bf84bd631db41d39a1b77af473cb9878dc853904` |
+| `ghcr.io/motir-co/motir-sandbox:codex`       | `sha256:74a585bbb4c8d0d228a2bc6e3b48d165f75e2ff612e0b62a443ed1ba6d9ef25c` |
+| `ghcr.io/motir-co/motir-sandbox:opencode`    | `sha256:594adcab904b75ff96b12f8120f2ce5aceb26b6a1cd941ecfdbf697d9986d783` |
+| `ghcr.io/motir-co/motir-sandbox:kimi`        | `sha256:bb3e40d8588c042b5e4bf990cdebee506c2e5f78255e483e58f51760a9230ecb` |
+| `ghcr.io/motir-co/motir-sandbox:antigravity` | `sha256:5609b0375bbf2e4b24f769b0884e8d1bfc0a822b204aab5f475cb5aaa6913d9b` |
+| `ghcr.io/motir-co/motir-sandbox:cursor`      | `sha256:534522c6571904961a5384252b90b14cb4770fbdf2dfe2f8797560bcc5a21bfd` |
+| `ghcr.io/motir-co/motir-sandbox:aider`       | `sha256:846876bb174fd84fa353a57bc2a7b27748a0abac0b84e2d0e7377e6f5922f915` |
+| `ghcr.io/motir-co/motir-sandbox:goose`       | `sha256:2a6a1f547fe4a918a967d0a98b592e7b2659d7b5e31f03996ab9ce1c92a24f95` |
 
 ### Release `cli-v0.1.1`
 
@@ -734,34 +734,34 @@ is for and why the immutable twin exists. Every digest below differs from its
 `cli-v0.1.0` row, which is the whole point of the release — see [Current, and
 asserted to be](#current-and-asserted-to-be-motir-2131).
 
-| Tag                                            | Digest                                                                    |
-| ---------------------------------------------- | ------------------------------------------------------------------------- |
-| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:f58990cf375dbe35c746f57e44bf47430f16089d4d21b0528f94e251358fe21a` |
-| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:aabc233887475ef147e24beb8f0703964e516087a2fc0988c7b87f470df0dfcc` |
-| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:a39149a096900db72a39bc5d012284a09e9481aade9f573a3751f6a4cdb71532` |
-| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:dda49f319f7b29b392996e0cba7ed81afa7c6018067bbce7c963e2a83b2d04a0` |
-| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:74b43a68481927a908dd0e84bb7e664d395d7bec34eea630e8667286e1caf6f4` |
-| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:f1a826c558a1eaf299b10256d7ce8250be35e7c17a648017d0b14d90fb6aec91` |
-| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:20e6ed2c3781b590a0e465e6bb7731da5d82319a2ee08affc37d6254c3eee8c0` |
-| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:1ae5866f83e9c36bfbb1ae2cd5f07dc0bbbc5013081e25cdfab2e7e8c360308b` |
-| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:f9fdbbcf3588dda3b84cb3e975f5c654d8d0e45558b0350776f73f36ccbccb41` |
+| Tag                                          | Digest                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/motir-co/motir-sandbox:base`        | `sha256:f58990cf375dbe35c746f57e44bf47430f16089d4d21b0528f94e251358fe21a` |
+| `ghcr.io/motir-co/motir-sandbox:claude`      | `sha256:aabc233887475ef147e24beb8f0703964e516087a2fc0988c7b87f470df0dfcc` |
+| `ghcr.io/motir-co/motir-sandbox:codex`       | `sha256:a39149a096900db72a39bc5d012284a09e9481aade9f573a3751f6a4cdb71532` |
+| `ghcr.io/motir-co/motir-sandbox:opencode`    | `sha256:dda49f319f7b29b392996e0cba7ed81afa7c6018067bbce7c963e2a83b2d04a0` |
+| `ghcr.io/motir-co/motir-sandbox:kimi`        | `sha256:74b43a68481927a908dd0e84bb7e664d395d7bec34eea630e8667286e1caf6f4` |
+| `ghcr.io/motir-co/motir-sandbox:antigravity` | `sha256:f1a826c558a1eaf299b10256d7ce8250be35e7c17a648017d0b14d90fb6aec91` |
+| `ghcr.io/motir-co/motir-sandbox:cursor`      | `sha256:20e6ed2c3781b590a0e465e6bb7731da5d82319a2ee08affc37d6254c3eee8c0` |
+| `ghcr.io/motir-co/motir-sandbox:aider`       | `sha256:1ae5866f83e9c36bfbb1ae2cd5f07dc0bbbc5013081e25cdfab2e7e8c360308b` |
+| `ghcr.io/motir-co/motir-sandbox:goose`       | `sha256:f9fdbbcf3588dda3b84cb3e975f5c654d8d0e45558b0350776f73f36ccbccb41` |
 
 ### Release `cli-v0.1.0`
 
 ([run 30547054641](https://github.com/moooon-B-V/motir-core/actions/runs/30547054641)).
 Each row's immutable twin — `:<profile>-0.1.0` — points at the same manifest.
 
-| Tag                                            | Digest                                                                    |
-| ---------------------------------------------- | ------------------------------------------------------------------------- |
-| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:292289b41e97acc93f8f336ca31d4146a25941036e0199ca8e5e9e931262066e` |
-| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:be09575019378b707e229808a7d832f063afe6515dfe325371cf4b13f85362be` |
-| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:f1212309ebbd945cfb9cff398565e78f77225472defece899ccf311d0cbef0e6` |
-| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:9a1f012847795029ffe5b015f320fc1485e658cd693adbd33bcad0e6b580ba4b` |
-| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:e0aec4f3908fb64e60bda93ce260e0f598f6c7a502b3bb764aef5dc0f5cdc561` |
-| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:3e0a1e5600ec86b9f7583f918be5ee5445caf75da85210b8bcf6abfd51be8496` |
-| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:0955c69d320cc26af0882cc93205f2d38ac82770b963cec5076d714666d17b3c` |
-| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:dfbb31dd911a27b48d910a273a93980c5ff510c197b1c98de8130d6845265c9c` |
-| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:57d6e0e0024f3e8f57490d7e782e3745e7e399f5f1f1bd5f5af0a26fc49f38ac` |
+| Tag                                          | Digest                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/motir-co/motir-sandbox:base`        | `sha256:292289b41e97acc93f8f336ca31d4146a25941036e0199ca8e5e9e931262066e` |
+| `ghcr.io/motir-co/motir-sandbox:claude`      | `sha256:be09575019378b707e229808a7d832f063afe6515dfe325371cf4b13f85362be` |
+| `ghcr.io/motir-co/motir-sandbox:codex`       | `sha256:f1212309ebbd945cfb9cff398565e78f77225472defece899ccf311d0cbef0e6` |
+| `ghcr.io/motir-co/motir-sandbox:opencode`    | `sha256:9a1f012847795029ffe5b015f320fc1485e658cd693adbd33bcad0e6b580ba4b` |
+| `ghcr.io/motir-co/motir-sandbox:kimi`        | `sha256:e0aec4f3908fb64e60bda93ce260e0f598f6c7a502b3bb764aef5dc0f5cdc561` |
+| `ghcr.io/motir-co/motir-sandbox:antigravity` | `sha256:3e0a1e5600ec86b9f7583f918be5ee5445caf75da85210b8bcf6abfd51be8496` |
+| `ghcr.io/motir-co/motir-sandbox:cursor`      | `sha256:0955c69d320cc26af0882cc93205f2d38ac82770b963cec5076d714666d17b3c` |
+| `ghcr.io/motir-co/motir-sandbox:aider`       | `sha256:dfbb31dd911a27b48d910a273a93980c5ff510c197b1c98de8130d6845265c9c` |
+| `ghcr.io/motir-co/motir-sandbox:goose`       | `sha256:57d6e0e0024f3e8f57490d7e782e3745e7e399f5f1f1bd5f5af0a26fc49f38ac` |
 
 ### Public, and asserted to be (MOTIR-2010)
 
@@ -787,8 +787,8 @@ _that_ fails — a broken probe answers "private" to everything, and "private" i
 the answer it is hunting.
 
 **It is ONE package, not nine.** Every profile is a TAG in the single OCI
-repository `moooon-b-v/motir-sandbox` — the registry says so itself, issuing the
-same `scope="repository:moooon-b-v/motir-sandbox:pull"` challenge for `:claude`,
+repository `motir-co/motir-sandbox` — the registry says so itself, issuing the
+same `scope="repository:motir-co/motir-sandbox:pull"` challenge for `:claude`,
 `:codex` and `:base` alike. GHCR's visibility is a property of the package, so
 one setting governs all eighteen tags. (Useful to know before touching it: the
 public-visibility flip is UI-only and **irreversible** — see
@@ -800,7 +800,7 @@ one either way:
 
 ```sh
 node packages/cli/sandbox/smoke/assert-public.mjs \
-  --ref ghcr.io/moooon-b-v/motir-sandbox:claude
+  --ref ghcr.io/motir-co/motir-sandbox:claude
 ```
 
 ### Current, and asserted to be (MOTIR-2131)
@@ -1013,7 +1013,7 @@ block and pin the published image instead, which needs no checkout at all:
 
 ```jsonc
 {
-  "image": "ghcr.io/moooon-b-v/motir-sandbox@sha256:<digest>",
+  "image": "ghcr.io/motir-co/motir-sandbox@sha256:<digest>",
   // …the same mounts / workspaceFolder the committed file carries
 }
 ```

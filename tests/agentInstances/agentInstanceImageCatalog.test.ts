@@ -300,7 +300,7 @@ describe('the live registry (Q1) — GHCR read through the orchestrator', () => 
     registryCalls.listImageTags = async () => ({
       ok: true,
       registry: 'ghcr.io',
-      repository: 'moooon-b-v/motir-sandbox',
+      repository: 'motir-co/motir-sandbox',
       tags: ['claude', 'claude-0.4.0', 'claude-0.5.0'],
     });
     registryCalls.probeImagePull = async (reference) => ({
@@ -325,7 +325,7 @@ describe('the live registry (Q1) — GHCR read through the orchestrator', () => 
     registryCalls.listImageTags = async () => ({
       ok: true,
       registry: 'ghcr.io',
-      repository: 'moooon-b-v/motir-sandbox',
+      repository: 'motir-co/motir-sandbox',
       tags: ['claude-0.5.0'],
     });
     registryCalls.probeImagePull = async (reference) => ({

@@ -224,12 +224,12 @@ describe('create', () => {
     const dto = await create();
 
     expect(dto).toMatchObject({ name: 'yue-claude', profileId: 'claude', state: 'running' });
-    expect(dto.imageTag).toBe('ghcr.io/moooon-b-v/motir-sandbox:claude');
+    expect(dto.imageTag).toBe('ghcr.io/motir-co/motir-sandbox:claude');
     expect(dto.imageDigest).toMatch(/^sha256:[0-9a-f]{64}$/);
 
     expect(fleet.persistentSpecs).toHaveLength(1);
     const spec = fleet.persistentSpecs[0]!;
-    expect(spec.image).toBe(`ghcr.io/moooon-b-v/motir-sandbox@${dto.imageDigest}`);
+    expect(spec.image).toBe(`ghcr.io/motir-co/motir-sandbox@${dto.imageDigest}`);
     expect(spec).toMatchObject({
       volumeSizeGb: 10,
       mountPath: '/home/node',

@@ -73,14 +73,19 @@ export function answerRefusalKey(code: string): AnswerRefusalKey {
   return Object.hasOwn(ANSWER_REFUSAL_KEY, code) ? ANSWER_REFUSAL_KEY[code]! : 'generic';
 }
 
-/** The conversation already plans something — a run in flight, or a plan still
- *  waiting for its decision — so the offer draws its mid-planning variant. */
+/** The conversation already plans something — a run in flight, a plan Motir is
+ *  still writing, or a plan still waiting for its decision — so the offer draws
+ *  its mid-planning variant. A reopened conversation whose plan is still being
+ *  written holds it as the live review with an idle phase, so `writingPlan` is
+ *  what says so there. */
 export function alreadyPlanning({
   phase,
   hasUndecidedPlan,
+  writingPlan = false,
 }: {
   phase: PlanChangePhase;
   hasUndecidedPlan: boolean;
+  writingPlan?: boolean;
 }): boolean {
-  return phase === 'streaming' || phase === 'deciding' || hasUndecidedPlan;
+  return phase === 'streaming' || phase === 'deciding' || hasUndecidedPlan || writingPlan;
 }

@@ -32,12 +32,12 @@ import { verifyFleetBootable, verifyIndexFleetBootable } from '@/lib/orchestrato
 // No database, no network. `fetch` is the only fake.
 
 const PUBLIC_IMAGE =
-  'ghcr.io/moooon-b-v/motir-ci-runner@sha256:446c692df68c80367876c65082c60ec3b1c667f32a98811ac53f0dfa8a0e6d1d';
-const PRIVATE_IMAGE = 'ghcr.io/moooon-b-v/motir-sandbox:claude';
+  'ghcr.io/motir-co/motir-ci-runner@sha256:446c692df68c80367876c65082c60ec3b1c667f32a98811ac53f0dfa8a0e6d1d';
+const PRIVATE_IMAGE = 'ghcr.io/motir-co/motir-sandbox:claude';
 
 /** GHCR's real challenge header, copied from a live 401. */
 const GHCR_CHALLENGE =
-  'Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:moooon-b-v/motir-ci-runner:pull"';
+  'Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:motir-co/motir-ci-runner:pull"';
 
 let urls: string[];
 

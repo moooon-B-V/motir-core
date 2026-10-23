@@ -175,14 +175,14 @@ describe('the anonymous pull probe', () => {
 
 describe('reference parsing', () => {
   it('splits a digest reference, a tagged one, and a host with a port', () => {
-    expect(parseReference('ghcr.io/moooon-b-v/motir-sandbox@sha256:abc')).toEqual({
+    expect(parseReference('ghcr.io/motir-co/motir-sandbox@sha256:abc')).toEqual({
       registry: 'ghcr.io',
-      repository: 'moooon-b-v/motir-sandbox',
+      repository: 'motir-co/motir-sandbox',
       reference: 'sha256:abc',
     });
-    expect(parseReference('ghcr.io/moooon-b-v/motir-sandbox:claude')).toEqual({
+    expect(parseReference('ghcr.io/motir-co/motir-sandbox:claude')).toEqual({
       registry: 'ghcr.io',
-      repository: 'moooon-b-v/motir-sandbox',
+      repository: 'motir-co/motir-sandbox',
       reference: 'claude',
     });
     // A port is a colon that is NOT a tag separator — the classic parser trap.

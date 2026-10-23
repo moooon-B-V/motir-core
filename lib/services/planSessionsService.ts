@@ -185,6 +185,44 @@ export const planSessionsService = {
   },
 
   /**
+   * The overlay's History (MOTIR-9306): the sessions the reader STARTED in this
+   * project, open or ended, newest activity first, on the same cursor as
+   * {@link listSessions}. No scope is resolved — it is the reader's own list
+   * whatever they may view — so a routed plan's session they did not start is
+   * not in it, and guide conversations never are.
+   */
+  async listOwnSessions(
+    projectId: string,
+    ctx: ServiceContext,
+    opts: { cursor?: string | null; limit?: number } = {},
+  ): Promise<PlanSessionListPageDto> {
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+    const limit = clampLimit(opts.limit);
+    const after = decodeCursor(opts.cursor);
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planChangeSessionRepository.listPageByProject(
+        {
+          projectId,
+          workspaceId: ctx.workspaceId,
+          limit: limit + 1,
+          after,
+          state: null,
+          mine: null,
+          ownerId: ctx.userId,
+        },
+        tx,
+      ),
+    );
+    const hasMore = rows.length > limit;
+    const sessions = (hasMore ? rows.slice(0, limit) : rows).map(toPlanSessionRowDto);
+    return {
+      sessions,
+      nextCursor: hasMore ? encodeCursor(sessions[sessions.length - 1]!) : null,
+      scope: 'mine',
+    };
+  },
+
+  /**
    * ONE session's row, or null when the id names no session of this project. It
    * serves TWO doors (MOTIR-9300): the room's `?session=<id>` landing, for a session
    * that is not on the first page, which passes `planOnly: true` so it lands only on

@@ -4,7 +4,7 @@
 # that moves on every merge is not a sandbox anyone can reproduce a run in. So
 # drift between `main` and the newest `cli-v*` release is EXPECTED by design,
 # and nothing anywhere noticed when it reached eleven commits and five days:
-# `ghcr.io/moooon-b-v/motir-sandbox:claude` was serving a `motir` that predated
+# `ghcr.io/motir-co/motir-sandbox:claude` was serving a `motir` that predated
 # `motir login` entirely, and greeted every new user with a credential banner
 # naming one of the three tiers the docs promise. Every internal signal stayed
 # green throughout, because none of them consume the artifact.

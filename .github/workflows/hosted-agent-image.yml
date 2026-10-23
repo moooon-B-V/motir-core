@@ -22,7 +22,7 @@
 # `--frozen-lockfile`, and `.dockerignore` decides what the context carries.
 
 # ── Where the image is read from ────────────────────────────────────────────
-# `ghcr.io/moooon-b-v/motir-hosted-agent`. Its recipe is in this public
+# `ghcr.io/motir-co/motir-hosted-agent`. Its recipe is in this public
 # repository, so by `docs/decisions/fleet-image-pull.md` §1 it is published
 # PUBLIC and the fleet pulls it anonymously. Pulling the published digest from
 # the fleet — the production check — is MOTIR-6386's (under the dogfood story),
@@ -63,7 +63,7 @@ concurrency:
 env:
   # OCI repository names are lowercase-only (the same trap `sandbox-images.yml`
   # documents), so the org is spelled lowercase here.
-  IMAGE: ghcr.io/moooon-b-v/motir-hosted-agent
+  IMAGE: ghcr.io/motir-co/motir-hosted-agent
   LOCAL_TAG: motir-hosted-agent:ci
 
 jobs:
