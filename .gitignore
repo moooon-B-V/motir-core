@@ -63,6 +63,7 @@ next-env.d.ts
 /generated/
 .worker/
 .relay/
+.fleet-admin/
 
 # Throwaway tsc probe dirs (tests/approval-gate-registry.test.ts) — removed in its own `finally`;
 # ignored so a hard-killed run cannot leave one in `git status`.

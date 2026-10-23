@@ -10051,6 +10051,10 @@
             "org_ci": {
               "enable": "Ativou a CI da frota",
               "disable": "Desativou a CI da frota"
+            },
+            "shard": {
+              "add": "Adicionou uma conta da frota",
+              "limits": "Atualizou os limites de uma conta da frota"
             }
           },
           "enterprise_request": {

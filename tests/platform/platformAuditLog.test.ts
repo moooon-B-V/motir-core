@@ -243,6 +243,10 @@ describe('the reason rule', () => {
     // org's CI onto the fleet, so `superadmin` with a reason, both directions.
     'fleet.org_ci.enable': 'required',
     'fleet.org_ci.disable': 'required',
+    // `fleet-admin add-shard` / `refresh-limits` (Story MOTIR-8953 · MOTIR-8967):
+    // a fleet account added or its quota re-read — writes, reason by the service.
+    'fleet.shard.add': 'required',
+    'fleet.shard.limits': 'required',
     'enterprise_request.transition': 'required',
     // The idea store (Story MOTIR-7662 · MOTIR-7671): retiring and deleting say
     // why an idea left the public list; the rest carry the caller's context.

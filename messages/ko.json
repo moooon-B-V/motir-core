@@ -10045,6 +10045,10 @@
             "org_ci": {
               "enable": "플릿 CI 켬",
               "disable": "플릿 CI 끔"
+            },
+            "shard": {
+              "add": "플릿 계정 추가함",
+              "limits": "플릿 계정 한도 갱신함"
             }
           },
           "enterprise_request": {

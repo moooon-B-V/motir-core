@@ -10048,6 +10048,10 @@
             "org_ci": {
               "enable": "フリート CI をオンにした",
               "disable": "フリート CI をオフにした"
+            },
+            "shard": {
+              "add": "フリートのアカウントを追加",
+              "limits": "フリートのアカウントの上限を再取得"
             }
           },
           "enterprise_request": {

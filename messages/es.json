@@ -10051,6 +10051,10 @@
             "org_ci": {
               "enable": "Activó la CI de la flota",
               "disable": "Desactivó la CI de la flota"
+            },
+            "shard": {
+              "add": "Añadió una cuenta de la flota",
+              "limits": "Actualizó los límites de una cuenta de la flota"
             }
           },
           "enterprise_request": {

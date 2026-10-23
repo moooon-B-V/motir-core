@@ -10051,6 +10051,10 @@
             "org_ci": {
               "enable": "Włączono CI floty",
               "disable": "Wyłączono CI floty"
+            },
+            "shard": {
+              "add": "Dodano konto floty",
+              "limits": "Odświeżono limity konta floty"
             }
           },
           "enterprise_request": {

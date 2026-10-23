@@ -93,6 +93,27 @@ export const requirePlatformStaff = cache(async function requirePlatformStaff(
 });
 
 /**
+ * The platform principal for a staff member named by EMAIL, or
+ * `NotPlatformStaffError` — the same standing rule as {@link requirePlatformStaff},
+ * read fresh, for a command run on a deployed machine (`fleet-admin`, Story
+ * MOTIR-8953 · MOTIR-8967) where there is no web session to read.
+ *
+ * ⚠️ NEVER FROM A REQUEST. A web surface gates with `requirePlatformStaff`; an
+ * email is not a credential. Its one caller is a command whose operator already
+ * holds a shell on the production machine, which is the real gate.
+ */
+export async function platformPrincipalForStaffEmail(
+  email: string,
+  minimum: PlatformRole = 'support',
+): Promise<PlatformPrincipal> {
+  if (!email.trim()) throw new NotPlatformStaffError();
+  const standing = await platformStaffRepository.findStandingByEmail(email);
+  if (!standing?.platformRole) throw new NotPlatformStaffError();
+  if (!platformRoleAtLeast(standing.platformRole, minimum)) throw new NotPlatformStaffError();
+  return { userId: standing.id, email: standing.email, role: standing.platformRole };
+}
+
+/**
  * The OPERATOR's own session — never a staff "View as" identity (MOTIR-749).
  *
  * Inside a staff session `getSession()` answers as the customer being viewed

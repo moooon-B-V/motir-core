@@ -182,6 +182,12 @@ export const fleetShardService = {
     return toFleetShardDTO(await withSystemContext((tx) => requireShard(id, tx)));
   },
 
+  /** The account with this name, or null — how `fleet-admin` resumes a run. */
+  async findShardByName(name: string): Promise<FleetShardDTO | null> {
+    const row = await withSystemContext((tx) => fleetShardRepository.findByName(name, tx));
+    return row ? toFleetShardDTO(row) : null;
+  },
+
   /** The accounts of one role (default `primary`), optionally one kind and state. */
   async listShards(
     filter: { fleetKind?: string; role?: FleetShardRoleDTO; state?: FleetShardStateDTO } = {},

@@ -86,3 +86,13 @@ export class FleetShardTakenError extends Error {
     this.name = 'FleetShardTakenError';
   }
 }
+
+/** `fleet-admin add-shard` / `refresh-limits` refused the run BEFORE its first
+ *  external call (Story MOTIR-8953 · MOTIR-8967) — every problem found, at once. */
+export class FleetShardProvisioningRefusedError extends Error {
+  readonly code = 'FLEET_SHARD_PROVISIONING_REFUSED' as const;
+  constructor(readonly problems: string[]) {
+    super(`add-shard refused: ${problems.join('; ')}`);
+    this.name = 'FleetShardProvisioningRefusedError';
+  }
+}

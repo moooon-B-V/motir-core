@@ -291,6 +291,21 @@ export const PLATFORM_AUDIT_ACTIONS = {
   'fleet.org_ci.enable': { kind: 'write', reason: 'required' },
   'fleet.org_ci.disable': { kind: 'write', reason: 'required' },
   /**
+   * A fleet ACCOUNT was added to, or resumed in, a fleet kind's pool by
+   * `fleet-admin add-shard` (Story MOTIR-8953 · MOTIR-8967) — one row per run,
+   * written after its steps, carrying `{ fleetKind, provider, steps,
+   * pendingManualSteps }` and never a credential value. `fleet.shard.limits` is
+   * `refresh-limits`: an account's quota re-read after a raise, `{ from, to }`.
+   *
+   * `required`, at the `superadmin` degree of ADR §7, with a reason the SERVICE
+   * writes (as `enterprise_request.transition` does): the command is run from a
+   * shell with no reason field, the row says which command and which account, and
+   * a write is never `never`. Target is `platform` with the account's id as
+   * `targetId` and its name as `targetLabel`; the domain is `fleet`.
+   */
+  'fleet.shard.add': { kind: 'write', reason: 'required' },
+  'fleet.shard.limits': { kind: 'write', reason: 'required' },
+  /**
    * An Enterprise request was MOVED through its states by staff (Story
    * MOTIR-7602 · MOTIR-7608): `new → contacted → offer_sent → won`, or any open
    * state → `lost`. At the `operator` degree of ADR §7. Target is the

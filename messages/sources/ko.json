@@ -11660,5 +11660,7 @@
   "titleTranslation.noCredit": "Titles stay in their original language because your organization has no credit left.",
   "titleTranslation.pendingMark": "Translating",
   "titleTranslation.showOriginal": "Show original",
-  "titleTranslation.showTranslation": "Show translation"
+  "titleTranslation.showTranslation": "Show translation",
+  "platformAdmin.users.log.action.fleet.shard.add": "Added a fleet account",
+  "platformAdmin.users.log.action.fleet.shard.limits": "Refreshed a fleet account's limits"
 }

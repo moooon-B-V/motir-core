@@ -10045,6 +10045,10 @@
             "org_ci": {
               "enable": "已开启集群 CI",
               "disable": "已关闭集群 CI"
+            },
+            "shard": {
+              "add": "已添加集群账户",
+              "limits": "已刷新集群账户的上限"
             }
           },
           "enterprise_request": {

@@ -36,6 +36,20 @@ export const platformStaffRepository = {
   },
 
   /**
+   * The standing of the account with this email (case-insensitive), or `null` —
+   * how a command run on a deployed machine (`fleet-admin`, MOTIR-8967) names its
+   * operator, where there is no web session to read.
+   */
+  async findStandingByEmail(
+    email: string,
+  ): Promise<{ id: string; email: string; platformRole: PlatformRole | null } | null> {
+    return db.user.findFirst({
+      where: { email: { equals: email.trim(), mode: 'insensitive' } },
+      select: { id: true, email: true, platformRole: true },
+    });
+  },
+
+  /**
    * Every platform staff member a staff notice can reach — any `platformRole`
    * (support reads Enterprise requests too) with a VERIFIED email. Selects only
    * what an email needs: who to address, and which id keys its idempotency.

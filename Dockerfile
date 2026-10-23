@@ -215,6 +215,14 @@ RUN pnpm build:worker
 # `lib/auth`, so the relay app boots with its four secrets and no others.
 RUN pnpm build:relay
 
+# ── the fleet-admin command bundle (MOTIR-8967) ─────────────────────────────
+# `fleet-admin add-shard` / `refresh-limits` run inside a motir-core machine
+# (`fly ssh console -a motir-core -C "node fleet/fleet-admin.mjs …"`), where the
+# Enterprise and App secrets live. The image carries no `scripts/`, so the command
+# is bundled the worker's way for the worker's reason
+# (`scripts/build-fleet-admin.mjs`), with the worker's external set.
+RUN pnpm build:fleet-admin
+
 
 # ── assert the standalone output stayed small — the prune's successor ────────
 # ⚠️ THIS STEP USED TO PRUNE. It does not any more, because there is nothing
@@ -371,6 +379,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/.worker/worker.mjs.map ./worker/w
 # same reason.
 COPY --from=builder --chown=nextjs:nodejs /app/.relay/relay.mjs ./relay/relay.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/.relay/relay.mjs.map ./relay/relay.mjs.map
+
+# ── /app/fleet — the platform admin's fleet-account command (MOTIR-8967) ────
+# Run by hand over `fly ssh console`, never by a process group. Its unresolved
+# imports resolve upward into `/app/node_modules`, as the worker's do; the map is
+# copied so an error names a source line.
+COPY --from=builder --chown=nextjs:nodejs /app/.fleet-admin/fleet-admin.mjs ./fleet/fleet-admin.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/.fleet-admin/fleet-admin.mjs.map ./fleet/fleet-admin.mjs.map
 
 # ── the RUNNING process must be able to name its own build (MOTIR-3760) ─────
 # ⚠️ THE BUILDER STAGE'S `MOTIR_RELEASE` DOES NOT REACH HERE, AND FOR MONTHS
