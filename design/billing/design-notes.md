@@ -1984,6 +1984,9 @@ panel is drawn static with the shipped `Modal`'s classes. The mono lines are boa
 
 ### What changes
 
+**Revised 2026-10-23 after review: the price cards were too narrow, so the plans view now takes the
+full page width (point 7).**
+
 1. **The Host card (panels 1–2).** Host is a fifth paid card, last in the row after Max ×2, drawn by
    the shipped `PlanCard` with no new element. Its name, monthly and annual price, credit pool and
    included seat are the catalog entry's. Its ladder line is the shipped `plans.ladder.multiple`
@@ -2005,7 +2008,12 @@ panel is drawn static with the shipped `Modal`'s classes. The mono lines are boa
 6. **The downgrade from Host and the pending downgrade from Host (panels 9–11).** The shipped
    downgrade dialog at period end, nothing due, credits unchanged, and the shipped pending-change
    line on the Host card with the target card's disabled Scheduled for … control.
-7. **`zh` and narrow (panels 12–13).** No layout change: the row scrolls horizontally with snap at
+7. **The plans view takes the full page width (every desktop panel).** The billing page no longer
+   caps the Motir AI plans view at `max-w-[64rem]`: it fills the width the app shell gives it, so
+   five cards stay wide enough to read. The cards keep the shipped `grow basis-0`, so the row
+   shares that width equally. The other billing views (the home panel, Motir seats, the
+   Calculator) keep their shipped width. This is layout only: no new token.
+8. **`zh` and narrow (panels 12–13).** No layout change: the row scrolls horizontally with snap at
    375px and Host is full and readable at its end; the dialogs are full-width sheets.
 
 ### Copy — new keys in the `billing` namespace (en)

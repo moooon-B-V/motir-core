@@ -13,6 +13,8 @@
   Rendered with renderMock from the design system's own parts (Button, Card, Pill,
   Segmented), composed as BillingClient.tsx composes PlanCard and PlanChangeDialog.tsx
   its dialogs (the dialog panel is drawn static with the shipped Modal's classes).
+  The plans view takes the full page width: it no longer stops at 64rem, so the
+  board is uncapped too and the row widens with the window.
   Every figure and date is illustrative.
 -->
 
@@ -4696,24 +4698,25 @@
     </style>
   </head>
   <body class="bg-(--el-page-bg) text-(--el-text) font-sans antialiased">
-    <main class="mx-auto flex max-w-[64rem] flex-col gap-8 p-8">
+    <main class="mx-auto flex w-full flex-col gap-8 p-8">
       <h1 class="font-sans text-2xl font-semibold text-(--el-text)">
         Billing &amp; plans, delta — the Host plan
       </h1>
       <section
         class="flex flex-col gap-3"
-        aria-label="1 · Five paid cards, no plan held, monthly, owner — Host is last, after Max ×2. Recommended stays on Pro; Host is never Recommended and never Calculator-marked. The Need more credits? callout below is unchanged and still names Max ×2."
+        aria-label="1 · Five paid cards across the full page width (the plans view no longer stops at 64rem), no plan held, monthly, owner — Host is last, after Max ×2. Recommended stays on Pro; Host is never Recommended and never Calculator-marked. The Need more credits? callout below is unchanged and still names Max ×2."
       >
         <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          1 · Five paid cards, no plan held, monthly, owner — Host is last, after Max ×2.
-          Recommended stays on Pro; Host is never Recommended and never Calculator-marked. The Need
-          more credits? callout below is unchanged and still names Max ×2.
+          1 · Five paid cards across the full page width (the plans view no longer stops at 64rem),
+          no plan held, monthly, owner — Host is last, after Max ×2. Recommended stays on Pro; Host
+          is never Recommended and never Calculator-marked. The Need more credits? callout below is
+          unchanged and still names Max ×2.
         </h2>
         <div
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
         >
           <div
-            class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
+            class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding) w-full"
           >
             <div class="flex flex-col gap-6">
               <header class="flex flex-col gap-1">
@@ -5376,7 +5379,7 @@
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
         >
           <div
-            class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
+            class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding) w-full"
           >
             <div class="flex flex-col gap-6">
               <header class="flex flex-col gap-1">
@@ -6242,7 +6245,7 @@
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
         >
           <div
-            class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
+            class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding) w-full"
           >
             <div class="flex flex-col gap-6">
               <header class="flex flex-col gap-1">
@@ -6868,7 +6871,7 @@
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
         >
           <div
-            class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
+            class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding) w-full"
           >
             <div class="flex flex-col gap-6">
               <header class="flex flex-col gap-1">
@@ -7851,7 +7854,7 @@
               </div>
             </div>
             <div
-              class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
+              class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding) w-full"
             >
               <div class="flex flex-col gap-6">
                 <header class="flex flex-col gap-1">
@@ -8462,7 +8465,7 @@
         >
           <div class="flex flex-col gap-4">
             <div
-              class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
+              class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding) w-full"
             >
               <div class="flex flex-col gap-6">
                 <header class="flex flex-col gap-1">
@@ -9299,7 +9302,7 @@
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
         >
           <div
-            class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
+            class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding) w-full"
           >
             <div class="flex flex-col gap-6">
               <header class="flex flex-col gap-1">
@@ -10096,7 +10099,7 @@
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
         >
           <div
-            class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
+            class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding) w-full"
           >
             <div class="flex flex-col gap-6">
               <header class="flex flex-col gap-1">
