@@ -247,6 +247,10 @@ describe('the reason rule', () => {
     // a fleet account added or its quota re-read — writes, reason by the service.
     'fleet.shard.add': 'required',
     'fleet.shard.limits': 'required',
+    // Its account controls (MOTIR-8972): ceiling, disable, enable — writes.
+    'fleet.shard.ceiling': 'required',
+    'fleet.shard.disable': 'required',
+    'fleet.shard.enable': 'required',
     'enterprise_request.transition': 'required',
     // The idea store (Story MOTIR-7662 · MOTIR-7671): retiring and deleting say
     // why an idea left the public list; the rest carry the caller's context.

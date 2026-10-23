@@ -10048,7 +10048,10 @@
             },
             "shard": {
               "add": "플릿 계정 추가함",
-              "limits": "플릿 계정 한도 갱신함"
+              "limits": "플릿 계정 한도 갱신함",
+              "ceiling": "플릿 계정 수용 한도 변경함",
+              "disable": "플릿 계정 비활성화함",
+              "enable": "플릿 계정 다시 활성화함"
             }
           },
           "enterprise_request": {

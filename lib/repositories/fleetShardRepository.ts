@@ -87,6 +87,28 @@ export const fleetShardRepository = {
     });
   },
 
+  /** Lock one account by name for a platform admin's change (MOTIR-8972), so two
+   *  changes of one account apply one after the other. Null when none has it. */
+  async lockByNameForUpdateInTx(
+    name: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetShard | null> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "fleet_shard" WHERE "name" = ${name} FOR UPDATE`;
+    const id = rows[0]?.id;
+    return id ? tx.fleetShard.findUnique({ where: { id } }) : null;
+  },
+
+  /** The platform admin's admission ceiling (MOTIR-8972); null returns the
+   *  account to its derived ceiling. */
+  async setAdmissionCeilingOverrideInTx(
+    id: string,
+    ceiling: number | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetShard> {
+    return tx.fleetShard.update({ where: { id }, data: { admissionCeilingOverride: ceiling } });
+  },
+
   /** Skip this account in admission until `until` (MOTIR-8968). */
   async pauseInTx(
     id: string,

@@ -11,6 +11,10 @@
  *   fly ssh console -a motir-core -C "node fleet/fleet-admin.mjs refresh-limits \
  *     --name <account> --operator <email>"
  *
+ * and the account controls beside it (MOTIR-8972): `set-ceiling --name <account>
+ * (--ceiling <n> | --clear)`, `disable --name <account> --reason <text>` and
+ * `enable --name <account>`, each with `--operator <email>`.
+ *
  * `add-shard` walks `fleetShardProvisioningService.addShard`'s steps, printing one
  * line per step (`done` · `already` · `pending: <what a person must do>`) and a
  * **Pending manual steps** list. Re-running the same command resumes.
@@ -31,6 +35,10 @@ import { pathToFileURL } from 'node:url';
 import { FleetShardProvisioningRefusedError } from '@/lib/ciFleet/errors';
 import { findShardProvisioningProvider } from '@/lib/fleetShards/provisioningProviders';
 import {
+  fleetShardControlsService,
+  type FleetShardControlResult,
+} from '@/lib/services/fleetShardControlsService';
+import {
   fleetShardProvisioningService,
   type ShardProvisioningResult,
 } from '@/lib/services/fleetShardProvisioningService';
@@ -45,6 +53,9 @@ const USAGE = [
   '    --github-org <org> (--create-org --admin-login <login> [--billing-email <email>] | --existing-org)',
   '    --operator <email> [provider options]',
   '  fleet-admin refresh-limits --name <account> --operator <email>',
+  '  fleet-admin set-ceiling --name <account> (--ceiling <n> | --clear) --operator <email>',
+  '  fleet-admin disable --name <account> --reason <text> --operator <email>',
+  '  fleet-admin enable --name <account> --operator <email>',
 ].join('\n');
 
 /** Where the command writes — stdout and stderr in production, a buffer in tests. */
@@ -153,12 +164,62 @@ async function refreshLimits(args: string[], io: FleetAdminIo): Promise<number> 
   return printResult(result, io);
 }
 
+function printControl(result: FleetShardControlResult, io: FleetAdminIo): number {
+  io.out(
+    `account ${result.name} (${result.fleetKind}): ${String(result.from ?? 'none')} → ` +
+      `${String(result.to ?? 'none')}`,
+  );
+  return EXIT_OK;
+}
+
+/** The account controls beside add-shard (MOTIR-8972). */
+async function control(command: string, args: string[], io: FleetAdminIo): Promise<number> {
+  const { values } = parseArgs({
+    args,
+    options: {
+      name: { type: 'string' },
+      operator: { type: 'string' },
+      ...(command === 'set-ceiling'
+        ? { ceiling: { type: 'string' }, clear: { type: 'boolean' } }
+        : {}),
+      ...(command === 'disable' ? { reason: { type: 'string' } } : {}),
+    },
+    strict: true,
+    allowPositionals: false,
+  });
+  const read = (key: string): string => {
+    const value = (values as Record<string, unknown>)[key];
+    return typeof value === 'string' ? value : '';
+  };
+  const name = read('name');
+  const operator = read('operator');
+  if (command === 'set-ceiling') {
+    const clear = Boolean((values as Record<string, unknown>)['clear']);
+    const raw = read('ceiling');
+    if (clear === Boolean(raw)) {
+      throw new FleetShardProvisioningRefusedError(['pass exactly one of --ceiling or --clear']);
+    }
+    const ceiling = clear ? null : Number(raw);
+    return printControl(await fleetShardControlsService.setCeiling(name, ceiling, operator), io);
+  }
+  if (command === 'disable') {
+    return printControl(
+      await fleetShardControlsService.disable(name, read('reason'), operator),
+      io,
+    );
+  }
+  return printControl(await fleetShardControlsService.enable(name, operator), io);
+}
+
 /** Run one `fleet-admin` command; answers its exit code. */
 export async function runFleetAdmin(argv: string[], io: FleetAdminIo): Promise<number> {
   const [command, ...args] = argv;
   try {
     if (command === 'add-shard') return await addShard(args, io);
     if (command === 'refresh-limits') return await refreshLimits(args, io);
+    if (command === 'set-ceiling' || command === 'disable' || command === 'enable') {
+      return await control(command, args, io);
+    }
     io.err(USAGE);
     return EXIT_ERROR;
   } catch (err) {

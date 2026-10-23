@@ -10054,7 +10054,10 @@
             },
             "shard": {
               "add": "Dodano konto floty",
-              "limits": "Odświeżono limity konta floty"
+              "limits": "Odświeżono limity konta floty",
+              "ceiling": "Zmieniono pułap konta floty",
+              "disable": "Wyłączono konto floty",
+              "enable": "Ponownie włączono konto floty"
             }
           },
           "enterprise_request": {

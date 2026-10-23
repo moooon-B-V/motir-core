@@ -11662,5 +11662,8 @@
   "titleTranslation.showOriginal": "Show original",
   "titleTranslation.showTranslation": "Show translation",
   "platformAdmin.users.log.action.fleet.shard.add": "Added a fleet account",
-  "platformAdmin.users.log.action.fleet.shard.limits": "Refreshed a fleet account's limits"
+  "platformAdmin.users.log.action.fleet.shard.limits": "Refreshed a fleet account's limits",
+  "platformAdmin.users.log.action.fleet.shard.ceiling": "Changed a fleet account's ceiling",
+  "platformAdmin.users.log.action.fleet.shard.disable": "Disabled a fleet account",
+  "platformAdmin.users.log.action.fleet.shard.enable": "Re-enabled a fleet account"
 }

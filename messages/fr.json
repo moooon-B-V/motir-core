@@ -10054,7 +10054,10 @@
             },
             "shard": {
               "add": "A ajouté un compte de la flotte",
-              "limits": "A actualisé les limites d’un compte de la flotte"
+              "limits": "A actualisé les limites d’un compte de la flotte",
+              "ceiling": "A modifié le plafond d’un compte de la flotte",
+              "disable": "A désactivé un compte de la flotte",
+              "enable": "A réactivé un compte de la flotte"
             }
           },
           "enterprise_request": {

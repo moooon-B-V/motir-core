@@ -306,6 +306,16 @@ export const PLATFORM_AUDIT_ACTIONS = {
   'fleet.shard.add': { kind: 'write', reason: 'required' },
   'fleet.shard.limits': { kind: 'write', reason: 'required' },
   /**
+   * The account controls beside add-shard (Story MOTIR-8953 · MOTIR-8972):
+   * `set-ceiling` (an admission ceiling set or cleared), `disable` and `enable`.
+   * Same target and degree as `fleet.shard.add`; `metadata` is `{ fleetKind,
+   * from, to }`. `disable`'s reason is the operator's `--reason`; the other two
+   * carry the command the service writes.
+   */
+  'fleet.shard.ceiling': { kind: 'write', reason: 'required' },
+  'fleet.shard.disable': { kind: 'write', reason: 'required' },
+  'fleet.shard.enable': { kind: 'write', reason: 'required' },
+  /**
    * An Enterprise request was MOVED through its states by staff (Story
    * MOTIR-7602 · MOTIR-7608): `new → contacted → offer_sent → won`, or any open
    * state → `lost`. At the `operator` degree of ADR §7. Target is the

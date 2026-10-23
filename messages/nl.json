@@ -10054,7 +10054,10 @@
             },
             "shard": {
               "add": "Een vlootaccount toegevoegd",
-              "limits": "De limieten van een vlootaccount vernieuwd"
+              "limits": "De limieten van een vlootaccount vernieuwd",
+              "ceiling": "Het plafond van een vlootaccount gewijzigd",
+              "disable": "Een vlootaccount uitgeschakeld",
+              "enable": "Een vlootaccount weer ingeschakeld"
             }
           },
           "enterprise_request": {

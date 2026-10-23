@@ -10054,7 +10054,10 @@
             },
             "shard": {
               "add": "Flottenkonto hinzugefügt",
-              "limits": "Limits eines Flottenkontos aktualisiert"
+              "limits": "Limits eines Flottenkontos aktualisiert",
+              "ceiling": "Obergrenze eines Flottenkontos geändert",
+              "disable": "Flottenkonto deaktiviert",
+              "enable": "Flottenkonto wieder aktiviert"
             }
           },
           "enterprise_request": {

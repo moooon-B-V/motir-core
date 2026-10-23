@@ -10054,7 +10054,10 @@
             },
             "shard": {
               "add": "Adicionou uma conta da frota",
-              "limits": "Atualizou os limites de uma conta da frota"
+              "limits": "Atualizou os limites de uma conta da frota",
+              "ceiling": "Alterou o teto de uma conta da frota",
+              "disable": "Desativou uma conta da frota",
+              "enable": "Reativou uma conta da frota"
             }
           },
           "enterprise_request": {
