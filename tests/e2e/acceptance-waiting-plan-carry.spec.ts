@@ -80,7 +80,6 @@ test.describe.configure({ timeout: 360_000 });
 
 const session = en.planningWorkspace.session;
 const surface = en.approvalGate.planApproval.surface;
-const planState = en.aiPlanning.sessions.planState;
 
 // ── Locators ─────────────────────────────────────────────────────────────────
 
@@ -556,9 +555,11 @@ test('a waiting plan under a Closed session is carried by its first turn, revise
     await expect(carriedRow).toBeVisible();
     await expect(carriedRow.getByTestId('plan-session-continued-from')).toBeVisible();
     await expect(carriedRow).not.toContainText(/earlier plan/);
-    await expect(sessionRowOf(page, s1)).toContainText(planState.closed);
+    // The carry moved the plan off s1, so it holds none, and the Plans list serves
+    // only sessions that reached planning (MOTIR-9217): s1 is not listed.
     expect(await plansIn(s2)).toBe(1);
     expect(await plansIn(s1)).toBe(0);
+    await expect(sessionRowOf(page, s1)).toHaveCount(0);
     await beat();
   });
 
