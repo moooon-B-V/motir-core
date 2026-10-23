@@ -1,6 +1,6 @@
 import type { FleetShard, Prisma } from '@/generated/prisma/client';
-import { withSystemContext } from '@/lib/workspaces/context';
 import { bindOrganizationContext } from '@/lib/organizations/context';
+import { withSystemContext } from '@/lib/workspaces/context';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
 import { GITHUB_SECONDARY_LIMITS, tenantsPerShard } from '@/lib/ciFleet/shardTargets';
 import type { GithubAppRole } from '@/lib/github/appAuth';
@@ -130,8 +130,28 @@ function best(candidates: readonly GithubOrgCandidate[]): GithubOrgCandidate | n
   );
 }
 
+/**
+ * True when the organisation already has a repository established in the
+ * fallback (provisioning) org — its own transaction, bound to the tenant:
+ * `project_repository` has no system-admin read arm, so under `motir_app` a
+ * system-context read of it returns zero rows and raises nothing.
+ */
+async function hasExistingHosting(organizationId: string): Promise<boolean> {
+  const fallback = provisioningOrgLogin();
+  if (!fallback) return false;
+  return withSystemContext(async (tx) => {
+    await bindOrganizationContext(tx, organizationId);
+    return projectRepoRepository.hasEstablishedHostedRepoForOrganizationInTx(
+      organizationId,
+      fallback,
+      tx,
+    );
+  });
+}
+
 async function ensureInTx(
   organizationId: string,
+  existingHosting: boolean,
   now: Date,
   tx: Prisma.TransactionClient,
 ): Promise<HostedGithubOrgOutcome> {
@@ -148,17 +168,7 @@ async function ensureInTx(
     };
   }
 
-  const fallback = provisioningOrgLogin();
-  if (
-    fallback &&
-    (await projectRepoRepository.hasEstablishedHostedRepoForOrganizationInTx(
-      organizationId,
-      fallback,
-      tx,
-    ))
-  ) {
-    return { outcome: 'existing_hosting' };
-  }
+  if (existingHosting) return { outcome: 'existing_hosting' };
 
   const shards = await fleetShardRepository.lockActiveWithGithubOrgInTx(tx);
   if (shards.length === 0) return { outcome: 'no_github_org' };
@@ -237,11 +247,7 @@ export const fleetGithubOrgAssignmentService = {
     organizationId: string,
     now: Date = new Date(),
   ): Promise<HostedGithubOrgOutcome> {
-    return withSystemContext(async (tx) => {
-      // Bound here, not only inside `lockByIdForUpdate`, so the tenant reads that
-      // follow (`project_repository` has no system arm) are visibly bound.
-      await bindOrganizationContext(tx, organizationId);
-      return ensureInTx(organizationId, now, tx);
-    });
+    const existingHosting = await hasExistingHosting(organizationId);
+    return withSystemContext((tx) => ensureInTx(organizationId, existingHosting, now, tx));
   },
 };

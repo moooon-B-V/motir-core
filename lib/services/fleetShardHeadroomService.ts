@@ -343,6 +343,7 @@ export const fleetShardHeadroomService = {
     const registrations =
       smallest(naming.map((shard) => shard.githubRegistrationsPer5Min)) ??
       GITHUB_RUNNER_REGISTRATIONS_PER_5_MIN;
+
     const { minted, secondary, contributors } = await withSystemContext(async (tx) => {
       const minted = await ledger.countSince(
         org,
