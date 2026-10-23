@@ -13,6 +13,10 @@ import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
 import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
+import {
+  githubRunnerCallLedgerService as runnerCallLedger,
+  runnerCallReachedGithub,
+} from '@/lib/services/githubRunnerCallLedgerService';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import { isOrchestratorConfigured, recordContainerUsage } from '@/lib/orchestrator';
 import {
@@ -218,7 +222,19 @@ async function stopIntent(
     try {
       // In the org that owns the job's repository (MOTIR-8711).
       await runnerJitConfigClient.deleteRunner(intent.githubRunnerId, fleetRunnerTargetFor(intent));
+      await runnerCallLedger.recordForTargetQuietly(
+        fleetRunnerTargetFor(intent),
+        'delete',
+        intent.fleetShardId,
+      );
     } catch (err) {
+      if (runnerCallReachedGithub(err)) {
+        await runnerCallLedger.recordForTargetQuietly(
+          fleetRunnerTargetFor(intent),
+          'delete',
+          intent.fleetShardId,
+        );
+      }
       console.error('[fleetStopService] could not de-register a runner', {
         intentId: intent.id,
         runnerId: intent.githubRunnerId,

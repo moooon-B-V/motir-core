@@ -548,6 +548,10 @@ limit (the mint limit reads 70% of 300/min = 210/min) — with every runner coun
 **repository's** GitHub org. It is the input of the headroom reading (MOTIR-8969) and the trigger of
 the pool-growth story (MOTIR-9362).
 
+Sustained deferral alerts separately, per fleet kind: at least `SUSTAINED_DEFERRAL_MIN_JOBS` (10) of
+the kind's jobs deferred `shard_capacity` and at least `SUSTAINED_DEFERRAL_FRACTION` (20%) of them,
+over `SUSTAINED_DEFERRAL_WINDOW_MINUTES` (60) — pre-launch targets (MOTIR-8969).
+
 ### A1.11 · The pool default
 
 The default pool of a tenant org drops from 500 to **one target tenant's peak concurrency**:

@@ -56,6 +56,10 @@ import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { fleetShardService } from '@/lib/services/fleetShardService';
 import {
+  githubRunnerCallLedgerService as runnerCallLedger,
+  runnerCallReachedGithub,
+} from '@/lib/services/githubRunnerCallLedgerService';
+import {
   classifyProvisionRefusal,
   fleetShardAdmissionService,
   SHARD_CAPACITY_DETAIL,
@@ -1245,6 +1249,11 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
       runnerTarget,
     );
   } catch (err) {
+    // THE LEDGER (MOTIR-8969): a refusal GitHub answered still spent a call on the
+    // runner's org. A timeout or transport failure is not recorded.
+    if (runnerCallReachedGithub(err)) {
+      await runnerCallLedger.recordForTargetQuietly(runnerTarget, 'mint', verdict.fleetShardId);
+    }
     if (err instanceof RunnerRegistrationRateLimitedError) {
       // Early, not broken. Release the claim and let the next sweep try — a
       // burst against GitHub's 1,500-per-5-minutes ceiling is the gate's
@@ -1301,6 +1310,8 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
     await settleFailed(intentId, intent.projectId, 'provision_failed', detail);
     return terminal({ outcome: 'provision_failed', detail });
   }
+
+  await runnerCallLedger.recordForTargetQuietly(runnerTarget, 'mint', verdict.fleetShardId);
 
   // Persist the runner id BEFORE booting. `generate-jitconfig` has already
   // registered the runner (§7.4), so from here on a crash without this column
@@ -1758,7 +1769,11 @@ async function deregisterQuietly(
   if (runnerId === null) return;
   try {
     await runnerJitConfigClient.deleteRunner(runnerId, target);
+    await runnerCallLedger.recordForTargetQuietly(target, 'delete', null);
   } catch (err) {
+    if (runnerCallReachedGithub(err)) {
+      await runnerCallLedger.recordForTargetQuietly(target, 'delete', null);
+    }
     console.error(
       '[ciRunnerBootService] could not de-register a runner — it may be left dangling',
       { intentId, runnerId, detail: detailOf(err) },
@@ -1782,6 +1797,8 @@ async function deregisterByNameQuietly(
 ): Promise<void> {
   try {
     const removed = await runnerJitConfigClient.deleteRunnersNamed(runnerName, target);
+    // One `delete` per runner it removed (MOTIR-8969).
+    await runnerCallLedger.recordForTargetQuietly(target, 'delete', null, removed.length);
     if (removed.length > 0) {
       console.warn('[ciRunnerBootService] de-registered a runner left by a timed-out mint', {
         intentId,

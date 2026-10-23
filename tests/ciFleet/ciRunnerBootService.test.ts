@@ -37,6 +37,7 @@ import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestr
 import { SHARD_PAUSE_SECONDS, wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { githubRunnerCallEventRepository } from '@/lib/repositories/githubRunnerCallEventRepository';
 import { randomToken, randomInt } from '../helpers/random';
 
 // THE PROVISIONER against real Postgres (Story MOTIR-1916 · MOTIR-1921).
@@ -1826,6 +1827,13 @@ describe('the fleet account a container boots in (MOTIR-8964)', () => {
       teardownReason: null,
     });
     expect(row.shardCapacityDeferredAt).not.toBeNull();
+    // The mint that booted nothing still spent GitHub capacity on the repo's org
+    // (MOTIR-8969): the ledger holds it, and the deregistration.
+    const ledger = await adminDb.githubRunnerCallEvent.findMany({ orderBy: { at: 'asc' } });
+    expect(ledger.map((e) => [e.githubOrg, e.kind])).toEqual([
+      [MOTIR_ORG, 'mint'],
+      [MOTIR_ORG, 'delete'],
+    ]);
   });
 
   it.each([
@@ -1877,5 +1885,30 @@ describe('the fleet account a container boots in (MOTIR-8964)', () => {
       FAST,
     );
     expect(verdict.done).toBe(true);
+  });
+});
+
+describe('the GitHub runner-call ledger (MOTIR-8969)', () => {
+  it('records the mint on the happy path, keyed on the repo org', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+
+    await ciRunnerBootService.bootIntent(intent.id, FAST);
+
+    expect(
+      (await adminDb.githubRunnerCallEvent.findMany()).map((e) => [e.githubOrg, e.kind]),
+    ).toEqual([[MOTIR_ORG, 'mint']]);
+  });
+
+  it('a failing ledger write never fails the boot', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(githubRunnerCallEventRepository, 'record').mockRejectedValue(new Error('db down'));
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+
+    const result = await ciRunnerBootService.bootIntent(intent.id, FAST);
+
+    expect(result.phase).toBe('supervising');
+    expect(await adminDb.githubRunnerCallEvent.count()).toBe(0);
   });
 });

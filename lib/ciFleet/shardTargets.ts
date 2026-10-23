@@ -72,6 +72,13 @@ export const GITHUB_INSTALLATION_API_PER_HOUR = 15_000;
  */
 export const HEADROOM_ALERT_FRACTION = 0.7;
 
+/** Sustained deferral (MOTIR-8969) — a pre-launch target: the window read. */
+export const SUSTAINED_DEFERRAL_WINDOW_MINUTES = 60;
+/** A pre-launch target: fewer deferred jobs than this in the window never alert. */
+export const SUSTAINED_DEFERRAL_MIN_JOBS = 10;
+/** A pre-launch target: the share of the window's jobs deferred that alerts. */
+export const SUSTAINED_DEFERRAL_FRACTION = 0.2;
+
 /** A GitHub secondary limit runner minting is held to. */
 export interface GithubSecondaryLimit {
   /** What the limit is, for the `boundBy` answer and the headroom reading. */
@@ -82,6 +89,9 @@ export interface GithubSecondaryLimit {
   readonly periodSeconds: number;
   /** How many of a runner's GitHub calls count toward it. */
   readonly callsCountedPerRunner: number;
+  /** Which runner calls count toward it — what the headroom pass counts
+   *  (MOTIR-8969). Its length is `callsCountedPerRunner`. */
+  readonly countsCalls: readonly ('mint' | 'delete')[];
   /**
    * `applies` — measured to bind; `assumed` — not measured, so counted as binding
    * (ADR AMENDMENT 1: an unknown limit is written "assumed to apply").
@@ -107,6 +117,7 @@ export const GITHUB_SECONDARY_LIMITS = {
     perPeriod: 300,
     periodSeconds: 60,
     callsCountedPerRunner: 1,
+    countsCalls: ['mint'],
     verdict: 'applies',
   },
   /**
@@ -120,6 +131,7 @@ export const GITHUB_SECONDARY_LIMITS = {
     perPeriod: 100,
     periodSeconds: 1,
     callsCountedPerRunner: 2,
+    countsCalls: ['mint', 'delete'],
     verdict: 'assumed',
   },
 } as const satisfies Record<string, GithubSecondaryLimit>;

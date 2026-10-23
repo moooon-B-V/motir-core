@@ -14722,3 +14722,29 @@ model ProjectRunnerGroup {
   @@index([workspaceId])
   @@map("project_runner_group")
 }
+
+/// Which GitHub runner call a ledger row records (MOTIR-8969).
+enum GithubRunnerCallKind {
+  mint
+  delete
+
+  @@map("github_runner_call_kind")
+}
+
+/// THE GITHUB RUNNER-CALL LEDGER (Story MOTIR-8953 · MOTIR-8969) — one row per
+/// runner mint or delete that reached GitHub, keyed on the RUNNER'S GitHub org
+/// (lower-cased), never the machine's account. The headroom pass counts GitHub's
+/// per-org limits from it and prunes it to about two hours. Platform bookkeeping
+/// with no workspace; RLS admits `app.system_admin` only.
+model GithubRunnerCallEvent {
+  id           String               @id @default(cuid())
+  githubOrg    String               @map("github_org")
+  kind         GithubRunnerCallKind
+  at           DateTime
+  /// The machine's account, for diagnosis only. No FK: the ledger outlives nothing.
+  fleetShardId String?              @map("fleet_shard_id")
+
+  @@index([githubOrg, at])
+  @@index([at])
+  @@map("github_runner_call_event")
+}

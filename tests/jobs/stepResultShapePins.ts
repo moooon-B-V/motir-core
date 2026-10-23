@@ -392,6 +392,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/jobRunReap.ts',
     shape: '{ abandoned: number; scanned: number; stillLive: number }',
   },
+  'fleet-shard-headroom': {
+    file: 'lib/jobs/definitions/fleetShardHeadroom.ts',
+    shape:
+      '{ accounts: number; alerted: number; failures: number; kinds: number; moves: { [key: string]: { capacity_refused?: number | undefined; provider_unavailable?: number | undefined } }; orgs: number; readings: Array<{ capacity: number; fraction: number; limit: string; subject: { fleetKind: string } | { githubOrg: string } | { shardId: string }; used: number }> }',
+  },
   'fleet-debit-monitor': {
     file: 'lib/jobs/definitions/fleetDebitMonitor.ts',
     shape: '{ alerted: number; failures: number; mismatched: number; orgs: number }',

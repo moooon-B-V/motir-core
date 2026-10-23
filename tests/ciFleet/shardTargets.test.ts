@@ -52,6 +52,7 @@ describe('tenantsPerShard', () => {
       perPeriod: 500,
       periodSeconds: 60 * 60,
       callsCountedPerRunner: 2,
+      countsCalls: ['mint', 'delete'],
       verdict: 'assumed',
     };
     const result = tenantsPerShard({
@@ -92,6 +93,7 @@ describe('tenantsPerShard', () => {
       perPeriod: 24 * TENANT_TARGET.startsPerHour * 10,
       periodSeconds: 24 * 60 * 60,
       callsCountedPerRunner: 1,
+      countsCalls: ['mint'],
       verdict: 'assumed',
     };
     expect(tenantsPerShard({ secondaryLimits: [daily] }).tenants).toBe(10);
