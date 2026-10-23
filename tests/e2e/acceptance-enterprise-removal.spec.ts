@@ -50,7 +50,9 @@ const REMOVED_PAGE = '/admin/enterprise-requests';
 /** Any well-formed cuid: the detail route is gone whatever the id. */
 const REMOVED_REQUEST_ID = 'cmenterprisereq0000000001';
 
-const OWNER = 'acceptance-enterprise-removal-owner@example.com';
+// The owner's address names the org and its workspace on every page, so it must
+// not carry the word the billing chapter asserts is absent.
+const OWNER = 'acceptance-tier-removal-owner@example.com';
 const STALE_REASON = `Moved Enterprise request ${REMOVED_REQUEST_ID} from new to contacted.`;
 
 /** The Motir AI ladder cards the plans screen offers: the catalog's ladder, less Free. */
