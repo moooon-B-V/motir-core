@@ -8512,6 +8512,21 @@
       "following": "プランナーを追従中",
       "resume": "プランナーを追従",
       "resumedAnnouncement": "プランナーの追従を再開しました"
+    },
+    "history": {
+      "header": "履歴",
+      "regionAria": "このプロジェクトでのあなたの過去の会話",
+      "status": {
+        "open": "進行中",
+        "ended": "終了"
+      },
+      "loading": "会話を読み込んでいます…",
+      "loadingMore": "さらに読み込んでいます…",
+      "end": "これより前の会話はありません",
+      "emptyTitle": "会話はまだありません",
+      "emptyBody": "このプロジェクトでした質問や開始した計画がここに表示されます。",
+      "error": "会話を読み込めませんでした。",
+      "rowAria": "{title} · {status} · {when}にアクティブ"
     }
   },
   "codeHealth": {

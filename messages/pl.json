@@ -8515,6 +8515,21 @@
       "following": "Podąża za planistą",
       "resume": "Podążaj za planistą",
       "resumedAnnouncement": "Znowu podąża za planistą"
+    },
+    "history": {
+      "header": "Historia",
+      "regionAria": "Twoje wcześniejsze rozmowy w tym projekcie",
+      "status": {
+        "open": "Otwarta",
+        "ended": "Zakończona"
+      },
+      "loading": "Wczytywanie rozmów…",
+      "loadingMore": "Wczytywanie kolejnych…",
+      "end": "Brak starszych rozmów",
+      "emptyTitle": "Nie ma jeszcze rozmów",
+      "emptyBody": "Tutaj pojawiają się pytania, które zadajesz, i plany, które zaczynasz w tym projekcie.",
+      "error": "Nie udało się wczytać Twoich rozmów.",
+      "rowAria": "{title} · {status} · aktywna {when}"
     }
   },
   "codeHealth": {

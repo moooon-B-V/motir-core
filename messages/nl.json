@@ -8515,6 +8515,21 @@
       "following": "Volgt de planner",
       "resume": "De planner volgen",
       "resumedAnnouncement": "Volgt de planner weer"
+    },
+    "history": {
+      "header": "Geschiedenis",
+      "regionAria": "Je eerdere gesprekken in dit project",
+      "status": {
+        "open": "Open",
+        "ended": "Beëindigd"
+      },
+      "loading": "Je gesprekken worden geladen…",
+      "loadingMore": "Meer laden…",
+      "end": "Geen oudere gesprekken",
+      "emptyTitle": "Nog geen gesprekken",
+      "emptyBody": "Vragen die je stelt en plannen die je in dit project start, staan hier.",
+      "error": "Je gesprekken konden niet worden geladen.",
+      "rowAria": "{title} · {status} · actief {when}"
     }
   },
   "codeHealth": {

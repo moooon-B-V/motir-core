@@ -8515,6 +8515,21 @@
       "following": "Seguindo o planejador",
       "resume": "Seguir o planejador",
       "resumedAnnouncement": "Seguindo o planejador novamente"
+    },
+    "history": {
+      "header": "Histórico",
+      "regionAria": "Suas conversas anteriores neste projeto",
+      "status": {
+        "open": "Aberta",
+        "ended": "Encerrada"
+      },
+      "loading": "Carregando suas conversas…",
+      "loadingMore": "Carregando mais…",
+      "end": "Nenhuma conversa mais antiga",
+      "emptyTitle": "Ainda não há conversas",
+      "emptyBody": "As perguntas que você faz e os planos que você inicia neste projeto aparecem aqui.",
+      "error": "Não foi possível carregar suas conversas.",
+      "rowAria": "{title} · {status} · ativa {when}"
     }
   },
   "codeHealth": {
