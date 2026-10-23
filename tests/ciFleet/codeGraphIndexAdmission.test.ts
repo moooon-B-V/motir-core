@@ -182,7 +182,7 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_FALLBACK_ORG', MOTIR_ORG);
   vi.stubEnv('MOTIR_AI_URL', 'https://ai.test');
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
-  // The kill switch disengaged and the org pool at its default (500), so an
+  // The kill switch disengaged and the org pool at its default (`DEFAULT_ORG_POOL_CAP`), so an
   // org_pool refusal never masks the branch a case is actually about. The pool
   // gets its own cases below.
   vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '');

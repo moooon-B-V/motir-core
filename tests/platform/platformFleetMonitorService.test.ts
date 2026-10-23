@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { DEFAULT_ORG_POOL_CAP } from '@/lib/ciFleet/limits';
 import type { RawUsageResponse } from '@/lib/ai/types';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
 import { NotPlatformStaffError } from '@/lib/platform/errors';
@@ -409,7 +410,7 @@ describe('listRunningOrgs', () => {
     // The head stats sum the WHOLE set, not the page: 59 index slots + 1 runner.
     expect(first.pooledContainers).toBe(60);
     expect(first.agentInstances).toBe(0);
-    expect(first.defaultPool).toBe(500);
+    expect(first.defaultPool).toBe(DEFAULT_ORG_POOL_CAP);
     expect(first.pageCount).toBe(3);
     expect(first.rows).toHaveLength(FLEET_ORGS_PAGE_SIZE);
     expect(first.rows[0]).toMatchObject({

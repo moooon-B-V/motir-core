@@ -323,17 +323,22 @@ export const organizationRepository = {
   },
 
   /**
-   * The org's own FLEET POOL override (`Organization.fleetPoolCap`, MOTIR-6907),
-   * or null when it has none — or when the row is absent or RLS-hidden, which
-   * reads as "the environment's number". Must run under the org GUC
-   * (`withOrgServiceWriteContext`): the org policies have no system escape.
+   * What the org's FLEET POOL is resolved from (MOTIR-6907, MOTIR-8963): its own
+   * override (`Organization.fleetPoolCap`, null when it has none) and whether it
+   * is one of Motir's own orgs (`isMeta`, whose default pool is larger). An absent
+   * or RLS-hidden row reads as no override and not meta — "the environment's
+   * number". Must run under the org GUC (`withOrgServiceWriteContext`): the org
+   * policies have no system escape.
    */
-  async findFleetPoolCapInTx(id: string, tx: Prisma.TransactionClient): Promise<number | null> {
+  async findFleetPoolCapInTx(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ fleetPoolCap: number | null; isMeta: boolean }> {
     const org = await tx.organization.findUnique({
       where: { id },
-      select: { fleetPoolCap: true },
+      select: { fleetPoolCap: true, isMeta: true },
     });
-    return org?.fleetPoolCap ?? null;
+    return { fleetPoolCap: org?.fleetPoolCap ?? null, isMeta: org?.isMeta ?? false };
   },
 
   /**

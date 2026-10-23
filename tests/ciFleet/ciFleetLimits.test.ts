@@ -6,11 +6,13 @@ import {
   DEFAULT_INDEX_IN_FLIGHT_CAP,
   DEFAULT_ORG_POOL_CAP,
   fleetKillSwitchEngaged,
+  META_ORG_POOL_CAP,
   fleetSlotTtlSeconds,
   indexInFlightCap,
   orgIndexInFlightCap,
   orgPoolCap,
 } from '@/lib/ciFleet/limits';
+import { TENANT_TARGET } from '@/lib/ciFleet/shardTargets';
 
 // The gate's CONFIGURATION half (Story MOTIR-1916 · MOTIR-1922, re-cut by
 // MOTIR-6907 per `docs/decisions/fleet-per-org-pool.md`) — pure, no DB.
@@ -26,10 +28,24 @@ afterEach(() => {
 });
 
 describe("the ORGANISATION's pool is per ENVIRONMENT, with an enterprise override", () => {
-  it('defaults to 500 when unset (§2)', () => {
+  // AMENDMENT 1: the default is DERIVED from the target tenant, never typed.
+  it("defaults to one target tenant's peak when unset", () => {
     vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '');
-    expect(DEFAULT_ORG_POOL_CAP).toBe(500);
-    expect(orgPoolCap()).toBe(500);
+    expect(DEFAULT_ORG_POOL_CAP).toBe(TENANT_TARGET.peakRunners);
+    expect(orgPoolCap()).toBe(TENANT_TARGET.peakRunners);
+  });
+
+  // Motir's own org is the measurement source, not a target-sized tenant.
+  it('takes the meta default (500) when the caller passes it and nothing is set', () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '');
+    expect(META_ORG_POOL_CAP).toBe(500);
+    expect(orgPoolCap(null, META_ORG_POOL_CAP)).toBe(META_ORG_POOL_CAP);
+  });
+
+  it('keeps its order with the meta default: override, then environment, then default', () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '40');
+    expect(orgPoolCap(null, META_ORG_POOL_CAP)).toBe(40);
+    expect(orgPoolCap(2000, META_ORG_POOL_CAP)).toBe(2000);
   });
 
   it('takes the environment value when set', () => {

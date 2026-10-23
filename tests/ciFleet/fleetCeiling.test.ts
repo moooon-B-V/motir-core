@@ -23,6 +23,8 @@ import {
 import { withSystemContext } from '@/lib/workspaces/context';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
+import { META_ORG_POOL_CAP } from '@/lib/ciFleet/limits';
+import { TENANT_TARGET } from '@/lib/ciFleet/shardTargets';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
@@ -331,10 +333,28 @@ describe("ONE pool per organisation, over ALL of that org's workloads", () => {
     expect((await orgCensus(fx)).total).toBe(3);
   });
 
-  it('defaults to 500 per org with nothing configured', async () => {
+  // AMENDMENT 1: a tenant's default is one target tenant's peak; Motir's own
+  // (meta) org keeps the larger pool it is measured with.
+  it('defaults to the target tenant per org with nothing configured', async () => {
     const fx = await seedTenant();
     const { verdict } = await reserve('hosted_agent', fx);
-    expect(verdict).toMatchObject({ outcome: 'reserved', pool: 500 });
+    expect(verdict).toMatchObject({ outcome: 'reserved', pool: TENANT_TARGET.peakRunners });
+  });
+
+  it('defaults a meta org to META_ORG_POOL_CAP; the environment and its own override still win', async () => {
+    const fx = await seedTenant({ isMeta: true });
+    expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({
+      outcome: 'reserved',
+      pool: META_ORG_POOL_CAP,
+    });
+
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '7');
+    expect(await fleetCeilingService.resolveOrgPool(fx.organizationId)).toBe(7);
+    await adminDb.organization.update({
+      where: { id: fx.organizationId },
+      data: { fleetPoolCap: 9 },
+    });
+    expect(await fleetCeilingService.resolveOrgPool(fx.organizationId)).toBe(9);
   });
 
   // The enterprise override (§2): platform staff set it on the org row.

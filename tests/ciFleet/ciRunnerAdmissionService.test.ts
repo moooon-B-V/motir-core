@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CiRunnerProvisioningIntent } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
+import { DEFAULT_ORG_POOL_CAP } from '@/lib/ciFleet/limits';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -194,7 +195,11 @@ describe("guard 1 — the ORGANISATION'S pool (fleet-per-org-pool.md §2)", () =
 
     const verdict = await ciRunnerAdmissionService.admit(intent);
 
-    expect(verdict).toMatchObject({ outcome: 'admitted', orgInFlight: 0, orgPool: 500 });
+    expect(verdict).toMatchObject({
+      outcome: 'admitted',
+      orgInFlight: 0,
+      orgPool: DEFAULT_ORG_POOL_CAP,
+    });
     // The claim is part of the decision, not a later step — the slot is taken
     // the moment the gate says yes, which is what makes the count exact.
     expect(await statusOf(intent.id)).toBe('provisioning');

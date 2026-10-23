@@ -10,7 +10,13 @@ import {
   FLEET_WORKLOAD_KINDS,
   type FleetWorkloadKind,
 } from '@/lib/ciFleet/workloads';
-import { fleetKillSwitchEngaged, fleetSlotTtlSeconds, orgPoolCap } from '@/lib/ciFleet/limits';
+import {
+  DEFAULT_ORG_POOL_CAP,
+  fleetKillSwitchEngaged,
+  fleetSlotTtlSeconds,
+  META_ORG_POOL_CAP,
+  orgPoolCap,
+} from '@/lib/ciFleet/limits';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import {
@@ -242,7 +248,8 @@ export const fleetCeilingService = {
 
   /**
    * The organisation's POOL — its enterprise override when platform staff set
-   * one, else the environment's number (`orgPoolCap`). Null when the org row
+   * one, else the environment's number, else the default for a tenant or for one
+   * of Motir's own (meta) orgs (`orgPoolCap`). Null when the org row
    * could not be read: every caller then FAILS CLOSED rather than hand an org
    * whose pool is unknown the default.
    *
@@ -253,10 +260,10 @@ export const fleetCeilingService = {
    */
   async resolveOrgPool(organizationId: string): Promise<number | null> {
     try {
-      const override = await withOrgServiceWriteContext(organizationId, (tx) =>
+      const { fleetPoolCap, isMeta } = await withOrgServiceWriteContext(organizationId, (tx) =>
         organizationRepository.findFleetPoolCapInTx(organizationId, tx),
       );
-      return orgPoolCap(override);
+      return orgPoolCap(fleetPoolCap, isMeta ? META_ORG_POOL_CAP : DEFAULT_ORG_POOL_CAP);
     } catch (err) {
       console.error("[fleetCeilingService] could not read the organization's fleet pool", {
         organizationId,

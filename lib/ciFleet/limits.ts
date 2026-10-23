@@ -5,14 +5,17 @@
 //
 // `docs/decisions/fleet-per-org-pool.md` is why the numbers are what they are:
 //
-//   * THE ORGANISATION'S POOL — `MOTIR_FLEET_ORG_MAX_IN_FLIGHT`, default 500 (§2).
-//     Each organisation holds its own pool, so one org's burst never queues
-//     another's. It is sized to the WORKLOAD (ten concurrent pull requests of a
-//     50-job repository), not to a price: the org's credits are what bound its
-//     spend (§3), and the attribution reconciler removes anything no paying org
-//     owns (§5). An enterprise org may carry its own number, set by platform
-//     staff on the org row (`Organization.fleetPoolCap`); it is never a per-org
-//     env var.
+//   * THE ORGANISATION'S POOL — `MOTIR_FLEET_ORG_MAX_IN_FLIGHT`, default
+//     `TENANT_TARGET.peakRunners` (AMENDMENT 1, which replaced §2's 500). Each
+//     organisation holds its own pool, so one org's burst never queues another's,
+//     and no tenant holds more of the fleet than a tenant was sized for
+//     (`shardTargets.ts`). Motir's own (meta) orgs keep `META_ORG_POOL_CAP`: they
+//     are the source of the measurements, not a target-sized tenant (chosen by
+//     `fleetCeilingService.resolveOrgPool`, never in this directory). The org's
+//     credits still bound its spend (§3), and the attribution reconciler removes
+//     anything no paying org owns (§5). An enterprise org may carry its own
+//     number, set by platform staff on the org row (`Organization.fleetPoolCap`);
+//     it is never a per-org env var.
 //   * THE KILL SWITCH — `MOTIR_FLEET_MAX_IN_FLIGHT` (§6). It USED to be the one
 //     fleet-wide ceiling (MOTIR-1997, default 24) and the only bound on Motir's
 //     invoice. It is now the operator's kill switch and nothing else: `0` stops
@@ -33,6 +36,8 @@
 // org's pool — a long-lived per-minute machine must not take CI's capacity. The
 // kill switch still stops them.
 
+import { TENANT_TARGET } from '@/lib/ciFleet/shardTargets';
+
 /** The env var an operator sets to `0` to stop every new boot — the kill switch. */
 const FLEET_KILL_SWITCH_ENV = 'MOTIR_FLEET_MAX_IN_FLIGHT';
 
@@ -50,14 +55,25 @@ const FLEET_SLOT_TTL_ENV = 'MOTIR_FLEET_SLOT_TTL_SECONDS';
 /**
  * THE ORGANISATION'S POOL when the environment sets none — how many containers
  * of the shared workloads (CI runners, hosted-agent runs, index containers) ONE
- * organisation may have in flight at once (`fleet-per-org-pool.md` §2).
+ * organisation may have in flight at once (`fleet-per-org-pool.md` AMENDMENT 1).
  *
- * 500 is about ten pull requests' worth of a real repository's CI (≈ 50 jobs
- * each, motir-core#3243) — a number no single org reaches in ordinary use. It is
- * deliberately not a tier ladder: the money is the limit (§3), so an org that
- * does reach it is still bounded by its credits.
+ * DERIVED, NEVER TYPED: it is one target tenant's peak concurrency
+ * (`TENANT_TARGET.peakRunners`), because the fleet's accounts are sized in target
+ * tenants and one tenant must not hold more of the fleet than it was sized for.
+ * It replaced §2's 500, which was sized to a workload no account was sized for.
  */
-export const DEFAULT_ORG_POOL_CAP = 500;
+export const DEFAULT_ORG_POOL_CAP: number = TENANT_TARGET.peakRunners;
+
+/**
+ * THE POOL OF MOTIR'S OWN (META) ORGANISATIONS when the environment sets none —
+ * §2's original 500, about ten pull requests' worth of a real repository's CI
+ * (≈ 50 jobs each, motir-core#3243).
+ *
+ * Motir's own org is the SOURCE of the measurements the tenant targets are a
+ * quarter of, not a target-sized tenant: shrinking it to a tenant's pool would
+ * throttle Motir's own CI the day the targets landed.
+ */
+export const META_ORG_POOL_CAP = 500;
 
 /**
  * How long a slot taken by a slot-backed workload keeps counting if nobody ever
@@ -142,15 +158,22 @@ export function fleetKillSwitchEngaged(): boolean {
  * `override` is the org's own number, set by platform staff for an enterprise
  * deal (`Organization.fleetPoolCap`, §2); when it is a non-negative integer it
  * wins over the environment. Otherwise `MOTIR_FLEET_ORG_MAX_IN_FLIGHT`, read on
- * every call so an operator can move it without a deploy, else
- * {@link DEFAULT_ORG_POOL_CAP}. Always a number: an org whose pool is unbounded
- * is not expressible, and `0` legitimately means "this org boots nothing".
+ * every call so an operator can move it without a deploy, else `defaultCap`:
+ * {@link DEFAULT_ORG_POOL_CAP} for a tenant, or {@link META_ORG_POOL_CAP}, which
+ * `fleetCeilingService.resolveOrgPool` passes for one of Motir's own orgs. The
+ * choice is made there, not here: nothing in `lib/ciFleet/` branches on which
+ * org it is (`fleetNoOrgIdentityBranch.test.ts`). Always a number: an org whose
+ * pool is unbounded is not expressible, and `0` legitimately means "this org
+ * boots nothing".
  */
-export function orgPoolCap(override: number | null = null): number {
+export function orgPoolCap(
+  override: number | null = null,
+  defaultCap: number = DEFAULT_ORG_POOL_CAP,
+): number {
   if (override !== null && Number.isInteger(override) && override >= 0) return override;
   /* istanbul ignore next -- the `?? 0` is UNREACHABLE: a non-null fallback means
      the shared reader cannot answer null here. */
-  return readCeilingEnv(ORG_POOL_ENV, DEFAULT_ORG_POOL_CAP) ?? 0;
+  return readCeilingEnv(ORG_POOL_ENV, defaultCap) ?? 0;
 }
 
 /**
