@@ -155,10 +155,14 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   // the boundary instead — a session memoised before the field existed simply
   // lacks it, and the settle's teardown then finds the volume in the machine's
   // own mounts, or the fleet reconciler's orphan sweep deletes it.
+  //
+  // MOTIR-9348 added the OPTIONAL `session.image` the same way, for the same
+  // reason: a session memoised before it existed lacks it, and the never-started
+  // verdict then names the image `unknown` rather than failing.
   'boot-runner': {
     file: 'lib/services/ciRunnerBootService.ts',
     shape:
-      '{ outcome: { billableSeconds: number; bootLatencyMs: null | number; containerId: string; costUsd: string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "gate_deferred"; reason: "ai_plan_required" | "balance_unavailable" | "ci_credits_exhausted" | "credits_insufficient" | "fleet_ceiling" | "gate_unavailable" | "org_pool" | "plan_unknown" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "no_runner_group" } | { detail: string; outcome: "provision_failed" } | { outcome: "already_claimed" } | { outcome: "not_configured" } | { outcome: "rate_limited"; retryAfterSeconds: null | number } | { outcome: "unknown_intent" }; phase: "terminal" } | { phase: "supervising"; session: { attribution: { orgId: string; projectId: string; repoFullName: string; workflowJobId: number; workspaceId: string }; bootedAt: string; githubRunnerId: null | number; handle: { createdAt: string; id: string; provider: "arc" | "fake" | "fly" | "runs_on"; region: string; volumeId?: string | undefined }; intentId: string; queuedAt: string; runnerTarget?: null | undefined | { installationId: string; org: string; role: "provisioning" | "user-facing" } } }',
+      '{ outcome: { billableSeconds: number; bootLatencyMs: null | number; containerId: string; costUsd: string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "gate_deferred"; reason: "ai_plan_required" | "balance_unavailable" | "ci_credits_exhausted" | "credits_insufficient" | "fleet_ceiling" | "gate_unavailable" | "org_pool" | "plan_unknown" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "no_runner_group" } | { detail: string; outcome: "provision_failed" } | { outcome: "already_claimed" } | { outcome: "not_configured" } | { outcome: "rate_limited"; retryAfterSeconds: null | number } | { outcome: "unknown_intent" }; phase: "terminal" } | { phase: "supervising"; session: { attribution: { orgId: string; projectId: string; repoFullName: string; workflowJobId: number; workspaceId: string }; bootedAt: string; githubRunnerId: null | number; handle: { createdAt: string; id: string; provider: "arc" | "fake" | "fly" | "runs_on"; region: string; volumeId?: string | undefined }; image?: string | undefined; intentId: string; queuedAt: string; runnerTarget?: null | undefined | { installationId: string; org: string; role: "provisioning" | "user-facing" } } }',
   },
   'build-archive': {
     file: 'lib/jobs/definitions/dataExportBuild.ts',
@@ -590,6 +594,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape: '"failed" | "launched" | "noop"',
   },
   'sweep-stale-claims': {
+    file: 'lib/jobs/definitions/fleetAttribution.ts',
+    shape: 'number',
+  },
+  'sweep-vanished-in-flight': {
     file: 'lib/jobs/definitions/fleetAttribution.ts',
     shape: 'number',
   },

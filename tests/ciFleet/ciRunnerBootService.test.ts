@@ -260,6 +260,7 @@ describe('the happy path — ONE intent produces ONE ephemeral runner', () => {
     });
     expect(settled.status).toBe('completed');
     expect(settled.teardownReason).toBe('job_completed');
+    expect(settled.failureDetail).toBeNull();
     expect(settled.containerProvider).toBe('fake');
     expect(settled.containerId).toBe(fakeOrchestrator.provisioned[0]!.id);
     expect(settled.githubRunnerId).toBe(9001);
@@ -471,6 +472,14 @@ describe('every failure path destroys the container — one test each', () => {
       where: { id: intent.id },
     });
     expect(settled.status).toBe('failed');
+    // The row says what the container was doing and which image it waited on,
+    // so a pull that never finishes is visible without the provider's logs
+    // (MOTIR-9348). The fake has no fleet config, so the spec's image is the
+    // unconfigured placeholder.
+    expect(settled.failureDetail).toBe(
+      'the container never started within 0.04 s ' +
+        '(last provider state: created; image motir/ci-runner@sha256:unset)',
+    );
     // It never ran, so it costs nothing — but it still produced a row.
     expect(outcome).toMatchObject({ billableSeconds: 0, costUsd: '0' });
   });
@@ -492,6 +501,9 @@ describe('every failure path destroys the container — one test each', () => {
       where: { id: intent.id },
     });
     expect(settled.teardownReason).toBe('job_timed_out');
+    // A container that started and timed out keeps the timeout's own detail;
+    // the never-started detail (MOTIR-9348) belongs to the boot deadline alone.
+    expect(settled.failureDetail ?? '').not.toContain('never started');
     // It DID run, so it costs something — the customer's hung job is Motir's
     // container-seconds either way.
     expect((outcome as { billableSeconds: number }).billableSeconds).toBeGreaterThanOrEqual(0);
@@ -865,12 +877,145 @@ describe('the REAPER — the backstop for the orchestrator crashing mid-flight',
     expect(settled.failureDetail).toContain('de-registered');
   });
 
+  describe('an in-flight intent whose container is already gone (MOTIR-9347)', () => {
+    const LONG_AGO = () => new Date(Date.now() - 3 * 60 * 60_000);
+
+    /** An intent left `running` by a supervision that never settled it, naming a
+     *  container the provider no longer holds — the 88 production rows. */
+    async function seedOrphanedRunning(
+      fx: Fixture,
+      overrides: { containerId?: string; startedAt?: Date | null; bootedAt?: Date } = {},
+    ) {
+      const intent = await seedIntent(fx);
+      return adminDb.ciRunnerProvisioningIntent.update({
+        where: { id: intent.id },
+        data: {
+          status: 'running',
+          containerProvider: 'fake',
+          containerId: overrides.containerId ?? `gone-${intent.id}`,
+          containerRegion: 'iad',
+          githubRunnerId: 9101,
+          runnerName: 'motir-orphan',
+          bootedAt: overrides.bootedAt ?? LONG_AGO(),
+          startedAt: overrides.startedAt ?? null,
+        },
+      });
+    }
+
+    async function inFlightCount(organizationId: string) {
+      return withSystemContext((tx) =>
+        ciRunnerProvisioningIntentRepository.countInFlightForOrganization(organizationId, tx),
+      );
+    }
+
+    it('settles it, names the missing container, and de-registers its runner', async () => {
+      const fx = await seedTenant();
+      const intent = await seedOrphanedRunning(fx);
+      expect(await inFlightCount(fx.organizationId)).toBe(1);
+
+      expect(await ciRunnerBootService.sweepVanishedInFlight()).toBe(1);
+
+      const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+        where: { id: intent.id },
+      });
+      expect(settled.status).toBe('failed');
+      expect(settled.teardownReason).toBe('provision_failed');
+      expect(settled.failureDetail).toContain(`container ${intent.containerId} no longer exists`);
+      expect(deleteRunnerCalls()).toHaveLength(1);
+      expect(await inFlightCount(fx.organizationId)).toBe(0);
+    });
+
+    it('treats a machine the provider still READS as destroyed as gone', async () => {
+      // Fly answers a destroyed machine with `state: destroyed` before its read
+      // 404s, and the inventory no longer lists it — the production case.
+      const fx = await seedTenant();
+      const intent = await seedOrphanedRunning(fx);
+      vi.spyOn(fakeOrchestrator, 'describe').mockResolvedValue({
+        handleId: intent.containerId!,
+        exists: true,
+        state: 'destroyed',
+        terminal: true,
+        createdAt: LONG_AGO(),
+        startedAt: null,
+        stoppedAt: null,
+        exitCode: null,
+      });
+
+      expect(await ciRunnerBootService.sweepVanishedInFlight()).toBe(1);
+
+      const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+        where: { id: intent.id },
+      });
+      expect(settled.status).toBe('failed');
+    });
+
+    it('settles one that had STARTED as job_timed_out', async () => {
+      const fx = await seedTenant();
+      const intent = await seedOrphanedRunning(fx, { startedAt: LONG_AGO() });
+
+      expect(await ciRunnerBootService.sweepVanishedInFlight()).toBe(1);
+
+      const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+        where: { id: intent.id },
+      });
+      expect(settled.teardownReason).toBe('job_timed_out');
+    });
+
+    it('leaves one whose container STILL EXISTS to the machine-driven kill', async () => {
+      const fx = await seedTenant();
+      fakeOrchestrator.setBootBehaviour('hang');
+      const pending = await seedIntent(fx);
+      const booted = await ciRunnerBootService.bootIntent(pending.id, FAST);
+      if (booted.phase !== 'supervising') throw new Error('unreachable');
+      await adminDb.ciRunnerProvisioningIntent.update({
+        where: { id: pending.id },
+        data: { bootedAt: LONG_AGO() },
+      });
+
+      expect(await ciRunnerBootService.sweepVanishedInFlight()).toBe(0);
+
+      const row = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+        where: { id: pending.id },
+      });
+      expect(row.status).toBe('running');
+      expect(deleteRunnerCalls()).toHaveLength(0);
+    });
+
+    it('leaves one still inside its own end alone, container or not', async () => {
+      const fx = await seedTenant();
+      const intent = await seedOrphanedRunning(fx, { bootedAt: new Date() });
+
+      expect(await ciRunnerBootService.sweepVanishedInFlight()).toBe(0);
+
+      const row = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+        where: { id: intent.id },
+      });
+      expect(row.status).toBe('running');
+    });
+
+    it('never reads an unreadable provider as a missing container', async () => {
+      const fx = await seedTenant();
+      const intent = await seedOrphanedRunning(fx);
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      vi.spyOn(fakeOrchestrator, 'describe').mockRejectedValue(new Error('provider 500'));
+
+      expect(await ciRunnerBootService.sweepVanishedInFlight()).toBe(0);
+
+      const row = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+        where: { id: intent.id },
+      });
+      expect(row.status).toBe('running');
+      expect(deleteRunnerCalls()).toHaveLength(0);
+    });
+  });
+
   it('is inert on a deployment with no orchestrator', async () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
     vi.stubEnv('FLY_FLEET_API_TOKEN', '');
     vi.stubEnv('FLY_FLEET_APP', '');
     vi.stubEnv('MOTIR_RUNNER_IMAGE', '');
     expect(await ciRunnerBootService.sweepStaleClaims()).toBe(0);
+    expect(await ciRunnerBootService.sweepVanishedInFlight()).toBe(0);
     expect(
       await ciRunnerBootService.reapContainer({
         provider: 'fly',
@@ -1396,6 +1541,59 @@ describe('the boot path is three bounded phases, not one long one', () => {
     if (!final.done) throw new Error('unreachable');
     expect(final.reason).toBe('job_timed_out');
     expect(final.failureDetail).toContain('could not be read');
+  });
+
+  it('a boot deadline reached on a FAILED read still names the last state a read saw (MOTIR-9348)', async () => {
+    const fx = await seedTenant();
+    fakeOrchestrator.setBootBehaviour('never_start');
+    const intent = await seedIntent(fx);
+    const booted = await ciRunnerBootService.bootIntent(intent.id, FAST);
+    if (booted.phase !== 'supervising') throw new Error('unreachable');
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const options = { ...FAST, bootDeadlineMs: 60_000 };
+
+    // One good read inside the deadline records the state it saw…
+    const first = await ciRunnerBootService.pollOnce(booted.session, undefined, options);
+    if (first.done) throw new Error('unreachable');
+    expect(first.lastState).toBe('created');
+
+    // …and when the deadline passes while the provider cannot be read, the
+    // verdict carries that state rather than `unknown`.
+    vi.spyOn(fakeOrchestrator, 'describe').mockRejectedValue(new Error('provider 500'));
+    const late = new Date(new Date(booted.session.bootedAt).getTime() + 60_000);
+    const verdict = await ciRunnerBootService.pollOnce(booted.session, first, {
+      ...options,
+      now: () => late,
+    });
+
+    expect(verdict).toMatchObject({
+      done: true,
+      reason: 'provision_failed',
+      failureDetail:
+        'the container never started within 60 s ' +
+        '(last provider state: created; image motir/ci-runner@sha256:unset)',
+    });
+  });
+
+  it('a session memoised before it carried an image says `unknown` rather than failing (MOTIR-9348)', async () => {
+    const fx = await seedTenant();
+    fakeOrchestrator.setBootBehaviour('never_start');
+    const intent = await seedIntent(fx);
+    const booted = await ciRunnerBootService.bootIntent(intent.id, FAST);
+    if (booted.phase !== 'supervising') throw new Error('unreachable');
+    const { image: _image, ...legacy } = booted.session;
+    const late = new Date(new Date(booted.session.bootedAt).getTime() + 1_000);
+
+    const verdict = await ciRunnerBootService.pollOnce(legacy, undefined, {
+      ...FAST,
+      now: () => late,
+    });
+
+    expect(verdict).toMatchObject({
+      done: true,
+      reason: 'provision_failed',
+      failureDetail: expect.stringContaining('image unknown'),
+    });
   });
 
   it('settleSupervision tears down, meters and settles — the stepped form of the finally', async () => {
