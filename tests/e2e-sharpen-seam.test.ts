@@ -280,6 +280,33 @@ describe('scripted', () => {
     expect(core.calls).toEqual([]);
   });
 
+  it('an in-run turn never asks a carried question, and ends at once when the carried answers cover its requests (MOTIR-9319)', async () => {
+    seed({ default: { mode: 'scripted', questions: SCRIPT } });
+    const q1 = SCRIPT[0]!;
+    const carried = {
+      requests: ['Export the board'],
+      settled: [
+        {
+          questionId: q1.id,
+          question: q1.text,
+          answer: q1.readings[0]!.label,
+          topic: q1.topic,
+          readingId: q1.readings[0]!.id,
+        },
+      ],
+      assumptions: [],
+    };
+    const run = (requests: string[]) => ({
+      run: { planId: 'plan-1', requests, card: null, carried },
+    });
+    const covered = await turn(next(null, 'start', run(['export  the BOARD'])));
+    expect(covered.result?.kind).toBe('nothing_to_ask');
+    expect(covered.result?.question).toBeNull();
+    const later = await turn(next(null, 'start', run(['Export the board', 'Also weekly'])));
+    expect(later.result?.kind).toBe('question');
+    expect(later.result?.question?.id).toBe(SCRIPT[1]!.id);
+  });
+
   it('stop with nothing settled ends with no write-back', async () => {
     seed({ default: { mode: 'scripted', questions: SCRIPT } });
     const t1 = await turn(next(null, 'start'));

@@ -419,7 +419,7 @@ describe('an offer that is never held', () => {
     expect(client.openSharpen).not.toHaveBeenCalled();
   });
 
-  it('does not hold the bug offer', async () => {
+  it('does not hold an offer that cannot start, and draws its cannot-start line', async () => {
     const view = renderWithIntl(rail({ session: conversation([]) }));
     await act(async () => {
       fireEvent.click(toggle());
@@ -429,12 +429,16 @@ describe('an offer that is never held', () => {
         rail({
           session: conversation([
             turn(0),
-            turn(1, 'assistant', { offer: offer({ kind: 'bug' }), createdAt: OFFER_AT }),
+            turn(1, 'assistant', {
+              offer: offer({ cannotStart: 'planning_unavailable' }),
+              createdAt: OFFER_AT,
+            }),
           ]),
         }),
       );
     });
     expect(screen.queryByTestId('plan-offer-held')).toBeNull();
+    expect(screen.getByTestId('plan-offer-cannot-start')).toBeTruthy();
     expect(client.openSharpen).not.toHaveBeenCalled();
   });
 });

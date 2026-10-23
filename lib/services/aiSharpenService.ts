@@ -249,9 +249,28 @@ function loadDto(sessionId: string, ctx: ProjectContext): Promise<SharpenSession
 /**
  * The caller's latest grilling on a conversation (MOTIR-9314), open or ended, with
  * the person turns it was given: every one written by its latest turn. A turn
- * written after that is a later, different request (MOTIR-9315). Null when they
- * never grilled it.
+ * written after that is a later, different request (MOTIR-9315) — except the turns
+ * that STARTED the plan offer this grilling held (MOTIR-9319): the typed yes and the
+ * request the start appends are the grilled request being confirmed, so a run
+ * started from that offer does not grill it again. Null when they never grilled it.
  */
+/** The confirmed plan offer a grilling that began at `grilledAt` held — the latest
+ *  `plan` offer answered before it — with when it was confirmed and its request. */
+function heldOfferStart(
+  turns: readonly { role: string; createdAt: Date; answerOffer: unknown }[],
+  grilledAt: Date,
+): { confirmedAt: Date; requestMd: string } | null {
+  for (let i = turns.length - 1; i >= 0; i -= 1) {
+    const turn = turns[i]!;
+    if (turn.role !== 'assistant' || turn.createdAt > grilledAt) continue;
+    const offer = turn.answerOffer as { kind?: string; requestMd?: string; confirmedAt?: string };
+    if (offer?.kind !== 'plan') continue;
+    if (!offer.confirmedAt || typeof offer.requestMd !== 'string') return null;
+    return { confirmedAt: new Date(offer.confirmedAt), requestMd: offer.requestMd.trim() };
+  }
+  return null;
+}
+
 async function settledOnConversation(
   conversationId: string,
   ctx: ProjectContext,
@@ -265,6 +284,7 @@ async function settledOnConversation(
   );
   if (!row) return null;
   const turns = await planChangeTurnRepository.listBySessionId(conversationId, ctx.workspaceId, tx);
+  const started = heldOfferStart(turns, row.createdAt);
   return {
     sessionId: row.id,
     status: row.status,
@@ -272,7 +292,14 @@ async function settledOnConversation(
     settled: (row.settled as unknown as SettledAnswer[]) ?? [],
     assumptions: (row.assumptions as unknown as SharpenAssumption[]) ?? [],
     requests: turns
-      .filter((t) => t.role === 'user' && t.createdAt <= row.lastActivityAt && t.body.trim())
+      .filter(
+        (t) =>
+          t.role === 'user' &&
+          t.body.trim() &&
+          (t.createdAt <= row.lastActivityAt ||
+            (started !== null &&
+              (t.createdAt <= started.confirmedAt || t.body.trim() === started.requestMd))),
+      )
       .map((t) => t.body),
   };
 }

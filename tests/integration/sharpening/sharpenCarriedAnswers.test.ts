@@ -249,6 +249,80 @@ describe('plan submit carries the conversation’s settled answers', () => {
   });
 });
 
+describe('the turns that start the offer a grilling held (MOTIR-9319)', () => {
+  const OFFER_REQUEST = 'Plan shared export presets for the finance team.';
+
+  /** The answer carrying a plan offer, written before the grilling opens. */
+  async function offered(conversationId: string): Promise<string> {
+    const { turnCount: seq } = await adminDb.planChangeSession.update({
+      where: { id: conversationId },
+      data: { turnCount: { increment: 1 } },
+      select: { turnCount: true },
+    });
+    const turn = await adminDb.planChangeTurn.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        sessionId: conversationId,
+        seq: seq - 1,
+        role: 'assistant',
+        body: 'I can plan export presets.',
+        isAnswer: true,
+        answerOffer: { kind: 'plan', requestMd: OFFER_REQUEST, targetKey: null },
+      },
+    });
+    return turn.id;
+  }
+
+  /** A typed yes, the start's claim on the offer, and the request it appends. */
+  async function startWithTypedYes(conversationId: string, offerTurnId: string) {
+    await planChangeSessionsService.appendTurn('yes, plan it', pctx, {
+      sessionId: conversationId,
+    });
+    const offer = await adminDb.planChangeTurn.findUniqueOrThrow({ where: { id: offerTurnId } });
+    await adminDb.planChangeTurn.update({
+      where: { id: offerTurnId },
+      data: {
+        answerOffer: {
+          ...(offer.answerOffer as object),
+          confirmedAt: new Date().toISOString(),
+          confirmedById: fx.ownerId,
+        },
+      },
+    });
+    await planChangeSessionsService.appendTurn(OFFER_REQUEST, pctx, {
+      sessionId: conversationId,
+    });
+  }
+
+  it('are among the carried requests, so the run they start does not grill that request again', async () => {
+    const conversationId = await conversation();
+    const offerTurnId = await offered(conversationId);
+    await grill(conversationId, { kind: 'stopped', settled: SETTLED, assumptions: [] });
+    await startWithTypedYes(conversationId, offerTurnId);
+    const { planId } = await planChangeSessionsService.submit(pctx, { sessionId: conversationId });
+    const requests = [REQUEST, 'yes, plan it', OFFER_REQUEST];
+    expect((planJob().context['carriedAnswers'] as { requests: string[] }).requests).toEqual(
+      requests,
+    );
+    jobs.submitted = [];
+    await aiSharpenService.open({ planId }, pctx);
+    const run = (jobs.submitted[0]!.context['sharpen'] as { run: Record<string, unknown> }).run;
+    expect(run['requests']).toEqual(requests);
+    expect((run['carried'] as { requests: string[] }).requests).toEqual(requests);
+  });
+
+  it('are not carried when the offer was answered after the grilling, not held by it', async () => {
+    const conversationId = await conversation();
+    await grill(conversationId, { kind: 'finished', settled: SETTLED, assumptions: [] });
+    const offerTurnId = await offered(conversationId);
+    await startWithTypedYes(conversationId, offerTurnId);
+    await planChangeSessionsService.submit(pctx, { sessionId: conversationId });
+    expect((planJob().context['carriedAnswers'] as { requests: string[] }).requests).toEqual([
+      REQUEST,
+    ]);
+  });
+});
+
 describe('the in-run grilling’s run block carries them', () => {
   it('a Sharpen session over the run’s plan gets run.carried', async () => {
     const conversationId = await conversation();

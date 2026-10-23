@@ -205,6 +205,20 @@ export function buildWriteBack(
   };
 }
 
+/** motir-ai's request normalisation (`normaliseRequest`). */
+function normaliseRequest(s: string): string {
+  return s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim();
+}
+
+/** Do the run's carried answers cover every one of its requests —
+ *  `carriedCoversRequests`, as motir-ai reads it. */
+function carriedCoversRun(ctx: SharpenJobContext): boolean {
+  const run = ctx.run;
+  if (!run?.carried) return false;
+  const known = new Set(run.carried.requests.map(normaliseRequest));
+  return run.requests.every((r) => known.has(normaliseRequest(r)));
+}
+
 /**
  * The turn a submit comes to, as a pure function of the fixture and the
  * envelope's context. The write-back it owes (if any) is returned, not made.
@@ -231,10 +245,18 @@ export function planSharpenTurn(
     };
   };
   if (ctx.action === 'stop') return end('stopped');
+  // The conversation already grilled this very request (`carriedAnswersCoverRun`,
+  // MOTIR-9313): nothing is left to ask.
+  if (ctx.action === 'start' && carriedCoversRun(ctx)) return end('nothing_to_ask');
   if (fixture.mode === 'determinate')
     return end(ctx.action === 'start' ? 'nothing_to_ask' : 'finished');
 
+  // What is already settled — the carried answers, then this session's own
+  // (`knownAnswers`): a carried question is never asked again.
+  const carried = ctx.run?.carried;
   const done = new Set([
+    ...(carried?.settled ?? []).map((s) => s.questionId),
+    ...(carried?.assumptions ?? []).map((a) => a.questionId),
     ...recorded.settled.map((s) => s.questionId),
     ...recorded.assumptions.map((a) => a.questionId),
   ]);
