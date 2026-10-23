@@ -40,7 +40,7 @@ beforeEach(async () => {
 // where both images were the same string would pass for a preflight that probed
 // the runner twice, which is the bug MOTIR-2030 fixes.
 
-const RUNNER_REPO = 'moooon-b-v/motir-ci-runner';
+const RUNNER_REPO = 'motir-co/motir-ci-runner';
 const RUNNER_IMAGE = `ghcr.io/${RUNNER_REPO}@sha256:446c692d`;
 const INDEXER_REPO = 'motir-ci-fleet/motir-indexer';
 const INDEXER_IMAGE = `registry.fly.io/${INDEXER_REPO}@sha256:9f2c1ab4`;
@@ -185,7 +185,7 @@ describe('the fleet boot preflight rides the daily health check', () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
     vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
     vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
-    vi.stubEnv('MOTIR_RUNNER_IMAGE', 'ghcr.io/moooon-b-v/motir-ci-runner@sha256:446c692d');
+    vi.stubEnv('MOTIR_RUNNER_IMAGE', 'ghcr.io/motir-co/motir-ci-runner@sha256:446c692d');
     vi.stubGlobal(
       'fetch',
       vi.fn(async (rawUrl: string): Promise<Response> => {
@@ -199,7 +199,7 @@ describe('the fleet boot preflight rides the daily health check', () => {
           headers: {
             'content-type': 'application/json',
             'www-authenticate':
-              'Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:moooon-b-v/motir-ci-runner:pull"',
+              'Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:motir-co/motir-ci-runner:pull"',
           },
         });
       }),
@@ -217,7 +217,7 @@ describe('the fleet boot preflight rides the daily health check', () => {
     // ⚠️ THE MESSAGE IS THE WHOLE SURFACE. It becomes `job_run.failure`, which
     // the DLQ detail panel renders and nothing beside it — so the diagnosis has
     // to be IN there: which image, what happened, and where to go next.
-    expect(error?.message).toContain('ghcr.io/moooon-b-v/motir-ci-runner@sha256:446c692d');
+    expect(error?.message).toContain('ghcr.io/motir-co/motir-ci-runner@sha256:446c692d');
     expect(error?.message).toContain('No CI container can boot');
     expect(error?.message).toContain('MOTIR_RUNNER_IMAGE');
     expect(error?.message).toContain('registry visibility');
@@ -232,7 +232,7 @@ describe('the fleet boot preflight rides the daily health check', () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
     vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
     vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
-    vi.stubEnv('MOTIR_RUNNER_IMAGE', 'ghcr.io/moooon-b-v/motir-ci-runner@sha256:446c692d');
+    vi.stubEnv('MOTIR_RUNNER_IMAGE', 'ghcr.io/motir-co/motir-ci-runner@sha256:446c692d');
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {

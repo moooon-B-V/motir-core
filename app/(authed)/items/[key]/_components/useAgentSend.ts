@@ -42,7 +42,15 @@ export type AgentSendRefusal =
     }
   | { kind: 'runActive'; agent: PickedAgent; runId: string | null; workItemKey: string | null }
   /** The wake's own refusal, passed through: its body is `myAgents.refusal.*`'s. */
-  | { kind: 'wake'; agent: PickedAgent; code: string; reason?: string }
+  | {
+      kind: 'wake';
+      agent: PickedAgent;
+      code: string;
+      reason?: string;
+      /** A cap refusal's figure and plan (MOTIR-9376), named in the wake's words. */
+      limit?: number;
+      planName?: string;
+    }
   /** The shipped repositories notice, unchanged (`hosted_repository_not_writable`). */
   | { kind: 'notWritable'; agent: PickedAgent; hosted: HostedRunRefusal };
 
@@ -55,6 +63,7 @@ export function agentSendRefusalOf(
   agent: PickedAgent,
 ): AgentSendRefusal {
   const code = str(body.code) ?? '';
+  const planName = str(body.planName);
   switch (code) {
     case 'agent_not_signed_in':
       return { kind: 'notSignedIn', agent };
@@ -82,7 +91,14 @@ export function agentSendRefusalOf(
       return { kind: 'notWritable', agent, hosted: refusalOf(status, body, '') };
     case 'agent_instance_start_refused':
     case 'agent_instances_unavailable':
-      return { kind: 'wake', agent, code, reason: str(body.reason) ?? undefined };
+      return {
+        kind: 'wake',
+        agent,
+        code,
+        reason: str(body.reason) ?? undefined,
+        ...(typeof body.limit === 'number' ? { limit: body.limit } : {}),
+        ...(planName ? { planName } : {}),
+      };
   }
   if (status === 403) return { kind: 'permission', agent };
   if (status === 402) return { kind: 'outOfCredits', agent };

@@ -54,7 +54,7 @@ export const ARTIFACT_EVIDENCE_MATCHERS: readonly {
   readonly kind: ArtifactEvidenceKind;
   readonly re: RegExp;
 }[] = [
-  // `ghcr.io/moooon-b-v/motir-ci-runner@sha256:446c692d…` — the registry digest
+  // `ghcr.io/motir-co/motir-ci-runner@sha256:446c692d…` — the registry digest
   // the artifact-obtainable check tells a run to quote. Truncated digests are
   // accepted (12 hex is already past coincidence) because they get abbreviated
   // in prose more often than not.

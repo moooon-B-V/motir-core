@@ -182,7 +182,13 @@ function installGitHubAndMotirAi(): void {
       const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
 
       // motir-ai (plan and balance) — the other side of the open-core boundary.
-      if (u.pathname === '/v1/stripe/subscription') return json(200, { status: 'active' });
+      // A paid plan with figures (MOTIR-9375: the CI gate reads the plan's CI burst cap).
+      if (u.pathname === '/v1/stripe/subscription') {
+        return json(200, {
+          status: 'active',
+          planTier: { key: 'max_x2', name: 'Max ×2', monthlyCreditAllotment: 60_000 },
+        });
+      }
       if (u.pathname === '/v1/usage') return json(200, { balance: 1_000 });
 
       const call: GithubCall = {
@@ -562,7 +568,6 @@ beforeEach(async () => {
   vi.stubEnv('MOTIR_AI_URL', 'https://motir-ai.test');
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
   vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '');
-  vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '');
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
   captured = captureJobEvents();
@@ -633,7 +638,7 @@ describe('A2 — admission through the shipped paths', () => {
     const intent = await deliver(connectedRepo, DELIVERY_INSTALLATION);
     const verdict = await ciRunnerAdmissionService.admit(intent);
 
-    expect(verdict).toMatchObject({ outcome: 'admitted', orgInFlight: 0 });
+    expect(verdict).toMatchObject({ outcome: 'admitted', ciInFlight: 0 });
     // The plan check answered no deferral, the credit check `bypassed` — the
     // shipped paths, which no code in this story touches.
     expect(plan).toHaveBeenCalledWith(fx.organizationId);
@@ -652,7 +657,7 @@ describe('A2 — admission through the shipped paths', () => {
     // org's claim.
     const tenantIntent = await deliver(tenantRepo, TENANT_INSTALLATION);
     const tenantVerdict = await ciRunnerAdmissionService.admit(tenantIntent);
-    expect(tenantVerdict).toMatchObject({ outcome: 'admitted', orgInFlight: 0 });
+    expect(tenantVerdict).toMatchObject({ outcome: 'admitted', ciInFlight: 0 });
     const tenantEntitlement = entitlement.mock.calls.findIndex(
       ([org]) => org === tenant.organizationId,
     );

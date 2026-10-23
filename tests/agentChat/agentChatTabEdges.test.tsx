@@ -117,7 +117,7 @@ function agent(): AgentInstanceListItemDto {
     projectId: 'p1',
     profileId: 'claude',
     profileName: 'Claude Code',
-    imageTag: 'ghcr.io/moooon-b-v/motir-sandbox:claude',
+    imageTag: 'ghcr.io/motir-co/motir-sandbox:claude',
     imageDigest: 'sha256:abc',
     region: 'iad',
     state: 'running',
@@ -212,7 +212,6 @@ async function mount() {
       projectName="motir"
       initial={{ instances: [agent()], total: 1, planLapse: null }}
       profiles={[{ id: 'claude', name: 'Claude Code' }]}
-      maxPerUser={10}
       openAgentId="a1"
       openTab="chat"
     />,

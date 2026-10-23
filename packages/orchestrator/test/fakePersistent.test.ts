@@ -21,7 +21,7 @@ const SPEC: PersistentContainerSpec = {
   workspaceId: 'ws-1',
   projectId: 'proj-1',
   instanceId: 'inst-1',
-  image: 'ghcr.io/moooon-b-v/motir-sandbox@sha256:' + 'c'.repeat(64),
+  image: 'ghcr.io/motir-co/motir-sandbox@sha256:' + 'c'.repeat(64),
   size: FLEET_CONTAINER_SIZE,
   env: {},
   region: 'iad',
@@ -425,7 +425,7 @@ describe('the terminal (agent-terminal.md Q2, Q8 · MOTIR-6939)', () => {
 });
 
 describe('the image move and the liveness check (agent-image-update.md Q2, Q3 · MOTIR-6950)', () => {
-  const NEW_IMAGE = 'ghcr.io/moooon-b-v/motir-sandbox@sha256:' + 'd'.repeat(64);
+  const NEW_IMAGE = 'ghcr.io/motir-co/motir-sandbox@sha256:' + 'd'.repeat(64);
 
   it('moves a RUNNING machine to the new image on the same volume: a new run, the handle unchanged', async () => {
     let clock = new Date('2026-10-01T10:00:00.000Z');
@@ -505,7 +505,7 @@ describe('the home a volume holds (MOTIR-6954)', () => {
   it('keeps a written file across an image move, and answers null once the volume is gone', async () => {
     const h = await fake.provisionPersistent(SPEC);
     fake.writeHomeFile(h.volumeId, 'notes.txt', 'mine');
-    await fake.moveImage(h, 'ghcr.io/moooon-b-v/motir-sandbox@sha256:' + 'e'.repeat(64), {
+    await fake.moveImage(h, 'ghcr.io/motir-co/motir-sandbox@sha256:' + 'e'.repeat(64), {
       launch: true,
     });
     expect(fake.readHomeFile(h.volumeId, 'notes.txt')).toBe('mine');

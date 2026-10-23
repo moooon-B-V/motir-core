@@ -49,10 +49,7 @@ import MyAgentsPage from '@/app/(authed)/my-agents/page';
 import { MyAgentsRoom } from '@/app/(authed)/my-agents/_components/MyAgentsRoom';
 import { MyAgentsSkeleton } from '@/app/(authed)/my-agents/_components/MyAgentsSkeleton';
 import { OFFERED_AGENT_PROFILES } from '@/lib/agentInstances/profiles';
-import {
-  INSTANCE_MAX_PER_USER,
-  INSTANCE_STORAGE_CREDITS_PER_DAY,
-} from '@/lib/agentInstances/config';
+import { INSTANCE_STORAGE_CREDITS_PER_DAY } from '@/lib/agentInstances/config';
 import { MY_AGENTS_LIST_LIMIT } from '@/lib/agentInstances/presentation';
 
 const ACTIVE = {
@@ -124,7 +121,6 @@ describe('/my-agents — the room over the reader’s own list', () => {
       projectName: 'motir',
       initial: LISTED,
       profiles: OFFERED_AGENT_PROFILES.map((p) => ({ id: p.id, name: p.name })),
-      maxPerUser: INSTANCE_MAX_PER_USER,
       storageCreditsPerDay: INSTANCE_STORAGE_CREDITS_PER_DAY,
       openAgentId: null,
       openTab: 'terminal',

@@ -525,7 +525,7 @@ function stubIo(overrides: Partial<AssertCommandsIo> = {}): AssertCommandsIo {
 
 describe('pulling the CLI out of a published image', () => {
   it('fans an index out to every real platform and skips the attestations', async () => {
-    const resolved = await resolvePlatforms('ghcr.io/moooon-b-v/motir-sandbox:claude', stubIo());
+    const resolved = await resolvePlatforms('ghcr.io/motir-co/motir-sandbox:claude', stubIo());
     expect(resolved.platforms).toEqual([
       { platform: 'linux/amd64', digest: 'sha256:amd64' },
       { platform: 'linux/arm64', digest: 'sha256:arm64' },
@@ -540,7 +540,7 @@ describe('pulling the CLI out of a published image', () => {
 
   it('extracts the installed package, keyed by its path inside the package', async () => {
     const pkg = await extractCliPackage(
-      { registry: 'ghcr.io', repository: 'moooon-b-v/motir-sandbox', reference: 'claude' },
+      { registry: 'ghcr.io', repository: 'motir-co/motir-sandbox', reference: 'claude' },
       'sha256:amd64',
       stubIo(),
     );
@@ -554,7 +554,7 @@ describe('pulling the CLI out of a published image', () => {
     const stub = stubRegistry({ layers: [gzipSync(makeTar({ 'usr/bin/other': 'x' }))] });
     await expect(
       extractCliPackage(
-        { registry: 'ghcr.io', repository: 'moooon-b-v/motir-sandbox', reference: 'claude' },
+        { registry: 'ghcr.io', repository: 'motir-co/motir-sandbox', reference: 'claude' },
         'sha256:amd64',
         stubIo({ registry: stub.registry }),
       ),
@@ -567,7 +567,7 @@ describe('pulling the CLI out of a published image', () => {
       history: [{ created_by: 'RUN something' }, { created_by: 'RUN something else' }],
     });
     const pkg = await extractCliPackage(
-      { registry: 'ghcr.io', repository: 'moooon-b-v/motir-sandbox', reference: 'claude' },
+      { registry: 'ghcr.io', repository: 'motir-co/motir-sandbox', reference: 'claude' },
       'sha256:amd64',
       stubIo({ registry: stub.registry }),
     );
@@ -647,7 +647,7 @@ describe('the anonymous registry reader', () => {
     }) as unknown as typeof fetch;
 
     const get = anonymousRegistry(
-      { registry: 'ghcr.io', repository: 'moooon-b-v/motir-sandbox', reference: 'claude' },
+      { registry: 'ghcr.io', repository: 'motir-co/motir-sandbox', reference: 'claude' },
       fetchImpl,
     );
     await get('manifests/claude', 'application/json');
@@ -673,7 +673,7 @@ describe('the anonymous registry reader', () => {
             headers: { 'www-authenticate': 'Bearer realm="https://ghcr.io/token"' },
           })) as unknown as typeof fetch;
     const get = anonymousRegistry(
-      { registry: 'ghcr.io', repository: 'moooon-b-v/private', reference: 'x' },
+      { registry: 'ghcr.io', repository: 'motir-co/private', reference: 'x' },
       fetchImpl,
     );
     await expect(get('manifests/x', 'application/json')).rejects.toThrow(
@@ -705,7 +705,7 @@ describe('the anonymous registry reader', () => {
 describe('the whole run, end to end over the stubs', () => {
   it('judges EVERY platform of every reference', async () => {
     const { results } = await assertReference(
-      'ghcr.io/moooon-b-v/motir-sandbox:claude',
+      'ghcr.io/motir-co/motir-sandbox:claude',
       ['login', 'link', 'doctor'],
       stubIo(),
     );
@@ -718,7 +718,7 @@ describe('the whole run, end to end over the stubs', () => {
 
   it('exits 0 and reports the expectation it derived', async () => {
     const io = stubIo();
-    const code = await main(['--ref', 'ghcr.io/moooon-b-v/motir-sandbox:claude'], io);
+    const code = await main(['--ref', 'ghcr.io/motir-co/motir-sandbox:claude'], io);
     expect(code).toBe(0);
     const lines = (io as unknown as { lines: string[] }).lines;
     expect(lines[0]).toContain('expected doctor, link, login');
@@ -732,7 +732,7 @@ describe('the whole run, end to end over the stubs', () => {
       readGuide: () => Promise.resolve('no annotations here'),
       registry: registry as never,
     });
-    expect(await main(['--ref', 'ghcr.io/moooon-b-v/motir-sandbox:claude'], io)).toBe(2);
+    expect(await main(['--ref', 'ghcr.io/motir-co/motir-sandbox:claude'], io)).toBe(2);
     expect(registry).not.toHaveBeenCalled();
     expect((io as unknown as { errors: string[] }).errors.join('\n')).toMatch(/proves NOTHING/);
   });
@@ -742,7 +742,7 @@ describe('the whole run, end to end over the stubs', () => {
       runNode: () =>
         Promise.resolve(REAL_HELP.replace(/ {2}doctor \[options\][\s\S]*?presence\.\n/, '')),
     });
-    expect(await main(['--ref', 'ghcr.io/moooon-b-v/motir-sandbox:claude'], io)).toBe(1);
+    expect(await main(['--ref', 'ghcr.io/motir-co/motir-sandbox:claude'], io)).toBe(1);
     const errors = (io as unknown as { errors: string[] }).errors.join('\n');
     expect(errors).toMatch(/cut a CLI release/);
     expect(errors).toMatch(/Do NOT edit the guide to match a stale image/);
@@ -759,12 +759,7 @@ describe('the whole run, end to end over the stubs', () => {
         Promise.resolve(REAL_HELP.replace(/ {2}link \[options\][\s\S]*?(?=\n {2}\S)/, '')),
     });
     const code = await main(
-      [
-        '--ref',
-        'ghcr.io/moooon-b-v/motir-sandbox:claude',
-        '--ref',
-        'ghcr.io/moooon-b-v/nope:absent',
-      ],
+      ['--ref', 'ghcr.io/motir-co/motir-sandbox:claude', '--ref', 'ghcr.io/motir-co/nope:absent'],
       io,
     );
     expect(code).toBe(1);
@@ -773,7 +768,7 @@ describe('the whole run, end to end over the stubs', () => {
 
   it('reports an unreadable image as UNKNOWN, exit 2', async () => {
     const io = stubIo();
-    expect(await main(['--ref', 'ghcr.io/moooon-b-v/nope:absent'], io)).toBe(2);
+    expect(await main(['--ref', 'ghcr.io/motir-co/nope:absent'], io)).toBe(2);
     expect((io as unknown as { errors: string[] }).errors.join('\n')).toMatch(
       /PROBE failure, not a[\s\S]*verdict/,
     );
@@ -787,7 +782,7 @@ describe('the whole run, end to end over the stubs', () => {
     // The digest form resolves to `<image>@<digest>`; the stub serves that
     // digest as a single-arch manifest, which is the `unspecified` platform arm.
     expect(
-      await main(['--image', 'ghcr.io/moooon-b-v/motir-sandbox', '--digests', 'digests'], io),
+      await main(['--image', 'ghcr.io/motir-co/motir-sandbox', '--digests', 'digests'], io),
     ).toBe(0);
     expect((io as unknown as { lines: string[] }).lines.join('\n')).toContain('[unspecified]');
   });
@@ -805,9 +800,9 @@ describe('the whole run, end to end over the stubs', () => {
     await main(
       [
         '--ref',
-        'ghcr.io/moooon-b-v/motir-sandbox:claude',
+        'ghcr.io/motir-co/motir-sandbox:claude',
         '--ref',
-        'ghcr.io/moooon-b-v/motir-sandbox:claude',
+        'ghcr.io/motir-co/motir-sandbox:claude',
       ],
       io,
     );

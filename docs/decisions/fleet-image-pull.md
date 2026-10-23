@@ -7,7 +7,7 @@ measured live 2026-08-02** (§2; every probe reproducible from §2.5)
 
 `docs/decisions/ci-runner-fleet.md` §1 fixed that the fleet runs on Fly Machines and §7.2
 that it consumes a **digest**. Neither says how a Machine **obtains** the bytes that digest
-names. MOTIR-1978 published `ghcr.io/moooon-b-v/motir-ci-runner` **private**, the adapter
+names. MOTIR-1978 published `ghcr.io/motir-co/motir-ci-runner` **private**, the adapter
 sends no registry credential, and so `isFlyFleetConfigured()` returns true while the fleet
 cannot boot a single container. This is that decision.
 
@@ -100,7 +100,7 @@ distinguishes the two states; `motir-ci-runner` is in the closed one.
 `POST /v1/apps/{app}/machines` with the real published digest:
 
 ```
-{"error":"failed to get manifest ghcr.io/moooon-b-v/motir-ci-runner@sha256:446c692d…: unauthorized"}
+{"error":"failed to get manifest ghcr.io/motir-co/motir-ci-runner@sha256:446c692d…: unauthorized"}
 HTTP 400
 ```
 
@@ -382,9 +382,9 @@ which is exactly the dependency the plan should show.
 
 ## §9 — Out of scope, but found while measuring: the sandbox image
 
-`ghcr.io/moooon-b-v/motir-sandbox` — the BYOK CLI sandbox, nine published digests recorded in
+`ghcr.io/motir-co/motir-sandbox` — the BYOK CLI sandbox, nine published digests recorded in
 `packages/cli/sandbox/README.md` — is **also private** (§2.1's probe, 2026-08-02), while
-`docs/cli.md` tells every user to `docker run ghcr.io/moooon-b-v/motir-sandbox:claude` with
+`docs/cli.md` tells every user to `docker run ghcr.io/motir-co/motir-sandbox:claude` with
 the words _"Pull and go — no checkout, no build."_ That flow cannot work for anyone outside
 the org. It is the **same failure shape one product surface over**, and it is **not** one of
 the three images this card binds. Logged as its own bug, **MOTIR-2010** (`notes.html` #27 — never absorbed
@@ -398,7 +398,7 @@ mirror.
 it.** Every profile is a TAG in a single OCI repository: an anonymous manifest
 `GET` for `:claude`, `:codex` and `:base` each returns the _same_ challenge,
 `scope="repository:moooon-b-v/motir-sandbox:pull"`, and `sandbox-images.yml`
-pushes all of them under one `IMAGE: ghcr.io/moooon-b-v/motir-sandbox`. GHCR
+pushes all of them under one `IMAGE: ghcr.io/motir-co/motir-sandbox`. GHCR
 visibility is per-package, so **one flip covers all eighteen tags** (nine moving,
 nine versioned). ⚠️ A bearer challenge is issued for repositories that do not
 exist either — `moooon-b-v/motir-sandbox-claude` is challenged just as readily —

@@ -64,7 +64,7 @@ the sandbox image's `HOME` (`packages/cli/sandbox/Dockerfile`: `ENV HOME=/home/n
   crashed main process is restarted by Fly. An explicit stop through the API is not a failure, so it
   stays stopped.
 - **The image is pinned by DIGEST.** At create, the profile's tag
-  (`ghcr.io/moooon-b-v/motir-sandbox:<profile>`) is resolved to its digest and the machine boots
+  (`ghcr.io/motir-co/motir-sandbox:<profile>`) is resolved to its digest and the machine boots
   `…@sha256:<digest>`. The instance record keeps the digest (§4). The image is public, so Fly pulls it
   anonymously (`fleet-image-pull.md` §0).
 - **Only the home survives.** Fly: _"The root file systems of a Fly Machine are ephemeral"_ (Fly,

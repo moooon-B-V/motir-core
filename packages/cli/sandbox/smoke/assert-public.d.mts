@@ -13,7 +13,7 @@ export declare const CONTROL_REFERENCE: string;
 export interface ParsedReference {
   /** The registry HOST (`ghcr.io`, `localhost:5000`). */
   registry: string;
-  /** The repository path (`moooon-b-v/motir-sandbox`). */
+  /** The repository path (`motir-co/motir-sandbox`). */
   repository: string;
   /** A `sha256:…` digest or a tag — whatever the reference pinned. */
   reference: string;

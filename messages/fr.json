@@ -10306,34 +10306,41 @@
       "fleet": {
         "orgs": {
           "title": "Flotte · organisations exécutant des conteneurs",
-          "subtitle": "Chaque organisation détenant actuellement un conteneur, à côté de ce que le débit de CI a fait pour elle au cours des {minutes} dernières minutes (deux périodes de débit). Les incohérences en premier.",
+          "subtitle": "Chaque organisation détenant actuellement un conteneur, rapportée aux chiffres de son forfait, à côté de ce que le débit de CI a fait pour elle au cours des {minutes} dernières minutes (deux périodes de débit). Les incohérences en premier.",
           "mismatchedCount": "{count} incohérentes",
           "runningCount": "{count, plural, one {# organisation active} other {# organisations actives}}",
           "noMismatch": "Aucune incohérence",
           "stat": {
             "orgs": "organisations exécutant un conteneur",
-            "pooled": "conteneurs dans les pools par organisation (CI · hébergé · index)",
-            "instances": "instances d'agent · leur propre pool, non comptées ci-dessus",
+            "ciRunners": "runners de CI · chaque organisation limitée au pic de CI de son forfait",
+            "hostedAgents": "exécutions d'agent hébergé · chaque organisation limitée aux exécutions parallèles de son forfait",
+            "instances": "instances d'agent en cours · chaque organisation limitée au chiffre de son forfait",
             "mismatched": "incohérentes · exécution et débit ne concordent pas"
           },
           "group": {
-            "pool": "Dans le pool de {pool} conteneurs",
-            "own": "Pool propre"
+            "plan": "Limité par le forfait",
+            "uncapped": "Aucun chiffre du forfait"
           },
           "col": {
             "org": "Organisation",
+            "plan": "Forfait",
             "ciRunner": "Runners de CI",
             "hostedAgent": "Exécutions d'agent hébergé",
             "index": "Conteneurs d'indexation",
-            "poolUsed": "Pool utilisé",
             "agentInstance": "Instances d'agent",
-            "agentInstanceNote": "hors du pool",
             "accrued": "Minutes de CI · {minutes} dernières min",
             "credits": "Crédits ce mois-ci · confirmés",
             "verdict": "Verdict"
           },
-          "poolOf": "{used} / {pool}",
-          "poolUnknown": "pool illisible",
+          "plan": {
+            "named": "{plan}<pp> · {perUser} par personne</pp>",
+            "exempt": "Aucune limite de forfait",
+            "unknown": "Forfait inconnu · {key}",
+            "unknownNoKey": "Forfait inconnu",
+            "unknownNote": "nouveaux conteneurs refusés"
+          },
+          "usedOf": "<b>{used}</b> sur {figure}",
+          "override": "dérogation",
           "metaTag": "méta-organisation · isMeta",
           "unnamed": "Organisation {id}",
           "accrued": {
@@ -10351,7 +10358,7 @@
           "foot": "{from}–{to} sur {total} · incohérences en premier, puis le plus de conteneurs · seule la CI est évaluée — c'est la seule charge débitée pendant son exécution",
           "empty": {
             "title": "Aucune organisation n'exécute de conteneur de la flotte",
-            "body": "Tous les pools par organisation sont vides pour le moment ; il n'y a donc rien à comparer au débit. C'est un état sain, pas une anomalie."
+            "body": "Aucune organisation ne détient actuellement de runner de CI, d'exécution d'agent hébergé, d'instance d'agent ni de conteneur d'indexation ; il n'y a donc rien à comparer au débit. C'est un état sain, pas une anomalie."
           },
           "error": {
             "title": "Impossible de lire la flotte",
@@ -11447,12 +11454,20 @@
         "charge": {
           "ciRunner": "Facturé pendant l'exécution",
           "hostedAgent": "Facturé à la fin de l'exécution",
-          "agentInstance": "Facturé par intervalle d'exécution · hors du pool",
+          "agentInstance": "Facturé par intervalle d'exécution",
           "index": "Coût à la charge de Motir — jamais facturé"
         },
+        "tile": {
+          "of": " sur {figure}",
+          "override": "dérogation"
+        },
         "facts": {
-          "pool": "Pool <strong>{used} sur {pool}</strong>",
-          "poolUnknown": "Pool <strong>{used} sur —</strong>",
+          "plan": "Forfait <strong>{plan}</strong> · {runs} exécutions hébergées à la fois · {perUser} agents par personne · {running} agents en cours · {ci} tâches de CI à la fois",
+          "planCiUnreadable": "Forfait <strong>{plan}</strong> · {runs} exécutions hébergées à la fois · {perUser} agents par personne · {running} agents en cours · limite de CI illisible",
+          "planExempt": "Forfait <strong>Aucune limite de forfait</strong>",
+          "planExemptOverride": "Forfait <strong>Aucune limite de forfait</strong> · {ci} tâches de CI à la fois (dérogation)",
+          "planUnknown": "Forfait <strong>inconnu · {key}</strong> · nouveaux conteneurs refusés",
+          "planUnknownNoKey": "Forfait <strong>inconnu</strong> · nouveaux conteneurs refusés",
           "accrued": "Cumulé, dernières {minutes} min <strong>{value} min</strong>",
           "debited": "Débité ce mois-ci <strong>{credits} crédits</strong>",
           "pending": "En attente de confirmation <strong>{credits} crédits</strong>"
@@ -12314,8 +12329,10 @@
       "aiPlanUnknown": "Motir n'a pas pu vérifier le forfait IA de votre organisation pour le moment. Réessayez dans un instant.",
       "credits": "Votre organisation n'a plus de crédits. Les agents consomment des crédits pendant leur exécution et chaque jour pour leur stockage, en veille ou non. <link>Ajoutez des crédits</link> pour créer ou réveiller un agent.",
       "creditsUnknown": "Motir n'a pas pu vérifier les crédits de votre organisation pour le moment. Réessayez dans un instant.",
-      "userCap": "Vous avez déjà {count} agents. Chacun est facturé chaque jour pour son stockage, même en veille. Supprimez-en un pour en créer un autre.",
-      "orgRunningLimit": "Votre organisation exécute {limit} agents sur {limit} autorisés. Mettez-en un en veille pour en démarrer un autre.",
+      "userCap": "Le forfait {plan} de votre organisation autorise {limit, plural, one {# agent} other {# agents}} par personne. Chacun est facturé chaque jour pour son stockage, même en veille. Supprimez-en un pour en créer un autre.",
+      "userCapNoFigure": "Vous avez déjà autant d’agents que le forfait de votre organisation en autorise par personne. Chacun est facturé chaque jour pour son stockage, même en veille. Supprimez-en un pour en créer un autre.",
+      "orgRunningLimit": "Le forfait {plan} de votre organisation exécute {limit, plural, one {# agent} other {# agents}} à la fois, et tous sont déjà en cours d’exécution. Mettez-en un en veille pour en démarrer un autre.",
+      "orgRunningLimitNoFigure": "Votre organisation exécute déjà autant d’agents à la fois que son forfait le permet. Mettez-en un en veille pour en démarrer un autre.",
       "busy": "Motir exécute actuellement autant de machines que possible. Réessayez dans quelques minutes.",
       "notOffered": "Cet agent de code n'est pas proposé : ses conditions ne permettent pas encore à une plateforme de l'héberger. Choisissez un autre agent de code.",
       "nameTaken": "Vous avez déjà un agent nommé {name} sur ce projet.",

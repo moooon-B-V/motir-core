@@ -1746,7 +1746,7 @@ docker run --rm -it \
   -v "$PWD:/workspace" \
   -e MOTIR_TOKEN -e MOTIR_SERVER \
   -v "$HOME/.claude:/home/node/.claude:ro" \
-  ghcr.io/moooon-b-v/motir-sandbox:claude \
+  ghcr.io/motir-co/motir-sandbox:claude \
   motir auto --agent "claude --dangerously-skip-permissions"
 ```
 
@@ -1772,7 +1772,7 @@ The images are **public** — no `docker login`, no token, no GitHub account. Th
 is asserted on every release by a job that holds no credential at all, so "pull
 and go" stays a fact rather than an intention; you can run the same check
 yourself with `node packages/cli/sandbox/smoke/assert-public.mjs --ref
-ghcr.io/moooon-b-v/motir-sandbox:claude`.
+ghcr.io/motir-co/motir-sandbox:claude`.
 
 There is one tag per agent profile (`claude`, `codex`, `opencode`, `kimi`,
 `antigravity`, `cursor`, `aider`, `goose`) plus an agent-less `base`, built for
@@ -1782,7 +1782,7 @@ the digest for anything you need to reproduce** — the digest table is filled i
 from each `cli-v*` release run, and the registry is always the authority:
 
 ```sh
-docker buildx imagetools inspect ghcr.io/moooon-b-v/motir-sandbox:claude
+docker buildx imagetools inspect ghcr.io/motir-co/motir-sandbox:claude
 ```
 
 **Building it yourself** stays supported, and is the path to take when you are

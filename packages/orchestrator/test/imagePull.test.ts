@@ -41,12 +41,12 @@ import {
 // No database, no network. `fetch` is the only fake.
 
 const PUBLIC_IMAGE =
-  'ghcr.io/moooon-b-v/motir-ci-runner@sha256:446c692df68c80367876c65082c60ec3b1c667f32a98811ac53f0dfa8a0e6d1d';
-const PRIVATE_IMAGE = 'ghcr.io/moooon-b-v/motir-sandbox:claude';
+  'ghcr.io/motir-co/motir-ci-runner@sha256:446c692df68c80367876c65082c60ec3b1c667f32a98811ac53f0dfa8a0e6d1d';
+const PRIVATE_IMAGE = 'ghcr.io/motir-co/motir-sandbox:claude';
 
 /** GHCR's real challenge header, copied from a live 401. */
 const GHCR_CHALLENGE =
-  'Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:moooon-b-v/motir-ci-runner:pull"';
+  'Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:motir-co/motir-ci-runner:pull"';
 
 let urls: string[];
 
@@ -105,7 +105,7 @@ describe('parseImageReference — the registry a reference actually names', () =
   it('splits a digest-pinned GHCR reference into host, repository and digest', () => {
     expect(parseImageReference(PUBLIC_IMAGE)).toEqual({
       registry: 'ghcr.io',
-      repository: 'moooon-b-v/motir-ci-runner',
+      repository: 'motir-co/motir-ci-runner',
       reference: 'sha256:446c692df68c80367876c65082c60ec3b1c667f32a98811ac53f0dfa8a0e6d1d',
       isDigest: true,
     });
@@ -114,7 +114,7 @@ describe('parseImageReference — the registry a reference actually names', () =
   it('splits a tagged reference and marks it as NOT a digest', () => {
     expect(parseImageReference(PRIVATE_IMAGE)).toMatchObject({
       registry: 'ghcr.io',
-      repository: 'moooon-b-v/motir-sandbox',
+      repository: 'motir-co/motir-sandbox',
       reference: 'claude',
       isDigest: false,
     });
@@ -177,7 +177,7 @@ describe('parseBearerChallenge — the WWW-Authenticate dance', () => {
     expect(parseBearerChallenge(GHCR_CHALLENGE)).toEqual({
       realm: 'https://ghcr.io/token',
       service: 'ghcr.io',
-      scope: 'repository:moooon-b-v/motir-ci-runner:pull',
+      scope: 'repository:motir-co/motir-ci-runner:pull',
     });
   });
 
@@ -245,7 +245,7 @@ describe('probeImagePull — the question Fly asks at machine-create, asked earl
     // that hardcoded GHCR's would silently stop working on the §5 mirror.
     const tokenUrl = new URL(urls.find((u) => u.includes('/token')) as string);
     expect(tokenUrl.searchParams.get('service')).toBe('ghcr.io');
-    expect(tokenUrl.searchParams.get('scope')).toBe('repository:moooon-b-v/motir-ci-runner:pull');
+    expect(tokenUrl.searchParams.get('scope')).toBe('repository:motir-co/motir-ci-runner:pull');
   });
 
   it('a PRIVATE repository is `pullable: false` — the token endpoint refuses', async () => {
@@ -574,7 +574,7 @@ describe('OrchestratorImageUnpullableError — the sentence that reaches the ope
       'fly',
       400,
       PRIVATE_IMAGE,
-      'failed to get manifest ghcr.io/moooon-b-v/motir-sandbox:claude: unauthorized',
+      'failed to get manifest ghcr.io/motir-co/motir-sandbox:claude: unauthorized',
     );
     expect(err.message).toContain(PRIVATE_IMAGE);
     expect(err.message).toContain('HTTP 400');

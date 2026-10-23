@@ -46,10 +46,10 @@ on:
 
 env:
   # OCI repository names are lowercase-only, so the `moooon-B-V` org is spelled
-  # lowercase here — `ghcr.io/moooon-B-V/...` is not a pullable reference at all.
+  # lowercase here — `ghcr.io/Motir-Co/...` is not a pullable reference at all.
   # Hardcoded rather than derived from `github.repository_owner` for that reason
   # (the same trap `sandbox-images.yml` documents).
-  IMAGE: ghcr.io/moooon-b-v/motir-ci-runner
+  IMAGE: ghcr.io/motir-co/motir-ci-runner
 
 jobs:
   runner-image:

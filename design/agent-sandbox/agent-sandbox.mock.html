@@ -1191,7 +1191,7 @@ docker run -it --rm --pull=always \
   -v "$PWD:/workspace" \
   -v motir-auth:/home/node/.config/motir \
   -v "$HOME/&lt;credential mount&gt;:/home/node/&lt;credential mount&gt;:ro" \
-  ghcr.io/moooon-b-v/motir-sandbox:&lt;profile&gt;</pre
+  ghcr.io/motir-co/motir-sandbox:&lt;profile&gt;</pre
               >
             </div>
             <table class="spec">
@@ -1231,7 +1231,7 @@ docker run -it --rm --pull=always \
   -v "$PWD:/workspace" \
   -v motir-auth:/home/node/.config/motir \
   -v "$HOME/.claude:/home/node/.claude:ro" \
-  ghcr.io/moooon-b-v/motir-sandbox:claude</pre
+  ghcr.io/motir-co/motir-sandbox:claude</pre
               >
             </div>
             <div class="callout">
@@ -1276,7 +1276,7 @@ docker run -it --rm --pull=always \
               <pre>
 {
   "name": "Motir sandbox (Claude Code)",
-  "image": "ghcr.io/moooon-b-v/motir-sandbox:claude",
+  "image": "ghcr.io/motir-co/motir-sandbox:claude",
   "workspaceFolder": "/workspace",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
   "mounts": [
@@ -1549,7 +1549,7 @@ docker run -it --rm --pull=always \
   -v "$PWD:/workspace" \
   -v motir-auth:/home/node/.config/motir \
   -v "$HOME/.claude:/home/node/.claude:ro" \
-  ghcr.io/moooon-b-v/motir-sandbox:claude</pre
+  ghcr.io/motir-co/motir-sandbox:claude</pre
             >
           </div>
         </div>

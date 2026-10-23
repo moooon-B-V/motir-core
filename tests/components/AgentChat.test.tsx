@@ -125,7 +125,7 @@ function agent(over: Partial<AgentInstanceListItemDto> = {}): AgentInstanceListI
     projectId: 'p1',
     profileId: 'claude',
     profileName: 'Claude Code',
-    imageTag: 'ghcr.io/moooon-b-v/motir-sandbox:claude',
+    imageTag: 'ghcr.io/motir-co/motir-sandbox:claude',
     imageDigest: 'sha256:abc',
     region: 'iad',
     state: 'running',
@@ -246,7 +246,6 @@ async function mount(
       projectName="motir"
       initial={opts.initial ?? routes.list()}
       profiles={PROFILES}
-      maxPerUser={10}
       openAgentId={opts.openAgentId ?? 'a1'}
       openTab={opts.openTab ?? 'terminal'}
     />,

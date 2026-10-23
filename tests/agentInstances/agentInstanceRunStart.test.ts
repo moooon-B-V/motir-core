@@ -40,6 +40,9 @@ import { randomToken } from '../helpers/random';
 import * as sendEventModule from '@/lib/jobs/sendEvent';
 import { AgentRunRepairRefusedError } from '@/lib/agentInstances/errors';
 import { mapAgentInstanceError } from '@/lib/agentInstances/errorResponse';
+import { AGENT_LIST_LIMIT } from '@/lib/agentInstances/config';
+import { MY_AGENTS_LIST_LIMIT } from '@/lib/agentInstances/presentation';
+import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateJobRuns } from '../helpers/db';
@@ -803,6 +806,34 @@ describe('the card’s agent picker', () => {
       new PermissionDeniedError(fx.projectId, 'instance:use'),
     );
     expect(await runs.listAgentsForCard(item.identifier, fx.ctx)).toEqual({ agents: [] });
+  });
+
+  it('the lists are bounded by a page size, not the plan’s cap: a person over the cap sees every agent (MOTIR-9376)', async () => {
+    expect(AGENT_LIST_LIMIT).toBe(100);
+    expect(MY_AGENTS_LIST_LIMIT).toBe(AGENT_LIST_LIMIT);
+    // Twelve live agents — more than any plan's per-person figure, as an exempt
+    // org or a downgrade leaves a person — written past the create gate.
+    await adminDb.agentInstance.createMany({
+      data: Array.from({ length: 12 }, (_, i) => ({
+        workspaceId: fx.workspaceId,
+        organizationId: fx.workspace.organizationId!,
+        projectId: fx.projectId,
+        ownerId: fx.ctx.userId,
+        name: `held-${i}`,
+        profileId: 'claude',
+        imageTag: 't',
+        imageDigest: 'sha256:x',
+        region: 'iad',
+      })),
+    });
+    const item = await card();
+    const listed = vi.spyOn(agentInstanceRepository, 'listLiveForOwner');
+    const { agents } = await runs.listAgentsForCard(item.identifier, fx.ctx);
+    expect(agents).toHaveLength(12);
+    expect(listed.mock.calls[0]![0]).toMatchObject({ take: AGENT_LIST_LIMIT });
+    // My agents' first read, with the page's own size.
+    const page = await lifecycle.list(KEY(), { take: MY_AGENTS_LIST_LIMIT, skip: 0 }, fx.ctx);
+    expect(page.instances).toHaveLength(12);
   });
 });
 

@@ -141,7 +141,7 @@ function agent(over: Partial<AgentInstanceListItemDto> = {}): AgentInstanceListI
     projectId: 'p1',
     profileId: 'claude',
     profileName: 'Claude Code',
-    imageTag: 'ghcr.io/moooon-b-v/motir-sandbox:claude',
+    imageTag: 'ghcr.io/motir-co/motir-sandbox:claude',
     imageDigest: 'sha256:abc',
     imageVersion: '1.0.0',
     update: null,
@@ -256,7 +256,6 @@ async function mount(
       projectName="motir"
       initial={initial}
       profiles={PROFILES}
-      maxPerUser={10}
       openAgentId={opts.openAgentId ?? null}
     />,
     opts.messages ? { messages: opts.messages, locale: 'zh' } : {},
