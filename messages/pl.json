@@ -6643,7 +6643,10 @@
         "max": {
           "useCase": "Pro, a do tego zapas na przekazywanie zaplanowanej pracy agentowi.",
           "prev": "Pro",
-          "features": ["Zapas na automatyczne przekazywanie zaplanowanej pracy agentowi"]
+          "features": [
+            "Planuj więcej pracy, by projekt posuwał się szybciej",
+            "Zapas na automatyczne przekazywanie części zaplanowanej pracy agentowi"
+          ]
         },
         "max_x2": {
           "useCase": "Max, w podwójnej ilości.",

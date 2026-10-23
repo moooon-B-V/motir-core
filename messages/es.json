@@ -6643,7 +6643,10 @@
         "max": {
           "useCase": "Pro, más margen para pasar el trabajo planificado al agente.",
           "prev": "Pro",
-          "features": ["Margen para enviar automáticamente el trabajo planificado al agente"]
+          "features": [
+            "Planifica más trabajo para que tu proyecto avance más rápido",
+            "Margen para enviar automáticamente parte del trabajo planificado al agente"
+          ]
         },
         "max_x2": {
           "useCase": "Max, con el doble de volumen.",

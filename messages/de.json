@@ -6643,7 +6643,10 @@
         "max": {
           "useCase": "Pro, plus Spielraum, geplante Arbeit an den Agenten zu übergeben.",
           "prev": "Pro",
-          "features": ["Spielraum, geplante Arbeit automatisch an den Agenten zu übergeben"]
+          "features": [
+            "Mehr Arbeit planen, damit Ihr Projekt schneller vorankommt",
+            "Spielraum, einen Teil der geplanten Arbeit automatisch an den Agenten zu übergeben"
+          ]
         },
         "max_x2": {
           "useCase": "Max, mit doppeltem Volumen.",

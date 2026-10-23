@@ -6643,7 +6643,10 @@
         "max": {
           "useCase": "Pro, plus ruimte om gepland werk aan de agent over te dragen.",
           "prev": "Pro",
-          "features": ["Ruimte om gepland werk automatisch aan de agent toe te wijzen"]
+          "features": [
+            "Plan meer werk, zodat je project sneller vordert",
+            "Ruimte om een deel van het geplande werk automatisch aan de agent toe te wijzen"
+          ]
         },
         "max_x2": {
           "useCase": "Max, met twee keer het volume.",

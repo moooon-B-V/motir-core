@@ -6643,7 +6643,10 @@
         "max": {
           "useCase": "Pro, mais folga para passar o trabalho planejado ao agente.",
           "prev": "Pro",
-          "features": ["Folga para enviar automaticamente o trabalho planejado ao agente"]
+          "features": [
+            "Planeje mais trabalho para o seu projeto avançar mais rápido",
+            "Folga para enviar automaticamente parte do trabalho planejado ao agente"
+          ]
         },
         "max_x2": {
           "useCase": "Max, com o dobro do volume.",

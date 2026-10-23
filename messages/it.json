@@ -6643,7 +6643,10 @@
         "max": {
           "useCase": "Pro, più margine per affidare il lavoro pianificato all’agente.",
           "prev": "Pro",
-          "features": ["Margine per affidare automaticamente il lavoro pianificato all’agente"]
+          "features": [
+            "Pianifica più lavoro, così il progetto avanza più in fretta",
+            "Margine per affidare automaticamente parte del lavoro pianificato all’agente"
+          ]
         },
         "max_x2": {
           "useCase": "Max, con il doppio del volume.",

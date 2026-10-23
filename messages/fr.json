@@ -6643,7 +6643,10 @@
         "max": {
           "useCase": "Pro, plus de la marge pour confier le travail planifié à l’agent.",
           "prev": "Pro",
-          "features": ["De la marge pour confier automatiquement le travail planifié à l’agent"]
+          "features": [
+            "Planifiez davantage de travail pour faire avancer votre projet plus vite",
+            "De la marge pour confier automatiquement une partie du travail planifié à l’agent"
+          ]
         },
         "max_x2": {
           "useCase": "Max, avec deux fois le volume.",

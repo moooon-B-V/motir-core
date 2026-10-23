@@ -6640,7 +6640,10 @@
         "max": {
           "useCase": "Pro, plus headroom to hand planned work to the agent.",
           "prev": "Pro",
-          "features": ["Headroom to dispatch planned work to the agent automatically"]
+          "features": [
+            "Plan more work, so your project moves faster",
+            "Headroom to dispatch some planned work to the agent automatically"
+          ]
         },
         "max_x2": {
           "useCase": "Max, at twice the volume.",
