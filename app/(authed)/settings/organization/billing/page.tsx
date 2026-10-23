@@ -61,13 +61,7 @@ export default async function OrganizationBillingPage() {
       {/* The header lives inside BillingClient so it swaps with the active
           screen (home / Motir AI / Motir seats), each with its own breadcrumb. */}
       <span className="sr-only">{t('title')}</span>
-      <Suspense
-        fallback={
-          <div className="mx-auto max-w-[64rem]">
-            <SettingsPaneFrame />
-          </div>
-        }
-      >
+      <Suspense fallback={<SettingsPaneFrame />}>
         <BillingPaneBody orgId={org.id} orgName={org.name} actorUserId={session.user.id} />
       </Suspense>
     </div>
