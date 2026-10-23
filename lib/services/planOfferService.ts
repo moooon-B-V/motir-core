@@ -68,20 +68,29 @@ function actorOf(pctx: ProjectContext) {
   return { userId: pctx.userId, workspaceId: pctx.workspaceId };
 }
 
+/** The caller's permissions in the project, or null when Motir AI is not configured
+ *  or the project is not theirs to see. Never throws for either. */
+async function heldForOffers(
+  pctx: ProjectContext,
+  tx?: Prisma.TransactionClient,
+): Promise<ReadonlySet<string> | null> {
+  if (!isMotirAiConfigured()) return null;
+  try {
+    return await projectAccessService.getPermissions(pctx.projectId, actorOf(pctx), tx);
+  } catch (err) {
+    if (err instanceof ProjectNotFoundError) return null;
+    throw err;
+  }
+}
+
 /** Whether the caller may start a plan from an offer right now. Never throws: a
  *  caller who cannot even browse the project may not plan in it. */
 async function planningAvailable(
   pctx: ProjectContext,
   tx?: Prisma.TransactionClient,
 ): Promise<boolean> {
-  if (!isMotirAiConfigured()) return false;
-  try {
-    const held = await projectAccessService.getPermissions(pctx.projectId, actorOf(pctx), tx);
-    return held.has('ai:plan') && held.has('work_item:edit');
-  } catch (err) {
-    if (err instanceof ProjectNotFoundError) return false;
-    throw err;
-  }
+  const held = await heldForOffers(pctx, tx);
+  return Boolean(held?.has('ai:plan') && held.has('work_item:edit'));
 }
 
 /** Whether the caller may confirm a `log_bug` offer right now (MOTIR-9322): `ai:plan`
@@ -91,14 +100,7 @@ export async function bugLoggingAvailable(
   pctx: ProjectContext,
   tx?: Prisma.TransactionClient,
 ): Promise<boolean> {
-  if (!isMotirAiConfigured()) return false;
-  try {
-    const held = await projectAccessService.getPermissions(pctx.projectId, actorOf(pctx), tx);
-    return held.has('ai:plan');
-  } catch (err) {
-    if (err instanceof ProjectNotFoundError) return false;
-    throw err;
-  }
+  return (await heldForOffers(pctx, tx))?.has('ai:plan') ?? false;
 }
 
 /**
