@@ -433,6 +433,10 @@ export interface SupervisionSession {
    * provisioning-org job, so it de-registers through the default.
    */
   readonly runnerTarget?: GithubOrgTarget | null;
+  /** The image reference the container was booted from, so a container that never
+   *  starts can say which image it was waiting on (MOTIR-9348). OPTIONAL on read: a
+   *  session memoised before it existed has none. */
+  readonly image?: string;
   /** ISO-8601 — when the container was booted, the origin both deadlines run from. */
   readonly bootedAt: string;
   /** ISO-8601 — GitHub's own queue instant, which boot latency is measured from. */
@@ -456,6 +460,9 @@ export type PollResult =
       bootLatencyMs: number | null;
       /** Carried forward so the next poll can apply {@link MAX_CONSECUTIVE_READ_FAILURES}. */
       consecutiveReadFailures: number;
+      /** The provider state the last successful read reported, carried so a boot
+       *  deadline reached on a failed read can still name it. */
+      lastState?: string;
     }
   | {
       done: true;
@@ -931,6 +938,19 @@ export const ciRunnerBootService = {
   },
 
   /**
+   * Settle every in-flight intent past its own end whose container no longer
+   * exists (MOTIR-9347). The reconciler judges machines, so an intent whose
+   * supervision died AFTER its machine destroyed itself is never visited and
+   * stays `running` for ever, holding an org-pool slot. A container that still
+   * exists is left alone: the reconciler's machine-driven kill settles it with
+   * its usage row. Runs on the reconciler's schedule; returns how many it settled.
+   */
+  async sweepVanishedInFlight(options: { now?: () => Date } = {}): Promise<number> {
+    if (!isOrchestratorConfigured()) return 0;
+    return sweepVanishedInFlight(options.now ?? (() => new Date()));
+  },
+
+  /**
    * The provisioning SPEC for one intent — the port's provider-neutral shape.
    *
    * Exported (rather than inlined) because it is what MOTIR-1927's label-scoping
@@ -1347,6 +1367,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
       },
       githubRunnerId: jit.runnerId,
       runnerTarget: runnerTarget ?? null,
+      image: spec.image,
       bootedAt: bootedAt.toISOString(),
       queuedAt: intent.queuedAt.toISOString(),
       attribution: {
@@ -1384,15 +1405,24 @@ async function pollContainerOnce(
   /** The deadline check both the happy and the failed-read paths fall through
    *  to, so a provider that is down can never extend a container past its
    *  timeout. */
-  const deadlineVerdict = (failureDetail: string | null): PollResult | null => {
+  const deadlineVerdict = (
+    failureDetail: string | null,
+    lastState: string | undefined,
+  ): PollResult | null => {
     const elapsed = now().getTime() - bootedAt;
     if (!startedAt && elapsed >= bootDeadlineMs) {
+      // ⚠️ NAME WHAT THE CONTAINER WAS DOING (MOTIR-9348). A bare
+      // `provision_failed` is indistinguishable from every other boot failure,
+      // and the usual cause — a pull that never finishes — is visible only in
+      // the provider's own logs. The state and the image say it on the intent.
       return {
         done: true,
         reason: 'provision_failed',
         startedAt: null,
         bootLatencyMs: null,
-        failureDetail,
+        failureDetail:
+          `the container never started within ${bootDeadlineMs / 1000} s ` +
+          `(last provider state: ${lastState || 'unknown'}; image ${session.image ?? 'unknown'})`,
       };
     }
     if (elapsed >= jobTimeoutMs) {
@@ -1436,7 +1466,13 @@ async function pollContainerOnce(
       detail,
     });
     return (
-      deadlineVerdict(null) ?? { done: false, startedAt, bootLatencyMs, consecutiveReadFailures }
+      deadlineVerdict(null, previous.lastState) ?? {
+        done: false,
+        startedAt,
+        bootLatencyMs,
+        consecutiveReadFailures,
+        ...(previous.lastState !== undefined ? { lastState: previous.lastState } : {}),
+      }
     );
   }
 
@@ -1464,7 +1500,13 @@ async function pollContainerOnce(
   }
 
   return (
-    deadlineVerdict(null) ?? { done: false, startedAt, bootLatencyMs, consecutiveReadFailures: 0 }
+    deadlineVerdict(null, status.state) ?? {
+      done: false,
+      startedAt,
+      bootLatencyMs,
+      consecutiveReadFailures: 0,
+      lastState: status.state,
+    }
   );
 }
 
@@ -1786,6 +1828,70 @@ async function sweepStaleClaims(now: () => Date): Promise<number> {
     });
   }
   return stale.length;
+}
+
+/** How many in-flight intents one vanished-container sweep checks — a ceiling, so
+ *  a backlog drains across passes instead of one pass making hundreds of reads. */
+const VANISHED_SWEEP_BATCH = 50;
+
+/** The grace past an intent's end before its missing container is believed: the
+ *  same ten minutes the reconciler gives a machine (`fleet-per-org-pool.md` §5). */
+const VANISHED_SWEEP_GRACE_MS = 10 * 60_000;
+
+/** Provider states that mean the container is being or has been destroyed even
+ *  though the provider still answers a read for it. */
+const VANISHED_STATES: ReadonlySet<string> = new Set(['destroyed', 'destroying']);
+
+async function sweepVanishedInFlight(now: () => Date): Promise<number> {
+  const bootedBefore = new Date(now().getTime() - DEFAULT_REAP_AFTER_MS - VANISHED_SWEEP_GRACE_MS);
+  const candidates = await withSystemContext((tx) =>
+    intents.listInFlightBootedBefore(bootedBefore, VANISHED_SWEEP_BATCH, tx),
+  );
+  const orchestrator = getOrchestrator();
+  let settled = 0;
+  for (const intent of candidates) {
+    // A container another provider booted cannot be asked about here; the
+    // deployment that owns that provider sweeps it.
+    if (!intent.containerId || intent.containerProvider !== orchestrator.provider) continue;
+    let gone: boolean;
+    try {
+      const status = await orchestrator.describe({
+        provider: orchestrator.provider,
+        id: intent.containerId,
+        region: intent.containerRegion ?? '',
+        createdAt: intent.bootedAt ?? intent.createdAt,
+      });
+      // ⚠️ A DESTROYED MACHINE CAN STILL BE READ. Fly answers a destroyed
+      // machine with its record (`state: destroyed`) for a while before the
+      // read 404s, and the inventory no longer lists it — so the reconciler
+      // cannot reach it either. Treat that record as gone, not as alive.
+      gone = !status.exists || VANISHED_STATES.has(status.state);
+    } catch (err) {
+      // An unreadable provider is never evidence the container is gone.
+      console.warn(
+        '[ciRunnerBootService] could not read an in-flight container — left for the next pass',
+        {
+          intentId: intent.id,
+          containerId: intent.containerId,
+          detail: detailOf(err),
+        },
+      );
+      continue;
+    }
+    if (!gone) continue;
+
+    await deregisterQuietly(intent.githubRunnerId, intent.id, fleetRunnerTargetFor(intent));
+    await settleIntent(intent.id, intent.projectId, {
+      status: CI_RUNNER_INTENT_FAILED,
+      teardownReason: intent.startedAt ? 'job_timed_out' : 'provision_failed',
+      settledAt: now(),
+      failureDetail:
+        `container ${intent.containerId} no longer exists and its supervision never settled ` +
+        'the intent; settled by the fleet sweep and its runner de-registered',
+    });
+    settled += 1;
+  }
+  return settled;
 }
 
 /**
