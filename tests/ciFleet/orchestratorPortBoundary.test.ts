@@ -155,11 +155,6 @@ const FLY_TELLS: ReadonlyArray<{ pattern: RegExp; what: string }> = [
  */
 const ALLOWED: ReadonlyArray<{ file: string; tell: RegExp; why: string }> = [
   {
-    file: join('lib', 'services', 'ciRunnerBootService.ts'),
-    tell: /\bflyFleetConfig\b/,
-    why: 'reads the deployment image/region for a provider-neutral ContainerSpec',
-  },
-  {
     file: join('lib', 'deployment', 'identity.ts'),
     tell: /\bFLY_(APP_NAME|REGION|MACHINE_ID|PROCESS_GROUP)\b/,
     why: "answers where the WEB PROCESS runs, for the console's hosting card — not the fleet's port",

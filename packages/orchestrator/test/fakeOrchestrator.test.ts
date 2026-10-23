@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
   FLEET_CONTAINER_SIZE,
+  createFakeOrchestrator,
   fakeOrchestrator,
   type ContainerHandle,
   type ContainerSpec,
@@ -347,5 +348,33 @@ describe('sparedByCaller', () => {
     expect(await sparedByCaller(() => Promise.reject('not an error'), handle)).toBe(false);
     expect(warn.mock.calls[0]![1]).toMatchObject({ detail: 'unknown' });
     warn.mockRestore();
+  });
+});
+
+describe('createFakeOrchestrator — one fake per fleet account (MOTIR-8964)', () => {
+  it('keeps its own containers, apart from the singleton and from every other fake', async () => {
+    const a = createFakeOrchestrator({ idPrefix: 'account-a' });
+    const b = createFakeOrchestrator({ idPrefix: 'account-b' });
+
+    const handle = await a.provision(SPEC);
+
+    expect(handle.id).toBe('account-a-1');
+    expect(a.liveContainerIds()).toEqual([handle.id]);
+    expect(b.liveContainerIds()).toEqual([]);
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+  });
+
+  it('never takes the cross-process store, even with the seam variable set', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fake-account-'));
+    const path = join(dir, 'state.json');
+    vi.stubEnv('MOTIR_FAKE_CONTAINER_STATE_PATH', path);
+    try {
+      const handle = await createFakeOrchestrator().provision(SPEC);
+      expect(handle.id).toBe('fake-machine-1');
+      expect(existsSync(path)).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

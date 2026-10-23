@@ -46,13 +46,16 @@ import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
   ORCHESTRATOR_REQUEST_TIMEOUT_MS,
   OrchestratorImageUnpullableError,
+  fleetRunnerImage,
+  fleetRunnerRegion,
   getOrchestrator,
   isOrchestratorConfigured,
   recordContainerUsage,
 } from '@/lib/orchestrator';
+import type { FleetShardDTO } from '@/lib/dto/fleetShard';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import {
   FLEET_CONTAINER_SIZE,
-  flyFleetConfig,
   type ContainerHandle,
   type ContainerOrchestrator,
   type ContainerSpec,
@@ -423,6 +426,11 @@ export interface SupervisionSession {
      *  delete it after the machine destroyed itself. OPTIONAL on read: a session
      *  memoised before it existed has none, and teardown reads the mounts. */
     readonly volumeId?: string;
+    /** The fleet account the container was booted in (MOTIR-8964), so every
+     *  later step reaches the same provider account. OPTIONAL on read: a session
+     *  memoised before it existed has none, and resolves to the process-wide
+     *  fleet — where every such container was booted. */
+    readonly shardId?: string;
   };
   readonly githubRunnerId: number | null;
   /**
@@ -878,15 +886,20 @@ export const ciRunnerBootService = {
    */
   async reapContainer(
     handle: ContainerHandle,
-    options: { now?: () => Date } = {},
+    options: {
+      now?: () => Date;
+      /** The fleet account the container was LISTED in (MOTIR-8964). Absent =
+       *  the account its intent recorded; null = the process-wide fleet. */
+      shardId?: string | null;
+    } = {},
   ): Promise<boolean> {
-    if (!isOrchestratorConfigured()) return false;
     const now = options.now ?? (() => new Date());
-    const orchestrator = getOrchestrator();
-    if (orchestrator.provider !== handle.provider) return false;
-
     const resolved = await resolveReapAttribution(handle);
     if (!resolved) return false;
+    const shardId = options.shardId !== undefined ? options.shardId : resolved.shardId;
+    if (shardId === null && !isOrchestratorConfigured()) return false;
+    const orchestrator = await fleetShardOrchestratorService.forShard(shardId);
+    if (orchestrator.provider !== handle.provider) return false;
     const usage = await orchestrator.teardown(handle, 'reaped', resolved.attribution);
 
     if (resolved.hosted) {
@@ -965,22 +978,16 @@ export const ciRunnerBootService = {
     encodedJitConfig: string;
     timeoutSeconds: number;
     orchestrator: ContainerOrchestrator;
+    /** The region to boot in — the account's (MOTIR-8964). Absent = the
+     *  process-wide fleet's; empty = the orchestrator's own default. */
+    region?: string;
   }): ContainerSpec {
     const { intent, workflowJobId, projectId, encodedJitConfig, timeoutSeconds } = input;
-    // The image and region are the Fly deployment's, but they are read through
-    // the CONFIG accessor rather than the adapter's API surface, so the spec
-    // stays provider-neutral. On the fake adapter neither is set, and the
-    // defaults keep the spec well-formed.
-    let image = 'motir/ci-runner@sha256:unset';
-    let region = 'iad';
-    try {
-      const config = flyFleetConfig();
-      image = config.image;
-      region = config.region;
-    } catch {
-      // Not configured — the fake adapter path. The spec is still complete, and
-      // the caller has already established that an orchestrator exists.
-    }
+    // Provider-neutral: the image is the fleet's, whichever account boots it, and
+    // the region is the account's — read through the composition root, so this
+    // service names no adapter's config (MOTIR-8964).
+    const image = fleetRunnerImage();
+    const region = input.region ?? fleetRunnerRegion();
 
     return {
       orgId: intent.organizationId,
@@ -1177,9 +1184,16 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
     return terminal({ outcome: 'no_runner_group', detail });
   }
 
+  // WHICH ACCOUNT boots it (MOTIR-8964) — `null`, the process-wide fleet, until
+  // admission (MOTIR-8968) fills the seam. An account that cannot be reached is
+  // handled exactly as a process with no orchestrator: claim released.
   let orchestrator: ContainerOrchestrator;
+  let bootShard: FleetShardDTO | null;
   try {
-    orchestrator = getOrchestrator();
+    bootShard = await fleetShardOrchestratorService.chooseBootShard(intent);
+    orchestrator = bootShard
+      ? fleetShardOrchestratorService.forShardRow(bootShard)
+      : getOrchestrator();
   } catch (err) {
     await releaseClaim(intentId);
     console.warn('[ciRunnerBootService] no orchestrator is configured — claim released', {
@@ -1287,6 +1301,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
     encodedJitConfig: jit.encodedJitConfig,
     timeoutSeconds: Math.ceil(jobTimeoutMs / 1000),
     orchestrator,
+    ...(bootShard ? { region: bootShard.fly?.region ?? '' } : {}),
   });
 
   let handle: ContainerHandle;
@@ -1348,6 +1363,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
         githubRunnerId: jit.runnerId,
         runnerName: jit.runnerName,
         bootedAt,
+        fleetShardId: bootShard?.id ?? null,
       },
       tx,
     ),
@@ -1364,6 +1380,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
         region: handle.region,
         createdAt: handle.createdAt.toISOString(),
         ...(handle.volumeId ? { volumeId: handle.volumeId } : {}),
+        ...(bootShard ? { shardId: bootShard.id } : {}),
       },
       githubRunnerId: jit.runnerId,
       runnerTarget: runnerTarget ?? null,
@@ -1433,7 +1450,9 @@ async function pollContainerOnce(
 
   let status;
   try {
-    status = await orchestratorFor(session).describe({
+    status = await (
+      await orchestratorFor(session)
+    ).describe({
       provider: session.handle.provider,
       id: session.handle.id,
       region: session.handle.region,
@@ -1540,7 +1559,7 @@ async function settleSupervisedContainer(
 
   let orchestrator: ContainerOrchestrator;
   try {
-    orchestrator = orchestratorFor(session);
+    orchestrator = await orchestratorFor(session);
   } catch (err) {
     // No orchestrator to tear down THROUGH. Leave the intent in flight for the
     // reaper rather than settling a container that may still be running.
@@ -1605,11 +1624,12 @@ async function settleSupervisedContainer(
   };
 }
 
-/** The orchestrator a session's container lives on. Re-read per step rather than
- *  carried across the boundary, because an adapter is not serializable — the
- *  handle is, which is exactly why the port made it opaque. */
-function orchestratorFor(_session: SupervisionSession): ContainerOrchestrator {
-  return getOrchestrator();
+/** The orchestrator a session's container lives on — its account's, or the
+ *  process-wide fleet's for a session with none (MOTIR-8964). Re-read per step
+ *  rather than carried across the boundary, because an adapter is not
+ *  serializable — the handle is, which is exactly why the port made it opaque. */
+async function orchestratorFor(session: SupervisionSession): Promise<ContainerOrchestrator> {
+  return fleetShardOrchestratorService.forShard(session.handle.shardId ?? null);
 }
 
 // ── internals ─────────────────────────────────────────────────────────────
@@ -1754,9 +1774,12 @@ async function releaseClaim(intentId: string): Promise<void> {
  * its own live checkpoint row (MOTIR-6524). Null when nothing owns it, or when
  * what owns it cannot be attributed (a deleted project, a malformed job id).
  */
-async function resolveReapAttribution(
-  handle: ContainerHandle,
-): Promise<{ attribution: UsageAttribution; hosted: LiveAgentUsage | null } | null> {
+async function resolveReapAttribution(handle: ContainerHandle): Promise<{
+  attribution: UsageAttribution;
+  hosted: LiveAgentUsage | null;
+  /** The account the CI intent recorded its container in; null otherwise. */
+  shardId: string | null;
+} | null> {
   const intent = await withSystemContext((tx) =>
     intents.findByContainerId(handle.provider, handle.id, tx),
   );
@@ -1769,6 +1792,7 @@ async function resolveReapAttribution(
     if (!hosted?.projectId) return null;
     return {
       hosted,
+      shardId: null,
       attribution: {
         orgId: hosted.organizationId,
         workspaceId: hosted.workspaceId,
@@ -1792,6 +1816,7 @@ async function resolveReapAttribution(
   if (!Number.isInteger(workflowJobId)) return null;
   return {
     hosted: null,
+    shardId: intent.fleetShardId,
     attribution: {
       orgId: intent.organizationId,
       workspaceId: intent.workspaceId,
@@ -1847,14 +1872,16 @@ async function sweepVanishedInFlight(now: () => Date): Promise<number> {
   const candidates = await withSystemContext((tx) =>
     intents.listInFlightBootedBefore(bootedBefore, VANISHED_SWEEP_BATCH, tx),
   );
-  const orchestrator = getOrchestrator();
   let settled = 0;
   for (const intent of candidates) {
-    // A container another provider booted cannot be asked about here; the
-    // deployment that owns that provider sweeps it.
-    if (!intent.containerId || intent.containerProvider !== orchestrator.provider) continue;
+    if (!intent.containerId) continue;
     let gone: boolean;
     try {
+      // Asked of the account the container was booted in (MOTIR-8964).
+      const orchestrator = await fleetShardOrchestratorService.forIntent(intent);
+      // A container another provider booted cannot be asked about here; the
+      // deployment that owns that provider sweeps it.
+      if (intent.containerProvider !== orchestrator.provider) continue;
       const status = await orchestrator.describe({
         provider: orchestrator.provider,
         id: intent.containerId,

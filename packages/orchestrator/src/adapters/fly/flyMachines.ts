@@ -521,195 +521,223 @@ export async function flyRequest(
 
 // ── The client ──────────────────────────────────────────────────────────────
 
-export const flyMachinesClient = {
-  /**
-   * Create ONE Machine.
-   *
-   * ⚠️ THE THREE SINGLE-USE GUARANTEES (§7.1) — two of them are in this request
-   * body, and they are independent on purpose so that no single failure leaks a
-   * container:
-   *
-   *   * `auto_destroy: true` — "the Machine destroys itself once it's complete".
-   *   * `restart: { policy: 'no' }` — so an exiting process is a DESTROYED
-   *     machine, not a restarted one. Without it `auto_destroy` would race a
-   *     restart policy that keeps bringing the runner back, and a runner that
-   *     comes back after its ephemeral job has de-registered is a machine that
-   *     idles and bills until something notices.
-   *
-   * (The third is the JIT config itself, minted one job at a time; the fourth
-   * backstop is the reaper, for the case this process dies mid-flight.)
-   *
-   * ⚠️ HOW THE IMAGE IS AUTHENTICATED: IT ISN'T, AND THAT IS THE DECISION.
-   * `docs/decisions/fleet-image-pull.md` §1 fixes that the runner image is
-   * PUBLIC on GHCR and pulled ANONYMOUSLY; §2.3 records why there was never an
-   * alternative — the Machines API `config` object has no `registry_auth`, no
-   * `docker_auth`, no `image_pull_secret` and no credential field of any name,
-   * so `image: input.image` below is the whole of the pull mechanism and no
-   * plumbing was added here. That absence is load-bearing rather than an
-   * omission, which is why it is written down at the payload instead of left to
-   * be re-derived by whoever next reads this and wonders where the credential
-   * went. A CLOSED-source image does not join this path: §5 mirrors it into
-   * `registry.fly.io`, which Fly authenticates itself, still with nothing here.
-   */
-  async createMachine(input: CreateMachineInput): Promise<FlyMachine> {
-    const { token, app } = flyFleetConfig();
-    const res = await flyRequest(`/apps/${encodeURIComponent(app)}/machines`, {
-      method: 'POST',
-      token,
-      body: JSON.stringify({
-        name: input.name,
-        region: input.region,
-        config: {
-          image: input.image,
-          guest: {
-            cpu_kind: input.cpuKind,
-            cpus: input.cpus,
-            memory_mb: input.memoryMb,
+/** The app a client reaches, and the token it reaches it with. */
+export interface FlyClientBinding {
+  readonly token: string;
+  readonly app: string;
+}
+
+/**
+ * The client over a binding read AT EACH CALL (MOTIR-8964). The process-wide
+ * client binds `flyFleetConfig()`, so a rotated env is seen on the next request
+ * exactly as before; an account's client binds that account's app and token, so
+ * two accounts in one process never reach each other's app.
+ */
+function clientOver(bind: () => FlyClientBinding) {
+  return {
+    /**
+     * Create ONE Machine.
+     *
+     * ⚠️ THE THREE SINGLE-USE GUARANTEES (§7.1) — two of them are in this request
+     * body, and they are independent on purpose so that no single failure leaks a
+     * container:
+     *
+     *   * `auto_destroy: true` — "the Machine destroys itself once it's complete".
+     *   * `restart: { policy: 'no' }` — so an exiting process is a DESTROYED
+     *     machine, not a restarted one. Without it `auto_destroy` would race a
+     *     restart policy that keeps bringing the runner back, and a runner that
+     *     comes back after its ephemeral job has de-registered is a machine that
+     *     idles and bills until something notices.
+     *
+     * (The third is the JIT config itself, minted one job at a time; the fourth
+     * backstop is the reaper, for the case this process dies mid-flight.)
+     *
+     * ⚠️ HOW THE IMAGE IS AUTHENTICATED: IT ISN'T, AND THAT IS THE DECISION.
+     * `docs/decisions/fleet-image-pull.md` §1 fixes that the runner image is
+     * PUBLIC on GHCR and pulled ANONYMOUSLY; §2.3 records why there was never an
+     * alternative — the Machines API `config` object has no `registry_auth`, no
+     * `docker_auth`, no `image_pull_secret` and no credential field of any name,
+     * so `image: input.image` below is the whole of the pull mechanism and no
+     * plumbing was added here. That absence is load-bearing rather than an
+     * omission, which is why it is written down at the payload instead of left to
+     * be re-derived by whoever next reads this and wonders where the credential
+     * went. A CLOSED-source image does not join this path: §5 mirrors it into
+     * `registry.fly.io`, which Fly authenticates itself, still with nothing here.
+     */
+    async createMachine(input: CreateMachineInput): Promise<FlyMachine> {
+      const { token, app } = bind();
+      const res = await flyRequest(`/apps/${encodeURIComponent(app)}/machines`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          name: input.name,
+          region: input.region,
+          config: {
+            image: input.image,
+            guest: {
+              cpu_kind: input.cpuKind,
+              cpus: input.cpus,
+              memory_mb: input.memoryMb,
+            },
+            env: { ...input.env },
+            metadata: { ...input.metadata },
+            ...(input.mounts && input.mounts.length > 0
+              ? { mounts: input.mounts.map((m) => ({ volume: m.volume, path: m.path })) }
+              : {}),
+            auto_destroy: true,
+            restart: { policy: 'no' },
           },
-          env: { ...input.env },
-          metadata: { ...input.metadata },
-          ...(input.mounts && input.mounts.length > 0
-            ? { mounts: input.mounts.map((m) => ({ volume: m.volume, path: m.path })) }
-            : {}),
-          auto_destroy: true,
-          restart: { policy: 'no' },
-        },
-      }),
-    });
-    const body = await readFlyJson(res);
-    if (!res.ok) {
-      // §6.2 — the DISTINGUISHABLE reason. An unpullable image and an
-      // unreachable Fly both arrive here as a non-2xx; only the body tells them
-      // apart, and only here is the body still in scope.
-      const detail = flyErrorDetail(body);
-      if (isFlyImagePullRefusal(detail)) {
-        throw new OrchestratorImageUnpullableError('fly', res.status, input.image, detail);
+        }),
+      });
+      const body = await readFlyJson(res);
+      if (!res.ok) {
+        // §6.2 — the DISTINGUISHABLE reason. An unpullable image and an
+        // unreachable Fly both arrive here as a non-2xx; only the body tells them
+        // apart, and only here is the body still in scope.
+        const detail = flyErrorDetail(body);
+        if (isFlyImagePullRefusal(detail)) {
+          throw new OrchestratorImageUnpullableError('fly', res.status, input.image, detail);
+        }
+        throw (
+          flyCapacityRefusal(res.status, detail) ??
+          new OrchestratorApiError('fly', res.status, detail)
+        );
       }
-      throw (
-        flyCapacityRefusal(res.status, detail) ??
-        new OrchestratorApiError('fly', res.status, detail)
+      const machine = toFlyMachine(body);
+      if (!machine) {
+        throw new OrchestratorApiError(
+          'fly',
+          res.status,
+          'machine create returned an unexpected shape',
+        );
+      }
+      return machine;
+    },
+
+    /** Read one Machine. Returns null on 404 — a destroyed machine is GONE, and on
+     *  the happy path that is the expected observation, not a failure. */
+    async getMachine(id: string): Promise<FlyMachine | null> {
+      const { token, app } = bind();
+      const res = await flyRequest(
+        `/apps/${encodeURIComponent(app)}/machines/${encodeURIComponent(id)}`,
+        { method: 'GET', token },
       );
-    }
-    const machine = toFlyMachine(body);
-    if (!machine) {
-      throw new OrchestratorApiError(
-        'fly',
-        res.status,
-        'machine create returned an unexpected shape',
+      if (res.status === 404) return null;
+      const body = await readFlyJson(res);
+      if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
+      return toFlyMachine(body);
+    },
+
+    /**
+     * Destroy a Machine, forcibly. IDEMPOTENT against one already gone (404 is the
+     * desired end state), because the `finally` path and the reaper can both reach
+     * the same machine and a throw from the second would turn a tidy-up into an
+     * incident.
+     *
+     * `force=true` because the whole point is a guarantee: a machine mid-job is
+     * exactly the machine that most needs destroying when its timeout expires, and
+     * a graceful stop that the customer's own workflow can refuse is not a
+     * guarantee at all.
+     */
+    async destroyMachine(id: string): Promise<void> {
+      const { token, app } = bind();
+      const res = await flyRequest(
+        `/apps/${encodeURIComponent(app)}/machines/${encodeURIComponent(id)}?force=true`,
+        { method: 'DELETE', token },
       );
-    }
-    return machine;
-  },
+      if (res.ok || res.status === 404) return;
+      throw new OrchestratorApiError('fly', res.status, flyErrorDetail(await readFlyJson(res)));
+    },
 
-  /** Read one Machine. Returns null on 404 — a destroyed machine is GONE, and on
-   *  the happy path that is the expected observation, not a failure. */
-  async getMachine(id: string): Promise<FlyMachine | null> {
-    const { token, app } = flyFleetConfig();
-    const res = await flyRequest(
-      `/apps/${encodeURIComponent(app)}/machines/${encodeURIComponent(id)}`,
-      { method: 'GET', token },
-    );
-    if (res.status === 404) return null;
-    const body = await readFlyJson(res);
-    if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
-    return toFlyMachine(body);
-  },
+    /**
+     * Every Machine in the fleet app — the REAPER's read.
+     *
+     * It asks the PROVIDER what exists rather than asking Motir's own tables what
+     * it thinks it booted, and that inversion is the entire value of the reaper:
+     * the case it exists for is the orchestrator process having died between
+     * provision and teardown, which is precisely the case in which Motir's own
+     * record is the thing that is wrong.
+     */
+    async listMachines(): Promise<FlyMachine[]> {
+      const { token, app } = bind();
+      const res = await flyRequest(`/apps/${encodeURIComponent(app)}/machines`, {
+        method: 'GET',
+        token,
+      });
+      const body = await readFlyJson(res);
+      if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
+      const entries = Array.isArray(body) ? body : [];
+      return entries.flatMap((entry) => {
+        const machine = toFlyMachine(entry);
+        return machine ? [machine] : [];
+      });
+    },
 
-  /**
-   * Destroy a Machine, forcibly. IDEMPOTENT against one already gone (404 is the
-   * desired end state), because the `finally` path and the reaper can both reach
-   * the same machine and a throw from the second would turn a tidy-up into an
-   * incident.
-   *
-   * `force=true` because the whole point is a guarantee: a machine mid-job is
-   * exactly the machine that most needs destroying when its timeout expires, and
-   * a graceful stop that the customer's own workflow can refuse is not a
-   * guarantee at all.
-   */
-  async destroyMachine(id: string): Promise<void> {
-    const { token, app } = flyFleetConfig();
-    const res = await flyRequest(
-      `/apps/${encodeURIComponent(app)}/machines/${encodeURIComponent(id)}?force=true`,
-      { method: 'DELETE', token },
-    );
-    if (res.ok || res.status === 404) return;
-    throw new OrchestratorApiError('fly', res.status, flyErrorDetail(await readFlyJson(res)));
-  },
+    /** Create ONE volume in the fleet app (MOTIR-8839). The machine that mounts
+     *  it must be created in the same region. */
+    async createVolume(input: {
+      name: string;
+      region: string;
+      sizeGb: number;
+    }): Promise<FlyVolume> {
+      const { token, app } = bind();
+      const res = await flyRequest(`/apps/${encodeURIComponent(app)}/volumes`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ name: input.name, region: input.region, size_gb: input.sizeGb }),
+      });
+      const body = await readFlyJson(res);
+      if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
+      const volume = toFlyVolume(body);
+      if (!volume) {
+        throw new OrchestratorApiError(
+          'fly',
+          res.status,
+          'volume create returned an unexpected shape',
+        );
+      }
+      return volume;
+    },
 
-  /**
-   * Every Machine in the fleet app — the REAPER's read.
-   *
-   * It asks the PROVIDER what exists rather than asking Motir's own tables what
-   * it thinks it booted, and that inversion is the entire value of the reaper:
-   * the case it exists for is the orchestrator process having died between
-   * provision and teardown, which is precisely the case in which Motir's own
-   * record is the thing that is wrong.
-   */
-  async listMachines(): Promise<FlyMachine[]> {
-    const { token, app } = flyFleetConfig();
-    const res = await flyRequest(`/apps/${encodeURIComponent(app)}/machines`, {
-      method: 'GET',
-      token,
-    });
-    const body = await readFlyJson(res);
-    if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
-    const entries = Array.isArray(body) ? body : [];
-    return entries.flatMap((entry) => {
-      const machine = toFlyMachine(entry);
-      return machine ? [machine] : [];
-    });
-  },
-
-  /** Create ONE volume in the fleet app (MOTIR-8839). The machine that mounts
-   *  it must be created in the same region. */
-  async createVolume(input: { name: string; region: string; sizeGb: number }): Promise<FlyVolume> {
-    const { token, app } = flyFleetConfig();
-    const res = await flyRequest(`/apps/${encodeURIComponent(app)}/volumes`, {
-      method: 'POST',
-      token,
-      body: JSON.stringify({ name: input.name, region: input.region, size_gb: input.sizeGb }),
-    });
-    const body = await readFlyJson(res);
-    if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
-    const volume = toFlyVolume(body);
-    if (!volume) {
-      throw new OrchestratorApiError(
-        'fly',
-        res.status,
-        'volume create returned an unexpected shape',
+    /**
+     * Destroy a volume. IDEMPOTENT against one already gone (404). Fly refuses to
+     * delete a volume still attached to a machine, and a machine destroy releases
+     * its volume a moment later, so the caller retries — this call does not.
+     */
+    async destroyVolume(id: string): Promise<void> {
+      const { token, app } = bind();
+      const res = await flyRequest(
+        `/apps/${encodeURIComponent(app)}/volumes/${encodeURIComponent(id)}`,
+        { method: 'DELETE', token },
       );
-    }
-    return volume;
-  },
+      if (res.ok || res.status === 404) return;
+      throw new OrchestratorApiError('fly', res.status, flyErrorDetail(await readFlyJson(res)));
+    },
 
-  /**
-   * Destroy a volume. IDEMPOTENT against one already gone (404). Fly refuses to
-   * delete a volume still attached to a machine, and a machine destroy releases
-   * its volume a moment later, so the caller retries — this call does not.
-   */
-  async destroyVolume(id: string): Promise<void> {
-    const { token, app } = flyFleetConfig();
-    const res = await flyRequest(
-      `/apps/${encodeURIComponent(app)}/volumes/${encodeURIComponent(id)}`,
-      { method: 'DELETE', token },
-    );
-    if (res.ok || res.status === 404) return;
-    throw new OrchestratorApiError('fly', res.status, flyErrorDetail(await readFlyJson(res)));
-  },
+    /** Every volume in the fleet app — the orphan sweep's read (MOTIR-8839). */
+    async listVolumes(): Promise<FlyVolume[]> {
+      const { token, app } = bind();
+      const res = await flyRequest(`/apps/${encodeURIComponent(app)}/volumes`, {
+        method: 'GET',
+        token,
+      });
+      const body = await readFlyJson(res);
+      if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
+      const entries = Array.isArray(body) ? body : [];
+      return entries.flatMap((entry) => {
+        const volume = toFlyVolume(entry);
+        return volume ? [volume] : [];
+      });
+    },
+  };
+}
 
-  /** Every volume in the fleet app — the orphan sweep's read (MOTIR-8839). */
-  async listVolumes(): Promise<FlyVolume[]> {
-    const { token, app } = flyFleetConfig();
-    const res = await flyRequest(`/apps/${encodeURIComponent(app)}/volumes`, {
-      method: 'GET',
-      token,
-    });
-    const body = await readFlyJson(res);
-    if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
-    const entries = Array.isArray(body) ? body : [];
-    return entries.flatMap((entry) => {
-      const volume = toFlyVolume(entry);
-      return volume ? [volume] : [];
-    });
-  },
-};
+export type FlyMachinesClient = ReturnType<typeof clientOver>;
+
+/** A client bound to ONE app and token — an account's, whatever `FLY_FLEET_*` holds. */
+export function flyMachinesClientFor(binding: FlyClientBinding): FlyMachinesClient {
+  return clientOver(() => binding);
+}
+
+/** The process-wide client: `flyFleetConfig()` resolved per call, as always. */
+export const flyMachinesClient: FlyMachinesClient = clientOver(flyFleetConfig);

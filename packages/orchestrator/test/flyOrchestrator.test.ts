@@ -8,6 +8,7 @@ import {
   OrchestratorImageUnpullableError,
   OrchestratorNotConfiguredError,
   OrchestratorTimeoutError,
+  createFlyOrchestrator,
   exitCodeOf,
   flyFleetConfig,
   flyOrchestrator,
@@ -1270,5 +1271,73 @@ describe('deadlines — the provider cannot hold an invocation open (docs/jobs.m
     const err = await flyOrchestrator.describe(HANDLE).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(OrchestratorApiError);
     expect(err).not.toBeInstanceOf(OrchestratorTimeoutError);
+  });
+});
+
+// ── One orchestrator per ACCOUNT (MOTIR-8964) ───────────────────────────────
+
+describe('createFlyOrchestrator — an account’s app and token, whatever FLY_FLEET_* holds', () => {
+  interface Seen {
+    url: string;
+    method: string;
+    authorization: string | null;
+  }
+
+  let seen: Seen[];
+
+  beforeEach(() => {
+    seen = [];
+    // The process-wide fleet is a THIRD app with a third token: neither account
+    // may reach it.
+    vi.stubEnv('FLY_FLEET_APP', 'process-wide-app');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', 'process_wide_token');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit): Promise<Response> => {
+        const headers = new Headers(init?.headers);
+        const method = init?.method ?? 'GET';
+        seen.push({ url: String(url), method, authorization: headers.get('authorization') });
+        if (method === 'POST' && String(url).endsWith('/volumes')) {
+          return json(200, { id: 'vol_1', name: 'motir_ci_docker', region: 'ord' });
+        }
+        if (method === 'POST') return json(200, machine({ region: 'ord' }));
+        if (method === 'GET' && /\/(machines|volumes)$/.test(String(url))) return json(200, []);
+        if (method === 'GET') return json(404, { error: 'not found' });
+        return json(200, {});
+      }),
+    );
+  });
+
+  it('sends every Machines and Volumes request of each account to its own app with its own token', async () => {
+    const a = createFlyOrchestrator({ token: 'token_a', app: 'app-a', region: 'ord' });
+    const b = createFlyOrchestrator({ token: 'token_b', app: 'app-b', region: 'sjc' });
+
+    for (const [orchestrator, app, token] of [
+      [a, 'app-a', 'token_a'],
+      [b, 'app-b', 'token_b'],
+    ] as const) {
+      seen = [];
+      const handle = await orchestrator.provision({ ...SPEC, region: '', dockerVolumeGb: 20 });
+      await orchestrator.describe(handle);
+      await orchestrator.teardown(handle, 'job_completed', ATTRIBUTION);
+      await orchestrator.reap(new Date(), async () => ATTRIBUTION);
+      await orchestrator.sweepOrphanedVolumes!(new Date());
+
+      expect(seen.length).toBeGreaterThan(5);
+      for (const call of seen) {
+        expect(call.url).toContain(`/apps/${app}/`);
+        expect(call.url).not.toContain('process-wide-app');
+        expect(call.authorization).toBe(`Bearer ${token}`);
+      }
+    }
+  });
+
+  it('boots a spec with no region in the account’s region', async () => {
+    const orchestrator = createFlyOrchestrator({ token: 't', app: 'app-a', region: 'sjc' });
+    await orchestrator.provision({ ...SPEC, region: '' });
+    const create = seen.find((c) => c.method === 'POST' && c.url.endsWith('/machines'));
+    expect(create).toBeDefined();
+    const body = (vi.mocked(fetch).mock.calls.at(-1)?.[1]?.body ?? '{}') as string;
+    expect(JSON.parse(body)).toMatchObject({ region: 'sjc' });
   });
 });

@@ -26,6 +26,8 @@ import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
+import { fleetShardService } from '@/lib/services/fleetShardService';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';
@@ -1632,5 +1634,93 @@ describe('the boot path is three bounded phases, not one long one', () => {
     for (let i = 1; i < 50; i += 1) {
       expect(pollWaitMs(i)).toBeLessThanOrEqual(FLEET_TIME_BUDGETS.maxPollIntervalMs);
     }
+  });
+});
+
+describe('the fleet account a container boots in (MOTIR-8964)', () => {
+  afterEach(async () => {
+    // The account is RESTRICTed while an intent records it.
+    await adminDb.ciRunnerProvisioningIntent.deleteMany({});
+    await adminDb.fleetShard.deleteMany({});
+    orchestrator.resetShardFakes();
+    fleetShardOrchestratorService.resetCache();
+  });
+
+  async function createAccount() {
+    return fleetShardService.createShard({
+      name: `ci-runner-${randomToken(4)}`,
+      fleetKind: 'ci_runner',
+      provider: 'fly',
+      state: 'active',
+      githubOrg: MOTIR_ORG,
+      githubInstallationId: '556677',
+      flyOrg: 'motir',
+      flyApp: `motir-ci-${randomToken(4)}`,
+      flyRegion: 'ams',
+      credentialRef: 'FLEET_SHARD_TEST_TOKEN',
+      limits: { machineLimit: 50 },
+    });
+  }
+
+  it('with no account chosen, boots on the process-wide fleet and records none', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    const booted = await ciRunnerBootService.bootIntent(intent.id, FAST);
+    if (booted.phase !== 'supervising') throw new Error('unreachable');
+
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+    expect(booted.session.handle.shardId).toBeUndefined();
+    const row = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(row.fleetShardId).toBeNull();
+  });
+
+  it('boots in the CHOSEN account, in its region, and every later step reaches it — even once it is disabled', async () => {
+    const fx = await seedTenant();
+    const account = await createAccount();
+    vi.spyOn(fleetShardOrchestratorService, 'chooseBootShard').mockResolvedValue(account);
+    const fake = orchestrator.fakeOrchestratorForShard(account.id);
+    const intent = await seedIntent(fx);
+
+    const booted = await ciRunnerBootService.bootIntent(intent.id, FAST);
+    if (booted.phase !== 'supervising') throw new Error('unreachable');
+
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+    expect(fake.provisioned).toHaveLength(1);
+    expect(fake.specs[0]!.region).toBe('ams');
+    expect(booted.session.handle.shardId).toBe(account.id);
+    const row = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(row.fleetShardId).toBe(account.id);
+
+    // Disabling stops NEW boots; a container already running is still followed.
+    await fleetShardService.setState(account.id, 'disabled');
+    fake.completeJob(booted.session.handle.id);
+    const verdict = await ciRunnerBootService.pollOnce(booted.session, undefined, FAST);
+    expect(verdict.done).toBe(true);
+    if (!verdict.done) throw new Error('unreachable');
+    const outcome = await ciRunnerBootService.settleSupervision(booted.session, verdict, FAST);
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_completed' });
+    expect(fake.liveContainerIds()).toEqual([]);
+    expect(fakeOrchestrator.teardowns).toEqual([]);
+  });
+
+  it('a session memoised before accounts existed resolves to the process-wide fleet', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    const booted = await ciRunnerBootService.bootIntent(intent.id, FAST);
+    if (booted.phase !== 'supervising') throw new Error('unreachable');
+    // The memoised shape of an older run: no `shardId` on the handle.
+    const { shardId: _none, ...handle } = booted.session.handle;
+    fakeOrchestrator.completeJob(handle.id);
+
+    const verdict = await ciRunnerBootService.pollOnce(
+      { ...booted.session, handle },
+      undefined,
+      FAST,
+    );
+    expect(verdict.done).toBe(true);
   });
 });

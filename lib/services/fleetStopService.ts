@@ -10,12 +10,9 @@ import { actionsRunsClient, type ActionsRepoRef } from '@/lib/github/actionsRuns
 import { runnerJitConfigClient } from '@/lib/github/runnerJitConfig';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
 import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
-import {
-  getOrchestrator,
-  isOrchestratorConfigured,
-  recordContainerUsage,
-} from '@/lib/orchestrator';
+import { isOrchestratorConfigured, recordContainerUsage } from '@/lib/orchestrator';
 import {
   FLEET_CONTAINER_SIZE,
   type ContainerHandle,
@@ -110,20 +107,26 @@ export const fleetStopService = {
     );
     if (inFlight.length === 0) return result;
 
-    let orchestrator: ContainerOrchestrator | null = null;
-    if (isOrchestratorConfigured()) {
+    // Each container is torn down through the account it was booted in
+    // (MOTIR-8964); a legacy intent through the process-wide fleet.
+    const orchestratorFor = async (
+      intent: CiRunnerProvisioningIntent,
+    ): Promise<ContainerOrchestrator | null> => {
+      if (intent.fleetShardId === null && !isOrchestratorConfigured()) return null;
       try {
-        orchestrator = getOrchestrator();
+        return await fleetShardOrchestratorService.forIntent(intent);
       } catch (err) {
-        console.error('[fleetStopService] no orchestrator — containers left for the reaper', {
+        console.error('[fleetStopService] no orchestrator — container left for the reaper', {
           organizationId,
+          intentId: intent.id,
           detail: detailOf(err),
         });
+        return null;
       }
-    }
+    };
 
     for (const intent of inFlight) {
-      const stopped = await stopIntent(intent, reason, orchestrator, now);
+      const stopped = await stopIntent(intent, reason, await orchestratorFor(intent), now);
       if (stopped === 'stopped') result.containersStopped += 1;
       if (stopped === 'failed') result.failures += 1;
     }

@@ -10789,6 +10789,12 @@ model CiRunnerProvisioningIntent {
   containerProvider String? @map("container_provider")
   containerId       String? @map("container_id")
   containerRegion   String? @map("container_region")
+  /// The FLEET ACCOUNT the container was booted in (MOTIR-8964), so poll, settle,
+  /// stop and reap reach the same provider account after a restart. NULL = the
+  /// process-wide fleet — every row written before accounts existed, and every
+  /// boot while `chooseBootShard` answers none. RESTRICT: an account with a
+  /// container recorded against it cannot vanish from under it.
+  fleetShardId      String? @map("fleet_shard_id")
 
   /// GitHub's numeric runner id, from the JIT-config mint. Stored because
   /// `generate-jitconfig` REGISTERS the runner before any container exists
@@ -10843,6 +10849,7 @@ model CiRunnerProvisioningIntent {
 
   workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fleetShard   FleetShard?  @relation(fields: [fleetShardId], references: [id], onDelete: Restrict)
   project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
   githubRepo   GithubRepo?  @relation(fields: [githubRepoId], references: [id], onDelete: SetNull)
 
@@ -10864,6 +10871,7 @@ model CiRunnerProvisioningIntent {
   /// intent that waited an hour at the admission gate and then booted a second
   /// ago must not be swept as an hour-old orphan.
   @@index([status, bootedAt])
+  @@index([fleetShardId])
   @@map("ci_runner_provisioning_intent")
 }
 
@@ -11548,6 +11556,9 @@ model FleetShard {
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// The CI intents whose containers were booted in this account (MOTIR-8964).
+  ciRunnerIntents CiRunnerProvisioningIntent[]
 
   /// One Fly location is one account.
   @@unique([provider, flyOrg, flyApp])

@@ -35,6 +35,9 @@ export interface CiRunnerBootRecord {
   githubRunnerId: number | null;
   runnerName: string | null;
   bootedAt: Date;
+  /** The fleet account the container was booted in (MOTIR-8964); null or
+   *  absent = the process-wide fleet. */
+  fleetShardId?: string | null;
 }
 
 /** What a provisioner records once the container is gone. */
@@ -378,6 +381,7 @@ export const ciRunnerProvisioningIntentRepository = {
         githubRunnerId: data.githubRunnerId,
         runnerName: data.runnerName,
         bootedAt: data.bootedAt,
+        fleetShardId: data.fleetShardId ?? null,
       },
     });
   },
