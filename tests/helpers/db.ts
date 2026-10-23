@@ -59,9 +59,14 @@ export type ResetExecutor = Pick<typeof db, '$executeRawUnsafe'>;
 // `idea_tag_assignment` go with them, and `idea_research_run` with `user`. The
 // SEEDED ideas go too — a suite that needs today's 15 re-applies the seed
 // migration (`tests/ideas/_helpers.ts`), which is idempotent by contract.
+//
+// `fleet_shard` (Story MOTIR-8953 · MOTIR-8966) is platform bookkeeping with no
+// tenant FK, so no cascade reaches it. Left behind, one suite's ACTIVE account
+// naming a GitHub org makes the next suite's first establish assign that org and
+// create its repositories there, in a file that never mentions fleet accounts.
 export async function truncateAuthTables(executor: ResetExecutor = db): Promise<void> {
   await executor.$executeRawUnsafe(
-    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "github_identity", "import_source_identity", "verification", "email_change_request", "idea_draft", "public_hostname_reservation", "oauth_client", "platform_run_model", "platform_run_model_list", "idea", "idea_tag", "user" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "github_identity", "import_source_identity", "verification", "email_change_request", "idea_draft", "public_hostname_reservation", "oauth_client", "platform_run_model", "platform_run_model_list", "idea", "idea_tag", "fleet_shard", "user" RESTART IDENTITY CASCADE',
   );
 }
 
