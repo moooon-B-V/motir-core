@@ -122,6 +122,7 @@ const MENTION_DRAFT = {
     'None of these is established.',
     '',
     '- The sanitizer drops the `mention:` scheme.',
+    '- The save serializes the editor before its mention nodes resolve.',
     '',
     '## Context refs',
     '',
@@ -129,7 +130,11 @@ const MENTION_DRAFT = {
   ].join('\n'),
   explanationMd: 'Mentions pull people into a thread; losing them silences it.',
   contextRefs: [MENTION_REF],
-  candidateMechanisms: ['The sanitizer drops the `mention:` scheme.'],
+  // Two or none: one mechanism is a diagnosis, and `parseAuthoredBug` refuses it.
+  candidateMechanisms: [
+    'The sanitizer drops the `mention:` scheme.',
+    'The save serializes the editor before its mention nodes resolve.',
+  ],
 };
 
 function bugOffer(
