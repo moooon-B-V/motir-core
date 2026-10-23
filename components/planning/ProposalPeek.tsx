@@ -100,7 +100,10 @@ function proposedPayload(item: PlanReviewItemDto, projectIdentifier: string): Qu
     identifier: item.identifier ?? '',
     projectIdentifier,
     title: item.title,
-    workItemRefs: {},
+    // The live summaries of the links in THIS proposal's bodies, which the plan
+    // review resolved for the whole plan in one read (bug MOTIR-9355). An empty
+    // map here drew every link in an added card as a deleted one.
+    workItemRefs: item.workItemRefs ?? {},
     kind: (item.kind || 'task') as WorkItemKindDto,
     // No status: an `add` is not a work item yet, and the header's op chip is
     // where a proposal's own state lives (Part XIV §4).
@@ -336,6 +339,11 @@ export function ProposalPeek({
           title: item.title,
           descriptionMd: item.descriptionMd,
           explanationMd: item.explanationMd,
+          // The target's map was resolved from the target's STORED description;
+          // the bodies above are the PROPOSED ones, so their own refs are laid
+          // over it (bug MOTIR-9355). A link only the proposal adds, and every
+          // link in the explanation, is otherwise drawn as a deleted card.
+          workItemRefs: { ...base.workItemRefs, ...item.workItemRefs },
           ...(item.priority ? { priority: item.priority as QuickViewData['priority'] } : {}),
           ...(item.type !== null ? { type: item.type as QuickViewData['type'] } : {}),
           storyPoints: item.storyPoints,
