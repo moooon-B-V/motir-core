@@ -1,6 +1,7 @@
 import type { Prisma, WorkspaceMembership, WorkspaceRole } from '@/generated/prisma/client';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { isMotirSystemUser } from '@/lib/ai/systemPrincipal';
 import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
 
 // The membership READ every access gate makes — always context-bound.
@@ -125,6 +126,10 @@ export async function composeOwnerReach(
 ): Promise<WorkspaceRole | null> {
   const stored = membership?.workspaceRole ?? null;
   if (stored === 'manager') return stored;
+  // THE MOTIR SYSTEM ACCOUNT (MOTIR-9329) holds no membership anywhere and enters
+  // every workspace as a Manager, by identity — asked only on the non-member branch,
+  // so a member never pays the read.
+  if (stored === null && (await isMotirSystemUser(userId))) return 'manager';
   const reachesAsManager = await organizationMembershipRepository.isOrgManagerOfWorkspaceOrg(
     userId,
     workspaceId,
