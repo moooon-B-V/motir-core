@@ -104,7 +104,10 @@ test('Grill me: the planner asks before it plans — pick, skip, stop, and the a
   await chapter('Turn it on — nothing starts until the next message', async () => {
     await grillSwitch(page).click();
     await expect(grillSwitch(page)).toHaveAttribute('aria-checked', 'true');
-    await expect(rail(page).getByTestId('grill-me-hint')).toHaveText(COPY.control.hint);
+    // No plan exists yet, so the pre-planning hint shows (MOTIR-9316).
+    await expect(rail(page).getByTestId('grill-me-hint')).toHaveText(
+      COPY.control.hintBeforePlanning,
+    );
     expect(posts).toHaveLength(0);
   });
 

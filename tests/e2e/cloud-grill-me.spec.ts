@@ -154,7 +154,8 @@ test('grilled before planning: one question at a time, pick, skip, you decide, s
   // ── Turning it on starts nothing by itself ──
   await grillSwitch(page).click();
   await expect(grillSwitch(page)).toHaveAttribute('aria-checked', 'true');
-  await expect(rail(page).getByTestId('grill-me-hint')).toHaveText(COPY.control.hint);
+  // No plan exists yet, so the pre-planning hint shows (MOTIR-9316).
+  await expect(rail(page).getByTestId('grill-me-hint')).toHaveText(COPY.control.hintBeforePlanning);
   await expect(question(page)).toHaveCount(0);
   expect(posts, 'turning it on sends nothing').toHaveLength(0);
   expect(readSharpen().submitted ?? []).toHaveLength(0);
