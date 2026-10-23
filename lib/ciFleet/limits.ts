@@ -5,14 +5,13 @@
 //
 // `docs/decisions/fleet-per-org-pool.md` is why the numbers are what they are:
 //
-//   * THE ORGANISATION'S POOL — `MOTIR_FLEET_ORG_MAX_IN_FLIGHT`, default 500 (§2).
-//     Each organisation holds its own pool, so one org's burst never queues
-//     another's. It is sized to the WORKLOAD (ten concurrent pull requests of a
-//     50-job repository), not to a price: the org's credits are what bound its
-//     spend (§3), and the attribution reconciler removes anything no paying org
-//     owns (§5). An enterprise org may carry its own number, set by platform
-//     staff on the org row (`Organization.fleetPoolCap`); it is never a per-org
-//     env var.
+//   * THE ORGANISATION'S POOL — `MOTIR_FLEET_ORG_MAX_IN_FLIGHT`, default 500 (§2)
+//     — is RETIRED from admission (MOTIR-9375; the fleet-capacity decision record
+//     MOTIR-9357). Every workload is now held to its own plan figure, and no
+//     admission reads the pool: only the platform monitor still displays it, and
+//     the platform-view card (MOTIR-9377) removes the env var and the constant
+//     with that last reader. `Organization.fleetPoolCap`, set by platform staff,
+//     now overrides the plan's CI burst cap and nothing else.
 //   * THE KILL SWITCH — `MOTIR_FLEET_MAX_IN_FLIGHT` (§6). It USED to be the one
 //     fleet-wide ceiling (MOTIR-1997, default 24) and the only bound on Motir's
 //     invoice. It is now the operator's kill switch and nothing else: `0` stops
@@ -29,14 +28,15 @@
 //
 // ⚠️ AGENT INSTANCES ARE NOT IN THE ORG POOL (`docs/decisions/agent-instances.md`
 // AMENDMENT 2). They are an `own`-pool workload: slotted under the same lock,
-// bounded by their own `MOTIR_INSTANCE_MAX_RUNNING`, and never summed into an
-// org's pool — a long-lived per-minute machine must not take CI's capacity. The
-// kill switch still stops them.
+// bounded by their plan's `agentsRunningPerOrg` (MOTIR-9374), and never summed
+// into an org's count — a long-lived per-minute machine must not take CI's
+// capacity. The kill switch still stops them.
 
 /** The env var an operator sets to `0` to stop every new boot — the kill switch. */
 const FLEET_KILL_SWITCH_ENV = 'MOTIR_FLEET_MAX_IN_FLIGHT';
 
-/** The env var an operator raises or lowers every organisation's pool with. */
+/** The retired org pool's env var — read by no admission (MOTIR-9375), only by
+ *  the platform monitor's display until MOTIR-9377 removes it. */
 const ORG_POOL_ENV = 'MOTIR_FLEET_ORG_MAX_IN_FLIGHT';
 
 /** The env var an operator raises or lowers the INDEX workload's own cap with
@@ -48,6 +48,10 @@ const INDEX_CAP_ENV = 'MOTIR_INDEX_MAX_IN_FLIGHT';
 const FLEET_SLOT_TTL_ENV = 'MOTIR_FLEET_SLOT_TTL_SECONDS';
 
 /**
+ * ⚠️ READ BY NO ADMISSION (MOTIR-9375): every workload is held to its own plan
+ * figure instead. Kept only for the platform monitor's display, until the
+ * platform-view card (MOTIR-9377) removes it with its last reader.
+ *
  * THE ORGANISATION'S POOL when the environment sets none — how many containers
  * of the shared workloads (CI runners, hosted-agent runs, index containers) ONE
  * organisation may have in flight at once (`fleet-per-org-pool.md` §2).
@@ -136,8 +140,10 @@ export function fleetKillSwitchEngaged(): boolean {
 }
 
 /**
- * THE ORGANISATION'S POOL — how many shared-workload containers one org may have
- * in flight at once.
+ * THE ORGANISATION'S RETIRED POOL — DISPLAY ONLY (MOTIR-9375): no admission
+ * reads it, and `Organization.fleetPoolCap` now overrides the plan's CI burst cap
+ * (`fleetCeilingService.resolveCiBurstCap`), not this. Read by the platform
+ * monitor until MOTIR-9377 removes it.
  *
  * `override` is the org's own number, set by platform staff for an enterprise
  * deal (`Organization.fleetPoolCap`, §2); when it is a non-negative integer it

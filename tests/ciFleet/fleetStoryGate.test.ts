@@ -155,7 +155,13 @@ let tenantSeq = 0;
  * `projectRunnerGroupService` instead, which is the whole point of that test.
  */
 async function seedTenant(
-  options: { withRunnerGroup?: boolean; withProjectRepo?: boolean; isMeta?: boolean } = {},
+  options: {
+    withRunnerGroup?: boolean;
+    withProjectRepo?: boolean;
+    isMeta?: boolean;
+    /** A staff override of the CI burst cap (MOTIR-9375). */
+    ciBurstCap?: number;
+  } = {},
 ): Promise<Fixture> {
   tenantSeq += 1;
   const suffix = `${tenantSeq}-${randomInt(1_000_000)}`;
@@ -183,6 +189,12 @@ async function seedTenant(
     await adminDb.organization.update({
       where: { id: workspace.organizationId },
       data: { isMeta: true },
+    });
+  }
+  if (options.ciBurstCap !== undefined) {
+    await adminDb.organization.update({
+      where: { id: workspace.organizationId },
+      data: { fleetPoolCap: options.ciBurstCap },
     });
   }
   if (options.withRunnerGroup !== false) {
@@ -923,9 +935,8 @@ describe('§3.3 — NO RUNNER REUSE', () => {
 describe('§3.4 — the GATE is consulted BEFORE provision, on all three limbs', () => {
   /** The three refusals, each asserted to spend NOTHING: no JIT mint (which
    *  registers a runner at GitHub), no container, no cost row. */
-  it("the ORG'S POOL refuses before anything is spent", async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
-    const fx = await seedTenant();
+  it("the ORG'S CI FIGURE refuses before anything is spent", async () => {
+    const fx = await seedTenant({ ciBurstCap: 1 });
     await handle(delivery(fx, { jobId: 57_001, runId: 67_001 }));
     await handle(delivery(fx, { jobId: 57_002, runId: 67_002 }));
     const [first, second] = dispatchedIntentIds();
@@ -941,7 +952,7 @@ describe('§3.4 — the GATE is consulted BEFORE provision, on all three limbs',
 
     const outcome = await ciRunnerBootService.runIntent(second!, FAST);
 
-    expect(outcome).toMatchObject({ outcome: 'gate_deferred', reason: 'org_pool' });
+    expect(outcome).toMatchObject({ outcome: 'gate_deferred', reason: 'plan_cap' });
     expect(mintCalls()).toEqual([]);
     expect(fakeOrchestrator.provisioned).toEqual([]);
     const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
@@ -1091,7 +1102,7 @@ describe('§3.5 — the admission LOCK is load-bearing: an executable mutation c
   async function raceForSlots(): Promise<number> {
     // ONE org, because the pool is the org's: its racers are the ones that
     // contend for the same number.
-    const fx = await seedTenant({ withProjectRepo: true });
+    const fx = await seedTenant({ withProjectRepo: true, ciBurstCap: CEILING });
     const intents = await Promise.all(
       Array.from({ length: RACERS }, (_, i) =>
         adminDb.ciRunnerProvisioningIntent.create({
@@ -1134,8 +1145,6 @@ describe('§3.5 — the admission LOCK is load-bearing: an executable mutation c
   }
 
   it('WITH the lock, a race over one slot admits exactly one', async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', String(CEILING));
-
     expect(await raceForSlots()).toBe(CEILING);
 
     const inFlight = await withSystemContext((tx) =>
@@ -1144,8 +1153,7 @@ describe('§3.5 — the admission LOCK is load-bearing: an executable mutation c
     expect(inFlight).toBe(CEILING);
   });
 
-  it('WITHOUT the lock, the SAME race overruns the pool — the guard is real', async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', String(CEILING));
+  it('WITHOUT the lock, the SAME race overruns the CI figure — the guard is real', async () => {
     // THE MUTATION: report the scope as locked without ever taking `FOR UPDATE`.
     // Every other line of the gate is untouched.
     vi.spyOn(ciFleetAdmissionLockRepository, 'lockScope').mockResolvedValue(true);
@@ -1245,10 +1253,9 @@ describe('§3.7 — CROSS-TENANT ISOLATION: one org’s state never decides anot
     expect((await ciRunnerAdmissionService.admit(payingIntent!)).outcome).toBe('admitted');
   });
 
-  it('one org at its POOL does not consume another org’s pool', async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
-    const a = await seedTenant();
-    const b = await seedTenant();
+  it('one org at its CI figure does not consume another org’s', async () => {
+    const a = await seedTenant({ ciBurstCap: 1 });
+    const b = await seedTenant({ ciBurstCap: 1 });
     await handle(delivery(a, { jobId: 59_003, runId: 69_003 }));
     await handle(delivery(a, { jobId: 59_004, runId: 69_004 }));
     await handle(delivery(b, { jobId: 59_005, runId: 69_005 }));
@@ -1261,8 +1268,8 @@ describe('§3.7 — CROSS-TENANT ISOLATION: one org’s state never decides anot
     const other = await ciRunnerAdmissionService.admit(intents[2]!);
 
     expect(first.outcome).toBe('admitted');
-    expect(second).toMatchObject({ outcome: 'deferred', reason: 'org_pool' });
-    // B is a different org with its own pool: A filling its pool must not reach
+    expect(second).toMatchObject({ outcome: 'deferred', reason: 'plan_cap' });
+    // B is a different org with its own figure: A at its figure must not reach
     // across.
     expect(other.outcome).toBe('admitted');
   });

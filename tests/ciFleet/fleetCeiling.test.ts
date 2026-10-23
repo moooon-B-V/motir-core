@@ -60,7 +60,9 @@ interface Fixture {
   projectId: string;
 }
 
-async function seedTenant(options: { isMeta?: boolean } = {}): Promise<Fixture> {
+async function seedTenant(
+  options: { isMeta?: boolean; ciBurstCap?: number } = {},
+): Promise<Fixture> {
   const suffix = randomInt(1_000_000);
   const user = await usersService.createUser({
     email: `fleet-ceiling-${suffix}@example.com`,
@@ -81,6 +83,14 @@ async function seedTenant(options: { isMeta?: boolean } = {}): Promise<Fixture> 
     await adminDb.organization.update({
       where: { id: workspace.organizationId },
       data: { isMeta: true },
+    });
+  }
+  // A staff override of the CI burst cap (MOTIR-9375) — a small CI figure
+  // without inventing a plan.
+  if (options.ciBurstCap !== undefined) {
+    await adminDb.organization.update({
+      where: { id: workspace.organizationId },
+      data: { fleetPoolCap: options.ciBurstCap },
     });
   }
   return {
@@ -263,37 +273,46 @@ describe('the fleet workload REGISTRY', () => {
 
 // ── One pool per organisation, over ALL its workloads ───────────────────────
 
-describe("ONE pool per organisation, over ALL of that org's workloads", () => {
-  it("refuses an org's CI job when ITS index and agent containers filled its pool", async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '4');
-    const fx = await seedTenant();
+describe("each workload is held to its OWN figure, never the org's summed pool", () => {
+  // MOTIR-9375: the CI gate judges the org's CI runners alone, so ITS index and
+  // agent containers no longer take CI's room.
+  it("admits an org's CI job however many index and agent containers it holds", async () => {
+    const fx = await seedTenant({ ciBurstCap: 4 });
     await reserve('code_graph_index', fx);
     await reserve('code_graph_index', fx);
     await reserve('hosted_agent', fx);
+    await reserve('hosted_agent', fx);
+
+    const verdict = await ciRunnerAdmissionService.admit(await seedIntent(fx));
+
+    expect(verdict).toMatchObject({ outcome: 'admitted', ciInFlight: 0, ciBurstCap: 4 });
+  });
+
+  // ...and a CI job over the figure still WAITS, with the breakdown an operator
+  // acts on.
+  it("defers an org's CI job at its CI figure, queued, with the per-workload breakdown", async () => {
+    const fx = await seedTenant({ ciBurstCap: 2 });
+    await seedIntent(fx, { status: 'running' });
+    await seedIntent(fx, { status: 'running' });
     await reserve('hosted_agent', fx);
 
     const queued = await seedIntent(fx);
     const verdict = await ciRunnerAdmissionService.admit(queued);
 
-    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'org_pool' });
-    // QUEUED, not failed — a full pool must feel like waiting.
+    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'plan_cap' });
     const after = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: queued.id },
     });
     expect(after.status).toBe('pending');
-    // §4's words, and the breakdown an operator acts on.
     const detail = (verdict as { detail: string }).detail;
-    expect(detail).toContain('Your organization is running 4 of its 4 CI containers.');
-    expect(detail).toContain('code-graph index 2');
-    expect(detail).toContain('hosted agents 2');
+    expect(detail).toContain('runs 2 CI jobs at once');
+    expect(detail).toContain('hosted agents 1');
   });
 
   // MOTIR-9373: `reserve` no longer judges the summed pool. An index slot taken
-  // through it is held by no plan figure (indexing's own gate,
-  // `codeGraphIndexAdmissionService`, still sums the pool until the CI card).
+  // through it is held by no plan figure.
   it("reserve no longer refuses an INDEX slot because the org's CI runners filled its pool", async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '3');
-    const fx = await seedTenant();
+    const fx = await seedTenant({ ciBurstCap: 3 });
     await seedIntent(fx, { status: 'running' });
     await seedIntent(fx, { status: 'running' });
     await seedIntent(fx, { status: 'provisioning' });
@@ -304,17 +323,16 @@ describe("ONE pool per organisation, over ALL of that org's workloads", () => {
     expect(await adminDb.fleetInFlightSlot.count()).toBe(1);
   });
 
-  // ⚠️ THE POINT OF THE CARD (criterion 1): another org's full pool is NOT this
-  // org's problem.
-  it("admits org B while org A's pool is full", async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '2');
-    const a = await seedTenant();
-    const b = await seedTenant();
+  // ⚠️ THE POINT OF THE CARD (criterion 1): another org at its figure is NOT
+  // this org's problem.
+  it('admits org B while org A is at its CI figure', async () => {
+    const a = await seedTenant({ ciBurstCap: 1 });
+    const b = await seedTenant({ ciBurstCap: 1 });
     await seedIntent(a, { status: 'running' });
     await reserve('hosted_agent', a);
 
     expect(await ciRunnerAdmissionService.admit(await seedIntent(a))).toMatchObject({
-      reason: 'org_pool',
+      reason: 'plan_cap',
     });
     expect((await reserve('hosted_agent', b)).verdict).toMatchObject({ outcome: 'reserved' });
     expect((await ciRunnerAdmissionService.admit(await seedIntent(b))).outcome).toBe('admitted');
@@ -445,15 +463,17 @@ describe('a slot with no organisation is refused (criterion 5)', () => {
 // ── Completion frees a slot, whoever's container it was ─────────────────────
 
 describe('completion frees a slot for ANY workload of the org', () => {
-  it('an INDEX container ending lets the same org’s queued CI job through', async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
-    const fx = await seedTenant();
-    const { ref } = await reserve('code_graph_index', fx);
+  it('a CI runner ending lets the same org’s queued CI job through', async () => {
+    const fx = await seedTenant({ ciBurstCap: 1 });
+    const running = await seedIntent(fx, { status: 'running' });
     const queued = await seedIntent(fx);
 
-    expect(await ciRunnerAdmissionService.admit(queued)).toMatchObject({ reason: 'org_pool' });
+    expect(await ciRunnerAdmissionService.admit(queued)).toMatchObject({ reason: 'plan_cap' });
 
-    expect(await fleetCeilingService.release('code_graph_index', ref)).toBe(true);
+    await adminDb.ciRunnerProvisioningIntent.update({
+      where: { id: running.id },
+      data: { status: 'completed', settledAt: new Date(), teardownReason: 'job_completed' },
+    });
 
     const after = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: queued.id },
@@ -497,15 +517,14 @@ describe('the pool holds under REAL concurrency (notes.html #35)', () => {
   // and it MUST go red. Every racer then reads the same "0 in flight" snapshot
   // and all of them take a slot.
   //
-  // It races TWO ORGS at once (criterion 1): org A's CI bursts past its pool at
-  // the CI gate while org B's CI and hosted runs burst inside theirs, in the
-  // same instant. Org A is held to exactly its pool; every one of org B's
-  // containers is admitted. (A hosted run is held to its plan's figure rather
-  // than the pool since MOTIR-9373; its own race is in planCapAdmission.test.ts.)
-  it("holds org A at its pool while org B's concurrent burst is admitted in full", async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '4');
-    const a = await seedTenant();
-    const b = await seedTenant();
+  // It races TWO ORGS at once (criterion 1): org A's CI bursts past its CI
+  // figure at the CI gate while org B's CI and hosted runs burst inside theirs,
+  // in the same instant. Org A is held to exactly its figure; every one of org
+  // B's containers is admitted. (A hosted run's own race is in
+  // planCapAdmission.test.ts.)
+  it("holds org A at its CI figure while org B's concurrent burst is admitted in full", async () => {
+    const a = await seedTenant({ ciBurstCap: 4 });
+    const b = await seedTenant({ ciBurstCap: 4 });
     const aIntents = await Promise.all([1, 2, 3, 4, 5, 6].map(() => seedIntent(a)));
     const bIntents = await Promise.all([1, 2].map(() => seedIntent(b)));
 
@@ -521,7 +540,7 @@ describe('the pool holds under REAL concurrency (notes.html #35)', () => {
     const lostA = aResults.filter((r) => r.outcome === 'deferred');
     expect(wonA).toHaveLength(4);
     expect(lostA).toHaveLength(2);
-    for (const lost of lostA) expect(lost).toMatchObject({ reason: 'org_pool' });
+    for (const lost of lostA) expect(lost).toMatchObject({ reason: 'plan_cap' });
 
     // Org B was never deferred for org A's load.
     expect(bResults.every((r) => r.outcome === 'admitted' || r.outcome === 'reserved')).toBe(true);
@@ -627,43 +646,39 @@ describe('the pool fails CLOSED', () => {
 
 // ── No bypass ───────────────────────────────────────────────────────────────
 
-describe('nothing bypasses the pool', () => {
-  // §1: meta keeps the same pool at the CI gate, which still sums it until the
-  // CI burst cap card. (A hosted run's plan figure exempts Motir's own orgs —
-  // `tests/ciFleet/planCapAdmission.test.ts`.)
-  it('the META org is NOT exempt from the CI gate’s pool', async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '2');
-    const meta = await seedTenant({ isMeta: true });
-    await reserve('code_graph_index', meta);
-    await reserve('hosted_agent', meta);
+describe('nothing bypasses a staff override of the CI figure', () => {
+  // A staff override holds Motir's own orgs at the CI gate too (MOTIR-9375).
+  // (A hosted run's plan figure exempts them — `planCapAdmission.test.ts`.)
+  it('the META org is held by its CI override', async () => {
+    const meta = await seedTenant({ isMeta: true, ciBurstCap: 2 });
+    await seedIntent(meta, { status: 'running' });
+    await seedIntent(meta, { status: 'running' });
 
     expect(await ciRunnerAdmissionService.admit(await seedIntent(meta))).toMatchObject({
       outcome: 'deferred',
-      reason: 'org_pool',
+      reason: 'plan_cap',
     });
   });
 
   it('MOTIR_CLOUD=false does not lift it either', async () => {
     vi.stubEnv('MOTIR_CLOUD', 'false');
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
-    const fx = await seedTenant();
-    await reserve('hosted_agent', fx);
+    const fx = await seedTenant({ ciBurstCap: 1 });
+    await seedIntent(fx, { status: 'running' });
 
     expect(await ciRunnerAdmissionService.admit(await seedIntent(fx))).toMatchObject({
-      reason: 'org_pool',
+      reason: 'plan_cap',
     });
   });
 
   // §6: the per-project tier caps are retired — one project may use its org's
-  // whole pool.
-  it('one project may use the whole org pool (no per-project cap)', async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '5');
-    const fx = await seedTenant();
+  // whole CI figure.
+  it('one project may use the whole org CI figure (no per-project cap)', async () => {
+    const fx = await seedTenant({ ciBurstCap: 5 });
     for (let i = 0; i < 5; i += 1) {
       expect((await ciRunnerAdmissionService.admit(await seedIntent(fx))).outcome).toBe('admitted');
     }
     expect(await ciRunnerAdmissionService.admit(await seedIntent(fx))).toMatchObject({
-      reason: 'org_pool',
+      reason: 'plan_cap',
     });
   });
 });
