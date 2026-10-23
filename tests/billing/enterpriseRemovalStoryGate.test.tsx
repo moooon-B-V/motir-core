@@ -348,9 +348,20 @@ describe('source imports', () => {
     const deleted: string[] = [];
     const dangling: string[] = [];
     const self = rel(import.meta.filename ?? '');
+    // Every real specifier is a quoted literal, so a file whose quoted relative
+    // strings all resolve and that names no deleted module cannot fail either
+    // check. Only the rest is parsed: parsing the whole tree overran the timeout on
+    // a loaded CI runner.
+    const quotedRelative = /(['"])(\.{1,2}\/[^'"\n]*)\1/g;
     for (const file of files) {
       if (rel(file) === self) continue;
       const text = readFileSync(file, 'utf8');
+      const suspect =
+        DELETED_MODULES.some((d) => text.includes(d)) ||
+        [...text.matchAll(quotedRelative)].some(
+          (m) => !resolves(path.resolve(path.dirname(file), m[2]!)),
+        );
+      if (!suspect) continue;
       for (const spec of importSpecifiers(file, text)) {
         if (DELETED_MODULES.some((d) => spec.includes(d))) deleted.push(`${rel(file)}: ${spec}`);
         if (spec.startsWith('.') && !resolves(path.resolve(path.dirname(file), spec))) {
