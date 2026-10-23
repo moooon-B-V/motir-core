@@ -10294,34 +10294,41 @@
       "fleet": {
         "orgs": {
           "title": "容器集群 · 正在运行容器的组织",
-          "subtitle": "每个当前持有容器的组织，以及过去 {minutes} 分钟（两个扣费周期）内 CI 扣费对它做了什么。不一致的排在最前。",
+          "subtitle": "每个当前持有容器的组织，对照其套餐的各项上限，以及过去 {minutes} 分钟（两个扣费周期）内 CI 扣费对它做了什么。不一致的排在最前。",
           "mismatchedCount": "{count} 个不一致",
           "runningCount": "{count, plural, other {#}} 个组织在运行",
           "noMismatch": "无不一致",
           "stat": {
             "orgs": "正在运行容器的组织",
-            "pooled": "各组织容器池中的容器（CI · 托管 · 索引）",
-            "instances": "智能体实例 · 自有池，未计入上方",
+            "ciRunners": "CI 运行器 · 每个组织受其套餐的突发上限约束",
+            "hostedAgents": "托管智能体运行 · 每个组织受其套餐的并行运行数约束",
+            "instances": "运行中的智能体实例 · 每个组织受其套餐的上限约束",
             "mismatched": "不一致 · 运行与扣费不符"
           },
           "group": {
-            "pool": "计入 {pool} 个容器的池",
-            "own": "自有池"
+            "plan": "受套餐约束",
+            "uncapped": "无套餐上限"
           },
           "col": {
             "org": "组织",
+            "plan": "套餐",
             "ciRunner": "CI 运行器",
             "hostedAgent": "托管智能体运行",
             "index": "索引容器",
-            "poolUsed": "已用池容量",
             "agentInstance": "智能体实例",
-            "agentInstanceNote": "不计入池",
             "accrued": "CI 分钟 · 最近 {minutes} 分钟",
             "credits": "本月额度 · 已确认",
             "verdict": "判定"
           },
-          "poolOf": "{used} / {pool}",
-          "poolUnknown": "池容量无法读取",
+          "plan": {
+            "named": "{plan}<pp> · 每人 {perUser} 个</pp>",
+            "exempt": "无套餐限制",
+            "unknown": "套餐未知 · {key}",
+            "unknownNoKey": "套餐未知",
+            "unknownNote": "新容器被拒绝"
+          },
+          "usedOf": "<b>{used}</b> / {figure}",
+          "override": "覆盖值",
           "metaTag": "元组织 · isMeta",
           "unnamed": "组织 {id}",
           "accrued": {
@@ -10339,7 +10346,7 @@
           "foot": "显示第 {from}–{to} 个，共 {total} 个 · 不一致的在前，其次是容器最多的 · 只判定 CI——它是唯一在运行时扣费的工作负载",
           "empty": {
             "title": "没有组织在运行容器集群中的容器",
-            "body": "当前每个组织的容器池都是空的，因此没有可与扣费对比的内容。这是健康的读数，不是故障。"
+            "body": "当前没有组织持有 CI 运行器、托管智能体运行、智能体实例或索引容器，因此没有可与扣费对比的内容。这是健康的读数，不是故障。"
           },
           "error": {
             "title": "无法读取容器集群",
@@ -11435,12 +11442,20 @@
         "charge": {
           "ciRunner": "运行期间计费",
           "hostedAgent": "运行结束时计费",
-          "agentInstance": "按运行区间计费 · 不计入资源池",
+          "agentInstance": "按运行区间计费",
           "index": "Motir 自行承担——从不计费"
         },
+        "tile": {
+          "of": " / {figure}",
+          "override": "覆盖值"
+        },
         "facts": {
-          "pool": "资源池 <strong>{used} / {pool}</strong>",
-          "poolUnknown": "资源池 <strong>{used} / —</strong>",
+          "plan": "套餐 <strong>{plan}</strong> · 同时 {runs} 个托管运行 · 每人 {perUser} 个智能体 · {running} 个智能体运行中 · 同时 {ci} 个 CI 作业",
+          "planCiUnreadable": "套餐 <strong>{plan}</strong> · 同时 {runs} 个托管运行 · 每人 {perUser} 个智能体 · {running} 个智能体运行中 · CI 上限无法读取",
+          "planExempt": "套餐 <strong>无套餐限制</strong>",
+          "planExemptOverride": "套餐 <strong>无套餐限制</strong> · 同时 {ci} 个 CI 作业（覆盖值）",
+          "planUnknown": "套餐 <strong>未知 · {key}</strong> · 新容器被拒绝",
+          "planUnknownNoKey": "套餐 <strong>未知</strong> · 新容器被拒绝",
           "accrued": "最近 {minutes} 分钟累计 <strong>{value} 分钟</strong>",
           "debited": "本月已扣费 <strong>{credits} 积分</strong>",
           "pending": "待确认 <strong>{credits} 积分</strong>"
@@ -12302,8 +12317,10 @@
       "aiPlanUnknown": "Motir 暂时无法查询你的组织的 AI 套餐。请稍后重试。",
       "credits": "你的组织额度已用完。智能体运行时消耗额度，其存储每天也消耗额度，无论是否休眠。<link>充值额度</link>后即可创建或唤醒智能体。",
       "creditsUnknown": "Motir 暂时无法查询你的组织额度。请稍后重试。",
-      "userCap": "你已经有 {count} 个智能体。每个智能体即使休眠，每天也会收取存储费用。删除一个后才能再创建。",
-      "orgRunningLimit": "你的组织正在运行 {limit} 个智能体，已达上限 {limit} 个。休眠一个后才能启动另一个。",
+      "userCap": "你的组织的 {plan} 套餐每人最多可有 {limit, plural, other {#}} 个智能体。每个智能体即使休眠，每天也会收取存储费用。删除一个后才能再创建。",
+      "userCapNoFigure": "你拥有的智能体已达到组织套餐允许的每人上限。每个智能体即使休眠，每天也会收取存储费用。删除一个后才能再创建。",
+      "orgRunningLimit": "你的组织的 {plan} 套餐最多可同时运行 {limit, plural, other {#}} 个智能体，现已全部在运行。休眠一个后才能启动另一个。",
+      "orgRunningLimitNoFigure": "你的组织同时运行的智能体已达到套餐允许的上限。休眠一个后才能启动另一个。",
       "busy": "Motir 当前运行的机器已达上限。请几分钟后重试。",
       "notOffered": "暂不提供该编码智能体：其条款尚不允许平台托管它。请选择其他编码智能体。",
       "nameTaken": "你在这个项目上已经有一个名为 {name} 的智能体。",

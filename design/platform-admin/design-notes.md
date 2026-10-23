@@ -2994,3 +2994,123 @@ so they are told apart without colour.
 - **A loading skeleton** — server-rendered read (see the panels table).
 - **The zh strings** — the UI card's.
 - **A `.png` export** — retired (AMENDMENT 4).
+
+---
+
+# AMENDMENT 2026-10-23 — Monitoring · Fleet orgs under per-plan caps (MOTIR-9382 · story MOTIR-9363)
+
+**Mock:** `design/platform-admin/fleet-orgs--plan-caps.mock.html` — a DELTA mock. It amends
+MOTIR-7314's mock `monitoring--fleet.mock.html` — published as that card's design result and
+never committed to the tree — whose Fleet section shipped as `app/(admin)/admin/monitoring/_components/FleetSection.tsx`):
+**Panel 1's "Fleet · organisations running containers" card** and **Panel 3's empty state**.
+Nothing else on that mock changes — the kills card, the verdict chips, the disabled and read-failed
+states and the tenant link stand as drawn. Built by **MOTIR-9377**.
+
+## Why it changes
+
+The fleet-capacity decision **MOTIR-9357** amends `docs/decisions/fleet-per-org-pool.md` §2: the
+flat 500-container pool every paid org shared across CI, indexing and hosted runs is gone. Each
+organisation is held to its **plan's** figures, one per workload (`lib/billing/planCaps.ts`,
+MOTIR-9372): `agentRunsInParallel`, `agentsPerUser`, `agentsRunningPerOrg`, `ciBurstCap`. Code-graph
+indexing is under no figure. So "Pool used · {used} / {pool}" no longer means anything, and each
+workload must read against its own figure.
+
+## The panels (review EACH)
+
+| #   | Panel                    | What it shows                                                                                                                                                                                                                  |
+| --- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Populated, IN PLACE      | The access path (Operations → Monitoring, shipped sections collapsed) and the changed card: five tiles, the Plan column, one group header _Held to the plan_ over CI / hosted / agent instances, index under _No plan figure_. |
+| 2   | Tiles at the narrow step | The five tiles in the grid's two-column step (2 + 2 + 1).                                                                                                                                                                      |
+| 3   | The cell states          | One row per state: at a figure (full bar), under it, the Standard row, a CI override, plan unknown, exempt.                                                                                                                    |
+| 4   | Nothing running          | MOTIR-7314 Panel 3's empty state, body copy without "per-org pool".                                                                                                                                                            |
+| 5   | Dark mode                | Panel 1's card under `data-theme="dark"` (the mock re-emits Tier 3 on every `[data-theme]` scope so the nested board really computes dark).                                                                                    |
+
+## The table
+
+Columns, in order: **Organisation · Plan · CI runners · Hosted-agent runs · Agent instances ·
+Index containers · CI minutes · last {minutes} min · Credits this month · confirmed · Verdict.**
+
+- **Removed:** the _Pool used_ column and both group headers (_In the {pool}-container pool_,
+  _Own pool_). Agent instances are no longer "not in the pool" — they read against
+  `agentsRunningPerOrg` like the other two capped workloads.
+- **Group header row:** an empty cell over Organisation + Plan; **Held to the plan** (solid
+  `--el-border-strong` underline, the old pool header's treatment) over CI runners, Hosted-agent runs
+  and Agent instances; **No plan figure** (dashed underline, the old _Own pool_ treatment, with the
+  dashed column rule) over Index containers.
+- **Plan cell:** `{plan} · {n} per person` — the plan's display name (`planName` from motir-ai) in
+  `--el-text` weight 500, then ` · {agentsPerUser} per person` in `--el-text-secondary`. No bar: it is
+  a figure, not a usage.
+- **A capped workload cell** (CI runners · Hosted-agent runs · Agent instances): `{used} of {figure}`
+  — the count in `--el-text` 600, `of {figure}` in `--el-text-secondary` — over the shipped `.usebar`
+  (`--radius-badge`, `--el-surface` track) at `used / figure`. Fill `--el-accent`; **at or over the
+  figure the bar is full and takes `--el-warning`**, so "at the figure" reads without the number (a
+  graphic: 3:1 suffices, and the number says it in words).
+- **CI override:** when `Organization.fleetPoolCap` is set it replaces the plan's `ciBurstCap` for
+  CI alone — the cell reads `{used} of {override}` with the sub-line **override** (`.sub2`,
+  `--el-text-secondary`). Hosted and agent cells never show an override.
+- **Index containers:** a bare count, no figure and no bar. Zero is the shipped `.muted` 0.
+- **Exempt row** (Motir's own org — `isMeta` / `internalBilling`, or a build without billing): Plan
+  reads **No plan limit** (italic, `--el-text-secondary`); every workload is a bare count with no
+  "of" and no bar.
+- **Plan unknown row** (the plan read failed, the subscription has no tier, or the key has no caps
+  row): Plan is a `pill-warn` chip (`--el-tint-yellow`, `--el-text-strong`, help glyph)
+  **Plan unknown · {key}** — the key named when there is one; with none it reads **Plan unknown**.
+  Sub-line **new containers refused** (fail-closed: admission refuses on `plan_unknown`). Workloads are
+  bare counts, no figure, no bar.
+- Sort, mismatch rail, verdict chips, CI minutes, credits, footer and pager: unchanged.
+
+## The stat tiles
+
+The single pooled tile (_containers in per-org pools (CI · hosted · index)_) gives way to two, so
+there are five MiniStats. The shipped grid `grid gap-3 sm:grid-cols-2 lg:grid-cols-4` becomes
+**`sm:grid-cols-2 lg:grid-cols-5`** — one row at desktop; 2 + 2 + 1 at the `sm` step (Panel 2); one
+per row below `sm`. Order: orgs · CI runners · hosted-agent runs · agent instances · mismatched.
+
+## Copy (en — `platformAdmin.monitoring.fleet.orgs`, the UI card adds every locale)
+
+| key                 | en                                                                                                                                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `subtitle`          | Each organisation holding a container now, against its plan’s figures, beside what the CI debit did for it in the last {minutes} minutes (two debit periods). Mismatched first.             |
+| `stat.ciRunners`    | CI runners · each org held to its plan’s burst cap                                                                                                                                          |
+| `stat.hostedAgents` | hosted-agent runs · each org held to its plan’s parallel runs                                                                                                                               |
+| `stat.instances`    | agent instances running · each org held to its plan’s figure                                                                                                                                |
+| `group.plan`        | Held to the plan                                                                                                                                                                            |
+| `group.uncapped`    | No plan figure                                                                                                                                                                              |
+| `col.plan`          | Plan                                                                                                                                                                                        |
+| `plan.named`        | {plan} · {perUser} per person                                                                                                                                                               |
+| `plan.exempt`       | No plan limit                                                                                                                                                                               |
+| `plan.unknown`      | Plan unknown · {key}                                                                                                                                                                        |
+| `plan.unknownNoKey` | Plan unknown                                                                                                                                                                                |
+| `plan.unknownNote`  | new containers refused                                                                                                                                                                      |
+| `usedOf`            | {used} of {figure}                                                                                                                                                                          |
+| `override`          | override                                                                                                                                                                                    |
+| `empty.body`        | No organisation holds a CI runner, hosted-agent run, agent instance or index container right now, so there is nothing to compare against the debit. This is a healthy reading, not a fault. |
+
+Retired: `stat.pooled`, `group.pool`, `group.own`, `col.poolUsed`, `col.agentInstanceNote`,
+`poolOf`, `poolUnknown`. `stat.orgs`, `stat.mismatched` and every other key stand.
+
+## Colour and shape roles (`--el-*` only)
+
+| element                                                | role                                                                                         |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| plan name · count · bare count                         | `--el-text`                                                                                  |
+| per-person text · `of {n}` · sub-lines · No plan limit | `--el-text-secondary` (AA on the white card and every surface)                               |
+| usage bar track · fill                                 | `--el-surface` · `--el-accent`; at the figure `--el-warning`; `--radius-badge`               |
+| Plan unknown chip                                      | `pill-warn`: `--el-tint-yellow` + `--el-text-strong`, `--radius-badge`, `--spacing-chip-x/y` |
+| group underline · column rule                          | `--el-border-strong` (solid for _Held to the plan_, dashed for _No plan figure_)             |
+| tiles                                                  | the shipped MiniStat: `--el-border`, `--radius-card`, label `--el-text-secondary`            |
+
+## A11y
+
+- Each capped cell's text carries the meaning (`4 of 5`); the bar is `aria-hidden`, as the shipped
+  pool bar is. The warning fill at the figure is never the only signal.
+- The Plan unknown chip's glyph is `aria-hidden`; the word and the key carry it.
+- The group header cells are `<th scope="colgroup">`.
+
+## What this amendment does NOT draw
+
+- **The tenant page's `OrgFleetCard`** — the UI card applies the same cell grammar there
+  (`{used} of {figure}`, the Plan line); no new layout.
+- **Per-user agent counts** — the per-person figure is shown as the plan's figure only; the table
+  has no per-user breakdown.
+- **Loading** — server-rendered read, as before. **A `.png` export** — retired (AMENDMENT 4).

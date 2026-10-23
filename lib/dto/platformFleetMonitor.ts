@@ -36,6 +36,34 @@ export function isFleetMismatch(verdict: FleetVerdict): verdict is FleetMismatch
   return (FLEET_MISMATCH_VERDICTS as readonly FleetVerdict[]).includes(verdict);
 }
 
+/**
+ * The org's plan as the fleet's admissions read it (MOTIR-9377): each workload is
+ * held to its OWN plan figure (`lib/billing/planCaps.ts`, the fleet-capacity
+ * decision MOTIR-9357, amending `fleet-per-org-pool.md` §2), and the monitor
+ * shows the same figures the gates apply. A CLOSED union: the page renders each
+ * kind by name, so an exempt or unknown plan reads as words, never a default
+ * figure.
+ */
+export type FleetOrgPlanDTO =
+  | {
+      kind: 'capped';
+      planKey: string;
+      /** As motir-ai names it; shown untranslated. */
+      planName: string;
+      agentRunsInParallel: number;
+      agentsPerUser: number;
+      agentsRunningPerOrg: number;
+      /** What CI admission holds the org to — the plan's `ciBurstCap` or the staff
+       *  override; null when the override could not be read (CI is refused). */
+      ciBurstCap: number | null;
+      ciBurstSource: 'plan' | 'override' | 'unreadable';
+    }
+  /** Motir's own orgs (`isMeta` / `internalBilling`) or a build with no billing:
+   *  no plan figure, except a staff CI override when one is set. */
+  | { kind: 'exempt'; ciBurstOverride: number | null }
+  /** The plan could not be read, or its key has no caps row — admission refuses. */
+  | { kind: 'plan_unknown'; planKey: string | null };
+
 /** One organisation's fleet row — the monitor's line and the tenant page's card. */
 export interface FleetOrgRowDTO {
   organizationId: string;
@@ -47,10 +75,8 @@ export interface FleetOrgRowDTO {
   internalBilling: boolean;
   /** Running containers per workload — the census the admission reads. */
   byWorkload: Record<FleetWorkloadKind, number>;
-  /** Containers counted against the org's pool (shared-pool workloads only). */
-  poolUsed: number;
-  /** The org's pool, or null when it could not be read. */
-  pool: number | null;
+  /** The plan's figures each workload is read against (MOTIR-9377). */
+  plan: FleetOrgPlanDTO;
   /** Whole minutes the live charge accrued for the org in the window. */
   accruedMinutesInWindow: number;
   /** Credits motir-ai has CONFIRMED this month (`ci_period_charge.debited_credits`). */
@@ -88,12 +114,12 @@ export type FleetRunningOrgsDTO =
       total: number;
       /** Of those, how many hold at least one mismatch. */
       mismatched: number;
-      /** Containers counted against per-org pools, summed over the whole set. */
-      pooledContainers: number;
-      /** Running agent instances (their own pool), summed over the whole set. */
+      /** CI runners in flight, summed over the whole set. */
+      ciRunners: number;
+      /** Hosted-agent runs in flight, summed over the whole set. */
+      hostedAgents: number;
+      /** Running agent instances, summed over the whole set. */
       agentInstances: number;
-      /** The environment's per-org pool — what an org without an override holds. */
-      defaultPool: number;
       page: number;
       pageSize: number;
       pageCount: number;

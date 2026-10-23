@@ -946,8 +946,8 @@ describe('the admission cap queues, and nothing is dropped', () => {
     stubIndexFleet();
     vi.spyOn(codeGraphIndexAdmissionService, 'admit').mockResolvedValue({
       outcome: 'deferred',
-      reason: 'org_pool',
-      detail: 'the organization is running 500 of its 500 fleet containers (CI runners 500)',
+      reason: 'index_cap',
+      detail: 'indexing is at its global cap (6/6)',
     });
 
     const engine = new JobTestEngine({ function: codeGraphIndex });
@@ -958,7 +958,7 @@ describe('the admission cap queues, and nothing is dropped', () => {
 
     // The named failure, not a bare throw: the operator reads the reason off it.
     expect((error as Error).message).toContain('admission_deferred');
-    expect((error as Error).message).toContain('org_pool');
+    expect((error as Error).message).toContain('index_cap');
     expect(fakeOrchestrator.provisioned).toHaveLength(0);
     // The ledger recorded a FAILED run, not a success with an `output.repoRef`.
     const runs = await indexRuns();

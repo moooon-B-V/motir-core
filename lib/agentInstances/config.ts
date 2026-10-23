@@ -1,6 +1,8 @@
 // The agent-instance lane's NUMBERS (Story MOTIR-6860 · MOTIR-6872) — each one
-// `docs/decisions/agent-instances.md`'s, named once. Read at CALL time, so a
-// deployment that sets the two cap variables changes behaviour without a build.
+// `docs/decisions/agent-instances.md`'s, named once. The two agent LIMITS are not
+// here: they are the org's plan figures, `agentsPerUser` and `agentsRunningPerOrg`
+// (`lib/billing/planCaps.ts`, the fleet-capacity decision record MOTIR-9357,
+// MOTIR-9374), which replaced the flat 10 per person and MOTIR_INSTANCE_MAX_RUNNING.
 
 /** §3: the home volume, fixed, no auto-extend. */
 export const INSTANCE_VOLUME_SIZE_GB = 10;
@@ -34,34 +36,16 @@ export const INSTANCE_SLOT_TTL_SECONDS = 12 * 60 * 60 + 45 * 60;
  */
 export const INSTANCE_STORAGE_CREDITS_PER_DAY = 10;
 
-/** §6: live (not deleted) instances one user may hold, across projects. */
-export const INSTANCE_MAX_PER_USER = 10;
-
-function positiveIntFromEnv(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (raw === undefined || raw.trim() === '') return fallback;
-  const parsed = Number(raw);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
-}
-
 /**
- * Running agent instances ONE ORGANISATION may hold at once:
- * `MOTIR_INSTANCE_MAX_RUNNING`, default 50 (`agent-instances.md` AMENDMENT 3,
- * `agent-instance-storage.md` §3). It was one count across every organisation
- * (AMENDMENT 2); Motir is multi-tenant, so one busy organisation must never slow
- * another, and the count is now keyed on the slot's organisation, under the same
- * fleet admission lock that takes the slot. Reaching it refuses
- * `org_running_cap` with the organisation's own limit in the words.
- *
- * Motir's own organisations (`isMeta` / `internalBilling`) have no running cap
- * ({@link isUnlimitedAgentOrg}). There is no fleet-wide agent cap any more:
- * `MOTIR_FLEET_MAX_IN_FLIGHT=0` stays the operator's kill switch for every
- * workload. Agents keep their OWN pool: this number is not a share of an org's
- * fleet pool (`MOTIR_FLEET_ORG_MAX_IN_FLIGHT`).
+ * How many agents one read of a person's agents returns — a LIST PAGE SIZE, and no
+ * limit on how many they may hold (MOTIR-9376). The per-person limit is the org's
+ * plan figure, `agentsPerUser` (`lib/billing/planCaps.ts`), judged at create, and a
+ * person can legitimately hold more than it: an exempt org has no figure, and a
+ * downgrade keeps the agents already made. So no list is sized to the plan, or it
+ * would hide real agents. The instances route's `MAX_TAKE`, My agents' read and the
+ * start bar's picker all read this one value, so the three cannot drift.
  */
-export function instanceMaxRunning(): number {
-  return positiveIntFromEnv('MOTIR_INSTANCE_MAX_RUNNING', 50);
-}
+export const AGENT_LIST_LIMIT = 100;
 
 /**
  * How long an UPDATE (and a wake that applies a pinned one) waits in the REQUEST
@@ -115,12 +99,14 @@ export const INSTANCE_INLINE_STOP_WAIT_MS = 15_000;
 export const INSTANCE_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
 /**
- * Motir's own organisations have NO agent limits (`agent-instances.md`
+ * Motir's own organisations skip the CREDIT gate (`agent-instances.md`
  * AMENDMENT 3; the product owner, 2026-09-29: "meta org and internal org have no
- * limit"). The meta org (`isMeta`) and every internal org (`internalBilling`) skip
- * the per-user cap, the per-organisation running cap and the credit gate — at
- * create, at wake and in the sweep — and are still CHARGED like any org. The ONE
- * predicate: this reads the two flags and gives neither a new meaning.
+ * limit") — at create, at wake and in the sweep — and are still CHARGED like any
+ * org. Their agent LIMITS are lifted by the plan read instead: the plan-caps
+ * lookup answers `exempt` for the meta org (`isMeta`) and every internal org
+ * (`internalBilling`), so neither the plan's per-person figure nor its running
+ * figure applies (MOTIR-9374). The ONE predicate: this reads the two flags and
+ * gives neither a new meaning.
  */
 export function isUnlimitedAgentOrg(org: { isMeta: boolean; internalBilling: boolean }): boolean {
   return org.isMeta || org.internalBilling;

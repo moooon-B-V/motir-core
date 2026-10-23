@@ -3,7 +3,11 @@ import { Folder, Layers, Server, Sparkles, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react';
 import { Card } from '@/components/ui/Card';
 import type { PlatformRole } from '@/generated/prisma/client';
-import type { FleetOrgRowDTO, FleetWindowDTO } from '@/lib/dto/platformFleetMonitor';
+import type {
+  FleetOrgPlanDTO,
+  FleetOrgRowDTO,
+  FleetWindowDTO,
+} from '@/lib/dto/platformFleetMonitor';
 import type { FleetLastStopDTO } from '@/lib/dto/platformFleetStop';
 import { FleetVerdictChip } from '@/app/(admin)/admin/monitoring/_components/FleetVerdictChip';
 import { StopContainersDialog } from './StopContainersDialog';
@@ -52,6 +56,34 @@ const TILES: {
   { key: 'index', workload: 'code_graph_index', icon: Folder },
 ];
 
+/**
+ * The figure the plan holds a tile's workload to (MOTIR-9377): CI to the burst
+ * cap (the plan's, or a staff override), hosted runs to the parallel-run figure,
+ * agent instances to the running figure. Indexing, an exempt org and an unknown
+ * plan have none, so the tile shows a bare count — never a default.
+ */
+export function tileFigure(
+  plan: FleetOrgPlanDTO,
+  key: (typeof TILES)[number]['key'],
+): { figure: number; override: boolean } | null {
+  if (key === 'index' || plan.kind === 'plan_unknown') return null;
+  if (plan.kind === 'exempt') {
+    return key === 'ciRunner' && plan.ciBurstOverride !== null
+      ? { figure: plan.ciBurstOverride, override: true }
+      : null;
+  }
+  switch (key) {
+    case 'ciRunner':
+      return plan.ciBurstCap === null
+        ? null
+        : { figure: plan.ciBurstCap, override: plan.ciBurstSource === 'override' };
+    case 'hostedAgent':
+      return { figure: plan.agentRunsInParallel, override: false };
+    case 'agentInstance':
+      return { figure: plan.agentsRunningPerOrg, override: false };
+  }
+}
+
 /** What a stop would act on — index containers are deliberately left out. */
 export function stoppableCount(row: FleetOrgRowDTO): number {
   return row.byWorkload.ci_runner + row.byWorkload.hosted_agent + row.byWorkload.agent_instance;
@@ -66,6 +98,9 @@ export function OrgFleetCard({ orgId, orgName, role, row, window, lastStop }: Or
   const isSuperadmin = role === 'superadmin';
   const canStop = isSuperadmin && stoppableCount(row) > 0;
   const footNoteId = `org-fleet-foot-${orgId}`;
+  const figures = Object.fromEntries(
+    TILES.map(({ key }) => [key, tileFigure(row.plan, key)]),
+  ) as Record<(typeof TILES)[number]['key'], ReturnType<typeof tileFigure>>;
 
   let footNote: ReactNode;
   if (!isSuperadmin) {
@@ -133,23 +168,23 @@ export function OrgFleetCard({ orgId, orgName, role, row, window, lastStop }: Or
               {t(`workload.${key}`)}
             </span>
             <span className="font-sans text-xl font-semibold tabular-nums text-(--el-text)">
-              {format.number(row.byWorkload[workload])}
+              <span>{format.number(row.byWorkload[workload])}</span>
+              {figures[key] ? (
+                <span className="font-sans text-sm font-normal text-(--el-text-secondary)">
+                  {t('tile.of', { figure: format.number(figures[key].figure) })}
+                </span>
+              ) : null}
             </span>
             <span className="font-sans text-xs text-(--el-text-secondary)">
               {t(`charge.${key}`)}
+              {figures[key]?.override ? ` · ${t('tile.override')}` : null}
             </span>
           </div>
         ))}
       </div>
       <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 font-sans text-xs text-(--el-text-secondary)">
-        <span>
-          {row.pool === null
-            ? t.rich('facts.poolUnknown', { used: format.number(row.poolUsed), strong })
-            : t.rich('facts.pool', {
-                used: format.number(row.poolUsed),
-                pool: format.number(row.pool),
-                strong,
-              })}
+        <span data-testid="org-fleet-plan">
+          <PlanFacts plan={row.plan} />
         </span>
         <span>
           {t.rich('facts.accrued', {
@@ -177,6 +212,35 @@ export function OrgFleetCard({ orgId, orgName, role, row, window, lastStop }: Or
       />
     </Card>
   );
+}
+
+/** The plan line: its name and four figures, or the words for an org no figure
+ *  holds and one whose plan could not be read — never a pool. */
+function PlanFacts({ plan }: { plan: FleetOrgPlanDTO }) {
+  const t = useTranslations('platformAdmin.tenant.fleet.facts');
+  const format = useFormatter();
+  switch (plan.kind) {
+    case 'capped': {
+      const figures = {
+        plan: plan.planName,
+        runs: format.number(plan.agentRunsInParallel),
+        perUser: format.number(plan.agentsPerUser),
+        running: format.number(plan.agentsRunningPerOrg),
+        strong,
+      };
+      return plan.ciBurstCap === null
+        ? t.rich('planCiUnreadable', figures)
+        : t.rich('plan', { ...figures, ci: format.number(plan.ciBurstCap) });
+    }
+    case 'exempt':
+      return plan.ciBurstOverride === null
+        ? t.rich('planExempt', { strong })
+        : t.rich('planExemptOverride', { ci: format.number(plan.ciBurstOverride), strong });
+    case 'plan_unknown':
+      return plan.planKey
+        ? t.rich('planUnknown', { key: plan.planKey, strong })
+        : t.rich('planUnknownNoKey', { strong });
+  }
 }
 
 function LastStop({ id, lastStop }: { id: string; lastStop: FleetLastStopDTO }) {

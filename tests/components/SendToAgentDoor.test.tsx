@@ -699,6 +699,23 @@ describe('each refusal renders its own words, and the section shows no run', () 
     noRun();
   });
 
+  it('agent_instance_start_refused · org_running_cap — the plan and the figure the refusal carries (MOTIR-9376)', async () => {
+    await refusedWith(
+      429,
+      {
+        code: 'agent_instance_start_refused',
+        reason: 'org_running_cap',
+        limit: 30,
+        planName: 'Pro',
+      },
+      'yue-sleepy',
+    );
+    expect(screen.getByTestId('agent-refused-wake').textContent).toContain(
+      'Your organization’s Pro plan runs 30 agents at once, and all of them are running.',
+    );
+    noRun();
+  });
+
   it('agent_instances_unavailable', async () => {
     await refusedWith(503, { code: 'agent_instances_unavailable' });
     expect(screen.getByTestId('agent-refused-wake').textContent).toContain(
@@ -766,6 +783,17 @@ describe('the pure refusal map', () => {
       runId: null,
       workItemKey: null,
     });
+  });
+
+  it('a wake refusal carries the cap’s figure and plan only when the body names them', () => {
+    const a = agent();
+    const code = 'agent_instance_start_refused';
+    expect(
+      agentSendRefusalOf(429, { code, reason: 'user_cap', limit: 1, planName: 'Standard' }, a),
+    ).toEqual({ kind: 'wake', agent: a, code, reason: 'user_cap', limit: 1, planName: 'Standard' });
+    expect(
+      agentSendRefusalOf(429, { code, reason: 'user_cap', limit: '1', planName: '' }, a),
+    ).toEqual({ kind: 'wake', agent: a, code, reason: 'user_cap' });
   });
 });
 

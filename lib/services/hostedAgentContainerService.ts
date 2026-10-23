@@ -379,7 +379,21 @@ export type HostedAgentContainerOutcome =
 
 export type HostedAgentBootResult =
   | { phase: 'supervising'; session: HostedAgentSession }
-  | { phase: 'terminal'; outcome: HostedAgentContainerOutcome };
+  | { phase: 'terminal'; outcome: HostedAgentContainerOutcome }
+  /** The dispatch already held its fleet slot (MOTIR-9381): another pass for
+   *  the same run is booting it. Nothing was provisioned by this call. */
+  | { phase: 'already_booting' };
+
+/** What {@link hostedAgentContainerService.boot} accepts beyond supervision. */
+export interface HostedAgentBootOptions extends HostedAgentSupervisionOptions {
+  /**
+   * Env the container needs that may only exist once the run is ADMITTED
+   * (MOTIR-9381) — the run's own credentials, minted after the fleet slot is
+   * taken so a run that waited for room boots with credentials valid for its
+   * whole container life. Merged over `request.env`.
+   */
+  envAtAdmission?: () => Promise<Record<string, string>>;
+}
 
 /**
  * How long to wait before poll number `pollNumber` (1-based). PURE — a function of
@@ -478,7 +492,7 @@ export const hostedAgentContainerService = {
    */
   async boot(
     request: HostedAgentContainerRequest,
-    options: HostedAgentSupervisionOptions = {},
+    options: HostedAgentBootOptions = {},
   ): Promise<HostedAgentBootResult> {
     const now = options.now ?? ((): Date => new Date());
 
@@ -520,6 +534,26 @@ export const hostedAgentContainerService = {
         outcome: { outcome: 'admission_deferred', reason: verdict.reason, detail: verdict.detail },
       };
     }
+    // The dispatch ALREADY holds its slot (MOTIR-9381): another pass for the same
+    // run reserved it and is booting it, or booted it. Provisioning here would
+    // boot a second container against one slot, so nothing is provisioned.
+    if (verdict.outcome === 'already_held') {
+      return { phase: 'already_booting' };
+    }
+
+    // ── 1b · The run's credentials, minted only now that it is admitted ──────
+    // (MOTIR-9381) A run that waited for room gets credentials whose life starts
+    // at admission. A mint that throws gives the slot back and rethrows: no
+    // container was provisioned for it.
+    let env = request.env;
+    if (options.envAtAdmission) {
+      try {
+        env = { ...env, ...(await options.envAtAdmission()) };
+      } catch (err) {
+        await fleetCeilingService.release(HOSTED_AGENT_WORKLOAD, request.dispatchId, request.runId);
+        throw err;
+      }
+    }
 
     // ── 2 · Boot exactly one container ───────────────────────────────────────
     const spec: ContainerSpec = {
@@ -531,7 +565,7 @@ export const hostedAgentContainerService = {
       workflowJobId: NO_WORKFLOW_JOB,
       image: request.image,
       size: request.size,
-      env: request.env,
+      env,
       timeoutSeconds: request.timeoutSeconds,
       region: request.region,
     };
@@ -766,6 +800,15 @@ export const hostedAgentContainerService = {
         : this.boot(request, options),
     );
     if (booted.phase === 'terminal') return booted.outcome;
+    // Another supervision already holds this dispatch's slot and owns its
+    // container: this one boots nothing and supervises nothing.
+    if (booted.phase === 'already_booting') {
+      return {
+        outcome: 'admission_deferred',
+        reason: 'already_held',
+        detail: 'the dispatch already holds its fleet slot; another pass owns its container',
+      };
+    }
     const { session } = booted;
 
     const maxPolls = Math.min(

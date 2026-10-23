@@ -23,6 +23,8 @@ export interface StubCall {
   body: Record<string, unknown> | null;
 }
 
+const MAX_X2_TIER = { key: 'max_x2', name: 'Max ×2', monthlyCreditAllotment: 60_000 };
+
 /** Mutable knobs a test turns. */
 export const stub = {
   calls: [] as StubCall[],
@@ -30,6 +32,9 @@ export const stub = {
   /** The org's AI subscription as motir-ai reports it (MOTIR-6918's plan gate):
    *  a Stripe status, `null` for none, or `'unanswerable'` for a 503. */
   plan: 'active' as string | null,
+  /** The subscription's plan tier — whose figures cap agents (MOTIR-9374). Max ×2
+   *  by default: 10 per person, 50 running, the figures the flat limits had. */
+  planTier: MAX_X2_TIER as { key: string; name: string; monthlyCreditAllotment: number } | null,
   debit: 'ok' as 'ok' | 'unavailable' | 'refused',
   /** `GET /repos/{owner}/{name}/installation` status by `owner/name` (MOTIR-7026); default 200. */
   installation: {} as Record<string, number>,
@@ -54,6 +59,7 @@ export async function setUpHarness(): Promise<void> {
   stub.calls = [];
   stub.mayRun = true;
   stub.plan = 'active';
+  stub.planTier = MAX_X2_TIER;
   stub.debit = 'ok';
   _resetAiPlanCache();
   stub.installation = {};
@@ -65,7 +71,6 @@ export async function setUpHarness(): Promise<void> {
   vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', PEM);
   vi.stubEnv('GITHUB_APP_ID', '222');
   vi.stubEnv('GITHUB_APP_PRIVATE_KEY', PEM);
-  vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '');
   virtualNow = new Date('2026-09-29T10:00:00.000Z').getTime();
   vi.spyOn(agentInstanceClock, 'now').mockImplementation(() => new Date(virtualNow));
   vi.spyOn(agentInstanceClock, 'sleep').mockImplementation(async (ms: number) => {
@@ -96,7 +101,7 @@ export async function setUpHarness(): Promise<void> {
           status: stub.plan,
           currentPeriodEnd: null,
           priceId: null,
-          planTier: null,
+          planTier: stub.planTier,
         });
       }
       if (url === `${AI}/v1/credits/agent-machine`) {

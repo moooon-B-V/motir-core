@@ -9,9 +9,11 @@ import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { resolveAdmissionCoverage } from '@/lib/ciMetering/allowance';
 import { fleetKillSwitchEngaged } from '@/lib/ciFleet/limits';
 import {
+  ciBurstDetail,
   fleetCeilingService,
   describeFleetCensus,
   FLEET_KILL_SWITCH_DETAIL,
+  planUnknownCapDetail,
 } from '@/lib/services/fleetCeilingService';
 
 // THE PROVISIONING GATE (Story MOTIR-1916 · MOTIR-1922, re-cut by MOTIR-6906 ·
@@ -25,13 +27,16 @@ import {
 //   1. THE KILL SWITCH — `MOTIR_FLEET_MAX_IN_FLIGHT=0` stops every boot (§6).
 //      What the fleet-wide ceiling (MOTIR-1997) became; nothing else of it is
 //      left.
-//   2. THE ORGANISATION'S POOL (§2) — `MOTIR_FLEET_ORG_MAX_IN_FLIGHT`, default
-//      500, or the org's enterprise number. It counts the org's CI runners,
-//      hosted-agent runs and index containers (`fleetCeilingService.orgCensus`),
-//      so a CI job can wait because the SAME org's indexing filled its pool —
-//      and never because another org's did. It replaces MOTIR-1922's per-project
-//      tier caps, which are retired (§6): how an org shares its pool between its
-//      own projects is its own business.
+//   2. THE PLAN'S CI BURST CAP (MOTIR-9375; the fleet-capacity decision record
+//      MOTIR-9357) — Standard 5, Pro 10, Max 25, Host and `pool_*` 50 — judged
+//      against the org's in-flight CI RUNNERS alone (`orgCensus().byWorkload`),
+//      so a hosted-agent run or an index container never keeps a CI job
+//      waiting, and another org's work never does. `Organization.fleetPoolCap`,
+//      set by platform staff, overrides that one figure
+//      (`fleetCeilingService.resolveCiBurstCap`); Motir's own orgs with no
+//      override are held by no figure. A plan that cannot be read defers
+//      `plan_unknown`, whatever the override. It replaces the retired 500-container
+//      org pool and MOTIR-1922's per-project tier caps.
 //   3. ADMISSION BY COVERAGE (§3, MOTIR-6911) — the org's remaining included
 //      minutes plus its balance must pay for every charged container it runs
 //      AND this one, for one debit period (`resolveAdmissionCoverage`). The
@@ -67,8 +72,9 @@ import {
 // pool is decided and the slot is CLAIMED under the lock; the credit state is
 // read after, and a refusal RELEASES the claim. The window between them is
 // microseconds of local work and errs toward the pool, never past it: for that
-// moment the intent occupies a slot it may not keep. The org's pool override is
-// read BEFORE the lock for the same reason (it is an org-GUC read).
+// moment the intent occupies a slot it may not keep. The CI burst cap — the plan
+// and its override — is read BEFORE the lock for the same reason (a remote read
+// and an org-GUC read).
 
 /** Why an intent was not admitted. Every one of these leaves the intent PENDING,
  *  so the provisioning sweep retries it — a deferral, never a rejection. */
@@ -78,9 +84,9 @@ export type AdmissionDeferralReason =
   | 'ai_plan_required'
   /** The organisation's AI plan could not be read. FAIL-CLOSED. */
   | 'plan_unknown'
-  /** The intent's organisation already holds its whole pool (§2). Only that org
-   *  waits. */
-  | 'org_pool'
+  /** The org already runs as many CI jobs as its plan's CI burst cap (or its
+   *  staff override) allows (MOTIR-9375). Only that org waits. */
+  | 'plan_cap'
   /** The operator's kill switch is engaged (`MOTIR_FLEET_MAX_IN_FLIGHT=0`). */
   | 'fleet_ceiling'
   /** The org is past its pool AND out of credits. */
@@ -96,19 +102,15 @@ export type AdmissionDeferralReason =
 
 export type AdmissionVerdict =
   /** Admitted AND CLAIMED — the intent is now `provisioning` and the caller owns
-   *  it. `orgInFlight` is the org's pool count at the decision (runners + index
-   *  + hosted runs), for the caller's log. */
-  | { outcome: 'admitted'; orgInFlight: number; orgPool: number }
+   *  it. `ciInFlight` is the org's CI runner count at the decision and
+   *  `ciBurstCap` the figure it was judged against (`null`: none held it), for
+   *  the caller's log. */
+  | { outcome: 'admitted'; ciInFlight: number; ciBurstCap: number | null }
   /** Another provisioner claimed it first. Not an error; the compare-and-set
    *  worked. */
   | { outcome: 'already_claimed' }
   /** Not admitted. The intent is still `pending`. */
   | { outcome: 'deferred'; reason: AdmissionDeferralReason; detail: string };
-
-/** The words an `org_pool` CI deferral carries (`fleet-per-org-pool.md` §4). */
-export function orgPoolCiDetail(inFlight: number, pool: number): string {
-  return `Your organization is running ${inFlight} of its ${pool} CI containers. This job starts when one finishes.`;
-}
 
 /** The words a `credits_insufficient` deferral carries (`fleet-per-org-pool.md` §4). */
 export const CREDITS_INSUFFICIENT_DETAIL =
@@ -158,26 +160,29 @@ export const ciRunnerAdmissionService = {
       return { outcome: 'deferred', reason: 'fleet_ceiling', detail: FLEET_KILL_SWITCH_DETAIL };
     }
 
-    // ── 1b · THE PAID-AI-PLAN GATE (MOTIR-6909) — plan, then pool, then credits ─
+    // ── 1b · THE PAID-AI-PLAN GATE (MOTIR-6909) — plan, then figure, then credits
     const refused = await fleetCeilingService.planDeferral(intent.organizationId);
     if (refused) return refused;
 
-    const pool = await fleetCeilingService.resolveOrgPool(intent.organizationId);
-    if (pool === null) {
-      // FAIL CLOSED: an org whose pool cannot be established must not be handed
-      // the default by accident.
-      console.error('[ciRunnerAdmissionService] could not resolve the org pool — not booting', {
-        intentId: intent.id,
-        organizationId: intent.organizationId,
-      });
+    // ── 1c · THE CI BURST CAP — read BEFORE the lock (MOTIR-9375) ─────────────
+    const cap = await fleetCeilingService.resolveCiBurstCap(intent.organizationId);
+    if (cap.kind === 'plan_unknown') {
+      // FAIL CLOSED: no figure is ever assumed for a plan nobody could read.
+      return {
+        outcome: 'deferred',
+        reason: 'plan_unknown',
+        detail: planUnknownCapDetail(cap.planKey),
+      };
+    }
+    if (cap.kind === 'unreadable') {
       return {
         outcome: 'deferred',
         reason: 'gate_unavailable',
-        detail: "could not resolve the organization's fleet pool",
+        detail: "could not read the organization's CI burst cap",
       };
     }
 
-    // ── 2 · The org's pool, and the claim — one locked transaction ────────────
+    // ── 2 · The org's CI figure, and the claim — one locked transaction ───────
     // The org's CHARGED containers at the decision — its CI runners and hosted
     // runs, which draw on the balance coverage is checked against (§3).
     let chargedRunning = 0;
@@ -192,14 +197,15 @@ export const ciRunnerAdmissionService = {
         // Counted from inside this transaction rather than through
         // `fleetCeilingService.reserve` precisely because it ALREADY holds
         // `FLEET_ADMISSION_SCOPE` and is mid-claim — re-entering would deadlock
-        // the gate against itself. Not bypassed by `isMeta` (§1: meta keeps the
-        // same pool).
+        // the gate against itself. The CI count ALONE decides: the org's hosted
+        // runs and index containers take none of CI's room.
         const census = await fleetCeilingService.orgCensus(intent.organizationId, now, tx);
-        if (census.total >= pool) {
+        const ciInFlight = census.byWorkload.ci_runner;
+        if (cap.kind === 'capped' && ciInFlight >= cap.figure) {
           return {
             outcome: 'deferred' as const,
-            reason: 'org_pool' as const,
-            detail: `${orgPoolCiDetail(census.total, pool)} (${describeFleetCensus(census)})`,
+            reason: 'plan_cap' as const,
+            detail: `${ciBurstDetail(cap, ciInFlight)} (${describeFleetCensus(census)})`,
           };
         }
 
@@ -210,7 +216,11 @@ export const ciRunnerAdmissionService = {
 
         chargedRunning = census.byWorkload.ci_runner + census.byWorkload.hosted_agent;
 
-        return { outcome: 'admitted' as const, orgInFlight: census.total, orgPool: pool };
+        return {
+          outcome: 'admitted' as const,
+          ciInFlight,
+          ciBurstCap: cap.kind === 'capped' ? cap.figure : null,
+        };
       });
     } catch (err) {
       // FAIL CLOSED. The transaction rolled back, so nothing was claimed and the

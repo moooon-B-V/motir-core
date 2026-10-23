@@ -13,7 +13,6 @@ import {
 import {
   fleetCeilingService,
   describeFleetCensus,
-  orgPoolDetail,
   FLEET_KILL_SWITCH_DETAIL,
   type FleetInFlightCensus,
 } from '@/lib/services/fleetCeilingService';
@@ -40,19 +39,19 @@ import {
 //
 // ── THE LAYERING, AND WHAT THIS FILE IS NOT ─────────────────────────────────
 // `docs/decisions/fleet-per-org-pool.md` §7 re-derived it per ORGANISATION
-// (MOTIR-6907):
+// (MOTIR-6907), and the fleet-capacity decision record MOTIR-9357 took indexing
+// off the org pool (MOTIR-9375):
 //
-//   MOTIR_FLEET_ORG_MAX_IN_FLIGHT → the org's pool, every shared workload — §2
 //   MOTIR_INDEX_MAX_IN_FLIGHT     → the one Motir-side bound on indexing, which
 //                                   nobody is charged for — this file
 //   ceil(global / 2)              → index fairness, org vs org — this file
 //   MOTIR_FLEET_MAX_IN_FLIGHT=0   → the operator's kill switch — §6
 //
-// So this gate enforces the two index bounds AND the org's pool: an index
-// container counts in its organisation's pool of 500 (§2), and
-// `fleetCeilingService.orgCensus` is called in-line here, from inside this
-// transaction, exactly as the CI gate calls it from inside its own. At 3 per org
-// the index share cannot crowd the org's CI, but the pool must still see it.
+// So this gate enforces the two index bounds and nothing else: indexing is held
+// to NO plan figure, and an index container takes none of the org's CI or
+// hosted-run room. `fleetCeilingService.orgCensus` is still called in-line here,
+// from inside this transaction, for the org's index share and the admitted
+// verdict's breakdown.
 
 // ── IN THE ORCHESTRATOR, NOT IN INNGEST ─────────────────────────────────────
 // It belongs next to the resource it protects. And an Inngest-side per-tenant cap
@@ -66,7 +65,7 @@ import {
 // lock-before-read-derived-update contract): count, decide, take, in ONE
 // transaction with `FLEET_ADMISSION_SCOPE` held `FOR UPDATE`. That row is the
 // same one every CI admission and every `fleetCeilingService.reserve` takes,
-// which is what makes the per-organisation pool exact.
+// which is what makes the per-organisation index share exact.
 //
 // There is deliberately NO second, per-organisation lock. The fleet scope is
 // GLOBAL, so holding it already serializes every admission in the system,
@@ -76,7 +75,7 @@ import {
 // red.
 //
 // ── FAIL CLOSED ─────────────────────────────────────────────────────────────
-// If a count, or the org's pool, cannot be established, DO NOT BOOT — the same
+// If a count cannot be established, DO NOT BOOT — the same
 // posture as `fleetCeilingService`, for the same reason: a deferred index is
 // recoverable (the caller waits and asks again, and nothing is dropped), a
 // container nothing bounds is not.
@@ -125,10 +124,6 @@ export type IndexAdmissionDeferralReason =
   | 'org_index_cap'
   /** Indexing as a whole is at its configured global cap. */
   | 'index_cap'
-  /** The organisation already holds its whole fleet pool (§2). The containers
-   *  that filled it may be the org's CI runners or hosted runs; the detail
-   *  carries the per-workload breakdown. */
-  | 'org_pool'
   /** The operator's kill switch is engaged (`MOTIR_FLEET_MAX_IN_FLIGHT=0`). */
   | 'fleet_ceiling'
   /** The gate itself could not decide. FAIL-CLOSED: an unestablished count is
@@ -201,7 +196,7 @@ export interface IndexAdmissionRequest {
   readonly dispatchId: string;
   /** Attribution. */
   readonly workspaceId: string;
-  /** The key the per-organisation index share and the org's pool count on. */
+  /** The key the per-organisation index share counts on. */
   readonly organizationId: string;
   /**
    * The container's own hard kill, in ms — the slot's TTL is derived from it.
@@ -312,18 +307,9 @@ export const codeGraphIndexAdmissionService = {
     if (fleetKillSwitchEngaged()) {
       return { outcome: 'deferred', reason: 'fleet_ceiling', detail: FLEET_KILL_SWITCH_DETAIL };
     }
-    // The shared pool is paid-AI-plan only (MOTIR-6909): plan, then pool.
+    // The fleet is paid-AI-plan only (MOTIR-6909): plan, then the index caps.
     const refused = await fleetCeilingService.planDeferral(request.organizationId);
     if (refused) return refused;
-    // Read under the org GUC, before the lock (`fleetCeilingService.resolveOrgPool`).
-    const pool = await fleetCeilingService.resolveOrgPool(request.organizationId);
-    if (pool === null) {
-      return {
-        outcome: 'deferred',
-        reason: 'gate_unavailable',
-        detail: "the organization's fleet pool could not be read",
-      };
-    }
 
     try {
       return await withSystemContext(async (tx) => {
@@ -377,9 +363,8 @@ export const codeGraphIndexAdmissionService = {
         const held = await slots.findByRef(CODE_GRAPH_INDEX_WORKLOAD, slotRef, tx);
         if (held) return heldVerdict(held, slotRef, request.dispatchId);
 
-        // The org's census answers two of the three bounds at once:
-        // `byWorkload.code_graph_index` IS the org's index share, and `total` is
-        // its pool count — both from the SAME observation of the world.
+        // The org's census: `byWorkload.code_graph_index` IS the org's index
+        // share, and the rest is the admitted verdict's breakdown.
         const census = await fleetCeilingService.orgCensus(request.organizationId, now, tx);
         const orgIndexInFlight = census.byWorkload[CODE_GRAPH_INDEX_WORKLOAD];
         const indexInFlight = await slots.countLiveForWorkload(CODE_GRAPH_INDEX_WORKLOAD, now, tx);
@@ -405,19 +390,7 @@ export const codeGraphIndexAdmissionService = {
           };
         }
 
-        // ── 3 · THE ORGANISATION'S POOL (§2) ──────────────────────────────────
-        // An index container counts in its org's pool, so it waits when the
-        // org's own CI runners and hosted runs filled it — and never because
-        // another org's did.
-        if (census.total >= pool) {
-          return {
-            outcome: 'deferred' as const,
-            reason: 'org_pool' as const,
-            detail: orgPoolDetail(census, pool),
-          };
-        }
-
-        // ── 4 · TAKE THE SLOT, in the same transaction as the counts above ────
+        // ── 3 · TAKE THE SLOT, in the same transaction as the counts above ────
         const took = await slots.take(
           {
             workload: CODE_GRAPH_INDEX_WORKLOAD,
@@ -456,8 +429,7 @@ export const codeGraphIndexAdmissionService = {
             admittedAt: now.toISOString(),
             detail:
               `admitted: organization index ${orgIndexInFlight + 1}/${orgCap}, ` +
-              `indexing ${indexInFlight + 1}/${globalCap}, ` +
-              `organization pool ${census.total + 1}/${pool} (${describeFleetCensus(census)})`,
+              `indexing ${indexInFlight + 1}/${globalCap} (${describeFleetCensus(census)})`,
           },
         };
       });

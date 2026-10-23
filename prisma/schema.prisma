@@ -1395,13 +1395,13 @@ model Organization {
   /// unlike `isMeta`'s data-flip, classifying an org is an operator's act.
   internalBilling Boolean @default(false) @map("internal_billing")
 
-  /// THIS ORGANISATION'S OWN FLEET POOL — the enterprise override of
-  /// `MOTIR_FLEET_ORG_MAX_IN_FLIGHT` (default 500): how many shared-workload
-  /// containers (CI runners, hosted-agent runs, index containers) the org may
-  /// have in flight at once (`docs/decisions/fleet-per-org-pool.md` §2,
-  /// MOTIR-6907). NULL = the environment's number. Set by platform staff with the
-  /// org, the way its tier is, and never as a per-org env var. `0` is legal and
-  /// means the org boots nothing. Read by `lib/ciFleet/limits.ts` `orgPoolCap`.
+  /// THIS ORGANISATION'S CI BURST OVERRIDE (MOTIR-9375 · MOTIR-9377; it was the
+  /// org's own fleet pool, MOTIR-6907, until the fleet-capacity decision
+  /// MOTIR-9357 retired that pool): how many CI runners the org may have in
+  /// flight at once, in place of its plan's `ciBurstCap`. It overrides that one
+  /// figure and nothing else. NULL = the plan's figure. Set by platform staff with
+  /// the org, never as a per-org env var. `0` is legal and means the org boots no
+  /// CI runner. Read by `fleetCeilingService.resolveCiBurstCap`.
   fleetPoolCap Int? @map("fleet_pool_cap")
 
   /// The git CONNECTIONS this organisation holds, and the REPOSITORIES behind

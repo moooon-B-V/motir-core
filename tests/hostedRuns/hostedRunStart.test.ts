@@ -361,18 +361,24 @@ describe('a leaf card — the run it starts', () => {
       implementationModel: MODEL,
     });
 
-    // The key is minted for exactly the bare model, and dies at the backstop.
+    // The key is minted for exactly the bare model, and dies at the backstop —
+    // counted from ADMISSION (MOTIR-9381), which for a run admitted on its first
+    // try is the open itself or a moment after it.
+    const admittedBy = Date.now();
     expect(mintCalls()).toHaveLength(1);
     const mint = mintCalls()[0]!.body!;
     expect(mint['models']).toEqual([MODEL]);
-    expect(mint['expiresAt']).toBe(
+    expect(mint['expiresAt']).toBeGreaterThanOrEqual(
       Math.floor((run.startedAt.getTime() + HOSTED_RUN_TIMEOUT_MS) / 1000),
+    );
+    expect(mint['expiresAt']).toBeLessThanOrEqual(
+      Math.floor((admittedBy + HOSTED_RUN_TIMEOUT_MS) / 1000),
     );
     // The run credential dies by the backstop plus the settle margin.
     const token = await adminDb.apiToken.findFirstOrThrow({ where: { dispatchRunId: run.id } });
-    expect(token.expiresAt!.getTime()).toBe(
-      run.startedAt.getTime() + HOSTED_RUN_TIMEOUT_MS + HOSTED_RUN_SETTLE_MARGIN_MS,
-    );
+    const margin = HOSTED_RUN_TIMEOUT_MS + HOSTED_RUN_SETTLE_MARGIN_MS;
+    expect(token.expiresAt!.getTime()).toBeGreaterThanOrEqual(run.startedAt.getTime() + margin);
+    expect(token.expiresAt!.getTime()).toBeLessThanOrEqual(admittedBy + margin);
 
     // ONE container, booted with the 12-hour backstop and exactly the launcher's inputs.
     expect(fakeOrchestrator.provisioned).toHaveLength(1);

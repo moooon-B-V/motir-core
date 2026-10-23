@@ -132,6 +132,13 @@ const STANDARD_TIER: BillingFixtureTier = {
   monthlyCreditAllotment: 2000,
 };
 const PRO_TIER: BillingFixtureTier = { key: 'pro', name: 'Pro', monthlyCreditAllotment: 8000 };
+/** The top of the ladder (MOTIR-9363): the figures the flat limits used to be —
+ *  5 hosted runs at once, 10 agents per person, 50 running. */
+const MAX_X2_TIER: BillingFixtureTier = {
+  key: 'max_x2',
+  name: 'Max ×2',
+  monthlyCreditAllotment: 60000,
+};
 
 /** A free org: no AI plan, out of trial credits (balance 0 → the paywall's
  *  proactive `blocked` threshold + the tier-gate variant). */
@@ -164,7 +171,7 @@ export function paidOrgState(opts?: {
   };
 }
 
-export const TIERS = { standard: STANDARD_TIER, pro: PRO_TIER } as const;
+export const TIERS = { standard: STANDARD_TIER, pro: PRO_TIER, maxX2: MAX_X2_TIER } as const;
 
 function fixturePath(): string {
   const p = process.env['MOTIR_AI_BILLING_FIXTURE_PATH'];
@@ -214,8 +221,13 @@ export function resetBillingFixture(): void {
  * a cloud-on lane an org the fixture does not name reads as free and every door
  * that spends the fleet refuses it. A no-op on a lane with no billing fixture:
  * there the build is not cloud-billed and the gate answers yes by itself.
+ *
+ * Max ×2, not the default Standard (MOTIR-9363): every door now holds the org to
+ * its plan's figures, and Standard's (1 agent run at once, 1 agent per person)
+ * would refuse a journey that is not about the caps. A spec that IS about them
+ * sets its own tier with {@link setOrgBillingState}.
  */
 export function grantPaidAiPlanIfBilled(organizationId: string): void {
   if (!process.env['MOTIR_AI_BILLING_FIXTURE_PATH']) return;
-  setOrgBillingState(organizationId, paidOrgState());
+  setOrgBillingState(organizationId, paidOrgState({ tier: MAX_X2_TIER }));
 }

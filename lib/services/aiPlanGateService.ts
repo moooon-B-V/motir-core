@@ -1,7 +1,4 @@
-import { withOrgServiceWriteContext } from '@/lib/organizations/context';
-import { organizationRepository } from '@/lib/repositories/organizationRepository';
-import { getOrgSubscription } from '@/lib/ai/motirAiClient';
-import { isCloudBilling } from '@/lib/billing/availability';
+import { _resetOrgPlanCache, readOrgPlan } from '@/lib/services/orgPlanReader';
 
 // THE PAID-AI-PLAN GATE (Story MOTIR-6906 · MOTIR-6909) —
 // `docs/decisions/fleet-per-org-pool.md`: the fleet is paid-AI-plan only.
@@ -50,73 +47,24 @@ export function isPaidAiSubscriptionStatus(status: string | null): boolean {
 
 export type PaidAiPlanAnswer = boolean | 'unknown';
 
-/**
- * How long one answer is reused. Admission asks per container, and a burst of
- * one org's CI is hundreds of containers in seconds, so without a cache every one
- * of them would pay a round trip to motir-ai for an answer that changes when a
- * person buys or cancels a plan. Short, so a lapse takes effect within a minute;
- * `'unknown'` is never cached, so recovery is immediate.
- */
-const PLAN_CACHE_TTL_MS = 30_000;
-
-const planCache = new Map<string, { answer: boolean; expiresAt: number }>();
-
-function detailOf(err: unknown): string {
-  return err instanceof Error ? err.message.slice(0, 300) : 'unknown';
-}
-
 export const aiPlanGateService = {
   /** Does this organisation hold a paid monthly AI plan? See the module header
-   *  for the three answers. Never throws. */
+   *  for the three answers. Never throws.
+   *
+   *  The read itself — the org-row exemption, the no-billing short-circuit, the
+   *  subscription and its 30-second cache — is `orgPlanReader`'s, shared with the
+   *  plan caps (MOTIR-9372), so one admission pays for ONE subscription read. */
   async hasPaidAiPlan(organizationId: string): Promise<PaidAiPlanAnswer> {
-    if (!isCloudBilling()) return true;
-
-    const cached = planCache.get(organizationId);
-    if (cached && cached.expiresAt > Date.now()) return cached.answer;
-
-    // Motir's own organisations, from their own row — before any remote read.
-    let exempt: boolean;
-    try {
-      const org = await withOrgServiceWriteContext(organizationId, (tx) =>
-        organizationRepository.findByIdInTx(organizationId, tx),
-      );
-      if (!org) {
-        console.error('[aiPlanGateService] the organization row could not be found', {
-          organizationId,
-        });
-        return 'unknown';
-      }
-      exempt = org.isMeta || org.internalBilling;
-    } catch (err) {
-      console.error('[aiPlanGateService] could not read the organization', {
-        organizationId,
-        detail: detailOf(err),
-      });
-      return 'unknown';
-    }
-    if (exempt) return remember(organizationId, true);
-
-    try {
-      const subscription = await getOrgSubscription({ coreOrganizationId: organizationId });
-      return remember(organizationId, isPaidAiSubscriptionStatus(subscription.status));
-    } catch (err) {
-      console.error('[aiPlanGateService] could not read the AI plan — refusing (fail-closed)', {
-        organizationId,
-        detail: detailOf(err),
-      });
-      return 'unknown';
-    }
+    const read = await readOrgPlan(organizationId);
+    if (read.kind === 'exempt') return true;
+    if (read.kind === 'unknown') return 'unknown';
+    return isPaidAiSubscriptionStatus(read.subscription.status);
   },
 };
 
-function remember(organizationId: string, answer: boolean): boolean {
-  planCache.set(organizationId, { answer, expiresAt: Date.now() + PLAN_CACHE_TTL_MS });
-  return answer;
-}
-
 /** Test seam: forget every cached answer. */
 export function _resetAiPlanCache(): void {
-  planCache.clear();
+  _resetOrgPlanCache();
 }
 
 /** The words each door's refusal carries (`fleet-per-org-pool.md` §4). */

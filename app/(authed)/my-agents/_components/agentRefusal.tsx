@@ -27,8 +27,10 @@ export interface AgentRefusal {
 interface RefusalBody {
   code?: string;
   reason?: string;
-  /** The number a cap refusal names (`org_running_cap`). */
+  /** The figure a cap refusal applied (`user_cap`, `org_running_cap`). */
   limit?: number;
+  /** The plan that figure is from, as motir-ai names it (MOTIR-9376). */
+  planName?: string;
   /** `agent_instance_run_active` (MOTIR-7027): the run holding the agent, and its card. */
   runId?: string;
   workItemKey?: string | null;
@@ -42,6 +44,9 @@ export function refusalKey(body: RefusalBody | null): string {
     case 'ai_plan_required':
       return 'aiPlanRequired';
     case 'ai_plan_unknown':
+    // The plan's agent figures could not be read (MOTIR-9374): the same "could
+    // not check your plan, try again" words, never the generic refusal.
+    case 'plan_unknown':
       return 'aiPlanUnknown';
     case 'credits':
       return 'credits';
@@ -88,8 +93,20 @@ const TITLED = new Set([
 /** The keys whose sentence carries a link to Billing & plans. */
 const BILLING_LINKED = new Set(['aiPlanRequired', 'credits']);
 
+/**
+ * A cap refusal's words (MOTIR-9376). The figure and the plan are the ones the
+ * gate applied, read from the refusal body, so the page can never name a figure
+ * the gate did not use. A body missing either (an older server mid-deploy) gets
+ * the no-figure words: never a constant, never 0, never a default plan.
+ */
+function capValues(body: RefusalBody | null): { limit: number; plan: string } | null {
+  return typeof body?.limit === 'number' && typeof body.planName === 'string' && body.planName
+    ? { limit: body.limit, plan: body.planName }
+    : null;
+}
+
 /** Build the refusal a failed response should show. */
-export function useAgentRefusal(maxPerUser: number) {
+export function useAgentRefusal() {
   const t = useTranslations('myAgents.refusal');
   const tt = useTranslations('myAgents.refusalTitle');
   const tRun = useTranslations('myAgents.panel.run');
@@ -97,6 +114,8 @@ export function useAgentRefusal(maxPerUser: number) {
   const tState = useTranslations('myAgents.state');
   // The Start bar shares this with the Visitor tree's item page (MOTIR-6888).
   const routes = useReaderRoutes();
+  const capWords = (key: 'userCap' | 'orgRunningLimit', values: ReturnType<typeof capValues>) =>
+    values ? t(key, values) : t(`${key}NoFigure`);
   return (
     body: RefusalBody | null,
     name?: string,
@@ -154,13 +173,11 @@ export function useAgentRefusal(maxPerUser: number) {
             </Link>
           ),
         })
-      : key === 'userCap'
-        ? t('userCap', { count: maxPerUser })
-        : key === 'orgRunningLimit'
-          ? t('orgRunningLimit', { limit: body?.limit ?? 0 })
-          : key === 'nameTaken'
-            ? t('nameTaken', { name: name ?? '' })
-            : t(key);
+      : key === 'userCap' || key === 'orgRunningLimit'
+        ? capWords(key, capValues(body))
+        : key === 'nameTaken'
+          ? t('nameTaken', { name: name ?? '' })
+          : t(key);
     return {
       kind: key === 'busy' ? 'busy' : 'refusal',
       ...(TITLED.has(key) ? { title: tt(key) } : {}),

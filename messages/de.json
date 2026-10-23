@@ -10300,34 +10300,41 @@
       "fleet": {
         "orgs": {
           "title": "Flotte · Organisationen mit laufenden Containern",
-          "subtitle": "Jede Organisation, die gerade einen Container belegt, neben dem, was die CI-Abbuchung in den letzten {minutes} Minuten (zwei Abbuchungsperioden) für sie ergab. Abweichungen zuerst.",
+          "subtitle": "Jede Organisation, die gerade einen Container belegt, gemessen an den Werten ihres Plans, neben dem, was die CI-Abbuchung in den letzten {minutes} Minuten (zwei Abbuchungsperioden) für sie ergab. Abweichungen zuerst.",
           "mismatchedCount": "{count} abweichend",
           "runningCount": "{count, plural, one {# Organisation aktiv} other {# Organisationen aktiv}}",
           "noMismatch": "Keine Abweichung",
           "stat": {
             "orgs": "Organisationen mit einem laufenden Container",
-            "pooled": "Container in Pools pro Organisation (CI · gehostet · Index)",
-            "instances": "Agenteninstanzen · eigener Pool, oben nicht mitgezählt",
+            "ciRunners": "CI-Runner · jede Organisation an das Burst-Limit ihres Plans gebunden",
+            "hostedAgents": "gehostete Agentenläufe · jede Organisation an die parallelen Läufe ihres Plans gebunden",
+            "instances": "laufende Agenteninstanzen · jede Organisation an den Wert ihres Plans gebunden",
             "mismatched": "abweichend · Laufzeit und Abbuchung stimmen nicht überein"
           },
           "group": {
-            "pool": "Im Pool mit {pool} Containern",
-            "own": "Eigener Pool"
+            "plan": "An den Plan gebunden",
+            "uncapped": "Kein Planwert"
           },
           "col": {
             "org": "Organisation",
+            "plan": "Plan",
             "ciRunner": "CI-Runner",
             "hostedAgent": "Gehostete Agentenläufe",
             "index": "Index-Container",
-            "poolUsed": "Pool belegt",
             "agentInstance": "Agenteninstanzen",
-            "agentInstanceNote": "nicht im Pool",
             "accrued": "CI-Minuten · letzte {minutes} Min.",
             "credits": "Credits diesen Monat · bestätigt",
             "verdict": "Urteil"
           },
-          "poolOf": "{used} / {pool}",
-          "poolUnknown": "Pool nicht lesbar",
+          "plan": {
+            "named": "{plan}<pp> · {perUser} pro Person</pp>",
+            "exempt": "Kein Planlimit",
+            "unknown": "Plan unbekannt · {key}",
+            "unknownNoKey": "Plan unbekannt",
+            "unknownNote": "neue Container abgelehnt"
+          },
+          "usedOf": "<b>{used}</b> von {figure}",
+          "override": "Überschreibung",
           "metaTag": "Meta-Organisation · isMeta",
           "unnamed": "Organisation {id}",
           "accrued": {
@@ -10345,7 +10352,7 @@
           "foot": "{from}–{to} von {total} angezeigt · Abweichungen zuerst, dann die meisten Container · nur CI wird beurteilt – es ist die einzige Last, die während der Laufzeit abgebucht wird",
           "empty": {
             "title": "Keine Organisation betreibt einen Flotten-Container",
-            "body": "Alle Pools pro Organisation sind gerade leer, daher gibt es nichts mit der Abbuchung zu vergleichen. Das ist ein gesunder Zustand, kein Fehler."
+            "body": "Keine Organisation belegt gerade einen CI-Runner, gehosteten Agentenlauf, eine Agenteninstanz oder einen Index-Container, daher gibt es nichts mit der Abbuchung zu vergleichen. Das ist ein gesunder Zustand, kein Fehler."
           },
           "error": {
             "title": "Die Flotte konnte nicht gelesen werden",
@@ -11441,12 +11448,20 @@
         "charge": {
           "ciRunner": "Wird während der Ausführung berechnet",
           "hostedAgent": "Wird am Ende des Laufs berechnet",
-          "agentInstance": "Wird pro Laufintervall berechnet · außerhalb des Kontingents",
+          "agentInstance": "Wird pro Laufintervall berechnet",
           "index": "Kosten von Motir — wird nie berechnet"
         },
+        "tile": {
+          "of": " von {figure}",
+          "override": "Überschreibung"
+        },
         "facts": {
-          "pool": "Kontingent <strong>{used} von {pool}</strong>",
-          "poolUnknown": "Kontingent <strong>{used} von —</strong>",
+          "plan": "Plan <strong>{plan}</strong> · {runs} gehostete Läufe gleichzeitig · {perUser} Agenten pro Person · {running} laufende Agenten · {ci} CI-Jobs gleichzeitig",
+          "planCiUnreadable": "Plan <strong>{plan}</strong> · {runs} gehostete Läufe gleichzeitig · {perUser} Agenten pro Person · {running} laufende Agenten · CI-Limit nicht lesbar",
+          "planExempt": "Plan <strong>Kein Planlimit</strong>",
+          "planExemptOverride": "Plan <strong>Kein Planlimit</strong> · {ci} CI-Jobs gleichzeitig (Überschreibung)",
+          "planUnknown": "Plan <strong>unbekannt · {key}</strong> · neue Container abgelehnt",
+          "planUnknownNoKey": "Plan <strong>unbekannt</strong> · neue Container abgelehnt",
           "accrued": "Angefallen, letzte {minutes} Min. <strong>{value} Min.</strong>",
           "debited": "Diesen Monat abgebucht <strong>{credits} Credits</strong>",
           "pending": "Bestätigung ausstehend <strong>{credits} Credits</strong>"
@@ -12308,8 +12323,10 @@
       "aiPlanUnknown": "Motir konnte den AI-Plan Ihrer Organisation gerade nicht prüfen. Versuchen Sie es gleich noch einmal.",
       "credits": "Ihrer Organisation sind die Credits ausgegangen. Agenten verbrauchen Credits, solange sie laufen, und täglich für ihren Speicher, ob im Ruhezustand oder nicht. <link>Fügen Sie Credits hinzu</link>, um einen Agenten zu erstellen oder aufzuwecken.",
       "creditsUnknown": "Motir konnte die Credits Ihrer Organisation gerade nicht prüfen. Versuchen Sie es gleich noch einmal.",
-      "userCap": "Sie haben bereits {count} Agenten. Für jeden wird täglich der Speicher berechnet, auch im Ruhezustand. Löschen Sie einen, um einen weiteren zu erstellen.",
-      "orgRunningLimit": "In Ihrer Organisation laufen {limit} von {limit} Agenten. Versetzen Sie einen in den Ruhezustand, um einen weiteren zu starten.",
+      "userCap": "Der Plan {plan} Ihrer Organisation erlaubt {limit, plural, one {# Agenten} other {# Agenten}} pro Person. Für jeden wird täglich der Speicher berechnet, auch im Ruhezustand. Löschen Sie einen, um einen weiteren zu erstellen.",
+      "userCapNoFigure": "Sie haben bereits so viele Agenten, wie der Plan Ihrer Organisation pro Person erlaubt. Für jeden wird täglich der Speicher berechnet, auch im Ruhezustand. Löschen Sie einen, um einen weiteren zu erstellen.",
+      "orgRunningLimit": "Der Plan {plan} Ihrer Organisation lässt {limit, plural, one {# Agenten} other {# Agenten}} gleichzeitig laufen, und alle laufen bereits. Versetzen Sie einen in den Ruhezustand, um einen weiteren zu starten.",
+      "orgRunningLimitNoFigure": "In Ihrer Organisation laufen bereits so viele Agenten gleichzeitig, wie ihr Plan erlaubt. Versetzen Sie einen in den Ruhezustand, um einen weiteren zu starten.",
       "busy": "Motir betreibt gerade so viele Maschinen wie möglich. Versuchen Sie es in ein paar Minuten erneut.",
       "notOffered": "Dieser Coding-Agent wird nicht angeboten: Seine Bedingungen erlauben es einer Plattform noch nicht, ihn zu hosten. Wählen Sie einen anderen Coding-Agenten.",
       "nameTaken": "Sie haben in diesem Projekt bereits einen Agenten namens {name}.",

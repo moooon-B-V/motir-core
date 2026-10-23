@@ -754,10 +754,14 @@ describe('the ADMISSION GATE is consulted BEFORE anything is spent (MOTIR-1922)'
   // AFTER the JIT config is minted or the container is booted has already cost
   // the money it exists to save. So the assertion is not just the outcome — it
   // is that GitHub was never called and the orchestrator never provisioned.
-  it('an org at its pool leaves the job QUEUED, with no mint and no container', async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
+  it('an org at its CI figure leaves the job QUEUED, with no mint and no container', async () => {
     const fx = await seedTenant();
-    // One runner already in flight — the org's pool is full.
+    // A staff override of the CI burst cap (MOTIR-9375): one CI job at once.
+    await adminDb.organization.update({
+      where: { id: fx.organizationId },
+      data: { fleetPoolCap: 1 },
+    });
+    // One runner already in flight — the org is at its CI figure.
     await adminDb.ciRunnerProvisioningIntent.update({
       where: { id: (await seedIntent(fx, { jobId: '90001' })).id },
       data: { status: 'running' },
@@ -766,7 +770,7 @@ describe('the ADMISSION GATE is consulted BEFORE anything is spent (MOTIR-1922)'
 
     const result = await ciRunnerBootService.runIntent(queued.id, FAST);
 
-    expect(result).toMatchObject({ outcome: 'gate_deferred', reason: 'org_pool' });
+    expect(result).toMatchObject({ outcome: 'gate_deferred', reason: 'plan_cap' });
     expect(mintCalls()).toHaveLength(0);
     expect(fakeOrchestrator.provisioned).toHaveLength(0);
     // PENDING, so the next sweep retries it — queued, never failed.
