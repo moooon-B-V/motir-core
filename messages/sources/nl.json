@@ -5395,7 +5395,7 @@
   "billing.plans.seatIncluded": "+ {count, plural, one {# Motir seat} other {# Motir seats}} · work items uncapped",
   "billing.plans.everythingIn": "Everything in {prev}, plus",
   "billing.plans.tiers.standard.useCase": "Plan your projects with the Motir AI planner.",
-  "billing.plans.tiers.standard.features.0": "Plan the whole project, in detail",
+  "billing.plans.tiers.standard.features.0": "Plan the project, in detail",
   "billing.plans.tiers.standard.features.1": "Credits refresh monthly · top up anytime",
   "billing.plans.tiers.pro.useCase": "Standard, plus stronger models for planning.",
   "billing.plans.tiers.pro.prev": "Standard",

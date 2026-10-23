@@ -6627,10 +6627,7 @@
       "tiers": {
         "standard": {
           "useCase": "Plan your projects with the Motir AI planner.",
-          "features": [
-            "Plan the whole project, in detail",
-            "Credits refresh monthly · top up anytime"
-          ]
+          "features": ["Plan the project, in detail", "Credits refresh monthly · top up anytime"]
         },
         "pro": {
           "useCase": "Standard, plus stronger models for planning.",

@@ -6627,7 +6627,7 @@
       "tiers": {
         "standard": {
           "useCase": "用 Motir AI 规划器规划你的项目。",
-          "features": ["详细规划整个项目", "额度每月刷新 · 随时加购"]
+          "features": ["详细规划项目", "额度每月刷新 · 随时加购"]
         },
         "pro": {
           "useCase": "Standard 的全部，外加更强的规划模型。",
