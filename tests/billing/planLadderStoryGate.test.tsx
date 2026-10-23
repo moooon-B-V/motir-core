@@ -308,7 +308,7 @@ describe('the strings, in every shipped locale', () => {
         expect(plans[gone], gone).toBeUndefined();
       }
       const tiers = plans.tiers as Record<string, unknown>;
-      expect(Object.keys(tiers).sort()).toEqual(['max', 'max_x2', 'pro', 'standard']);
+      expect(Object.keys(tiers).sort()).toEqual(['host', 'max', 'max_x2', 'pro', 'standard']);
     }
   });
 });

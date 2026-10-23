@@ -6652,6 +6652,14 @@
             "Twice the Max monthly credit pool",
             "Dispatch more planned work to the agent automatically"
           ]
+        },
+        "host": {
+          "useCase": "Motir at fleet scale, on AWS accounts of your own.",
+          "prev": "Max ×2",
+          "features": [
+            "Motir runs your project autonomously",
+            "Dedicated pools for CI runners, agent runs, the indexer and hosted agents"
+          ]
         }
       },
       "trial": {

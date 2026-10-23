@@ -6655,6 +6655,14 @@
             "Le double de la réserve mensuelle de crédits de Max",
             "Confiez automatiquement davantage de travail planifié à l’agent"
           ]
+        },
+        "host": {
+          "useCase": "Motir à l’échelle d’une flotte, sur vos propres comptes AWS.",
+          "prev": "Max ×2",
+          "features": [
+            "Motir fait avancer votre projet de façon autonome",
+            "Des pools dédiés aux runners CI, aux exécutions d’agents, à l’indexeur et aux agents hébergés"
+          ]
         }
       },
       "trial": {

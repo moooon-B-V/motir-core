@@ -6655,6 +6655,14 @@
             "El doble del fondo mensual de créditos de Max",
             "Envía automáticamente más trabajo planificado al agente"
           ]
+        },
+        "host": {
+          "useCase": "Motir a escala de flota, en cuentas de AWS propias.",
+          "prev": "Max ×2",
+          "features": [
+            "Motir hace avanzar tu proyecto de forma autónoma",
+            "Pools dedicados para runners de CI, ejecuciones de agentes, el indexador y los agentes alojados"
+          ]
         }
       },
       "trial": {

@@ -6655,6 +6655,14 @@
             "Twee keer de maandelijkse creditpool van Max",
             "Meer gepland werk automatisch aan de agent toewijzen"
           ]
+        },
+        "host": {
+          "useCase": "Motir op vlootschaal, op AWS-accounts van jezelf.",
+          "prev": "Max ×2",
+          "features": [
+            "Motir brengt je project zelfstandig verder",
+            "Eigen pools voor CI-runners, agentruns, de indexer en gehoste agents"
+          ]
         }
       },
       "trial": {

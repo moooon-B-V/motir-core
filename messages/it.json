@@ -6655,6 +6655,14 @@
             "Il doppio della dotazione mensile di crediti di Max",
             "Affida automaticamente più lavoro pianificato all’agente"
           ]
+        },
+        "host": {
+          "useCase": "Motir su scala di flotta, su account AWS tutti tuoi.",
+          "prev": "Max ×2",
+          "features": [
+            "Motir porta avanti il progetto in autonomia",
+            "Pool dedicati per i runner CI, le esecuzioni degli agenti, l’indicizzatore e gli agenti ospitati"
+          ]
         }
       },
       "trial": {

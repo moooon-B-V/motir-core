@@ -6655,6 +6655,14 @@
             "Dwukrotność miesięcznej puli kredytów Max",
             "Automatycznie przekazuj agentowi więcej zaplanowanej pracy"
           ]
+        },
+        "host": {
+          "useCase": "Motir w skali floty, na własnych kontach AWS.",
+          "prev": "Max ×2",
+          "features": [
+            "Motir samodzielnie prowadzi Twój projekt",
+            "Dedykowane pule dla runnerów CI, uruchomień agentów, indeksera i hostowanych agentów"
+          ]
         }
       },
       "trial": {

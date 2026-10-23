@@ -6646,6 +6646,14 @@
           "useCase": "Max 的两倍用量。",
           "prev": "Max",
           "features": ["两倍于 Max 的每月额度池", "自动把更多规划好的工作派给智能体"]
+        },
+        "host": {
+          "useCase": "在你自己的 AWS 账户上，以集群规模运行 Motir。",
+          "prev": "Max ×2",
+          "features": [
+            "Motir 自主推进你的项目",
+            "CI 运行器、智能体运行、索引器和托管智能体各有专属资源池"
+          ]
         }
       },
       "trial": {
