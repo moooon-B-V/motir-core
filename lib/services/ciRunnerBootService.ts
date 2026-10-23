@@ -433,6 +433,10 @@ export interface SupervisionSession {
    * provisioning-org job, so it de-registers through the default.
    */
   readonly runnerTarget?: GithubOrgTarget | null;
+  /** The image reference the container was booted from, so a container that never
+   *  starts can say which image it was waiting on (MOTIR-9348). OPTIONAL on read: a
+   *  session memoised before it existed has none. */
+  readonly image?: string;
   /** ISO-8601 — when the container was booted, the origin both deadlines run from. */
   readonly bootedAt: string;
   /** ISO-8601 — GitHub's own queue instant, which boot latency is measured from. */
@@ -456,6 +460,9 @@ export type PollResult =
       bootLatencyMs: number | null;
       /** Carried forward so the next poll can apply {@link MAX_CONSECUTIVE_READ_FAILURES}. */
       consecutiveReadFailures: number;
+      /** The provider state the last successful read reported, carried so a boot
+       *  deadline reached on a failed read can still name it. */
+      lastState?: string;
     }
   | {
       done: true;
@@ -1347,6 +1354,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
       },
       githubRunnerId: jit.runnerId,
       runnerTarget: runnerTarget ?? null,
+      image: spec.image,
       bootedAt: bootedAt.toISOString(),
       queuedAt: intent.queuedAt.toISOString(),
       attribution: {
@@ -1384,15 +1392,24 @@ async function pollContainerOnce(
   /** The deadline check both the happy and the failed-read paths fall through
    *  to, so a provider that is down can never extend a container past its
    *  timeout. */
-  const deadlineVerdict = (failureDetail: string | null): PollResult | null => {
+  const deadlineVerdict = (
+    failureDetail: string | null,
+    lastState: string | undefined,
+  ): PollResult | null => {
     const elapsed = now().getTime() - bootedAt;
     if (!startedAt && elapsed >= bootDeadlineMs) {
+      // ⚠️ NAME WHAT THE CONTAINER WAS DOING (MOTIR-9348). A bare
+      // `provision_failed` is indistinguishable from every other boot failure,
+      // and the usual cause — a pull that never finishes — is visible only in
+      // the provider's own logs. The state and the image say it on the intent.
       return {
         done: true,
         reason: 'provision_failed',
         startedAt: null,
         bootLatencyMs: null,
-        failureDetail,
+        failureDetail:
+          `the container never started within ${bootDeadlineMs / 1000} s ` +
+          `(last provider state: ${lastState || 'unknown'}; image ${session.image ?? 'unknown'})`,
       };
     }
     if (elapsed >= jobTimeoutMs) {
@@ -1436,7 +1453,13 @@ async function pollContainerOnce(
       detail,
     });
     return (
-      deadlineVerdict(null) ?? { done: false, startedAt, bootLatencyMs, consecutiveReadFailures }
+      deadlineVerdict(null, previous.lastState) ?? {
+        done: false,
+        startedAt,
+        bootLatencyMs,
+        consecutiveReadFailures,
+        ...(previous.lastState !== undefined ? { lastState: previous.lastState } : {}),
+      }
     );
   }
 
@@ -1464,7 +1487,13 @@ async function pollContainerOnce(
   }
 
   return (
-    deadlineVerdict(null) ?? { done: false, startedAt, bootLatencyMs, consecutiveReadFailures: 0 }
+    deadlineVerdict(null, status.state) ?? {
+      done: false,
+      startedAt,
+      bootLatencyMs,
+      consecutiveReadFailures: 0,
+      lastState: status.state,
+    }
   );
 }
 
