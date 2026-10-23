@@ -107,6 +107,25 @@ describe('AuditLogTable', () => {
     );
   });
 
+  it('renders an action key that has left the vocabulary raw, and opens its entry (MOTIR-9386)', () => {
+    wrap(
+      <AuditLogTable
+        rows={[
+          {
+            entry: entry(7, { action: 'enterprise_request.transition', metadata: null }),
+            chain: 'verified',
+          },
+        ]}
+        initialOpenSeq={null}
+        clearHref={null}
+      />,
+    );
+    const row = screen.getByTestId('audit-row-7');
+    expect(within(row).getByText('enterprise_request.transition')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Show entry #7' }));
+    expect(screen.getByTestId('audit-detail').textContent).toContain('#7');
+  });
+
   it('no match: the empty state with Clear filters', () => {
     wrap(<AuditLogTable rows={[]} initialOpenSeq={null} clearHref="/admin/audit-log" />);
     expect(screen.getByText('No entries match these filters')).toBeTruthy();

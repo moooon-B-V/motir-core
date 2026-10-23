@@ -17,8 +17,10 @@ import { quotedIn, renderWithQuotes, QUOTED } from './fixtures/recipientLanguage
 // PART C's date cases live here too: a deletion date is written the way the
 // recipient's language writes dates.
 
-/** Staff mail, English by design: it goes to Motir's team, not a customer. */
-const ENGLISH_ONLY = new Set<EmailTemplate>(['enterprise-request-received']);
+/** Staff mail, English by design: it goes to Motir's team, not a customer.
+ *  Empty since the Contact-sales staff email went with its feature
+ *  (MOTIR-9386); a staff template added later joins it here. */
+const ENGLISH_ONLY = new Set<EmailTemplate>([]);
 const TEMPLATES = Object.keys(EMAIL_TEMPLATE_CLASS) as EmailTemplate[];
 /** The templates whose email carries no button. */
 const NO_BUTTON = new Set<EmailTemplate>(['two-factor-otp', 'organization-erased']);
@@ -132,7 +134,7 @@ function render(template: EmailTemplate, locale: Locale): Promise<RenderedEmail>
 
 describe('the matrix', () => {
   it('covers every template in the union', () => {
-    expect(TEMPLATES).toHaveLength(19);
+    expect(TEMPLATES).toHaveLength(18);
     expect([...ENGLISH_ONLY].every((t) => TEMPLATES.includes(t))).toBe(true);
   });
 });
@@ -195,9 +197,9 @@ describe.each(TEMPLATES.filter((t) => !ENGLISH_ONLY.has(t)))('%s', (template) =>
   );
 });
 
-describe('the English-only staff template', () => {
+describe.each([...ENGLISH_ONLY])('the English-only staff template %s', (template) => {
   it('renders in English with lang="en-US"', async () => {
-    const email = await render('enterprise-request-received', 'en');
+    const email = await render(template, 'en');
     expect(email.html).toMatch(/<html[^>]*\slang="en-US"/);
     expect(email.text).not.toMatch(RAW_KEY);
   });

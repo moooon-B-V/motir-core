@@ -334,10 +334,6 @@ describe('BillingClient', () => {
       if (typeof url === 'string' && url.endsWith('/billing')) {
         return new Response(JSON.stringify(freeOrg()), { status: 200 });
       }
-      // The Enterprise card's open-request read (MOTIR-7607) — none open.
-      if (typeof url === 'string' && url.endsWith('/billing/enterprise-request')) {
-        return new Response('null', { status: 200 });
-      }
       // The checkout POST → return a hosted Stripe URL.
       expect(init?.method).toBe('POST');
       return new Response(JSON.stringify({ url: 'https://stripe.test/checkout/abc' }), {
@@ -381,10 +377,6 @@ describe('BillingClient', () => {
       if (typeof url === 'string' && url.endsWith('/billing')) {
         return new Response(JSON.stringify(activeStandard()), { status: 200 });
       }
-      // The Enterprise card's open-request read (MOTIR-7607) — none open.
-      if (typeof url === 'string' && url.endsWith('/billing/enterprise-request')) {
-        return new Response('null', { status: 200 });
-      }
       expect(init?.method).toBe('POST');
       return new Response(JSON.stringify({ url: 'https://stripe.test/checkout/seat' }), {
         status: 200,
@@ -424,10 +416,6 @@ describe('BillingClient', () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (typeof url === 'string' && url.endsWith('/billing')) {
         return new Response(JSON.stringify(activeStandard()), { status: 200 });
-      }
-      // The Enterprise card's open-request read (MOTIR-7607) — none open.
-      if (typeof url === 'string' && url.endsWith('/billing/enterprise-request')) {
-        return new Response('null', { status: 200 });
       }
       expect(init?.method).toBe('POST');
       return new Response(JSON.stringify({ url: 'https://stripe.test/checkout/topup' }), {
@@ -469,10 +457,6 @@ describe('BillingClient', () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (typeof url === 'string' && url.endsWith('/billing')) {
         return new Response(JSON.stringify(activeStandard()), { status: 200 });
-      }
-      // The Enterprise card's open-request read (MOTIR-7607) — none open.
-      if (typeof url === 'string' && url.endsWith('/billing/enterprise-request')) {
-        return new Response('null', { status: 200 });
       }
       expect(init?.method).toBe('POST');
       return new Response(JSON.stringify({ url: 'https://stripe.test/checkout/topup1' }), {
