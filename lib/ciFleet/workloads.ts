@@ -56,9 +56,13 @@ export type { FleetWorkloadKind };
 /**
  * Which pool a workload counts against.
  *
- * `shared` — the ORGANISATION's pool (`MOTIR_FLEET_ORG_MAX_IN_FLIGHT`, default
- * 500; `docs/decisions/fleet-per-org-pool.md` §2), which CI, indexing and hosted
- * runs share. `own` — a workload with a limit of its own, decided by its caller
+ * `shared` — a paid-AI-plan workload admitted by the org's plan: a hosted-agent
+ * run is held to its plan's parallel-run figure (`PLAN_FIGURE_BY_WORKLOAD` in
+ * `fleetCeilingService`, MOTIR-9373; the fleet-capacity decision MOTIR-9357
+ * amends `docs/decisions/fleet-per-org-pool.md` §2), while the CI and index gates
+ * still sum CI, indexing and hosted runs against the org's pool
+ * (`MOTIR_FLEET_ORG_MAX_IN_FLIGHT`, default 500) until the CI burst cap card
+ * moves them off it. `own` — a workload with a limit of its own, decided by its caller
  * under the same admission lock, and NOT summed into the org's pool: agent
  * instances (`docs/decisions/agent-instances.md` AMENDMENT 2), whose machines are
  * long-lived and paid for per minute, so letting them fill the pool would starve

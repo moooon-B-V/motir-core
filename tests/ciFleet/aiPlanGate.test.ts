@@ -115,7 +115,9 @@ function stubMotirAi(
           status: opts.status === undefined ? 'active' : opts.status,
           currentPeriodEnd: null,
           priceId: null,
-          planTier: null,
+          // A real tier, so a paid org's hosted run reads real plan figures
+          // (MOTIR-9373) once the gate lets it through.
+          planTier: { key: 'pro', name: 'Pro', monthlyCreditAllotment: 15_000 },
         }),
         { status: 200, headers: { 'content-type': 'application/json' } },
       );
