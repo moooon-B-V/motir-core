@@ -466,6 +466,20 @@ describe('judgeOrganization — the plan figures each workload is read against',
     ).toEqual({ kind: 'plan_unknown', planKey: 'legacy_tier' });
   });
 
+  it('a CI figure the CI gate cannot read is shown as unreadable beside the agent figures', async () => {
+    vi.spyOn(fleetCeilingService, 'resolveCiBurstCap').mockResolvedValue({ kind: 'unreadable' });
+    const t = await seedTenant();
+    expect(
+      (await platformFleetMonitorService.judgeOrganization(t.organizationId, NOW)).plan,
+    ).toMatchObject({
+      kind: 'capped',
+      planKey: 'max',
+      agentRunsInParallel: 5,
+      ciBurstCap: null,
+      ciBurstSource: 'unreadable',
+    });
+  });
+
   it.each(['capsFor', 'resolveCiBurstCap'] as const)(
     'a throw from %s reads plan_unknown with no key, and the row keeps its counts and verdicts',
     async (read) => {

@@ -1,6 +1,6 @@
 import type { Cookie, Page, Response } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
-import { adminDb, db, resetDatabase } from './_helpers/db-reset';
+import { adminDb, resetDatabase } from './_helpers/db-reset';
 import { signIn, signUpToOnboarding } from './_helpers/shell-session';
 import { seedHostedRun, seedReadyHostedCard } from './_helpers/hosted-run-seed';
 import { appendEvents, ingestContext } from './_helpers/agent-run-seed';
@@ -168,7 +168,7 @@ test('a Standard org: its second agent run waits and boots by itself, its second
 
   const tag = Date.now().toString(36);
   const seed = await seedHostedRun(`plan-caps-${tag}@example.com`, `PLC${tag}`);
-  const { organizationId } = await db.workspace.findUniqueOrThrow({
+  const { organizationId } = await adminDb.workspace.findUniqueOrThrow({
     where: { id: seed.workspaceId },
   });
   // Standard, written BEFORE the first navigation so no cached read is free.
