@@ -204,10 +204,10 @@ name: Acceptance tests
 #
 # THE DERIVATION lives in the `membership` gate, which already counts the lane:
 #
-#   legs = min(specs, 10), floored at 1
+#   legs = min(specs, 14), floored at 1
 #
 #   0 specs → 1 leg    (a PR against an empty lane; `push` skips entirely)
-#   1 spec  → 1 leg    2 specs → 2 legs    …    ≥ 10 → 10 legs
+#   1 spec  → 1 leg    2 specs → 2 legs    …    ≥ 14 → 14 legs
 #
 # Two things that number is chosen to protect, both of which a plain "one leg per
 # spec" would break:
@@ -217,6 +217,8 @@ name: Acceptance tests
 #     to 6 when the lane reached 87 specs and a four-leg shard ran past its
 #     then 40-minute job timeout. MOTIR-9352 raised it to 10 when the lane
 #     reached 156 specs and the sixth leg ran past its 55-minute timeout.
+#     MOTIR-9220's repair raised it to 14 when, at 157 specs on ten legs, leg
+#     9/10 ran 37–42 min of tests and was cancelled at 55.
 #   • THE FLOOR of 1 keeps the rehearsal. A lane-definition PR against an empty
 #     lane runs no tests either way — what it still proves is that the harness
 #     BOOTS (the Playwright config loads, the webServer comes up, `e2e-setup`'s
@@ -491,7 +493,7 @@ jobs:
           # it held. The FLOOR is 1 rather than 0 because a run with no legs at
           # all would stop proving the harness still boots, which is the only
           # thing a lane-definition PR against an empty lane can prove.
-          MAX_LEGS=10
+          MAX_LEGS=14
           if [ "${COUNT}" -lt 1 ]; then
             LEGS=1
           elif [ "${COUNT}" -gt "${MAX_LEGS}" ]; then
@@ -510,7 +512,15 @@ jobs:
           # six ran 30–51 min of tests each (252 min in all, the slowest leg
           # ~1.2x the mean), and shard 6/6 passed all 57 of its tests and was
           # CANCELLED at 55 during its report upload (MOTIR-9352). Ten legs are
-          # ~25 min of tests per leg and ~31 for the slowest.
+          # ~25 min of tests per leg and ~31 for the slowest. They were not: the
+          # shards are contiguous slices of the alphabetical spec list, so a run
+          # of heavy specs lands on one leg. On main b08a2ea the ten legs ran
+          # 17.6–37.0 min of tests (leg 9/10, `acceptance-platform-planner-model`
+          # … `acceptance-surgical-plan`, the slowest), and the build-artifact
+          # download alone took 1–14 min per leg. On #3762 (MOTIR-9220) leg 9/10
+          # ran 42.4 min of tests, passed all 35, and was CANCELLED at 55 during
+          # the video upload, twice. Fourteen legs bring the slowest slice to
+          # ~27–30 min, which leaves room for a slow download and the upload.
           # `paste -sd, -`, not `seq -s,`: BSD `seq` puts the separator after the
           # last number too, so on a Mac the list came out `[1,]` — not JSON —
           # and tests/ci-acceptance-lane.test.ts, which runs this snippet on the
@@ -637,6 +647,9 @@ jobs:
     # toward it, raise the cap first, not this number. It did (MOTIR-9352): at
     # 156 specs the sixth leg ran 51 min of tests and was cancelled here, so the
     # cap went 6 → 10 (~31 min for the slowest leg) and this number stayed.
+    # Ten legs measured 17.6–42.4 min of tests, and leg 9/10 was cancelled here
+    # with every test passed (MOTIR-9220), so the cap went 10 → 14 and this
+    # number stayed again.
     timeout-minutes: 55
     # BOTH edges, and each is load-bearing (MOTIR-2908):
     #   · `build` publishes the `.next/` artifact every leg downloads, and it is
@@ -651,12 +664,12 @@ jobs:
       # report — the artifact a red lane is debugged from at all (MOTIR-1706).
       fail-fast: false
       matrix:
-        # SIZED FROM THE LANE'S MEMBERSHIP (MOTIR-2908) — `[1]` … `[1, …, 10]`,
+        # SIZED FROM THE LANE'S MEMBERSHIP (MOTIR-2908) — `[1]` … `[1, …, 14]`,
         # derived by the `membership` gate above. It was a literal `[1, 2, 3, 4]`
         # from MOTIR-2600 until MOTIR-2765 gave a spec a lifecycle and MOTIR-2769
         # triaged the lane empty; four legs over ≤2 specs is not parallelism, it
-        # is four copies of the setup. The cap is 10 since MOTIR-9352 (6 since
-        # MOTIR-7054).
+        # is four copies of the setup. The cap is 14 since MOTIR-9220 (10 since
+        # MOTIR-9352, 6 since MOTIR-7054).
         shard: ${{ fromJSON(needs.membership.outputs.shards) }}
     # `id-token: write` is BACK, and on THIS job only (MOTIR-7253). The publish
     # step requests a GitHub OIDC token (audience `motir-acceptance-video`), which
