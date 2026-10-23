@@ -1,7 +1,6 @@
 import { defineJob } from '../defineJob';
 import { deferRun } from '../engine/defer';
-import type { HostedRunAdmitData } from '../types';
-import { HOSTED_RUN_ADMIT_RETRY_MS } from '@/lib/services/hostedRunService';
+import { HOSTED_RUN_ADMIT_RETRY_MS, type HostedRunAdmitData } from '../types';
 
 // A HELD HOSTED RUN'S ADMISSION (Story MOTIR-9363 · MOTIR-9381) — one pass per
 // run of the queue, asking the fleet for a slot ONCE and deferring while the run

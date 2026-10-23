@@ -37,7 +37,11 @@ import {
 import { hostedRunDispatchId } from '@/lib/hostedRuns/ids';
 import type { MemoizingSteps } from '@/lib/jobs/supervision/inProcessSteps';
 import { sendEvent } from '@/lib/jobs/sendEvent';
-import type { HostedRunAdmitData, HostedRunSuperviseData } from '@/lib/jobs/types';
+import {
+  HOSTED_RUN_ADMIT_RETRY_MS,
+  type HostedRunAdmitData,
+  type HostedRunSuperviseData,
+} from '@/lib/jobs/types';
 import { hostedAgentFleetConfig } from '@/lib/orchestrator';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
@@ -464,9 +468,9 @@ export function hostedRunAdmitKey(dispatchRunId: string): string {
   return `hosted-run-admit:${dispatchRunId}`;
 }
 
-/** How long a held run waits before its admission asks again (MOTIR-9381). It
- *  bounds how soon a freed slot is taken, never whether the run boots. */
-export const HOSTED_RUN_ADMIT_RETRY_MS = 30_000;
+/** Re-exported from the job's payload module, where the job reads it without
+ *  loading this service's import graph (MOTIR-9381). */
+export { HOSTED_RUN_ADMIT_RETRY_MS };
 
 /**
  * The admission deferrals that clear BY THEMSELVES (MOTIR-9381): the org is at

@@ -426,6 +426,12 @@ export interface HostedRunSuperviseData {
   idempotencyKey: string;
 }
 
+/** How long a held run waits before its admission asks again (MOTIR-9381). It
+ *  bounds how soon a freed slot is taken, never whether the run boots. It lives
+ *  here, not in `hostedRunService`, so the job definition (and so the job
+ *  registry the docs-guard lane loads) never pulls in the service's graph. */
+export const HOSTED_RUN_ADMIT_RETRY_MS = 30_000;
+
 /**
  * The `hosted-run/admit` event payload (Story MOTIR-9363 · MOTIR-9381) — one per
  * hosted run that was held at admission for a reason that clears by itself (its
