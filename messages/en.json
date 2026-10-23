@@ -8496,6 +8496,21 @@
       "following": "Following the planner",
       "resume": "Follow the planner",
       "resumedAnnouncement": "Following the planner again"
+    },
+    "history": {
+      "header": "History",
+      "regionAria": "Your past conversations in this project",
+      "status": {
+        "open": "Open",
+        "ended": "Ended"
+      },
+      "loading": "Loading your conversations…",
+      "loadingMore": "Loading more…",
+      "end": "No older conversations",
+      "emptyTitle": "No conversations yet",
+      "emptyBody": "Questions you ask and plans you start in this project are listed here.",
+      "error": "Couldn’t load your conversations.",
+      "rowAria": "{title} · {status} · active {when}"
     }
   },
   "codeHealth": {

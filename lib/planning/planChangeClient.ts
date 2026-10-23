@@ -16,6 +16,7 @@ import type {
   PlanTargetHeldByDto,
   ResumableSessionDto,
 } from '@/lib/dto/planChange';
+import type { PlanSessionListPageDto } from '@/lib/dto/planSessions';
 
 // Client reads/writes for the plan-change CONVERSATION seam (Story 7.30 ·
 // MOTIR-1728's routes), consumed by the conversational rail (MOTIR-1730). No
@@ -141,6 +142,17 @@ export async function findResumableSession(signal?: AbortSignal): Promise<Resuma
     earlier: body?.earlier ?? null,
     copyable: body?.copyable ?? null,
   };
+}
+
+/** One page of the caller's OWN sessions in the active project — the overlay's
+ *  History (Story MOTIR-9218 · MOTIR-9306/9307). `cursor` is the previous page's
+ *  `nextCursor`; omit it for the first page. */
+export async function listOwnSessions(
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<PlanSessionListPageDto> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  return get<PlanSessionListPageDto>(`/api/ai/plan-change/sessions/history${query}`, signal);
 }
 
 /** START a new session that CARRIES OVER an ended one's conversation (AMENDMENT
