@@ -8448,7 +8448,7 @@
         "targetUnavailable": "已无法打开 {key}，因此无法开始规划。",
         "generic": "无法从这条提议开始规划。"
       },
-      "held": "这些问题问完后，Motir AI 会提议规划。",
+      "held": "这几问答完后，Motir AI 会提议规划。",
       "settledHeading": "你的回答确定了这些",
       "clearEnough": "已足够清楚，可以按原样规划。",
       "nothingSettled": "没有确定任何内容，所以会按请求原样规划。"
