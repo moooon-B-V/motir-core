@@ -1,0 +1,243 @@
+import {
+  Ec2ApiError,
+  type Ec2Api,
+  type Ec2AvailabilityZone,
+  type Ec2Filter,
+  type Ec2InternetGateway,
+  type Ec2RouteTable,
+  type Ec2SecurityGroup,
+  type Ec2Subnet,
+  type Ec2Tag,
+  type Ec2Vpc,
+} from '../../src/index';
+
+// An in-memory EC2 (Story MOTIR-9270) — the AWS twin of the Fly harness's
+// in-memory Machines API. It answers the `Ec2Api` calls, holds tags, and enforces
+// the describe filters the adapter relies on (`tag:<key>`, `vpc-id`, `state`), so
+// a test that passes here passes for the reason it would against EC2: the
+// resource was FOUND by its tag, not handed back from a variable.
+//
+// Every call is recorded in `calls`, which is how a test counts creates.
+
+export interface FakeCall {
+  readonly method: string;
+  readonly input: unknown;
+}
+
+interface Tagged {
+  tags: Ec2Tag[];
+}
+
+type Attributes = Record<string, readonly string[]>;
+
+function matches(filters: readonly Ec2Filter[], tags: readonly Ec2Tag[], attrs: Attributes) {
+  return filters.every((f) => {
+    if (f.name.startsWith('tag:')) {
+      const key = f.name.slice('tag:'.length);
+      return tags.some((t) => t.key === key && f.values.includes(t.value));
+    }
+    if (f.name === 'tag-key') return tags.some((t) => f.values.includes(t.key));
+    const have = attrs[f.name];
+    if (!have) throw new Error(`awsEc2Fake: unsupported filter ${f.name}`);
+    return have.some((v) => f.values.includes(v));
+  });
+}
+
+export class AwsEc2Fake implements Ec2Api {
+  readonly calls: FakeCall[] = [];
+  zones: Ec2AvailabilityZone[] = [
+    { zoneName: 'us-east-1a', state: 'available' },
+    { zoneName: 'us-east-1b', state: 'available' },
+    { zoneName: 'us-east-1c', state: 'available' },
+  ];
+  readonly vpcs = new Map<string, Ec2Vpc & Tagged>();
+  readonly internetGateways = new Map<string, Ec2InternetGateway & Tagged>();
+  readonly routeTables = new Map<string, Ec2RouteTable & Tagged>();
+  readonly subnets = new Map<string, Ec2Subnet & Tagged>();
+  readonly securityGroups = new Map<string, Ec2SecurityGroup & Tagged>();
+  private seq = 0;
+  private readonly failures = new Map<string, string>();
+
+  /** The next call of `method` throws an `Ec2ApiError` with `code`. */
+  failNext(method: keyof Ec2Api, code = 'InternalError', httpStatus = 500): void {
+    this.failures.set(method, `${code}|${httpStatus}`);
+  }
+
+  /** How many recorded calls of `method` there were. */
+  count(method: string): number {
+    return this.calls.filter((c) => c.method === method).length;
+  }
+
+  /** Every recorded call whose name starts with a mutating verb. */
+  mutations(): FakeCall[] {
+    return this.calls.filter((c) => /^(create|attach|associate|modify|authorize)/.test(c.method));
+  }
+
+  protected record(method: string, input: unknown): void {
+    this.calls.push({ method, input });
+    const failure = this.failures.get(method);
+    if (failure) {
+      this.failures.delete(method);
+      const [code, status] = failure.split('|');
+      throw new Ec2ApiError(code!, Number(status), Number(status) >= 500);
+    }
+  }
+
+  protected nextId(prefix: string): string {
+    this.seq += 1;
+    return `${prefix}-${this.seq.toString(16).padStart(8, '0')}`;
+  }
+
+  async describeAvailabilityZones(filters: readonly Ec2Filter[]) {
+    this.record('describeAvailabilityZones', filters);
+    return this.zones.filter((z) => matches(filters, [], { state: [z.state] }));
+  }
+
+  async describeVpcs(filters: readonly Ec2Filter[]) {
+    this.record('describeVpcs', filters);
+    return [...this.vpcs.values()].filter((v) => matches(filters, v.tags, { 'vpc-id': [v.vpcId] }));
+  }
+
+  async createVpc(input: { cidrBlock: string; tags: readonly Ec2Tag[] }) {
+    this.record('createVpc', input);
+    const vpcId = this.nextId('vpc');
+    this.vpcs.set(vpcId, { vpcId, cidrBlock: input.cidrBlock, tags: [...input.tags] });
+    return { vpcId };
+  }
+
+  async describeInternetGateways(filters: readonly Ec2Filter[]) {
+    this.record('describeInternetGateways', filters);
+    return [...this.internetGateways.values()].filter((g) =>
+      matches(filters, g.tags, { 'attachment.vpc-id': g.attachedVpcIds }),
+    );
+  }
+
+  async createInternetGateway(input: { tags: readonly Ec2Tag[] }) {
+    this.record('createInternetGateway', input);
+    const internetGatewayId = this.nextId('igw');
+    this.internetGateways.set(internetGatewayId, {
+      internetGatewayId,
+      attachedVpcIds: [],
+      tags: [...input.tags],
+    });
+    return { internetGatewayId };
+  }
+
+  async attachInternetGateway(input: { internetGatewayId: string; vpcId: string }) {
+    this.record('attachInternetGateway', input);
+    const gateway = this.internetGateways.get(input.internetGatewayId);
+    if (!gateway) throw new Ec2ApiError('InvalidInternetGatewayID.NotFound', 400, false);
+    if (gateway.attachedVpcIds.length > 0)
+      throw new Ec2ApiError('Resource.AlreadyAssociated', 400, false);
+    this.internetGateways.set(input.internetGatewayId, {
+      ...gateway,
+      attachedVpcIds: [input.vpcId],
+    });
+  }
+
+  async describeRouteTables(filters: readonly Ec2Filter[]) {
+    this.record('describeRouteTables', filters);
+    return [...this.routeTables.values()].filter((t) =>
+      matches(filters, t.tags, { 'vpc-id': [t.vpcId] }),
+    );
+  }
+
+  async createRouteTable(input: { vpcId: string; tags: readonly Ec2Tag[] }) {
+    this.record('createRouteTable', input);
+    const routeTableId = this.nextId('rtb');
+    this.routeTables.set(routeTableId, {
+      routeTableId,
+      vpcId: input.vpcId,
+      routes: [{ destinationCidrBlock: '10.40.0.0/16', gatewayId: 'local' }],
+      associatedSubnetIds: [],
+      tags: [...input.tags],
+    });
+    return { routeTableId };
+  }
+
+  async createRoute(input: {
+    routeTableId: string;
+    destinationCidrBlock: string;
+    gatewayId: string;
+  }) {
+    this.record('createRoute', input);
+    const table = this.routeTables.get(input.routeTableId)!;
+    this.routeTables.set(input.routeTableId, {
+      ...table,
+      routes: [
+        ...table.routes,
+        { destinationCidrBlock: input.destinationCidrBlock, gatewayId: input.gatewayId },
+      ],
+    });
+  }
+
+  async associateRouteTable(input: { routeTableId: string; subnetId: string }) {
+    this.record('associateRouteTable', input);
+    const table = this.routeTables.get(input.routeTableId)!;
+    this.routeTables.set(input.routeTableId, {
+      ...table,
+      associatedSubnetIds: [...table.associatedSubnetIds, input.subnetId],
+    });
+  }
+
+  async describeSubnets(filters: readonly Ec2Filter[]) {
+    this.record('describeSubnets', filters);
+    return [...this.subnets.values()].filter((s) =>
+      matches(filters, s.tags, {
+        'vpc-id': [s.vpcId],
+        'subnet-id': [s.subnetId],
+        'availability-zone': [s.availabilityZone],
+      }),
+    );
+  }
+
+  async createSubnet(input: {
+    vpcId: string;
+    cidrBlock: string;
+    availabilityZone: string;
+    tags: readonly Ec2Tag[];
+  }) {
+    this.record('createSubnet', input);
+    const subnetId = this.nextId('subnet');
+    this.subnets.set(subnetId, {
+      subnetId,
+      vpcId: input.vpcId,
+      availabilityZone: input.availabilityZone,
+      cidrBlock: input.cidrBlock,
+      mapPublicIpOnLaunch: false,
+      tags: [...input.tags],
+    });
+    return { subnetId };
+  }
+
+  async modifySubnetAttribute(input: { subnetId: string; mapPublicIpOnLaunch: boolean }) {
+    this.record('modifySubnetAttribute', input);
+    const subnet = this.subnets.get(input.subnetId)!;
+    this.subnets.set(input.subnetId, { ...subnet, mapPublicIpOnLaunch: input.mapPublicIpOnLaunch });
+  }
+
+  async describeSecurityGroups(filters: readonly Ec2Filter[]) {
+    this.record('describeSecurityGroups', filters);
+    return [...this.securityGroups.values()].filter((g) =>
+      matches(filters, g.tags, { 'vpc-id': [g.vpcId], 'group-id': [g.groupId] }),
+    );
+  }
+
+  async createSecurityGroup(input: {
+    groupName: string;
+    description: string;
+    vpcId: string;
+    tags: readonly Ec2Tag[];
+  }) {
+    this.record('createSecurityGroup', input);
+    const groupId = this.nextId('sg');
+    this.securityGroups.set(groupId, {
+      groupId,
+      groupName: input.groupName,
+      vpcId: input.vpcId,
+      ingressRuleCount: 0,
+      tags: [...input.tags],
+    });
+    return { groupId };
+  }
+}
