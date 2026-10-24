@@ -12,7 +12,7 @@ import { PUBLISHED_PACKAGES, tagFor } from '../../scripts/releaseTags.mjs';
 //      versioned at all.
 //   B. `scripts/releaseTags.mjs`'s `PUBLISHED_PACKAGES` — which packages get
 //      TAGGED, and with what prefix.
-//   C. five workflows' `on.push.tags` globs — which tags actually FIRE a lane.
+//   C. six workflows' `on.push.tags` globs — which tags actually FIRE a lane.
 //   D. `packages/cli/sandbox/smoke/assert-current.mjs`'s `TAG_PREFIX` — what
 //      the morning tripwire looks for when it decides the image is stale.
 //
@@ -76,8 +76,9 @@ const RELEASE_LANE = '.github/workflows/release.yml';
 
 const read = (relativePath: string): string => readFileSync(join(ROOT, relativePath), 'utf8');
 
-/** `runner-v*` releases the self-hosted runner IMAGE, which is not a published npm package. */
-const NON_PACKAGE_TAG_GLOBS = ['runner-v*'];
+/** `runner-v*` releases the self-hosted runner IMAGE and `ci-runner-ami-v*` the AWS
+ *  runner AMI (MOTIR-9272); neither is a published npm package, both are cut by hand. */
+const NON_PACKAGE_TAG_GLOBS = ['runner-v*', 'ci-runner-ami-v*'];
 
 type Pkg = { name: string; dir: string; tagPrefix: string; lane: string };
 const PACKAGES = PUBLISHED_PACKAGES as Pkg[];
@@ -413,10 +414,11 @@ describe('the parser reads the shipped files, and says so when it does not (MOTI
   // Every check below is only as good as this. A regex that silently matches
   // nothing turns four gates into four green tautologies, which is the exact
   // shape the card was written against.
-  it('finds an `on.push.tags` glob in each of the five tag-triggered lanes', () => {
+  it('finds an `on.push.tags` glob in each of the six tag-triggered lanes', () => {
     const tagTriggered = Object.entries(globsByLane).filter(([, g]) => g !== null && g.length > 0);
     expect(tagTriggered.map(([lane]) => lane)).toEqual([
       '.github/workflows/release-brand.yml',
+      '.github/workflows/release-ci-runner-ami.yml',
       '.github/workflows/release-cli.yml',
       '.github/workflows/release-design-system.yml',
       '.github/workflows/release-runner-image.yml',
