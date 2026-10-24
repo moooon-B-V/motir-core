@@ -1,11 +1,7 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  AwsAccountCreationRefusedError,
   type AwsCredentialsConfig,
-  type AwsManagementApi,
-  type AwsOrganizationAccount,
-  type AwsPolicyDocument,
   type AwsSessionCredentials,
   type Ec2Api,
 } from '@motir/orchestrator';
@@ -23,6 +19,13 @@ import { runFleetAdmin } from '@/scripts/fleet/fleetAdmin';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import {
+  ADD_SHARD_ENTERPRISE_SLUG as SLUG,
+  FakeOrganization,
+  installAddShardGithub,
+  newGithubWorld,
+  type GithubWorld,
+} from '../helpers/addShardFakes';
 
 // `fleet-admin add-shard --provider aws` (Story MOTIR-9270 · MOTIR-9278), against
 // a real database for the row and the audit entry, GitHub stubbed at `fetch`, the
@@ -39,12 +42,10 @@ interface Ec2Fake extends Ec2Api {
 }
 let AwsEc2Fake: new () => Ec2Fake;
 
-const SLUG = 'moooon-bv';
 const ORG = 'motir-fleet-use1-2';
 const NAME = 'ci-runner-use1-2';
 const PREFIX = 'FLEET_SHARD_CI_RUNNER_USE1_2';
 const ACCOUNT_EMAIL = 'aws+ci-runner-use1-2@motir.co';
-const CLIENT_ID = 'Iv1.studio';
 const SECRETS = {
   admin: 'ghp_ADMIN_SECRET_never_printed',
   installation: 'ghs_INSTALL_SECRET_never_printed',
@@ -64,71 +65,6 @@ const SESSION: AwsSessionCredentials = {
   expiration: null,
 };
 
-interface GithubWorld {
-  orgs: Set<string>;
-  installed: Set<string>;
-  calls: string[];
-}
-
-/** An in-memory AWS organization: accounts by name, CreateAccount requests, quotas
- *  and IAM users, with every call recorded by name. */
-class FakeOrganization implements AwsManagementApi {
-  readonly calls: string[] = [];
-  readonly accounts = new Map<string, AwsOrganizationAccount>();
-  readonly inProgress = new Map<string, string>();
-  readonly iamUsers = new Set<string>();
-  quota = SHARD_VCPU_QUOTA_TARGET - 1_000;
-  createFailure: string | null = null;
-  private seq = 0;
-
-  private nextAccountId(): string {
-    this.seq += 1;
-    return String(400_000_000_000 + this.seq);
-  }
-
-  async findOrganizationAccount(name: string) {
-    this.calls.push('findOrganizationAccount');
-    return {
-      account: this.accounts.get(name) ?? null,
-      inProgressRequestId: this.inProgress.get(name) ?? null,
-    };
-  }
-
-  async createOrganizationAccount(input: { name: string; email: string }) {
-    this.calls.push('createOrganizationAccount');
-    if (this.createFailure)
-      throw new AwsAccountCreationRefusedError(input.name, this.createFailure);
-    const account = { accountId: this.nextAccountId(), name: input.name, status: 'ACTIVE' };
-    this.accounts.set(input.name, account);
-    return account;
-  }
-
-  async waitForCreateAccount(requestId: string, name: string) {
-    this.calls.push(`waitForCreateAccount:${requestId}`);
-    this.inProgress.delete(name);
-    const account = { accountId: this.nextAccountId(), name, status: 'ACTIVE' };
-    this.accounts.set(name, account);
-    return account;
-  }
-
-  async assumeMemberRole(accountId: string) {
-    this.calls.push(`assumeMemberRole:${accountId}`);
-    return SESSION;
-  }
-
-  async readVcpuQuota(credentials: AwsSessionCredentials, regionId: string) {
-    this.calls.push(`readVcpuQuota:${regionId}:${credentials.accessKeyId === SESSION.accessKeyId}`);
-    return this.quota;
-  }
-
-  async ensureRunnerIamUser(_credentials: AwsSessionCredentials, policy: AwsPolicyDocument) {
-    this.calls.push('ensureRunnerIamUser');
-    if (this.iamUsers.has(JSON.stringify(policy))) return { created: [] };
-    this.iamUsers.add(JSON.stringify(policy));
-    return { created: ['iam-user:motir-fleet-runner', 'iam-policy:motir-fleet-runner-ec2'] };
-  }
-}
-
 let github: GithubWorld;
 let organization: FakeOrganization;
 let ec2: Ec2Fake;
@@ -136,69 +72,6 @@ let ec2: Ec2Fake;
 let ec2Keys: string[];
 let unregister: () => void;
 let operatorEmail: string;
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
-
-function installGithub(): void {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (input: string | URL, init?: RequestInit) => {
-      const url = new URL(String(input));
-      const method = init?.method ?? 'GET';
-      const path = url.pathname;
-      github.calls.push(`${method} ${path}`);
-      if (method === 'POST' && /^\/app\/installations\/\d+\/access_tokens$/.test(path)) {
-        return json({ token: SECRETS.installation, expires_at: '2099-01-01T00:00:00Z' }, 201);
-      }
-      if (method === 'GET' && path === '/app/installations') {
-        return json([
-          { id: 150298786, target_type: 'Organization', account: { login: 'motir-projects' } },
-          { id: 174620715, target_type: 'Enterprise', account: { slug: SLUG } },
-        ]);
-      }
-      if (method === 'GET' && path === '/app') return json({ client_id: CLIENT_ID });
-      if (method === 'GET' && /^\/orgs\/[^/]+\/installation$/.test(path)) return json({ id: 9001 });
-      const org = path.match(/^\/orgs\/([^/]+)$/);
-      if (method === 'GET' && org) {
-        return github.orgs.has(org[1]!) ? json({ login: org[1], id: 77 }) : json({}, 404);
-      }
-      if (method === 'POST' && path === '/graphql') {
-        const body = JSON.parse(String(init?.body)) as {
-          query: string;
-          variables: { input?: { login: string } };
-        };
-        if (body.query.includes('enterprise(slug')) {
-          return json({ data: { enterprise: { id: 'E_kgDOAAyC2w' } } });
-        }
-        const login = body.variables.input!.login;
-        github.orgs.add(login);
-        return json({
-          data: { createEnterpriseOrganization: { organization: { login, databaseId: 77 } } },
-        });
-      }
-      const installs = path.match(
-        new RegExp(`^/enterprises/${SLUG}/apps/organizations/([^/]+)/installations$`),
-      );
-      if (installs && method === 'GET') {
-        return json(
-          github.installed.has(installs[1]!)
-            ? [{ id: 5, client_id: CLIENT_ID, app_slug: 'motir-studio' }]
-            : [],
-        );
-      }
-      if (installs && method === 'POST') {
-        github.installed.add(installs[1]!);
-        return json({ id: 5, client_id: CLIENT_ID, app_slug: 'motir-studio' });
-      }
-      return json({ message: `unstubbed ${method} ${path}` }, 500);
-    }),
-  );
-}
 
 async function staff(role: PlatformRole | null): Promise<string> {
   const user = await createTestUser();
@@ -276,11 +149,11 @@ beforeEach(async () => {
   vi.stubEnv(`${PREFIX}_SECRET_ACCESS_KEY`, '');
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
-  github = { orgs: new Set(), installed: new Set(), calls: [] };
-  organization = new FakeOrganization();
+  github = newGithubWorld();
+  organization = new FakeOrganization(SESSION);
   ec2 = new AwsEc2Fake();
   ec2Keys = [];
-  installGithub();
+  installAddShardGithub(github, SECRETS.installation);
   unregister = registerShardProvisioningProvider(
     createAwsShardProvisioningProvider({
       management: () => organization,
