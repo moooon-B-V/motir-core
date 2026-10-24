@@ -296,3 +296,135 @@ describe('toEc2ApiError', () => {
     expect(toEc2ApiError(already)).toBe(already);
   });
 });
+
+describe('createEc2Api — the instance calls (MOTIR-9276)', () => {
+  const LAUNCH = {
+    clientToken: 'token-1',
+    imageId: 'ami-1',
+    instanceType: 'm6i.large',
+    subnetId: 'subnet-1',
+    securityGroupIds: ['sg-1'],
+    userData: 'QUJD',
+    metadataOptions: {
+      httpTokens: 'required',
+      httpPutResponseHopLimit: 1,
+      httpEndpoint: 'enabled',
+    },
+    instanceInitiatedShutdownBehavior: 'terminate',
+    blockDeviceMappings: [
+      { deviceName: '/dev/sdb', volumeSizeGb: 20, volumeType: 'gp3', deleteOnTermination: true },
+    ],
+    tags: TAGS,
+  } as const;
+
+  it('sends RunInstances with every launch field, tagging the instance and its volumes', async () => {
+    const launchTime = new Date('2026-10-24T10:00:00.000Z');
+    const { sent, factory } = stub({
+      RunInstancesCommand: {
+        Instances: [
+          {
+            InstanceId: 'i-1',
+            State: { Name: 'pending' },
+            LaunchTime: launchTime,
+            StateTransitionReason: '',
+            Placement: { AvailabilityZone: 'us-east-1a' },
+            Tags: SDK_TAGS,
+          },
+        ],
+      },
+    });
+    const instance = await createEc2Api(CONFIG, factory).runInstances(LAUNCH);
+
+    expect(instance).toEqual({
+      instanceId: 'i-1',
+      state: 'pending',
+      launchTime,
+      stateTransitionReason: null,
+      availabilityZone: 'us-east-1a',
+      tags: TAGS,
+    });
+    expect(sent[0]).toEqual({
+      command: 'RunInstancesCommand',
+      input: {
+        ClientToken: 'token-1',
+        ImageId: 'ami-1',
+        InstanceType: 'm6i.large',
+        MinCount: 1,
+        MaxCount: 1,
+        SubnetId: 'subnet-1',
+        SecurityGroupIds: ['sg-1'],
+        UserData: 'QUJD',
+        MetadataOptions: {
+          HttpTokens: 'required',
+          HttpPutResponseHopLimit: 1,
+          HttpEndpoint: 'enabled',
+        },
+        InstanceInitiatedShutdownBehavior: 'terminate',
+        BlockDeviceMappings: [
+          {
+            DeviceName: '/dev/sdb',
+            Ebs: { VolumeSize: 20, VolumeType: 'gp3', DeleteOnTermination: true },
+          },
+        ],
+        TagSpecifications: [
+          { ResourceType: 'instance', Tags: SDK_TAGS },
+          { ResourceType: 'volume', Tags: SDK_TAGS },
+        ],
+      },
+    });
+    expect(sent[0]!.input).not.toHaveProperty('IamInstanceProfile');
+    expect(sent[0]!.input).not.toHaveProperty('KeyName');
+  });
+
+  it('omits BlockDeviceMappings when there is no Docker disk, and refuses an empty answer', async () => {
+    const { sent, factory } = stub({ RunInstancesCommand: { Instances: [] } });
+    await expect(
+      createEc2Api(CONFIG, factory).runInstances({ ...LAUNCH, blockDeviceMappings: [] }),
+    ).rejects.toMatchObject({ code: 'MissingField.Instances' });
+    expect(sent[0]!.input).not.toHaveProperty('BlockDeviceMappings');
+  });
+
+  it('describes instances across reservations, passing ids, filters and paging through', async () => {
+    const { sent, factory } = stub({
+      DescribeInstancesCommand: {
+        Reservations: [
+          { Instances: [{ InstanceId: 'i-1', State: { Name: 'running' } }] },
+          { Instances: [{ InstanceId: 'i-2' }] },
+          {},
+        ],
+        NextToken: 'page-2',
+      },
+    });
+    const ec2 = createEc2Api(CONFIG, factory);
+
+    const page = await ec2.describeInstances({
+      filters: [{ name: 'instance-state-name', values: ['running'] }],
+      maxResults: 5,
+      nextToken: 'page-1',
+    });
+    await ec2.describeInstances({ instanceIds: ['i-1'] });
+
+    expect(page.nextToken).toBe('page-2');
+    expect(page.instances.map((i) => [i.instanceId, i.state, i.launchTime])).toEqual([
+      ['i-1', 'running', null],
+      ['i-2', '', null],
+    ]);
+    expect(sent[0]!.input).toEqual({
+      Filters: [{ Name: 'instance-state-name', Values: ['running'] }],
+      MaxResults: 5,
+      NextToken: 'page-1',
+    });
+    expect(sent[1]!.input).toEqual({ Filters: undefined, InstanceIds: ['i-1'] });
+  });
+
+  it('reads a last page as nextToken null, and terminates by id', async () => {
+    const { sent, factory } = stub({ DescribeInstancesCommand: {} });
+    const ec2 = createEc2Api(CONFIG, factory);
+    expect(await ec2.describeInstances({})).toEqual({ instances: [], nextToken: null });
+    await ec2.terminateInstances(['i-1']);
+    expect(sent[1]).toEqual({
+      command: 'TerminateInstancesCommand',
+      input: { InstanceIds: ['i-1'] },
+    });
+  });
+});

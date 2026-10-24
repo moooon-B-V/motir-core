@@ -8,6 +8,7 @@ import {
   CreateSubnetCommand,
   CreateVpcCommand,
   DescribeAvailabilityZonesCommand,
+  DescribeInstancesCommand,
   DescribeInternetGatewaysCommand,
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
@@ -15,7 +16,10 @@ import {
   DescribeVpcsCommand,
   EC2Client,
   ModifySubnetAttributeCommand,
+  RunInstancesCommand,
+  TerminateInstancesCommand,
   type Filter,
+  type Instance,
   type ResourceType,
   type Tag,
 } from '@aws-sdk/client-ec2';
@@ -119,6 +123,57 @@ export interface Ec2SecurityGroup {
   readonly tags: readonly Ec2Tag[];
 }
 
+/** One EC2 instance, as a describe or a launch reports it. */
+export interface Ec2Instance {
+  readonly instanceId: string;
+  /** `pending` · `running` · `shutting-down` · `terminated` · `stopping` · `stopped`. */
+  readonly state: string;
+  readonly launchTime: Date | null;
+  /** AWS's free-text reason for the last transition, e.g.
+   *  `User initiated (2026-10-22 12:00:00 GMT)`; null when it gives none. */
+  readonly stateTransitionReason: string | null;
+  readonly availabilityZone: string | null;
+  readonly tags: readonly Ec2Tag[];
+}
+
+/** One EBS mapping on a launch — the runner's Docker data disk. */
+export interface Ec2BlockDeviceMapping {
+  readonly deviceName: string;
+  readonly volumeSizeGb: number;
+  readonly volumeType: 'gp3';
+  readonly deleteOnTermination: boolean;
+}
+
+/** A `RunInstances` request for ONE instance, in plain shapes. Every field the
+ *  fleet sets is named, so the fake can record and a test can read it. */
+export interface Ec2RunInstanceInput {
+  /** Idempotency key: the same token answers the same instance. */
+  readonly clientToken: string;
+  readonly imageId: string;
+  readonly instanceType: string;
+  readonly subnetId: string;
+  readonly securityGroupIds: readonly string[];
+  /** Already base64, as `RunInstances` takes it. */
+  readonly userData: string;
+  readonly metadataOptions: {
+    readonly httpTokens: 'required';
+    readonly httpPutResponseHopLimit: number;
+    readonly httpEndpoint: 'enabled';
+  };
+  readonly instanceInitiatedShutdownBehavior: 'terminate' | 'stop';
+  readonly blockDeviceMappings: readonly Ec2BlockDeviceMapping[];
+  /** Written on the instance AND its volumes in the same call. */
+  readonly tags: readonly Ec2Tag[];
+}
+
+export interface Ec2DescribeInstancesInput {
+  readonly filters?: readonly Ec2Filter[];
+  readonly instanceIds?: readonly string[];
+  /** Page size (EC2 takes 5–1000); not allowed together with `instanceIds`. */
+  readonly maxResults?: number;
+  readonly nextToken?: string;
+}
+
 /**
  * The EC2 calls the AWS fleet makes, in adapter-level shapes. Every method throws
  * {@link Ec2ApiError} on a refusal. Grown per card: the network calls here, the
@@ -172,6 +227,16 @@ export interface Ec2Api {
     vpcId: string;
     tags: readonly Ec2Tag[];
   }): Promise<{ groupId: string }>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_RunInstances.html */
+  runInstances(input: Ec2RunInstanceInput): Promise<Ec2Instance>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeInstances.html —
+   *  an unknown id is `InvalidInstanceID.NotFound`, a malformed one
+   *  `InvalidInstanceID.Malformed`, both thrown. */
+  describeInstances(
+    input: Ec2DescribeInstancesInput,
+  ): Promise<{ instances: Ec2Instance[]; nextToken: string | null }>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_TerminateInstances.html */
+  terminateInstances(instanceIds: readonly string[]): Promise<void>;
 }
 
 /** The slice of `EC2Client` the factory uses — what a test stubs. */
@@ -250,12 +315,93 @@ export function createEc2Api(
       throw toEc2ApiError(err);
     }
   }
-  return networkCalls(send);
+  return { ...networkCalls(send), ...instanceCalls(send) };
 }
 
 type Send = <T>(command: unknown) => Promise<T>;
 
-function networkCalls(send: Send): Ec2Api {
+type NetworkCalls = Omit<Ec2Api, 'runInstances' | 'describeInstances' | 'terminateInstances'>;
+type InstanceCalls = Pick<Ec2Api, 'runInstances' | 'describeInstances' | 'terminateInstances'>;
+
+function toInstance(i: Instance): Ec2Instance {
+  return {
+    instanceId: required(i.InstanceId, 'InstanceId'),
+    state: i.State?.Name ?? '',
+    launchTime: i.LaunchTime ?? null,
+    stateTransitionReason: i.StateTransitionReason || null,
+    availabilityZone: i.Placement?.AvailabilityZone ?? null,
+    tags: tagsOf(i.Tags),
+  };
+}
+
+function instanceCalls(send: Send): InstanceCalls {
+  return {
+    async runInstances(input) {
+      // Parameter names per the RunInstances reference and the SDK's
+      // `RunInstancesRequest`; `MetadataOptions` per `InstanceMetadataOptionsRequest`,
+      // `BlockDeviceMappings[].Ebs` per `EbsBlockDevice`.
+      const out = await send<{ Instances?: Instance[] }>(
+        new RunInstancesCommand({
+          ClientToken: input.clientToken,
+          ImageId: input.imageId,
+          InstanceType: input.instanceType as never,
+          MinCount: 1,
+          MaxCount: 1,
+          SubnetId: input.subnetId,
+          SecurityGroupIds: [...input.securityGroupIds],
+          UserData: input.userData,
+          MetadataOptions: {
+            HttpTokens: input.metadataOptions.httpTokens,
+            HttpPutResponseHopLimit: input.metadataOptions.httpPutResponseHopLimit,
+            HttpEndpoint: input.metadataOptions.httpEndpoint,
+          },
+          InstanceInitiatedShutdownBehavior: input.instanceInitiatedShutdownBehavior,
+          ...(input.blockDeviceMappings.length > 0
+            ? {
+                BlockDeviceMappings: input.blockDeviceMappings.map((m) => ({
+                  DeviceName: m.deviceName,
+                  Ebs: {
+                    VolumeSize: m.volumeSizeGb,
+                    VolumeType: m.volumeType,
+                    DeleteOnTermination: m.deleteOnTermination,
+                  },
+                })),
+              }
+            : {}),
+          TagSpecifications: [
+            ...sdkTagSpecs('instance', input.tags),
+            ...sdkTagSpecs('volume', input.tags),
+          ],
+        }),
+      );
+      const instance = out.Instances?.[0];
+      if (!instance) throw new Ec2ApiError('MissingField.Instances', null, false);
+      return toInstance(instance);
+    },
+    async describeInstances({ filters = [], instanceIds, maxResults, nextToken }) {
+      const out = await send<{
+        Reservations?: { Instances?: Instance[] }[];
+        NextToken?: string;
+      }>(
+        new DescribeInstancesCommand({
+          Filters: sdkFilters(filters),
+          ...(instanceIds ? { InstanceIds: [...instanceIds] } : {}),
+          ...(maxResults ? { MaxResults: maxResults } : {}),
+          ...(nextToken ? { NextToken: nextToken } : {}),
+        }),
+      );
+      return {
+        instances: (out.Reservations ?? []).flatMap((r) => (r.Instances ?? []).map(toInstance)),
+        nextToken: out.NextToken || null,
+      };
+    },
+    async terminateInstances(instanceIds) {
+      await send(new TerminateInstancesCommand({ InstanceIds: [...instanceIds] }));
+    },
+  };
+}
+
+function networkCalls(send: Send): NetworkCalls {
   return {
     async describeAvailabilityZones(filters) {
       const out = await send<{ AvailabilityZones?: { ZoneName?: string; State?: string }[] }>(

@@ -2,9 +2,12 @@ import {
   Ec2ApiError,
   type Ec2Api,
   type Ec2AvailabilityZone,
+  type Ec2DescribeInstancesInput,
   type Ec2Filter,
+  type Ec2Instance,
   type Ec2InternetGateway,
   type Ec2RouteTable,
+  type Ec2RunInstanceInput,
   type Ec2SecurityGroup,
   type Ec2Subnet,
   type Ec2Tag,
@@ -18,6 +21,12 @@ import {
 // resource was FOUND by its tag, not handed back from a variable.
 //
 // Every call is recorded in `calls`, which is how a test counts creates.
+//
+// INSTANCES (MOTIR-9276) behave as EC2's do where the adapter depends on it:
+// `RunInstances` answers a repeated `ClientToken` with the instance it already
+// made; a launched instance reads `running` (or stays `pending`); a terminated one
+// stays describable as `terminated` until it AGES OUT, after which its id is
+// `InvalidInstanceID.NotFound`; and DescribeInstances pages by `maxResults`.
 
 export interface FakeCall {
   readonly method: string;
@@ -55,12 +64,131 @@ export class AwsEc2Fake implements Ec2Api {
   readonly routeTables = new Map<string, Ec2RouteTable & Tagged>();
   readonly subnets = new Map<string, Ec2Subnet & Tagged>();
   readonly securityGroups = new Map<string, Ec2SecurityGroup & Tagged>();
+  /** Every instance ever launched, terminated ones included, by id. */
+  readonly instances = new Map<string, Ec2Instance & { request: Ec2RunInstanceInput }>();
+  /** The instance each `ClientToken` made. */
+  private readonly byToken = new Map<string, string>();
+  /** The next launch stays `pending`. */
+  leaveNextPending = false;
+  /** The next RunInstances creates its instance and THEN fails — an ambiguous
+   *  timeout. */
+  private failNextAfterCreate: string | null = null;
   private seq = 0;
   private readonly failures = new Map<string, string>();
 
   /** The next call of `method` throws an `Ec2ApiError` with `code`. */
   failNext(method: keyof Ec2Api, code = 'InternalError', httpStatus = 500): void {
     this.failures.set(method, `${code}|${httpStatus}`);
+  }
+
+  /** Forget everything: resources, instances, calls and arranged failures. */
+  clear(): void {
+    this.calls.length = 0;
+    for (const map of [
+      this.vpcs,
+      this.internetGateways,
+      this.routeTables,
+      this.subnets,
+      this.securityGroups,
+      this.instances,
+      this.byToken,
+    ]) {
+      map.clear();
+    }
+    this.failures.clear();
+    this.leaveNextPending = false;
+    this.failNextAfterCreate = null;
+    this.seq = 0;
+  }
+
+  /**
+   * Put a shard's network in place directly, with FIXED ids — what
+   * `ensureAwsShardNetwork` leaves, without its calls. One subnet per zone and
+   * one no-inbound group, all tagged `motir-shard=<shardTag>`.
+   */
+  seedShardNetwork(shardTag: string, zones: readonly string[] = ['us-east-1a', 'us-east-1b']) {
+    const tags = [{ key: 'motir-shard', value: shardTag }];
+    const vpcId = `vpc-${shardTag}`;
+    this.vpcs.set(vpcId, { vpcId, cidrBlock: '10.40.0.0/16', tags });
+    zones.forEach((zone, i) => {
+      const subnetId = `subnet-${shardTag}-${zone}`;
+      this.subnets.set(subnetId, {
+        subnetId,
+        vpcId,
+        availabilityZone: zone,
+        cidrBlock: `10.40.${i * 16}.0/20`,
+        mapPublicIpOnLaunch: true,
+        tags,
+      });
+    });
+    const groupId = `sg-${shardTag}`;
+    this.securityGroups.set(groupId, {
+      groupId,
+      groupName: `motir-runner-${shardTag}`,
+      vpcId,
+      ingressRuleCount: 0,
+      tags,
+    });
+    return { vpcId, groupId, subnetIds: zones.map((z) => `subnet-${shardTag}-${z}`) };
+  }
+
+  /** The next RunInstances makes its instance, then answers `code` as a 5xx. */
+  failNextRunAfterCreate(code = 'InternalError'): void {
+    this.failNextAfterCreate = code;
+  }
+
+  /** The instance's VM powers off with `terminate` behaviour — a finished job. */
+  endJob(instanceId: string, at = new Date()): void {
+    this.setState(instanceId, 'terminated', userInitiated(at));
+  }
+
+  /** Move an instance to `state`, as a person in the console or AWS would. */
+  setState(instanceId: string, state: string, reason: string | null = null): void {
+    const instance = this.instance(instanceId);
+    this.instances.set(instanceId, { ...instance, state, stateTransitionReason: reason });
+  }
+
+  /** The instance was launched at `launchTime`. */
+  backdate(instanceId: string, launchTime: Date): void {
+    this.instances.set(instanceId, { ...this.instance(instanceId), launchTime });
+  }
+
+  /** A terminated instance drops out of DescribeInstances, as EC2's do after an hour. */
+  ageOut(instanceId: string): void {
+    this.instances.delete(instanceId);
+  }
+
+  /** Put an instance in the fake directly — another shard's, or a hand-made one. */
+  plantInstance(instance: Partial<Ec2Instance> & { tags: readonly Ec2Tag[] }): string {
+    const instanceId = instance.instanceId ?? this.nextId('i');
+    this.instances.set(instanceId, {
+      instanceId,
+      state: 'running',
+      launchTime: new Date(),
+      stateTransitionReason: null,
+      availabilityZone: 'us-east-1a',
+      ...instance,
+      request: {} as Ec2RunInstanceInput,
+    });
+    return instanceId;
+  }
+
+  /** Instances that still bill — every one not terminated. */
+  liveInstanceIds(): string[] {
+    return [...this.instances.values()]
+      .filter((i) => i.state !== 'terminated')
+      .map((i) => i.instanceId);
+  }
+
+  /** The RunInstances request that made `instanceId`. */
+  requestOf(instanceId: string): Ec2RunInstanceInput {
+    return this.instance(instanceId).request;
+  }
+
+  private instance(instanceId: string) {
+    const instance = this.instances.get(instanceId);
+    if (!instance) throw new Error(`awsEc2Fake: no instance ${instanceId}`);
+    return instance;
   }
 
   /** How many recorded calls of `method` there were. */
@@ -70,7 +198,9 @@ export class AwsEc2Fake implements Ec2Api {
 
   /** Every recorded call whose name starts with a mutating verb. */
   mutations(): FakeCall[] {
-    return this.calls.filter((c) => /^(create|attach|associate|modify|authorize)/.test(c.method));
+    return this.calls.filter((c) =>
+      /^(create|attach|associate|modify|authorize|run|terminate)/.test(c.method),
+    );
   }
 
   protected record(method: string, input: unknown): void {
@@ -240,4 +370,86 @@ export class AwsEc2Fake implements Ec2Api {
     });
     return { groupId };
   }
+
+  async runInstances(input: Ec2RunInstanceInput) {
+    this.record('runInstances', input);
+    const existing = this.byToken.get(input.clientToken);
+    if (existing) return this.view(existing);
+    if (!this.subnets.has(input.subnetId)) {
+      throw new Ec2ApiError('InvalidSubnetID.NotFound', 400, false);
+    }
+    const instanceId = this.nextId('i');
+    const subnet = this.subnets.get(input.subnetId)!;
+    this.instances.set(instanceId, {
+      instanceId,
+      state: this.leaveNextPending ? 'pending' : 'running',
+      launchTime: new Date(),
+      stateTransitionReason: null,
+      availabilityZone: subnet.availabilityZone,
+      tags: [...input.tags],
+      request: input,
+    });
+    this.leaveNextPending = false;
+    this.byToken.set(input.clientToken, instanceId);
+    if (this.failNextAfterCreate) {
+      const code = this.failNextAfterCreate;
+      this.failNextAfterCreate = null;
+      throw new Ec2ApiError(code, 500, true);
+    }
+    // EC2's own answer to a launch: `pending`, whatever it is a moment later.
+    return { ...this.view(instanceId), state: 'pending' };
+  }
+
+  async describeInstances(input: Ec2DescribeInstancesInput) {
+    this.record('describeInstances', input);
+    if (input.instanceIds) {
+      if (input.maxResults) throw new Ec2ApiError('InvalidParameterCombination', 400, false);
+      for (const id of input.instanceIds) {
+        if (!/^i-[0-9a-f]+$/.test(id))
+          throw new Ec2ApiError('InvalidInstanceID.Malformed', 400, false);
+        if (!this.instances.has(id))
+          throw new Ec2ApiError('InvalidInstanceID.NotFound', 400, false);
+      }
+    }
+    const matching = [...this.instances.values()]
+      .filter((i) => !input.instanceIds || input.instanceIds.includes(i.instanceId))
+      .filter((i) =>
+        matches(input.filters ?? [], i.tags, {
+          'instance-state-name': [i.state],
+          'instance-id': [i.instanceId],
+        }),
+      )
+      .map((i) => this.view(i.instanceId));
+    const start = input.nextToken ? Number(input.nextToken) : 0;
+    const size = input.maxResults ?? matching.length;
+    const end = start + size;
+    return {
+      instances: matching.slice(start, end),
+      nextToken: end < matching.length ? String(end) : null,
+    };
+  }
+
+  async terminateInstances(instanceIds: readonly string[]) {
+    this.record('terminateInstances', instanceIds);
+    for (const id of instanceIds) {
+      if (!this.instances.has(id)) throw new Ec2ApiError('InvalidInstanceID.NotFound', 400, false);
+    }
+    for (const id of instanceIds) {
+      const instance = this.instances.get(id)!;
+      if (instance.state !== 'terminated') {
+        this.setState(id, 'terminated', userInitiated(new Date()));
+      }
+    }
+  }
+
+  /** What DescribeInstances reports — the instance without its recorded request. */
+  private view(instanceId: string): Ec2Instance {
+    const { request: _request, ...instance } = this.instance(instanceId);
+    return { ...instance, tags: [...instance.tags] };
+  }
+}
+
+/** EC2's `StateTransitionReason` for a user-initiated transition. */
+export function userInitiated(at: Date): string {
+  return `User initiated (${at.toISOString().slice(0, 19).replace('T', ' ')} GMT)`;
 }

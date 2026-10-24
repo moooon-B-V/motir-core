@@ -49,6 +49,8 @@ export interface ProviderLocation {
   flyOrg?: string | null;
   flyApp?: string | null;
   flyRegion?: string | null;
+  awsAccountId?: string | null;
+  awsRegion?: string | null;
 }
 
 export interface ProviderAccountResult {
