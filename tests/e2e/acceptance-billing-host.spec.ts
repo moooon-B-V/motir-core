@@ -538,8 +538,10 @@ test.describe('Host, a regular plan of 300,000 credits', () => {
         .getByRole('button', { name: format(copy.plans.ctaChoose, { plan: LARGEST.name }) })
         .click();
       const req = await sent;
+      // The Calculator buys on the plans view's cadence, which opens on annual
+      // after the reload above.
       expect(req.postDataJSON()).toEqual({
-        priceLookupKey: LARGEST.prices!.monthly.priceLookupKey,
+        priceLookupKey: LARGEST.prices!.annual.priceLookupKey,
       });
       expect((await req.response())?.status()).toBe(200);
       await page.waitForURL(E2E_CHECKOUT_URL);
