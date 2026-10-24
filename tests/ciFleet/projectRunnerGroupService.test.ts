@@ -735,3 +735,66 @@ describe('a deployment that does not provision repositories has no group at all'
     expect(await readProject(fx.projectId)).toMatchObject({ runnerGroupSyncPending: false });
   });
 });
+
+describe('a project hosted in its tenant’s assigned GitHub org (MOTIR-8966)', () => {
+  const HOST_ORG = 'motir-host-a';
+  const hostedOrg = { org: HOST_ORG, installationId: '7788', role: 'provisioning' as const };
+  let hostGroups: RunnerGroupFake;
+
+  beforeEach(() => {
+    hostGroups = createRunnerGroupFake(HOST_ORG);
+    const fallbackGitHub = globalThis.fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit): Promise<Response> => {
+        const method = init?.method ?? 'GET';
+        const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
+        const group = await hostGroups.handle(String(url), method, body);
+        if (group) {
+          calls.push({ url: String(url), method, body, authorization: '' });
+          return group;
+        }
+        return fallbackGitHub(url, init);
+      }),
+    );
+  });
+
+  it('ensures the group EMPTY in the assigned org before any repository, and none in the fallback org', async () => {
+    const fx = await makeWorkItemFixture();
+
+    const outcome = await projectRunnerGroupService.syncForProject(
+      { projectId: fx.projectId, workspaceId: fx.workspaceId },
+      { hostedOrg },
+    );
+
+    expect(outcome.outcome).toBe('not_needed');
+    expect(outcome.connectedOrgs).toEqual([
+      expect.objectContaining({ org: HOST_ORG, outcome: 'synced', repositoryIds: [] }),
+    ]);
+    const group = hostGroups.onlyGroup();
+    expect(group).toMatchObject({ name: runnerGroupNameFor(fx.projectId), repositoryIds: [] });
+    const stored = await adminDb.projectRunnerGroup.findFirstOrThrow({
+      where: { projectId: fx.projectId },
+    });
+    expect(stored).toMatchObject({
+      org: HOST_ORG,
+      installationId: '7788',
+      runnerGroupId: group.id,
+    });
+    expect(runnerGroups.groups.size).toBe(0);
+    expect((await readProject(fx.projectId)).runnerGroupId).toBeNull();
+  });
+
+  it('a second sync ADOPTS the group by name and keeps it while the org holds nothing yet', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = { projectId: fx.projectId, workspaceId: fx.workspaceId };
+    await projectRunnerGroupService.syncForProject(target, { hostedOrg });
+
+    await projectRunnerGroupService.syncForProject(target, { hostedOrg });
+
+    expect(hostGroups.groups.size).toBe(1);
+    expect(
+      await adminDb.projectRunnerGroup.count({ where: { projectId: fx.projectId, org: HOST_ORG } }),
+    ).toBe(1);
+  });
+});

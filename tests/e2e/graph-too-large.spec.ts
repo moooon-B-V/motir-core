@@ -1,6 +1,7 @@
 // E2E: a repository whose graph is too large, as a person meets it on /code
-// (Story MOTIR-7092 · MOTIR-7134). The regression twin of
-// `acceptance-graph-too-large.spec.ts`, which records the paced receipt.
+// (Story MOTIR-7092 · MOTIR-7134). Its paced receipt,
+// `acceptance-graph-too-large.spec.ts`, was retired by MOTIR-9411: the receipt
+// is recorded, and this file asserts every state it showed.
 //
 // The story: motir-ai refuses a graph over the supported 1 GiB at the upload
 // grant, motir-core stops retrying and writes the size and the limit onto the

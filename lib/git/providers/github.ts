@@ -6,7 +6,7 @@ import {
   mintInstallationToken,
 } from '@/lib/github/appAuth';
 import { githubAppRoleForRepo } from '@/lib/github/appRoleForRepo';
-import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
 import {
   CHANGED_FILES_MAX,
   CHANGED_FILES_TIMEOUT_MS,
@@ -249,7 +249,7 @@ async function githubMergeContext(input: {
   owner: string;
   name: string;
 }): Promise<{ repoUrl: string; headers: Record<string, string> }> {
-  const role = githubAppRoleForRepo({ owner: input.owner }, provisioningOrgLogin());
+  const role = githubAppRoleForRepo({ owner: input.owner }, await motirOwnedOrgLogins());
   let token: string;
   try {
     ({ token } = await mintInstallationToken(input.installationId, role));
@@ -504,12 +504,15 @@ function shaOf(value: unknown): string | null {
 export const githubProvider: GitProvider = {
   id: 'github',
 
-  mintInstallationToken(
+  async mintInstallationToken(
     installationId: string,
     forRepo?: { owner: string },
   ): Promise<InstallationToken> {
     return forRepo
-      ? mintInstallationToken(installationId, githubAppRoleForRepo(forRepo, provisioningOrgLogin()))
+      ? mintInstallationToken(
+          installationId,
+          githubAppRoleForRepo(forRepo, await motirOwnedOrgLogins()),
+        )
       : mintInstallationToken(installationId);
   },
 
@@ -544,7 +547,7 @@ export const githubProvider: GitProvider = {
     // The App is chosen by the repository's PROVENANCE (MOTIR-5861): a hosted
     // repository is installed on the provisioning App ONLY, so a mint through the
     // user-facing default cannot reach it and the indexer never gets a tarball.
-    const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
+    const role = githubAppRoleForRepo({ owner }, await motirOwnedOrgLogins());
     const { token } = await mintInstallationToken(installationId, role);
     // ⚠️ `redirect: 'manual'` IS THE WHOLE METHOD. The sibling above lets `fetch`
     // follow the 302 and then buffers what comes back; this one stops at the
@@ -825,7 +828,7 @@ export const githubProvider: GitProvider = {
   ): Promise<CommitComparison> {
     // Provenance, as above (MOTIR-5861). A hosted repository's comparison would
     // throw GithubAppNotConfiguredError, which the drift count reads as no answer.
-    const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
+    const role = githubAppRoleForRepo({ owner }, await motirOwnedOrgLogins());
     const { token } = await mintInstallationToken(installationId, role);
     const url =
       `${GITHUB_API}/repos/${owner}/${name}/compare/` +
@@ -894,7 +897,7 @@ export const githubProvider: GitProvider = {
     // Provenance, as every other read on this seam (MOTIR-5681 / MOTIR-5861).
     let token: string;
     try {
-      const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
+      const role = githubAppRoleForRepo({ owner }, await motirOwnedOrgLogins());
       ({ token } = await mintInstallationToken(installationId, role));
     } catch (err) {
       return githubMintFailure(err, refs);
@@ -991,7 +994,7 @@ export const githubProvider: GitProvider = {
     // ⚠️ THE APP IS CHOSEN BY PROVENANCE, as the merge's is (MOTIR-5681 found this read
     // minting through the user-facing App for a HOSTED repository, which that App is not
     // installed on — so a decision document there could never be shown).
-    const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
+    const role = githubAppRoleForRepo({ owner }, await motirOwnedOrgLogins());
     const { token } = await mintInstallationToken(installationId, role);
     const url =
       `${GITHUB_API}/repos/${owner}/${name}/contents/` +
@@ -1243,7 +1246,7 @@ export const githubProvider: GitProvider = {
     // lists `GET /repos/{owner}/{repo}/collaborators/{username}/permission` under
     // *Repository permissions for "Metadata"* → read, available to an installation
     // access token.
-    const role = githubAppRoleForRepo({ owner: input.owner }, provisioningOrgLogin());
+    const role = githubAppRoleForRepo({ owner: input.owner }, await motirOwnedOrgLogins());
     const { token } = await mintInstallationToken(input.installationId, role);
 
     const url =
@@ -1686,7 +1689,7 @@ export const githubProvider: GitProvider = {
     // Provenance, as above (MOTIR-5861). A hosted repository is exactly the one
     // whose Actions minutes Motir is billed for, so metering it is the case that
     // matters most and the case the user-facing default cannot reach.
-    const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
+    const role = githubAppRoleForRepo({ owner }, await motirOwnedOrgLogins());
     const { token } = await mintInstallationToken(installationId, role);
     // The ATTEMPT-scoped jobs endpoint, so a re-run reads only its OWN jobs —
     // `/runs/{id}/jobs` would return every attempt's jobs and double-count.

@@ -1,5 +1,5 @@
 import type { GithubAppRole } from '@/lib/github/appAuth';
-import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
+import { isMotirHostedOwner, type HostOwners } from '@/lib/git/hostOwnership';
 
 // WHICH GITHUB APP MAY ACT ON THIS REPOSITORY (Story MOTIR-4882 · MOTIR-5511;
 // `docs/decisions/approval-gates.md` §4 and its second amendment, decision 7).
@@ -17,9 +17,10 @@ import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 // module COMPOSES it — exactly as `lib/projects/prMergeModeDefault.ts` does — and
 // never re-spells it.
 //
-// ⚠️ IT TAKES `hostOwner`, IT DOES NOT READ IT. `provisioningOrgLogin()` is a SERVER
-// value; the caller resolves it once per call path and threads it down, so this
-// function stays pure and callable from anywhere.
+// ⚠️ IT TAKES THE HOST OWNERS, IT DOES NOT READ THEM. `motirOwnedOrgLogins()` is a
+// SERVER read (the fallback org plus every fleet account's org, MOTIR-8974); the
+// caller resolves it once per call path and threads it down, so this function stays
+// pure and callable from anywhere.
 //
 // The four existing hard-coded `'provisioning'` call sites (`actionsPermissions.ts`,
 // `repoProvisioning.ts` ×2, `repoTransfer.ts`) do NOT route through this: they act on
@@ -30,13 +31,13 @@ import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
  * The App a credential for this repository must be minted from.
  *
  * `'provisioning'` when the repository sits under the organisation Motir provisions
- * into; `'user-facing'` for every other owner — including when `hostOwner` is `null`,
+ * into; `'user-facing'` for every other owner — including when `hostOwners` is `null` or empty,
  * because a deployment that cannot provision hosts nothing (`isMotirHostedOwner`'s
  * own null arm).
  */
 export function githubAppRoleForRepo(
   repo: { owner: string },
-  hostOwner: string | null,
+  hostOwners: HostOwners,
 ): GithubAppRole {
-  return isMotirHostedOwner(repo.owner, hostOwner) ? 'provisioning' : 'user-facing';
+  return isMotirHostedOwner(repo.owner, hostOwners) ? 'provisioning' : 'user-facing';
 }

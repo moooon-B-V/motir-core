@@ -1,9 +1,20 @@
 import {
   OrchestratorApiError,
+  type ContainerOrchestrator,
   type FleetInventory,
   type InventoryMachine,
 } from '@motir/orchestrator';
-import { getFleetInventory, getOrchestrator, isOrchestratorConfigured } from '@/lib/orchestrator';
+import {
+  getFleetInventory,
+  getOrchestrator,
+  inventoryForShard,
+  isOrchestratorConfigured,
+  legacyFleetLocationKey,
+  shardLocationKey,
+} from '@/lib/orchestrator';
+import type { FleetShardDTO } from '@/lib/dto/fleetShard';
+import { fleetShardService } from '@/lib/services/fleetShardService';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { withSystemContext } from '@/lib/workspaces/context';
 import {
   ciRunnerProvisioningIntentRepository as intents,
@@ -166,11 +177,65 @@ export type FleetAttributionResult =
  * created is never taken from under it. Never throws — the adapter's sweep
  * logs and counts, and an orchestrator without one has nothing to sweep.
  */
-async function sweepOrphanedVolumes(now: () => Date): Promise<number> {
-  if (!isOrchestratorConfigured()) return 0;
-  const orchestrator = getOrchestrator();
-  if (!orchestrator.sweepOrphanedVolumes) return 0;
-  return orchestrator.sweepOrphanedVolumes(new Date(now().getTime() - FLEET_ATTRIBUTION_GRACE_MS));
+async function sweepOrphanedVolumes(
+  now: () => Date,
+  accounts: readonly FleetShardDTO[],
+): Promise<number> {
+  const olderThan = new Date(now().getTime() - FLEET_ATTRIBUTION_GRACE_MS);
+  // ONCE PER PLACE, not once per route (MOTIR-8964): an account naming the
+  // process-wide app is the same volumes, swept once.
+  const places = new Map<string, () => ContainerOrchestrator>();
+  if (isOrchestratorConfigured()) places.set(legacyFleetLocationKey(), getOrchestrator);
+  for (const account of accounts) {
+    const key = shardLocationKey(account);
+    if (!places.has(key)) {
+      places.set(key, () => fleetShardOrchestratorService.forShardRow(account));
+    }
+  }
+  let destroyed = 0;
+  for (const [place, resolve] of places) {
+    try {
+      const orchestrator = resolve();
+      if (orchestrator.sweepOrphanedVolumes) {
+        destroyed += await orchestrator.sweepOrphanedVolumes(olderThan);
+      }
+    } catch (err) {
+      console.error('[fleetAttribution] could not sweep volumes in a fleet account', {
+        place,
+        detail: detailOf(err),
+      });
+    }
+  }
+  return destroyed;
+}
+
+/** One fleet account's own machine listing — for a provider the Fly organisation
+ *  walk does not cover (MOTIR-8964). */
+export interface AccountInventory {
+  shardId: string;
+  name: string;
+  inventory: FleetInventory;
+}
+
+/** Every account that can still have machines billing (all but `provisioning`). */
+async function liveAccounts(): Promise<FleetShardDTO[]> {
+  const accounts = await fleetShardService.listShards();
+  return accounts.filter((account) => account.state !== 'provisioning');
+}
+
+/** The listings of the accounts whose provider the Fly walk does not cover. An
+ *  account whose adapter cannot be built is alerted and skipped. */
+function accountInventories(accounts: readonly FleetShardDTO[]): AccountInventory[] {
+  const out: AccountInventory[] = [];
+  for (const account of accounts) {
+    try {
+      const inventory = inventoryForShard(account);
+      if (inventory) out.push({ shardId: account.id, name: account.name, inventory });
+    } catch (err) {
+      alertFleetAttribution(new FleetInventoryUnavailableError(account.name, detailOf(err)));
+    }
+  }
+  return out;
 }
 
 function detailOf(err: unknown): string {
@@ -205,21 +270,30 @@ export const fleetAttributionService = {
       inventory?: FleetInventory | null;
       /** The pause before a transient listing failure is asked again. */
       listingRetryDelayMs?: number;
+      /** The fleet accounts to walk after the organisation — read from the
+       *  account rows when absent (MOTIR-8964). */
+      accounts?: readonly FleetShardDTO[];
+      /** Their listings — derived from `accounts` when absent. */
+      accountInventories?: readonly AccountInventory[];
     } = {},
   ): Promise<FleetAttributionResult> {
     const inventory = options.inventory === undefined ? getFleetInventory() : options.inventory;
-    if (!inventory) return { outcome: 'disabled' };
     const now = options.now ?? (() => new Date());
     const retryDelayMs = options.listingRetryDelayMs ?? FLEET_LISTING_RETRY_DELAY_MS;
+    const accounts = options.accounts ?? (await liveAccounts());
+    const perAccount = options.accountInventories ?? accountInventories(accounts);
+    if (!inventory && perAccount.length === 0) return { outcome: 'disabled' };
 
-    let apps: string[];
-    try {
-      apps = await listWithOneRetry(() => inventory.listApps(), retryDelayMs);
-    } catch (err) {
-      alertFleetAttribution(
-        new FleetInventoryUnavailableError('the fleet organization', detailOf(err)),
-      );
-      return { outcome: 'inventory_unavailable', detail: detailOf(err) };
+    let apps: string[] = [];
+    if (inventory) {
+      try {
+        apps = await listWithOneRetry(() => inventory.listApps(), retryDelayMs);
+      } catch (err) {
+        alertFleetAttribution(
+          new FleetInventoryUnavailableError('the fleet organization', detailOf(err)),
+        );
+        return { outcome: 'inventory_unavailable', detail: detailOf(err) };
+      }
     }
 
     const result = {
@@ -235,72 +309,95 @@ export const fleetAttributionService = {
       orphanedVolumesDestroyed: 0,
     };
 
-    for (const app of apps) {
-      let machines: InventoryMachine[];
+    // One walk per listing: the organisation's (machines settle through the
+    // account their intent recorded), then each account's own (settling
+    // through that account).
+    const walk = async (
+      source: FleetInventory,
+      sourceApps: readonly string[],
+      shardId: string | null | undefined,
+    ): Promise<void> => {
+      for (const app of sourceApps) {
+        let machines: InventoryMachine[];
+        try {
+          machines = await listWithOneRetry(() => source.listMachines(app), retryDelayMs);
+        } catch (err) {
+          result.unavailableApps.push(app);
+          alertFleetAttribution(new FleetInventoryUnavailableError(app, detailOf(err)));
+          continue;
+        }
+
+        for (const machine of machines) {
+          if (machine.state === 'gone') continue;
+          result.listed += 1;
+          if (!machine.createdAt) {
+            result.undated += 1;
+            alertFleetAttribution(
+              new FleetInventoryUnavailableError(
+                app,
+                `machine ${machine.machineId} has no creation instant, so it cannot be aged`,
+              ),
+            );
+            continue;
+          }
+
+          let verdict: Verdict;
+          try {
+            verdict = await this.judge(source.provider, machine, now());
+          } catch (err) {
+            // Could not read the records: never a reason to destroy.
+            result.failures += 1;
+            console.error('[fleetAttribution] could not judge a machine — left running', {
+              app,
+              machineId: machine.machineId,
+              detail: detailOf(err),
+            });
+            continue;
+          }
+          if (verdict.kind === 'attributed') {
+            result.matched += 1;
+            continue;
+          }
+
+          // The grace runs from the later of the machine's creation and its
+          // record's end, so the pass never races a boot or an ordinary teardown.
+          const since = Math.max(machine.createdAt.getTime(), verdict.endedAt?.getTime() ?? 0);
+          if (now().getTime() - since < FLEET_ATTRIBUTION_GRACE_MS) {
+            result.spared += 1;
+            continue;
+          }
+
+          const dated = { ...machine, createdAt: machine.createdAt };
+          const done = await this.killMachine(source, dated, verdict, now, shardId);
+          if (done) {
+            result.killed.push({
+              app,
+              machineId: machine.machineId,
+              reason: verdict.reason,
+              action: verdict.action,
+              workload: verdict.workload,
+            });
+          } else {
+            result.failures += 1;
+          }
+        }
+      }
+    };
+
+    if (inventory) await walk(inventory, apps, undefined);
+    for (const account of perAccount) {
+      let accountApps: string[];
       try {
-        machines = await listWithOneRetry(() => inventory.listMachines(app), retryDelayMs);
+        accountApps = await listWithOneRetry(() => account.inventory.listApps(), retryDelayMs);
       } catch (err) {
-        result.unavailableApps.push(app);
-        alertFleetAttribution(new FleetInventoryUnavailableError(app, detailOf(err)));
+        result.unavailableApps.push(account.name);
+        alertFleetAttribution(new FleetInventoryUnavailableError(account.name, detailOf(err)));
         continue;
       }
-
-      for (const machine of machines) {
-        if (machine.state === 'gone') continue;
-        result.listed += 1;
-        if (!machine.createdAt) {
-          result.undated += 1;
-          alertFleetAttribution(
-            new FleetInventoryUnavailableError(
-              app,
-              `machine ${machine.machineId} has no creation instant, so it cannot be aged`,
-            ),
-          );
-          continue;
-        }
-
-        let verdict: Verdict;
-        try {
-          verdict = await this.judge(inventory.provider, machine, now());
-        } catch (err) {
-          // Could not read the records: never a reason to destroy.
-          result.failures += 1;
-          console.error('[fleetAttribution] could not judge a machine — left running', {
-            app,
-            machineId: machine.machineId,
-            detail: detailOf(err),
-          });
-          continue;
-        }
-        if (verdict.kind === 'attributed') {
-          result.matched += 1;
-          continue;
-        }
-
-        // The grace runs from the later of the machine's creation and its
-        // record's end, so the pass never races a boot or an ordinary teardown.
-        const since = Math.max(machine.createdAt.getTime(), verdict.endedAt?.getTime() ?? 0);
-        if (now().getTime() - since < FLEET_ATTRIBUTION_GRACE_MS) {
-          result.spared += 1;
-          continue;
-        }
-
-        const dated = { ...machine, createdAt: machine.createdAt };
-        const done = await this.killMachine(inventory, dated, verdict, now);
-        if (done) {
-          result.killed.push({
-            app,
-            machineId: machine.machineId,
-            reason: verdict.reason,
-            action: verdict.action,
-            workload: verdict.workload,
-          });
-        } else {
-          result.failures += 1;
-        }
-      }
+      result.apps += accountApps.length;
+      await walk(account.inventory, accountApps, account.shardId);
     }
-    result.orphanedVolumesDestroyed = await sweepOrphanedVolumes(now);
+    result.orphanedVolumesDestroyed = await sweepOrphanedVolumes(now, accounts);
     return result;
   },
 
@@ -405,6 +502,9 @@ export const fleetAttributionService = {
     machine: InventoryMachine & { createdAt: Date },
     verdict: Extract<Verdict, { kind: 'kill' }>,
     now: () => Date,
+    /** The account the machine was LISTED in; absent = the organisation walk,
+     *  where the intent's own recorded account decides (MOTIR-8964). */
+    shardId?: string | null,
   ): Promise<boolean> {
     const decidedAt = now();
     const ageMs = decidedAt.getTime() - machine.createdAt.getTime();
@@ -443,7 +543,7 @@ export const fleetAttributionService = {
               region: machine.region,
               createdAt: machine.createdAt,
             },
-            { now },
+            shardId === undefined ? { now } : { now, shardId },
           );
         }
         await inventory.destroyMachine(machine.app, machine.machineId);

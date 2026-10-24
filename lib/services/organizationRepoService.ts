@@ -13,7 +13,7 @@ import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboarding
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { deriveCodeGraphIndexState } from '@/lib/codeGraph/indexState';
-import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
 import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
@@ -412,7 +412,7 @@ export const organizationRepoService = {
     // The classification is `isMotirHostedOwner`, the same predicate
     // `lib/projectRepos/roomSections.ts` classifies the project room's sections
     // with, so the two surfaces cannot answer "whose is it?" differently again.
-    const hostOwner = provisioningOrgLogin();
+    const hostOwners = await motirOwnedOrgLogins();
 
     return usage.flatMap((row) => {
       const repo = byId.get(row.githubRepoId);
@@ -423,7 +423,7 @@ export const organizationRepoService = {
         indexedHeadSha: repo.indexedHeadSha,
         hasRunningIndex: repo.indexingRunId !== null && runningRunIds.has(repo.indexingRunId),
       });
-      return [{ repo: toOrgRepoOptionDto(repo, hostOwner), projects: row.projects, indexState }];
+      return [{ repo: toOrgRepoOptionDto(repo, hostOwners), projects: row.projects, indexState }];
     });
   },
 
@@ -477,7 +477,7 @@ export const organizationRepoService = {
     // instruction pointing at the ORGANISATION's installation, which a repository
     // under the shared provisioning installation is not in. The act that applies
     // to it is the TAKEOVER (MOTIR-711), and the refusal names it.
-    if (isMotirHostedOwner(repo.owner, provisioningOrgLogin())) {
+    if (isMotirHostedOwner(repo.owner, await motirOwnedOrgLogins())) {
       throw new MotirHostedRepoIsTakenOverError(repoRef);
     }
     if (repo.provider === 'github') throw new GithubRemovalHappensOnGithubError(repoRef);
@@ -579,16 +579,17 @@ export const organizationRepoService = {
     projectId: string,
     ctx: ServiceContext,
   ): Promise<OrgRepoOptionDto[]> {
+    // Resolved before the transaction: the owned-org set is its own system read.
+    const hostOwners = await motirOwnedOrgLogins();
     return inProjectOrg(projectId, ctx, 'browse', async (tx, organizationId) => {
       const [orgRepos, held] = await Promise.all([
         githubRepoRepository.listByOrganization(organizationId, tx),
         projectRepoRepository.listByProject(projectId, ctx.workspaceId, tx),
       ]);
       const taken = new Set(held.map((row) => row.githubRepoId).filter((id): id is string => !!id));
-      const hostOwner = provisioningOrgLogin();
       return orgRepos
         .filter((repo) => !taken.has(repo.id))
-        .map((repo) => toOrgRepoOptionDto(repo, hostOwner));
+        .map((repo) => toOrgRepoOptionDto(repo, hostOwners));
     });
   },
 

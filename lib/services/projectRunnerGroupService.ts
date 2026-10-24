@@ -11,6 +11,7 @@ import {
 import { runnerGroupClient, runnerGroupNameFor } from '@/lib/github/runnerGroups';
 import type { GithubOrgTarget } from '@/lib/github/orgTarget';
 import { repoVisibilityClient } from '@/lib/github/repoVisibility';
+import { fleetGithubOrgAssignmentService } from '@/lib/services/fleetGithubOrgAssignmentService';
 
 // The PER-PROJECT RUNNER GROUP (Story MOTIR-1916 · MOTIR-1972) — the service that
 // keeps "one GitHub Actions runner group per Motir PROJECT, access-listed to
@@ -120,6 +121,15 @@ export interface RunnerGroupSyncOptions {
   /** Re-ask GitHub whether the App is installed on an org it was recently not
    *  installed on — the one-shot sync script. */
   bypassInstallationCache?: boolean;
+  /**
+   * The tenant's ASSIGNED Motir-owned GitHub org (MOTIR-8966), passed by the
+   * establish flow before the first repository exists. When it names an org other
+   * than the provisioning org, the project's group is ensured THERE (adopt by
+   * name, else create with an empty access list) and stored in
+   * `project_runner_group` as the connected-org pass stores it; and no group is
+   * made in the provisioning org for a project that has no repositories there.
+   */
+  hostedOrg?: GithubOrgTarget;
 }
 
 export type RunnerGroupSyncOutcome =
@@ -142,6 +152,10 @@ export type RunnerGroupSyncOutcome =
     /** GitHub refused or was unreachable. The project is marked
      *  `runnerGroupSyncPending`; the caller's own work is unaffected. */
     | { outcome: 'sync_pending'; detail: string }
+    /** The project is hosted in another Motir-owned GitHub org and has no
+     *  repository and no group in the provisioning org, so none is made there
+     *  (MOTIR-8966). */
+    | { outcome: 'not_needed' }
   ) & {
     /** The connected-org pass, one entry per org other than the provisioning org
      *  that owns some of the project's repositories. ABSENT when there is none, so
@@ -213,6 +227,10 @@ export const projectRunnerGroupService = {
   ): Promise<RunnerGroupSyncOutcome> {
     const org = provisioningOrgLogin();
     if (!org || !isRepoProvisioningConfigured()) return { outcome: 'not_configured' };
+    // A sync that was not handed the tenant's assigned org reads it (MOTIR-8966).
+    const assigned =
+      options.hostedOrg ??
+      (await fleetGithubOrgAssignmentService.hostedTargetForWorkspace(target.workspaceId));
 
     return withWorkspaceServiceContext(
       target.workspaceId,
@@ -240,16 +258,20 @@ export const projectRunnerGroupService = {
         );
         const repositoryIds = motirOwnedRepoIds(realized, org);
 
-        const provisioning = await syncProvisioningGroup(
-          tx,
-          target,
-          project.runnerGroupId,
-          repositoryIds,
-        );
+        // A project hosted in its tenant's ASSIGNED org (MOTIR-8966) gets no group
+        // in the provisioning org until something of it lives there.
+        const hostedOrg = assigned && !sameOrg(assigned.org, org) ? assigned : undefined;
+        const provisioning: RunnerGroupSyncOutcome =
+          hostedOrg && repositoryIds.length === 0 && project.runnerGroupId === null
+            ? { outcome: 'not_needed' as const }
+            : await syncProvisioningGroup(tx, target, project.runnerGroupId, repositoryIds);
         // The connected-org pass runs under the SAME lock, after the provisioning
         // pass and whatever it answered — a provisioning-side failure must not
         // strand another org's group, and the reverse.
-        const connectedOrgs = await syncConnectedOrgGroups(tx, target, realized, org, options);
+        const connectedOrgs = await syncConnectedOrgGroups(tx, target, realized, org, {
+          ...options,
+          hostedOrg,
+        });
         return connectedOrgs.length > 0 ? { ...provisioning, connectedOrgs } : provisioning;
       },
       SYNC_TX_BUDGET,
@@ -266,9 +288,12 @@ export const projectRunnerGroupService = {
    * failing an establishment over the group would report a settled row as failed
    * and destroy the one artifact that cannot be recreated.
    */
-  async syncQuietly(target: ProjectRunnerGroupTarget): Promise<void> {
+  async syncQuietly(
+    target: ProjectRunnerGroupTarget,
+    options: RunnerGroupSyncOptions = {},
+  ): Promise<void> {
     try {
-      await this.syncForProject(target);
+      await this.syncForProject(target, options);
     } catch (err) {
       console.error('[projectRunnerGroupService] could not sync the runner group', {
         projectId: target.projectId,
@@ -592,6 +617,10 @@ async function syncConnectedOrgGroups(
   options: RunnerGroupSyncOptions,
 ): Promise<ConnectedOrgSyncOutcome[]> {
   const byOrg = groupConnectedReposByOrg(realized, provisioningOrg);
+  // The ASSIGNED org (MOTIR-8966) gets its group before its first repository
+  // exists, so it is in the pass with whatever it holds — possibly nothing.
+  const hostedKey = options.hostedOrg?.org.trim().toLowerCase();
+  if (hostedKey && !byOrg.has(hostedKey)) byOrg.set(hostedKey, []);
   // Orgs that HAD a group but no longer own any of the project's repositories are
   // swept too, so a removed repository cannot leave a stale grant behind.
   for (const row of await projectRunnerGroupRepository.listForProject(
@@ -606,16 +635,23 @@ async function syncConnectedOrgGroups(
   for (const [org, repos] of [...byOrg.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     const stored = await projectRunnerGroupRepository.findForOrg(target.projectId, org, tx);
     try {
+      const hosted = org === hostedKey ? options.hostedOrg : undefined;
       const installationId = stored?.installationId
         ? stored.installationId
-        : await findProvisioningInstallationId(org, {
-            bypassNegativeCache: options.bypassInstallationCache,
-          });
+        : hosted
+          ? hosted.installationId
+          : await findProvisioningInstallationId(org, {
+              bypassNegativeCache: options.bypassInstallationCache,
+            });
       if (installationId === null) {
         outcomes.push({ org, outcome: 'skipped_no_install' });
         continue;
       }
-      const orgTarget: GithubOrgTarget = { org, installationId, role: 'provisioning' };
+      const orgTarget: GithubOrgTarget = {
+        org: hosted?.org ?? org,
+        installationId,
+        role: hosted?.role ?? 'provisioning',
+      };
 
       const repositoryIds: number[] = [];
       for (const repo of repos) {
@@ -630,7 +666,9 @@ async function syncConnectedOrgGroups(
       // project. Safe here and not in the provisioning pass: a connected
       // repository exists before it is connected, so an empty list is never
       // "the first repository has not been created yet".
-      if (repositoryIds.length === 0) {
+      // The assigned org's group is the exception: it is MADE empty, before the
+      // first repository exists, exactly as the provisioning org's group is.
+      if (repositoryIds.length === 0 && !hosted) {
         if (stored) {
           await runnerGroupClient.deleteGroup(stored.runnerGroupId, orgTarget);
           await projectRunnerGroupRepository.deleteForOrg(target.projectId, org, tx);
@@ -691,6 +729,11 @@ async function syncConnectedOrgGroups(
     }
   }
   return outcomes;
+}
+
+/** GitHub logins compare case-insensitively. */
+function sameOrg(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
 /** The project's established repositories outside the provisioning org, keyed by

@@ -7,6 +7,8 @@ import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository'
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { actionsPermissionsClient } from '@/lib/github/actionsPermissions';
 import { isCiMeteringEnabled, provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
+import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import type { CiEntitlementStateDTO } from '@/lib/dto/ciAllowance';
 
 // THE CI-ACTIONS GATE (Story MOTIR-1775 · MOTIR-1907) — the REPOSITORY-side half
@@ -74,12 +76,14 @@ export const ciActionsGateService = {
     // nothing to enforce and Motir hosts nobody's repositories.
     if (!isCiMeteringEnabled()) return { outcome: 'bypassed', reason: 'disabled' };
 
-    const owner = provisioningOrgLogin();
     // Nothing is Motir-owned when no provisioning org is configured, so the whole
     // path is correctly inert (the same first-class UNSET state the meter's gate
     // documents) — and it is also exactly what must happen once a repo has been
     // transferred away.
-    if (!owner) return { outcome: 'bypassed', reason: 'no_provisioning_org' };
+    if (!provisioningOrgLogin()) return { outcome: 'bypassed', reason: 'no_provisioning_org' };
+    // Every org Motir owns — the provisioning org and each fleet account's
+    // (MOTIR-8974), where a tenant's hosted repositories may live.
+    const owners = await motirOwnedOrgLogins();
 
     // ⚠️ THE META GUARD IS READ INDEPENDENTLY OF THE STATE, ON PURPOSE.
     //
@@ -121,7 +125,7 @@ export const ciActionsGateService = {
     // `within_allowance` likewise.
     const disabled = state.state === 'ci_credits_exhausted';
 
-    const workspaceIds = await this.listOwnedWorkspaceIds(organizationId, owner);
+    const workspaceIds = await this.listOwnedWorkspaceIds(organizationId, owners);
 
     // ── The transaction: intent only ────────────────────────────────────────
     let intentChanged = 0;
@@ -129,14 +133,14 @@ export const ciActionsGateService = {
       intentChanged += await withWorkspaceServiceContext(workspaceId, async (tx) => {
         const rows = await projectRepoRepository.listMotirCreatedByWorkspace(workspaceId, tx);
         const ids = rows
-          .filter((row) => sameOwner(row.githubRepo?.owner, owner))
+          .filter((row) => isMotirHostedOwner(row.githubRepo?.owner, owners))
           .map((row) => row.id);
         return projectRepoRepository.setCiActionsIntent(ids, disabled, at, tx);
       });
     }
 
     // ── After the commit: the host calls ────────────────────────────────────
-    const { applied, failed } = await assertPending(workspaceIds, owner);
+    const { applied, failed } = await assertPending(workspaceIds, owners);
     return {
       outcome: 'synced',
       disabled,
@@ -160,13 +164,9 @@ export const ciActionsGateService = {
    */
   async sweep(): Promise<{ applied: number; failed: number }> {
     if (!isCiMeteringEnabled()) return { applied: 0, failed: 0 };
-    const owner = provisioningOrgLogin();
-    if (!owner) return { applied: 0, failed: 0 };
-    const workspaceIds = await withSystemContext(async (tx) => {
-      const rows = await githubRepoRepository.listWorkspaceIdsByOwner(owner, tx);
-      return rows.map((row) => row.workspaceId);
-    });
-    return assertPending(workspaceIds, owner);
+    if (!provisioningOrgLogin()) return { applied: 0, failed: 0 };
+    const owners = await motirOwnedOrgLogins();
+    return assertPending(await workspaceIdsOwnedBy(owners), owners);
   },
 
   /**
@@ -186,13 +186,9 @@ export const ciActionsGateService = {
    */
   async listDisabledOrganizationIds(): Promise<string[]> {
     if (!isCiMeteringEnabled()) return [];
-    const owner = provisioningOrgLogin();
-    if (!owner) return [];
+    if (!provisioningOrgLogin()) return [];
 
-    const candidates = await withSystemContext(async (tx) => {
-      const rows = await githubRepoRepository.listWorkspaceIdsByOwner(owner, tx);
-      return rows.map((row) => row.workspaceId);
-    });
+    const candidates = await workspaceIdsOwnedBy(await motirOwnedOrgLogins());
 
     const organizationIds = new Set<string>();
     for (const workspaceId of candidates) {
@@ -223,11 +219,11 @@ export const ciActionsGateService = {
    * pleasant consequence is that RLS itself, not this code, is what stops a
    * workspace in another org from being touched.
    */
-  async listOwnedWorkspaceIds(organizationId: string, owner: string): Promise<string[]> {
-    const candidates = await withSystemContext(async (tx) => {
-      const rows = await githubRepoRepository.listWorkspaceIdsByOwner(owner, tx);
-      return rows.map((row) => row.workspaceId);
-    });
+  async listOwnedWorkspaceIds(
+    organizationId: string,
+    owners: readonly string[],
+  ): Promise<string[]> {
+    const candidates = await workspaceIdsOwnedBy(owners);
 
     const owned: string[] = [];
     for (const workspaceId of candidates) {
@@ -252,7 +248,7 @@ export const ciActionsGateService = {
  */
 async function assertPending(
   workspaceIds: string[],
-  owner: string,
+  owners: readonly string[],
 ): Promise<{ applied: number; failed: number }> {
   let applied = 0;
   let failed = 0;
@@ -270,7 +266,7 @@ async function assertPending(
         // Re-check the owner at call time rather than trusting the enumeration:
         // a repo transferred out of Motir's org (MOTIR-711) is the user's, and
         // its Actions settings are no longer Motir's to touch.
-        if (!row?.githubRepo || !sameOwner(row.githubRepo.owner, owner)) return [];
+        if (!row?.githubRepo || !isMotirHostedOwner(row.githubRepo.owner, owners)) return [];
         return [
           {
             id: row.id,
@@ -315,8 +311,15 @@ async function assertPending(
   return { applied, failed };
 }
 
-/** GitHub logins are case-insensitive; the mirror echoes the payload's casing,
- *  which an operator's `GITHUB_FALLBACK_ORG` need not match. */
-function sameOwner(a: string | null | undefined, b: string): boolean {
-  return typeof a === 'string' && a.trim().toLowerCase() === b.trim().toLowerCase();
+/** Every workspace holding a mirror under one of these owners, de-duplicated. */
+async function workspaceIdsOwnedBy(owners: readonly string[]): Promise<string[]> {
+  return withSystemContext(async (tx) => {
+    const ids = new Set<string>();
+    for (const owner of owners) {
+      for (const row of await githubRepoRepository.listWorkspaceIdsByOwner(owner, tx)) {
+        ids.add(row.workspaceId);
+      }
+    }
+    return [...ids];
+  });
 }

@@ -1,5 +1,5 @@
 import { getGitProvider } from '@/lib/git';
-import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
 import { githubAppRoleForRepo } from '@/lib/github/appRoleForRepo';
 import { readPullRequest } from '@/lib/github/pullRequestRead';
 import {
@@ -202,8 +202,9 @@ export const pullRequestReconcileService = {
     // down (`${role}:${installationId}`), because a token IS per installation per
     // App — so this memo has exactly the granularity of the thing it is memoising.
     const tokens = new Map<string, Promise<string>>();
+    const hostOwners = await motirOwnedOrgLogins();
     const tokenFor = (installationId: string, owner: string): Promise<string> => {
-      const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
+      const role = githubAppRoleForRepo({ owner }, hostOwners);
       const key = `${role}:${installationId}`;
       let token = tokens.get(key);
       if (!token) {

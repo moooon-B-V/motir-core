@@ -1,0 +1,55 @@
+# The AWS runner's one service (MOTIR-9272): prepare the VM, run ONE job, power off.
+#
+# The VM's whole life is this unit, the way a Fly Machine's whole life is its
+# container:
+#
+#   ExecStartPre   motir-runner-prepare — user-data → the env file, the Docker
+#                  volume at /var/lib/docker, the metadata service closed.
+#   ExecStart      motir-ci-runner-entrypoint — `infra/ci-runner/entrypoint.sh`,
+#                  installed unchanged: dockerd, then `run.sh --jitconfig` as
+#                  `runner`. A JIT-config runner takes one job and exits.
+#   ExecStartPost  removes the env file. The entrypoint has its environment by
+#                  then (Type=exec waits for the exec), and the JIT config
+#                  should not outlive the moment it was needed on disk.
+#   ExecStopPost   powers the VM off however the entrypoint ended — success,
+#                  failure, or a prepare hook that failed before it started.
+#                  The adapter launches with InstanceInitiatedShutdownBehavior=
+#                  terminate, so the power-off ENDS the instance, as Fly's
+#                  `auto_destroy` ends a Machine. This is load-bearing: the CI
+#                  supervisor reads a stopped instance as the job finishing, and
+#                  a VM left running would look like a job in progress until the
+#                  job timeout, billing all the while.
+#
+# Ordered after cloud-init.service (its network stage, which has read the
+# datasource) and NOT after cloud-final.service: cloud-final is itself ordered
+# after multi-user.target, which wants this unit, so that ordering would be a
+# cycle. Nothing here traces or prints the JIT config.
+
+[Unit]
+Description=Motir CI runner (one JIT-config job, then power off)
+Wants=network-online.target
+After=network-online.target cloud-init.service
+
+[Service]
+Type=exec
+ExecStartPre=/usr/local/sbin/motir-runner-prepare
+# `-`: the file is written by ExecStartPre, so it does not exist yet when that
+# runs. If the hook failed, ExecStart never runs; if the file is somehow empty,
+# the entrypoint refuses to boot without ACTIONS_RUNNER_INPUT_JITCONFIG.
+EnvironmentFile=-/run/motir-ci-runner/env
+Environment=PATH=/home/runner/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=LANG=C.UTF-8 LC_ALL=C.UTF-8
+WorkingDirectory=/home/runner/actions-runner
+ExecStart=/usr/local/bin/motir-ci-runner-entrypoint
+ExecStartPost=/usr/bin/rm -f /run/motir-ci-runner/env
+ExecStopPost=/usr/bin/systemctl --no-block poweroff
+Restart=no
+# Formatting the volume and the first IMDS reads fit well inside this.
+TimeoutStartSec=300
+# journal+console: the boot is readable from `aws ec2 get-console-output`
+# without logging in, which is the only window a VM that powers itself off has.
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target
