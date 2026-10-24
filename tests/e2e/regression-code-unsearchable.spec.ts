@@ -177,7 +177,10 @@ test('A. a change asked for over unsearchable code plans nothing and says which 
   });
 
   await chapter('Nothing was planned, and the plan on the canvas is untouched', async () => {
-    expect(await nodeIds()).toEqual(before);
+    // Polled, not read once (MOTIR-9411): the canvas re-renders after the turn
+    // lands, and in the recording lane a 4 s beat always covered that window.
+    // The claim is unchanged: the same nodes as before the turn.
+    await expect.poll(nodeIds).toEqual(before);
     expect(await adminDb.planItem.count(), 'no proposal was written').toBe(0);
     await expect(codebaseLink(page)).toHaveAttribute('href', '/code');
     await expect(codebaseLink(page)).toHaveText('Go to Codebase');

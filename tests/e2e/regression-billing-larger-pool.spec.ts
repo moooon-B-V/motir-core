@@ -30,7 +30,6 @@ import {
   PINNED_CATEGORIES_ANSWER,
   PINNED_ESTIMATE_ANSWER,
 } from '../fixtures/calculatorPinnedVector';
-import { assessWatchability } from '../../scripts/upload-acceptance-video.mjs';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 
@@ -481,11 +480,10 @@ test.describe('The larger credit pool, sold from the Calculator', () => {
       await expect(page.getByText(/billing\.(calculator|plans)\./)).toHaveCount(0);
     });
 
-    const verdict = assessWatchability({
-      chapters: starts.map((tSeconds, i) => ({ label: String(i), tSeconds })),
-      meta: { totalSeconds: (Date.now() - t0) / 1000 },
-    });
-    expect(verdict.watchable, verdict.reason ?? '').toBe(true);
+    // No watchability floor here (MOTIR-9411): this spec ran in the recording
+    // lane, where it asserted its clip was long enough to watch. The regression
+    // lane records nothing and holds nothing, so that floor measured an apparatus
+    // this lane does not have. The receipt it guarded is recorded.
     expect(pageErrors).toEqual([]);
   });
 

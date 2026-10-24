@@ -52,7 +52,6 @@ import { ADD_PLAN_ITEMS_TOOL_NAME } from '@/lib/mcp/tools/authorPlan';
 import { FAILING_AFTER, POLL_MS } from '@/lib/hooks/useGeneratingPlanPoll';
 import { PLAN_STALLED_AFTER_MS } from '@/lib/plans/planProgress';
 import type { PlanStepKindDto } from '@/lib/dto/plans';
-import { assessWatchability } from '../../scripts/upload-acceptance-video.mjs';
 import en from '@/messages/en.json';
 
 // The wave-band path, read from `design/brand/wave-band-24.svg` (pinned to
@@ -446,9 +445,8 @@ test('while Motir writes a plan, the card it is writing and the Motir mark move,
 }) => {
   acceptanceStory('MOTIR-8413');
 
-  // The watchability floor is the uploader's own predicate, over this clip's own
-  // chapter starts and length (the fixture writes `chapters.json` only after the
-  // test, so the same offsets are measured here).
+  // The chapter starts are measured here, as they were when this spec asserted
+  // the receipt's watchability floor (see the end of the test).
   const t0 = Date.now();
   const starts: number[] = [];
   const timed = (label: string, body: () => Promise<void>) => {
@@ -543,11 +541,10 @@ test('while Motir writes a plan, the card it is writing and the Motir mark move,
     await door?.dispose();
   }
 
-  const verdict = assessWatchability({
-    chapters: starts.map((tSeconds, i) => ({ label: String(i), tSeconds })),
-    meta: { totalSeconds: (Date.now() - t0) / 1000 },
-  });
-  expect(verdict.watchable, verdict.reason ?? '').toBe(true);
+  // No watchability floor here (MOTIR-9411): this spec ran in the recording
+  // lane, where it asserted its clip was long enough to watch. The regression
+  // lane records nothing and holds nothing, so that floor measured an apparatus
+  // this lane does not have. The receipt it guarded is recorded.
 });
 
 /** Nothing running on these cards — the entrances have played out. */

@@ -10,7 +10,7 @@ import { E2E_PROVISIONING_ORG } from './github-const';
 import { headShaFor, publishReceipt, type SeededCard } from './acceptance-gate-seed';
 
 // THE ACCEPTANCE-VERDICT seed (Story MOTIR-6071 · Subtask MOTIR-6508), for the receipt
-// `regression-verdict.spec.ts` records. It is `acceptance-gate-seed.ts`'s STORY-RUN shape
+// `acceptance-verdict.spec.ts` records. It is `acceptance-gate-seed.ts`'s STORY-RUN shape
 // twice, plus one FINISHED story, in one project for one reviewer:
 //
 //   · two STORY RUNS — a story at In Review over two subtasks at Implemented, the story

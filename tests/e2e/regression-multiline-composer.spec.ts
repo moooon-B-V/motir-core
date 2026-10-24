@@ -273,6 +273,11 @@ test('a request to Motir AI can be a paragraph — on the planning surface', asy
     expect(capped.scrollHeight).toBeGreaterThan(capped.clientHeight);
     await beat();
 
+    // The composer ignores Enter while the previous turn is still in flight
+    // (`PlanChangeComposer`'s `disabled`), and Send is disabled for exactly that
+    // time. In the recording lane the holds above always outlasted the first
+    // turn; here the press can land inside it (MOTIR-9411).
+    await expect(sendButton(page)).toBeEnabled();
     const sent = page.waitForResponse(
       (r) =>
         /\/api\/work-items\/[^/]+\/ai\/plan$/.test(new URL(r.url()).pathname) &&
