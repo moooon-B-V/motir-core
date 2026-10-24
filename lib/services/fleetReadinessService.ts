@@ -634,8 +634,20 @@ async function imageCoverageCondition(
   privateRepos: OrgRepo[],
   inventory: FleetJobInventory,
 ): Promise<FleetReadinessCondition> {
+  // `privateRepos` all belong to the org being read, so an entry is matched by the
+  // repository's NAME within that org, never by its `owner/` segment: a GitHub org
+  // rename changes every live `owner/name` while the measured workflows stay the
+  // same (MOTIR-9410). An exact `owner/name` key still wins when two entries share
+  // a name.
   const byKey = new Map<string, FleetInventoryRepo>();
-  for (const [key, entry] of Object.entries(inventory.repos)) byKey.set(key.toLowerCase(), entry);
+  const byName = new Map<string, FleetInventoryRepo>();
+  for (const [key, entry] of Object.entries(inventory.repos)) {
+    byKey.set(key.toLowerCase(), entry);
+    const name = key.slice(key.indexOf('/') + 1).toLowerCase();
+    if (!byName.has(name)) byName.set(name, entry);
+  }
+  const entryFor = (repo: OrgRepo) =>
+    byKey.get(fullName(repo).toLowerCase()) ?? byName.get(repo.name.trim().toLowerCase());
 
   const notInventoried: string[] = [];
   const stale: Array<{ repository: string; measuredSha: string; headSha: string }> = [];
@@ -650,7 +662,7 @@ async function imageCoverageCondition(
   const githubHostedJobs: Array<{ repoRef: string; workflow: string; jobId: string }> = [];
 
   for (const repo of privateRepos) {
-    const entry = byKey.get(fullName(repo).toLowerCase());
+    const entry = entryFor(repo);
     if (!entry) {
       notInventoried.push(fullName(repo));
       continue;
@@ -677,7 +689,7 @@ async function imageCoverageCondition(
       for (const job of workflow.jobs) {
         if (!requestsFleetRunner(job.runsOn)) {
           githubHostedJobs.push({
-            repoRef: entry.repoRef,
+            repoRef: fullName(repo),
             workflow: workflow.path,
             jobId: job.jobId,
           });
@@ -685,7 +697,7 @@ async function imageCoverageCondition(
         }
         if (job.verdict === 'runnable' && !job.missing.includes('unverified')) continue;
         jobs.push({
-          repoRef: entry.repoRef,
+          repoRef: fullName(repo),
           workflow: workflow.path,
           jobId: job.jobId,
           verdict: job.verdict,

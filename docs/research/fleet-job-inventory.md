@@ -44,6 +44,19 @@ entry's sha. motir-ai is re-measured at `857ac4244`: the workflow set, the job s
 every `runsOn` are unchanged since `35d359a22`, and the fingerprint is identical at
 both.
 
+**Re-keyed after the org rename (MOTIR-9410, 2026-10-24):** GitHub renamed the
+`moooon-B-V` org to `motir-co`, so every `repoRef` now names `motir-co/<name>`. The
+readiness check also matches an entry by repository NAME within the org it reads
+(an exact `owner/name` key still wins), so the next rename cannot make every
+repository read as not inventoried. motir-ai (`30508ba10`), motir-gateway
+(`24a54f497`), motir-meta (`ba13df74d`) and motir-skills (`ceff4048e`) are
+re-measured at their `main` heads: `fingerprint-workflows.ts` gives the same digest
+at the head as at the recorded sha, so no job, runner or tool changed.
+nextjs-prisma-vercel-starter's head is the recorded sha. motir-core and
+motir-marketing keep their 2026-10-15 shas: their workflows changed in structure
+since then, they are public, and the readiness check never reads them, so moving
+the sha without re-inventorying their jobs would record a measurement nobody made.
+
 **Image under test:** `infra/ci-runner/Dockerfile` on `motir-core` `main` at
 `4064243068` (last commit touching the file, 2026-10-12). Every "absent from the
 image" below is read from that file: it installs Ubuntu 24.04 (by digest), the
