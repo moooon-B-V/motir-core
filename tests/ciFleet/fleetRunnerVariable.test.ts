@@ -354,3 +354,30 @@ describe('contract guards — what must NEVER happen', () => {
     expect(source).toContain(`vars.${MOTIR_RUNNER_VARIABLE}`);
   });
 });
+
+describe('fleetRunnerVariableService in the tenant’s assigned GitHub org (MOTIR-8966)', () => {
+  it('ensures the fleet label in the TARGET org, through its installation', async () => {
+    const HOST_ORG = 'motir-host-a';
+    const hostFake = createActionsVariableFake(HOST_ORG);
+    const fallbackGitHub = globalThis.fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit): Promise<Response> => {
+        const method = init?.method ?? 'GET';
+        const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
+        return hostFake.handle(String(url), method, body) ?? fallbackGitHub(url, init);
+      }),
+    );
+
+    const result = await fleetRunnerVariableService.ensureForFleet({
+      org: HOST_ORG,
+      installationId: '7788',
+      role: 'provisioning',
+    });
+
+    expect(result).toEqual({ outcome: 'ensured', result: 'created' });
+    expect(hostFake.variables.get(MOTIR_RUNNER_VARIABLE)?.value).toBe(MOTIR_RUNNER_LABEL);
+    expect(variablesFake.calls).toHaveLength(0);
+    expect(calls.some((c) => c.url.includes('/app/installations/7788/access_tokens'))).toBe(true);
+  });
+});

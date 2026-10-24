@@ -10043,6 +10043,13 @@
             "org_ci": {
               "enable": "Activó la CI de la flota",
               "disable": "Desactivó la CI de la flota"
+            },
+            "shard": {
+              "add": "Añadió una cuenta de la flota",
+              "limits": "Actualizó los límites de una cuenta de la flota",
+              "ceiling": "Cambió el límite de admisión de una cuenta de la flota",
+              "disable": "Desactivó una cuenta de la flota",
+              "enable": "Reactivó una cuenta de la flota"
             }
           },
           "idea": {

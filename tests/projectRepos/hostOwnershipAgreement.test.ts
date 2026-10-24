@@ -140,8 +140,14 @@ describe('the inventory classifies a row by OWNERSHIP (criterion 1)', () => {
   });
 });
 
+/** The fixture rows the CI meter's §5.1 gate does (`owned`) or does not call Motir's. */
+async function meterOwned(owned: boolean) {
+  const verdicts = await Promise.all(FIXTURE.map((r) => isMotirOwnedRepo(r.owner)));
+  return FIXTURE.filter((_, i) => verdicts[i] === owned);
+}
+
 describe('the two surfaces AGREE about which repositories are the organisation`s (criterion 4)', () => {
-  it('answers the same set over ONE fixture holding both kinds', () => {
+  it('answers the same set over ONE fixture holding both kinds', async () => {
     vi.stubEnv('GITHUB_FALLBACK_ORG', HOST_OWNER);
 
     // ⚠️ A CAPTURED COMPARISON, not two assertions side by side. Each surface is
@@ -158,21 +164,19 @@ describe('the two surfaces AGREE about which repositories are the organisation`s
       .filter((dto) => !dto.hostedByMotir)
       .map((dto) => dto.fullName);
 
-    const meterSaysOrganisations = FIXTURE.filter((r) => !isMotirOwnedRepo(r.owner)).map(
-      (r) => `${r.owner}/${r.name}`,
-    );
+    const meterSaysOrganisations = (await meterOwned(false)).map((r) => `${r.owner}/${r.name}`);
 
     expect(inventorySaysOrganisations).toEqual(meterSaysOrganisations);
     expect(meterSaysOrganisations).toEqual(['moooon/motir-core', 'moooon/motir-gateway']);
 
     // …and the fixture really did hold both kinds, so the agreement above is not
     // two empty sets agreeing.
-    expect(
-      FIXTURE.filter((r) => isMotirOwnedRepo(r.owner)).map((r) => `${r.owner}/${r.name}`),
-    ).toEqual([`${HOST_OWNER}/motir`]);
+    expect((await meterOwned(true)).map((r) => `${r.owner}/${r.name}`)).toEqual([
+      `${HOST_OWNER}/motir`,
+    ]);
   });
 
-  it('agrees in the NO-PROVISIONING-ORG case too — both surfaces call every row the organisation`s', () => {
+  it('agrees in the NO-PROVISIONING-ORG case too — both surfaces call every row the organisation`s', async () => {
     // The arm that must not diverge quietly: with nothing hosted, the meter
     // classifies nothing and the inventory classifies nothing, so both name the
     // whole fixture. A surface that hard-coded a login would fail exactly here.
@@ -181,15 +185,13 @@ describe('the two surfaces AGREE about which repositories are the organisation`s
     const inventory = FIXTURE.map((r) => toOrgRepoOptionDto(repoRow(r.owner, r.name), null))
       .filter((dto) => !dto.hostedByMotir)
       .map((dto) => dto.fullName);
-    const meter = FIXTURE.filter((r) => !isMotirOwnedRepo(r.owner)).map(
-      (r) => `${r.owner}/${r.name}`,
-    );
+    const meter = (await meterOwned(false)).map((r) => `${r.owner}/${r.name}`);
 
     expect(inventory).toEqual(meter);
     expect(meter).toHaveLength(FIXTURE.length);
   });
 
-  it('⚠️ agrees on CASING too — the two read their host owner from different places', () => {
+  it('⚠️ agrees on CASING too — the two read their host owner from different places', async () => {
     // The case the pair exists to catch, and the one the old room/inventory pair
     // could not state: the inventory is HANDED `hostOwner` by its caller while the
     // meter reads `GITHUB_FALLBACK_ORG` itself. Give the two spellings that differ
@@ -202,9 +204,7 @@ describe('the two surfaces AGREE about which repositories are the organisation`s
     )
       .filter((dto) => !dto.hostedByMotir)
       .map((dto) => dto.fullName);
-    const meter = FIXTURE.filter((r) => !isMotirOwnedRepo(r.owner)).map(
-      (r) => `${r.owner}/${r.name}`,
-    );
+    const meter = (await meterOwned(false)).map((r) => `${r.owner}/${r.name}`);
 
     expect(inventory).toEqual(meter);
     expect(meter).toEqual(['moooon/motir-core', 'moooon/motir-gateway']);

@@ -1,6 +1,6 @@
 import { Prisma } from '@/generated/prisma/client';
 import { markOrgClosing, reopenOrg } from '@/lib/ai/motirAiClient';
-import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
 import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import type {
   OrganizationDeletionConsequencesDTO,
@@ -314,7 +314,7 @@ export const organizationDeletionService = {
         return organizationMembershipRepository.countByOrg(organizationId, tx);
       },
     );
-    const hostOwner = provisioningOrgLogin();
+    const hostOwners = await motirOwnedOrgLogins();
     const { workspaces, projectCount, repos } = await withSystemContext(async (tx) => ({
       workspaces: await workspaceRepository.listByOrganization(organizationId, tx),
       projectCount: await projectRepository.countByOrganization(organizationId, tx),
@@ -327,7 +327,7 @@ export const organizationDeletionService = {
       memberCount,
       hostedRepos: repos
         .filter((r) => r.provider === 'github')
-        .filter((r) => isMotirHostedOwner(r.owner, hostOwner))
+        .filter((r) => isMotirHostedOwner(r.owner, hostOwners))
         .map((r) => ({ id: r.id, fullName: `${r.owner}/${r.name}` })),
       erasureDueAt: erasureDueAt(now).toISOString(),
       hasPassword,

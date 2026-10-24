@@ -1,0 +1,107 @@
+# Builds and publishes the AWS CI runner AMI (MOTIR-9272).
+#
+# The AWS counterpart of `release-runner-image.yml`: that lane publishes the Fly
+# runner IMAGE and prints its digest for `MOTIR_RUNNER_IMAGE`; this one builds
+# the AMI every AWS runner boots from and prints its id for
+# `MOTIR_AWS_RUNNER_AMI_ID`. Both read the same pins, the ARGs in
+# `infra/ci-runner/Dockerfile`.
+#
+# Trigger: push the package-scoped tag `ci-runner-ami-v<n>`, or run it by hand.
+# There is deliberately NO push-to-main trigger, for the release lane's reason:
+# the AMI id only moves when a person sets it, so an AMI per merge would be a
+# stream of images nobody launches.
+#
+# ⚠️ A tag-triggered lane builds the TAG'S tree, not `main`.
+#
+# Release procedure:
+#   1. merge the change (a pin bump in the Dockerfile, or a change here)
+#   2. git tag ci-runner-ami-v<n> && git push origin ci-runner-ami-v<n>
+#   3. this workflow validates, then builds in the build account over OIDC
+#   4. copy the `fly secrets set` line from the job summary
+#
+# Pull requests run the VALIDATE job only: `packer validate` and shellcheck,
+# with no AWS credentials. The build job never runs on a pull request.
+#
+# What it reads (none is a key; the build authenticates by OIDC only):
+#   secrets.MOTIR_AWS_AMI_BUILD_ROLE_ARN  the IAM role the build assumes
+#   vars.MOTIR_AWS_ORG_ARN                the Organization the AMI is shared with
+#   vars.MOTIR_AWS_AMI_BUILD_SUBNET_ID    optional; else the default VPC
+
+name: Release CI runner AMI
+
+on:
+  push:
+    tags:
+      - 'ci-runner-ami-v*'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'infra/ci-runner-aws/**'
+      - 'infra/ci-runner/Dockerfile'
+      - 'infra/ci-runner/entrypoint.sh'
+      - 'infra/ci-runner/start-dockerd.sh'
+      - 'infra/ci-runner/job-started.sh'
+      - '.github/workflows/release-ci-runner-ami.yml'
+
+permissions:
+  contents: read
+
+# Never two builds of one ref at once, and never cancel one in flight: a
+# cancelled build leaves a half-made AMI and a running build VM behind.
+concurrency:
+  group: release-ci-runner-ami-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PACKER_VERSION: '1.14.2'
+
+jobs:
+  validate:
+    name: Validate the AMI template
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # No run on record yet: `packer init` (one plugin download), `packer
+    # validate` and a shellcheck container take about a minute → 10 (the
+    # short-job floor).
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-packer@v3
+        with:
+          version: ${{ env.PACKER_VERSION }}
+      - name: packer validate (no credentials)
+        run: infra/ci-runner-aws/build-ami.sh validate
+      - name: shellcheck
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:v0.10.0 \
+            infra/ci-runner-aws/provision.sh \
+            infra/ci-runner-aws/build-ami.sh \
+            infra/ci-runner-aws/boot/motir-runner-prepare.sh
+
+  build:
+    name: Build and publish the AMI
+    needs: validate
+    if: github.event_name != 'pull_request'
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # No run on record yet (the first build is MOTIR-9282's). A build VM boot,
+    # the apt and Playwright layers and the snapshot that registers the AMI are
+    # expected to take 20-30 min → 60, a floor to revise from the first runs.
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-packer@v3
+        with:
+          version: ${{ env.PACKER_VERSION }}
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.MOTIR_AWS_AMI_BUILD_ROLE_ARN }}
+          role-session-name: motir-ci-runner-ami-${{ github.run_id }}
+          aws-region: us-east-1
+      - name: Build the AMI
+        env:
+          AWS_ORG_ARN: ${{ vars.MOTIR_AWS_ORG_ARN }}
+          AMI_BUILD_SUBNET_ID: ${{ vars.MOTIR_AWS_AMI_BUILD_SUBNET_ID }}
+        run: infra/ci-runner-aws/build-ami.sh build

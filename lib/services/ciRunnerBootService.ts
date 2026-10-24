@@ -46,13 +46,30 @@ import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
   ORCHESTRATOR_REQUEST_TIMEOUT_MS,
   OrchestratorImageUnpullableError,
+  fleetRunnerImage,
+  fleetRunnerRegion,
   getOrchestrator,
   isOrchestratorConfigured,
   recordContainerUsage,
 } from '@/lib/orchestrator';
+import type { FleetShardDTO } from '@/lib/dto/fleetShard';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
+import { fleetShardService } from '@/lib/services/fleetShardService';
+import {
+  githubRunnerCallLedgerService as runnerCallLedger,
+  runnerCallReachedGithub,
+} from '@/lib/services/githubRunnerCallLedgerService';
+import {
+  classifyProvisionRefusal,
+  fleetShardAdmissionService,
+  SHARD_CAPACITY_DETAIL,
+} from '@/lib/services/fleetShardAdmissionService';
+import {
+  ciFleetAdmissionLockRepository as locks,
+  FLEET_ADMISSION_SCOPE,
+} from '@/lib/repositories/ciFleetAdmissionLockRepository';
 import {
   FLEET_CONTAINER_SIZE,
-  flyFleetConfig,
   type ContainerHandle,
   type ContainerOrchestrator,
   type ContainerSpec,
@@ -423,6 +440,11 @@ export interface SupervisionSession {
      *  delete it after the machine destroyed itself. OPTIONAL on read: a session
      *  memoised before it existed has none, and teardown reads the mounts. */
     readonly volumeId?: string;
+    /** The fleet account the container was booted in (MOTIR-8964), so every
+     *  later step reaches the same provider account. OPTIONAL on read: a session
+     *  memoised before it existed has none, and resolves to the process-wide
+     *  fleet — where every such container was booted. */
+    readonly shardId?: string;
   };
   readonly githubRunnerId: number | null;
   /**
@@ -878,15 +900,20 @@ export const ciRunnerBootService = {
    */
   async reapContainer(
     handle: ContainerHandle,
-    options: { now?: () => Date } = {},
+    options: {
+      now?: () => Date;
+      /** The fleet account the container was LISTED in (MOTIR-8964). Absent =
+       *  the account its intent recorded; null = the process-wide fleet. */
+      shardId?: string | null;
+    } = {},
   ): Promise<boolean> {
-    if (!isOrchestratorConfigured()) return false;
     const now = options.now ?? (() => new Date());
-    const orchestrator = getOrchestrator();
-    if (orchestrator.provider !== handle.provider) return false;
-
     const resolved = await resolveReapAttribution(handle);
     if (!resolved) return false;
+    const shardId = options.shardId !== undefined ? options.shardId : resolved.shardId;
+    if (shardId === null && !isOrchestratorConfigured()) return false;
+    const orchestrator = await fleetShardOrchestratorService.forShard(shardId);
+    if (orchestrator.provider !== handle.provider) return false;
     const usage = await orchestrator.teardown(handle, 'reaped', resolved.attribution);
 
     if (resolved.hosted) {
@@ -965,22 +992,16 @@ export const ciRunnerBootService = {
     encodedJitConfig: string;
     timeoutSeconds: number;
     orchestrator: ContainerOrchestrator;
+    /** The region to boot in — the account's (MOTIR-8964). Absent = the
+     *  process-wide fleet's; empty = the orchestrator's own default. */
+    region?: string;
   }): ContainerSpec {
     const { intent, workflowJobId, projectId, encodedJitConfig, timeoutSeconds } = input;
-    // The image and region are the Fly deployment's, but they are read through
-    // the CONFIG accessor rather than the adapter's API surface, so the spec
-    // stays provider-neutral. On the fake adapter neither is set, and the
-    // defaults keep the spec well-formed.
-    let image = 'motir/ci-runner@sha256:unset';
-    let region = 'iad';
-    try {
-      const config = flyFleetConfig();
-      image = config.image;
-      region = config.region;
-    } catch {
-      // Not configured — the fake adapter path. The spec is still complete, and
-      // the caller has already established that an orchestrator exists.
-    }
+    // Provider-neutral: the image is the fleet's, whichever account boots it, and
+    // the region is the account's — read through the composition root, so this
+    // service names no adapter's config (MOTIR-8964).
+    const image = fleetRunnerImage();
+    const region = input.region ?? fleetRunnerRegion();
 
     return {
       orgId: intent.organizationId,
@@ -1177,16 +1198,33 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
     return terminal({ outcome: 'no_runner_group', detail });
   }
 
-  let orchestrator: ContainerOrchestrator;
-  try {
-    orchestrator = getOrchestrator();
-  } catch (err) {
-    await releaseClaim(intentId);
-    console.warn('[ciRunnerBootService] no orchestrator is configured — claim released', {
-      intentId,
-      detail: detailOf(err),
-    });
-    return terminal({ outcome: 'not_configured' });
+  // WHICH ACCOUNT boots it — the one admission chose and wrote at the claim
+  // (MOTIR-8968); `null` = the process-wide fleet, today's path for a kind whose
+  // switch is Fly. On the Fly path an unconfigured orchestrator is handled as a
+  // process with none: claim released. An ACCOUNT that cannot be reached is a
+  // provider outage and moves the job (below).
+  let bootShardId: string | null = verdict.fleetShardId;
+  let bootShard: FleetShardDTO | null = null;
+  let orchestrator: ContainerOrchestrator | null = null;
+  let accountUnreachable: unknown = null;
+  if (bootShardId === null) {
+    try {
+      orchestrator = getOrchestrator();
+    } catch (err) {
+      await releaseClaim(intentId);
+      console.warn('[ciRunnerBootService] no orchestrator is configured — claim released', {
+        intentId,
+        detail: detailOf(err),
+      });
+      return terminal({ outcome: 'not_configured' });
+    }
+  } else {
+    try {
+      bootShard = await fleetShardService.getShard(bootShardId);
+      orchestrator = fleetShardOrchestratorService.forShardRow(bootShard);
+    } catch (err) {
+      accountUnreachable = err;
+    }
   }
 
   // ── 1 · Mint the JIT config ───────────────────────────────────────────────
@@ -1196,7 +1234,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
   // The org the runner is registered in — the job repository's own, through the
   // installation the delivery arrived on; `undefined` for the provisioning org.
   const runnerTarget = fleetRunnerTargetFor(intent);
-  let jit;
+  let jit: Awaited<ReturnType<typeof runnerJitConfigClient.mint>>;
   try {
     jit = await runnerJitConfigClient.mint(
       {
@@ -1211,6 +1249,11 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
       runnerTarget,
     );
   } catch (err) {
+    // THE LEDGER (MOTIR-8969): a refusal GitHub answered still spent a call on the
+    // runner's org. A timeout or transport failure is not recorded.
+    if (runnerCallReachedGithub(err)) {
+      await runnerCallLedger.recordForTargetQuietly(runnerTarget, 'mint', verdict.fleetShardId);
+    }
     if (err instanceof RunnerRegistrationRateLimitedError) {
       // Early, not broken. Release the claim and let the next sweep try — a
       // burst against GitHub's 1,500-per-5-minutes ceiling is the gate's
@@ -1268,6 +1311,8 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
     return terminal({ outcome: 'provision_failed', detail });
   }
 
+  await runnerCallLedger.recordForTargetQuietly(runnerTarget, 'mint', verdict.fleetShardId);
+
   // Persist the runner id BEFORE booting. `generate-jitconfig` has already
   // registered the runner (§7.4), so from here on a crash without this column
   // would leave a dangling registered runner nobody can name.
@@ -1280,19 +1325,90 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
   );
 
   // ── 2 · Boot exactly one container ────────────────────────────────────────
-  const spec = ciRunnerBootService.buildSpec({
-    intent,
-    workflowJobId,
-    projectId: intent.projectId,
-    encodedJitConfig: jit.encodedJitConfig,
-    timeoutSeconds: Math.ceil(jobTimeoutMs / 1000),
-    orchestrator,
-  });
+  const specFor = (shard: FleetShardDTO | null, through: ContainerOrchestrator) =>
+    ciRunnerBootService.buildSpec({
+      intent,
+      workflowJobId,
+      projectId: intent.projectId!,
+      encodedJitConfig: jit.encodedJitConfig,
+      timeoutSeconds: Math.ceil(jobTimeoutMs / 1000),
+      orchestrator: through,
+      ...(shard ? { region: shard.fly?.region ?? '' } : {}),
+    });
 
-  let handle: ContainerHandle;
-  try {
-    handle = await orchestrator.provision(spec);
-  } catch (err) {
+  // THE IN-BOOT MOVE (AMENDMENT 1, MOTIR-8968). An account that refuses for
+  // capacity or is down is paused, and the SAME boot moves to the next account
+  // of the kind with the SAME JIT config — the runner's GitHub org is the repo's
+  // whichever account boots it, so nothing is re-minted. With no account left
+  // the job defers `shard_capacity`; it is never `provision_failed` for a
+  // capacity reason and never sent to Fly.
+  const tried = new Set<string>();
+  let spec: ContainerSpec | null = null;
+  let handle: ContainerHandle | null = null;
+  for (;;) {
+    let refusal: unknown = accountUnreachable;
+    if (refusal === null) {
+      spec = specFor(bootShard, orchestrator!);
+      try {
+        handle = await orchestrator!.provision(spec);
+        break;
+      } catch (err) {
+        refusal = err;
+      }
+    }
+    accountUnreachable = null;
+
+    const reason = bootShardId === null ? 'job_fault' : classifyProvisionRefusal(refusal);
+    if (bootShardId === null || reason === 'job_fault') {
+      return failedProvision(refusal);
+    }
+
+    const refusedId = bootShardId;
+    tried.add(refusedId);
+    console.warn('[ciRunnerBootService] an account refused the provision — moving the job', {
+      intentId,
+      shardId: refusedId,
+      reason,
+      detail: detailOf(refusal),
+    });
+    const nextId = await withSystemContext(async (tx) => {
+      await locks.ensureScope(FLEET_ADMISSION_SCOPE, tx);
+      if (!(await locks.lockScope(FLEET_ADMISSION_SCOPE, tx))) {
+        throw new Error('the fleet admission lock could not be taken');
+      }
+      return fleetShardAdmissionService.moveAfterRefusalInTx(
+        intent,
+        refusedId,
+        reason,
+        tried,
+        now(),
+        tx,
+      );
+    });
+    if (nextId === null) {
+      await deregisterQuietly(jit.runnerId, intentId, runnerTarget);
+      await ciRunnerAdmissionService.releaseClaimForShardCapacity(intentId, now());
+      console.warn('[ciRunnerBootService] every account of the kind refused — deferred', {
+        intentId,
+        tried: [...tried],
+      });
+      return terminal({
+        outcome: 'gate_deferred',
+        reason: 'shard_capacity',
+        detail: SHARD_CAPACITY_DETAIL,
+      });
+    }
+    bootShardId = nextId;
+    bootShard = null;
+    try {
+      bootShard = await fleetShardService.getShard(nextId);
+      orchestrator = fleetShardOrchestratorService.forShardRow(bootShard);
+    } catch (err) {
+      accountUnreachable = err;
+    }
+  }
+
+  async function failedProvision(err: unknown): Promise<BootResult> {
     // A MINTED-BUT-UNUSED JIT CONFIG. The runner is registered at GitHub and no
     // container will ever claim it, so it is de-registered here rather than
     // left to GitHub — which does not clean it up (§7.4, verified).
@@ -1315,7 +1431,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
         image: err.imageReference,
         detail: detailOf(err),
       });
-      await settleFailed(intentId, intent.projectId, 'provision_failed', detail);
+      await settleFailed(intentId, intent!.projectId, 'provision_failed', detail);
       return terminal({ outcome: 'image_unpullable', detail });
     }
 
@@ -1323,7 +1439,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
     // A provider refusal or a blown deadline is transient until it repeats: the
     // intent goes back to the pool rather than taking a runner away from the jobs
     // queued at GitHub (MOTIR-8941).
-    const attempt = intent.bootAttempts + 1;
+    const attempt = intent!.bootAttempts + 1;
     if (attempt < MAX_BOOT_ATTEMPTS) {
       await ciRunnerAdmissionService.releaseClaimForRetry(intentId);
       console.warn('[ciRunnerBootService] the boot failed — claim released for another attempt', {
@@ -1333,10 +1449,11 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
       });
       return terminal({ outcome: 'rate_limited', retryAfterSeconds: null });
     }
-    await settleFailed(intentId, intent.projectId, 'provision_failed', detail);
+    await settleFailed(intentId, intent!.projectId, 'provision_failed', detail);
     return terminal({ outcome: 'provision_failed', detail });
   }
 
+  if (!handle || !spec) throw new Error('unreachable: the boot loop exits only with a handle');
   const bootedAt = now();
   await withSystemContext((tx) =>
     intents.recordBoot(
@@ -1348,6 +1465,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
         githubRunnerId: jit.runnerId,
         runnerName: jit.runnerName,
         bootedAt,
+        fleetShardId: bootShardId,
       },
       tx,
     ),
@@ -1364,6 +1482,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
         region: handle.region,
         createdAt: handle.createdAt.toISOString(),
         ...(handle.volumeId ? { volumeId: handle.volumeId } : {}),
+        ...(bootShardId ? { shardId: bootShardId } : {}),
       },
       githubRunnerId: jit.runnerId,
       runnerTarget: runnerTarget ?? null,
@@ -1433,7 +1552,9 @@ async function pollContainerOnce(
 
   let status;
   try {
-    status = await orchestratorFor(session).describe({
+    status = await (
+      await orchestratorFor(session)
+    ).describe({
       provider: session.handle.provider,
       id: session.handle.id,
       region: session.handle.region,
@@ -1540,7 +1661,7 @@ async function settleSupervisedContainer(
 
   let orchestrator: ContainerOrchestrator;
   try {
-    orchestrator = orchestratorFor(session);
+    orchestrator = await orchestratorFor(session);
   } catch (err) {
     // No orchestrator to tear down THROUGH. Leave the intent in flight for the
     // reaper rather than settling a container that may still be running.
@@ -1605,11 +1726,12 @@ async function settleSupervisedContainer(
   };
 }
 
-/** The orchestrator a session's container lives on. Re-read per step rather than
- *  carried across the boundary, because an adapter is not serializable — the
- *  handle is, which is exactly why the port made it opaque. */
-function orchestratorFor(_session: SupervisionSession): ContainerOrchestrator {
-  return getOrchestrator();
+/** The orchestrator a session's container lives on — its account's, or the
+ *  process-wide fleet's for a session with none (MOTIR-8964). Re-read per step
+ *  rather than carried across the boundary, because an adapter is not
+ *  serializable — the handle is, which is exactly why the port made it opaque. */
+async function orchestratorFor(session: SupervisionSession): Promise<ContainerOrchestrator> {
+  return fleetShardOrchestratorService.forShard(session.handle.shardId ?? null);
 }
 
 // ── internals ─────────────────────────────────────────────────────────────
@@ -1647,7 +1769,11 @@ async function deregisterQuietly(
   if (runnerId === null) return;
   try {
     await runnerJitConfigClient.deleteRunner(runnerId, target);
+    await runnerCallLedger.recordForTargetQuietly(target, 'delete', null);
   } catch (err) {
+    if (runnerCallReachedGithub(err)) {
+      await runnerCallLedger.recordForTargetQuietly(target, 'delete', null);
+    }
     console.error(
       '[ciRunnerBootService] could not de-register a runner — it may be left dangling',
       { intentId, runnerId, detail: detailOf(err) },
@@ -1671,6 +1797,8 @@ async function deregisterByNameQuietly(
 ): Promise<void> {
   try {
     const removed = await runnerJitConfigClient.deleteRunnersNamed(runnerName, target);
+    // One `delete` per runner it removed (MOTIR-8969).
+    await runnerCallLedger.recordForTargetQuietly(target, 'delete', null, removed.length);
     if (removed.length > 0) {
       console.warn('[ciRunnerBootService] de-registered a runner left by a timed-out mint', {
         intentId,
@@ -1754,9 +1882,12 @@ async function releaseClaim(intentId: string): Promise<void> {
  * its own live checkpoint row (MOTIR-6524). Null when nothing owns it, or when
  * what owns it cannot be attributed (a deleted project, a malformed job id).
  */
-async function resolveReapAttribution(
-  handle: ContainerHandle,
-): Promise<{ attribution: UsageAttribution; hosted: LiveAgentUsage | null } | null> {
+async function resolveReapAttribution(handle: ContainerHandle): Promise<{
+  attribution: UsageAttribution;
+  hosted: LiveAgentUsage | null;
+  /** The account the CI intent recorded its container in; null otherwise. */
+  shardId: string | null;
+} | null> {
   const intent = await withSystemContext((tx) =>
     intents.findByContainerId(handle.provider, handle.id, tx),
   );
@@ -1769,6 +1900,7 @@ async function resolveReapAttribution(
     if (!hosted?.projectId) return null;
     return {
       hosted,
+      shardId: null,
       attribution: {
         orgId: hosted.organizationId,
         workspaceId: hosted.workspaceId,
@@ -1792,6 +1924,7 @@ async function resolveReapAttribution(
   if (!Number.isInteger(workflowJobId)) return null;
   return {
     hosted: null,
+    shardId: intent.fleetShardId,
     attribution: {
       orgId: intent.organizationId,
       workspaceId: intent.workspaceId,
@@ -1847,14 +1980,16 @@ async function sweepVanishedInFlight(now: () => Date): Promise<number> {
   const candidates = await withSystemContext((tx) =>
     intents.listInFlightBootedBefore(bootedBefore, VANISHED_SWEEP_BATCH, tx),
   );
-  const orchestrator = getOrchestrator();
   let settled = 0;
   for (const intent of candidates) {
-    // A container another provider booted cannot be asked about here; the
-    // deployment that owns that provider sweeps it.
-    if (!intent.containerId || intent.containerProvider !== orchestrator.provider) continue;
+    if (!intent.containerId) continue;
     let gone: boolean;
     try {
+      // Asked of the account the container was booted in (MOTIR-8964).
+      const orchestrator = await fleetShardOrchestratorService.forIntent(intent);
+      // A container another provider booted cannot be asked about here; the
+      // deployment that owns that provider sweeps it.
+      if (intent.containerProvider !== orchestrator.provider) continue;
       const status = await orchestrator.describe({
         provider: orchestrator.provider,
         id: intent.containerId,

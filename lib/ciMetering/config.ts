@@ -23,6 +23,7 @@
 
 import { isCloudBilling } from '@/lib/billing/availability';
 import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
+import { motirOwnedOrgLogins } from './ownedOrgs';
 
 /**
  * Motir's provisioning GitHub org login (MOTIR-1779; working login
@@ -47,8 +48,10 @@ export function provisioningOrgLogin(): string | null {
  * makes the transfer edge fall out with NO special handling: the owner changes
  * at the transfer itself, so a run completing afterwards simply fails the gate.
  */
-export function isMotirOwnedRepo(ownerLogin: string | null | undefined): boolean {
-  return isMotirHostedOwner(ownerLogin, provisioningOrgLogin());
+export async function isMotirOwnedRepo(ownerLogin: string | null | undefined): Promise<boolean> {
+  // The owned-org SET (MOTIR-8974): the provisioning org plus every fleet
+  // account's org, where a tenant's hosted repositories may now live.
+  return isMotirHostedOwner(ownerLogin, await motirOwnedOrgLogins());
 }
 
 /**

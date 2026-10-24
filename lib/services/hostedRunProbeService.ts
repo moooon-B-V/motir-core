@@ -97,7 +97,7 @@ export const hostedRunProbeService = {
    * loud. `now` is injectable so a test never reads the wall clock.
    */
   async check(now: Date = new Date()): Promise<HostedRunProbeVerdictDTO> {
-    const ownedOrgs = motirOwnedOrgLogins();
+    const ownedOrgs = await motirOwnedOrgLogins();
     const windowStart = new Date(now.getTime() - HOSTED_RUN_WINDOW_MS);
     if (ownedOrgs.length === 0) return judgeHostedRuns([], ownedOrgs, now, windowStart);
     const runs = await withSystemContext((tx) =>

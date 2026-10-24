@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import {
@@ -30,7 +30,8 @@ import { truncateAuthTables } from '../helpers/db';
 // repositories and one public one, a synced runner group, and an inventory where
 // every job is runnable. Each case breaks one thing.
 
-const ORG = 'acme-connected';
+// A `let` so one block can read the org the shipped manifest names (MOTIR-9410).
+let ORG = 'acme-connected';
 const STUDIO_INSTALLATION = '880011';
 /** The user-facing App's installation on the org — the one that HAS a mirror row. */
 const MIRROR_INSTALLATION = '55501';
@@ -663,6 +664,71 @@ describe('image_coverage', () => {
     world.head.set('web', 'fail');
     const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
     expectOnly(result, 'image_coverage', 'unknown');
+  });
+
+  it("an entry measured under the org's former name still matches after a rename (MOTIR-9410)", async () => {
+    const inv = inventory({ api: [job('build', { verdict: 'needs-image', missing: ['gh'] })] });
+    for (const [key, entry] of Object.entries(inv.repos)) {
+      const name = key.slice(key.indexOf('/') + 1);
+      delete inv.repos[key];
+      inv.repos[`former-org/${name}`] = { ...entry, repoRef: `former-org/${name}` };
+    }
+    const result = await fleetReadinessService.readinessFor(target(), { inventory: inv });
+    expectOnly(result, 'image_coverage', 'unmet');
+    expect(cond(result, 'image_coverage')).toMatchObject({
+      reasonCode: 'jobs_not_runnable',
+      // The live repository is named, never the manifest's stale `owner/`.
+      params: { jobs: [{ repoRef: `${ORG}/api`, jobId: 'build' }] },
+    });
+  });
+
+  it("an exact owner/name entry wins over another org's entry of the same name", async () => {
+    const inv = inventory();
+    // Listed FIRST, so a name-only lookup would land on it.
+    inv.repos = {
+      'other-org/api': {
+        ...inv.repos[`${ORG}/api`]!,
+        repoRef: 'other-org/api',
+        workflows: [
+          { path: '.github/workflows/ci.yml', jobs: [job('x', { verdict: 'needs-image' })] },
+        ],
+      },
+      ...inv.repos,
+    };
+    const result = await fleetReadinessService.readinessFor(target(), { inventory: inv });
+    expect(cond(result, 'image_coverage').state).toBe('met');
+  });
+
+  describe('the shipped manifest, read for the org it names (MOTIR-9410)', () => {
+    const shipped = checkedInInventory as FleetJobInventory;
+    const entry = shipped.repos['motir-co/motir-ai']!;
+
+    beforeAll(() => {
+      ORG = 'motir-co';
+    });
+    afterAll(() => {
+      ORG = 'acme-connected';
+    });
+
+    beforeEach(async () => {
+      await connectRepos(['motir-ai']);
+      world.visibility = new Map([
+        ['api', false],
+        ['web', false],
+        ['site', false],
+        ['motir-ai', true],
+      ]);
+      world.head.set('motir-ai', { sha: entry.sha, date: entry.measuredAt });
+    });
+
+    it('a motir-co/motir-ai private repository is inventoried, and its image coverage is met', async () => {
+      const result = await fleetReadinessService.readinessFor(target(), { inventory: shipped });
+      expect(cond(result, 'image_coverage')).toMatchObject({
+        state: 'met',
+        reasonCode: 'all_runnable',
+        params: { repositories: ['motir-co/motir-ai'] },
+      });
+    });
   });
 
   describe('a newer workflow commit that leaves the structure alone (MOTIR-8870)', () => {

@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetOwnedOrgCache } from '@/lib/ciMetering/ownedOrgs';
+import { adminDb } from '../helpers/adminDb';
 import {
   billingUsageToken,
   isCiMeteringEnabled,
@@ -10,8 +12,19 @@ import {
 // `docs/decisions/ci-minutes-allowance.md` §5.1 (who GitHub bills) and §8.5
 // (self-host is inert).
 
+beforeEach(async () => {
+  // The §5.1 gate reads the fleet account orgs too (MOTIR-8974); this file pins
+  // the provisioning-org arm, so no account row may answer for it.
+  await adminDb.fleetShard.deleteMany({});
+  resetOwnedOrgCache();
+});
+
 afterEach(() => {
   vi.unstubAllEnvs();
+});
+
+afterAll(async () => {
+  await adminDb.$disconnect();
 });
 
 describe('provisioningOrgLogin', () => {
@@ -31,34 +44,34 @@ describe('provisioningOrgLogin', () => {
 });
 
 describe('isMotirOwnedRepo — the §5.1 gate', () => {
-  it('matches Motir’s provisioning org', () => {
+  it('matches Motir’s provisioning org', async () => {
     vi.stubEnv('GITHUB_FALLBACK_ORG', 'motir-projects');
-    expect(isMotirOwnedRepo('motir-projects')).toBe(true);
+    expect(await isMotirOwnedRepo('motir-projects')).toBe(true);
   });
 
-  it('matches case-insensitively, as GitHub logins are', () => {
+  it('matches case-insensitively, as GitHub logins are', async () => {
     vi.stubEnv('GITHUB_FALLBACK_ORG', 'Motir-Projects');
-    expect(isMotirOwnedRepo('motir-projects')).toBe(true);
-    expect(isMotirOwnedRepo('MOTIR-PROJECTS')).toBe(true);
+    expect(await isMotirOwnedRepo('motir-projects')).toBe(true);
+    expect(await isMotirOwnedRepo('MOTIR-PROJECTS')).toBe(true);
   });
 
-  it('REJECTS a repo in someone else’s account — Motir never bought that compute', () => {
+  it('REJECTS a repo in someone else’s account — Motir never bought that compute', async () => {
     // The connect-existing case (§5.4): GitHub bills the user directly, so
     // metering it would charge for compute Motir was never billed for.
     vi.stubEnv('GITHUB_FALLBACK_ORG', 'motir-projects');
-    expect(isMotirOwnedRepo('some-user')).toBe(false);
-    expect(isMotirOwnedRepo('motir-projects-fork')).toBe(false);
+    expect(await isMotirOwnedRepo('some-user')).toBe(false);
+    expect(await isMotirOwnedRepo('motir-projects-fork')).toBe(false);
   });
 
-  it('rejects everything when no org is configured', () => {
+  it('rejects everything when no org is configured', async () => {
     vi.stubEnv('GITHUB_FALLBACK_ORG', undefined);
-    expect(isMotirOwnedRepo('motir-projects')).toBe(false);
+    expect(await isMotirOwnedRepo('motir-projects')).toBe(false);
   });
 
-  it('rejects a missing owner rather than throwing', () => {
+  it('rejects a missing owner rather than throwing', async () => {
     vi.stubEnv('GITHUB_FALLBACK_ORG', 'motir-projects');
-    expect(isMotirOwnedRepo(null)).toBe(false);
-    expect(isMotirOwnedRepo(undefined)).toBe(false);
+    expect(await isMotirOwnedRepo(null)).toBe(false);
+    expect(await isMotirOwnedRepo(undefined)).toBe(false);
   });
 });
 
