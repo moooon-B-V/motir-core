@@ -271,7 +271,7 @@ test('⚠️ PLANNING IS NEVER GATED — the story ships a signal, not a lock', 
   await page.goto('/planning');
 
   // ⚠️ THE WORKSPACE DIALOG, NOT AN `h1` — the same correction its acceptance
-  // twin needed (`acceptance-code-index.spec.ts`, MOTIR-1771), which was made
+  // twin needed (`acceptance-code-index.spec.ts`, MOTIR-1771, since retired), which was made
   // there and missed here. `/planning` is a pure REDIRECT (MOTIR-4732's forward
   // for old links): it has no heading of its own and forwards to a HOST page
   // with the planning overlay mounted over it. A level-1 heading therefore
