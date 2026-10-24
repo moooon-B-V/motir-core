@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { projectRepoProvisioningService } from '@/lib/services/projectRepoProvisioningService';
+import { fleetGithubOrgAssignmentService } from '@/lib/services/fleetGithubOrgAssignmentService';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { listConnectedRepoNames } from '@/lib/workItems/targetRepo';
 import {
@@ -1150,5 +1151,92 @@ describe('an organisation hosted in its assigned GitHub org (MOTIR-8966)', () =>
     expect(result.rows[0]!.row?.state).toBe('failed');
     expect(createdIn.size).toBe(0);
     expect(calls.filter((c) => c.method !== 'GET' && c.url.includes(`/${MOTIR_ORG}/`))).toEqual([]);
+  });
+
+  it('an assigned org no account names any more fails every row, and nothing is created', async () => {
+    vi.spyOn(fleetGithubOrgAssignmentService, 'ensureHostedGithubOrg').mockResolvedValue({
+      outcome: 'already_assigned',
+      githubOrg: 'motir-host-gone',
+      target: null,
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fx = await makeWorkItemFixture();
+    await addRow(fx, 'api', 'acme-api');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(result.rows[0]).toMatchObject({
+      outcome: 'failed',
+      failureCode: 'REPO_HOST_ORG_UNAVAILABLE',
+    });
+    expect(createdIn.size).toBe(0);
+  });
+
+  it('an organisation already assigned an org with an account row is hosted there', async () => {
+    const target = {
+      org: HOST_ORG,
+      installationId: HOST_INSTALLATION,
+      role: 'provisioning' as const,
+    };
+    vi.spyOn(fleetGithubOrgAssignmentService, 'ensureHostedGithubOrg').mockResolvedValue({
+      outcome: 'already_assigned',
+      githubOrg: HOST_ORG,
+      target,
+    });
+    const fx = await makeWorkItemFixture();
+    await addRow(fx, 'api', 'acme-api');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(result.rows[0]).toMatchObject({ outcome: 'created' });
+    expect(createdIn.get(HOST_ORG)?.has('acme-api')).toBe(true);
+  });
+
+  // A run that will create nothing READS the assignment and never makes one.
+  it.each([
+    ['no assignment', null],
+    ['an assignment no account names', { githubOrg: 'motir-host-gone', target: null }],
+    [
+      'an assignment with its account',
+      {
+        githubOrg: HOST_ORG,
+        target: { org: HOST_ORG, installationId: HOST_INSTALLATION, role: 'provisioning' as const },
+      },
+    ],
+  ])('a run with nothing to create reads %s and assigns nothing', async (_label, current) => {
+    const read = vi
+      .spyOn(fleetGithubOrgAssignmentService, 'readHostedGithubOrg')
+      .mockResolvedValue(current);
+    const ensure = vi.spyOn(fleetGithubOrgAssignmentService, 'ensureHostedGithubOrg');
+    const fx = await makeWorkItemFixture();
+    const skippedId = await addRow(fx, 'infra', 'acme-infra');
+    await projectRepoSetService.skipRow(skippedId, fx.ctx);
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(result.rows.map((r) => r.outcome)).toEqual(['already_settled']);
+    expect(read).toHaveBeenCalledWith(fx.workspace.organizationId);
+    expect(ensure).not.toHaveBeenCalled();
+    expect(createdIn.size).toBe(0);
+  });
+
+  it('a single-row run decides from THAT row alone', async () => {
+    const read = vi
+      .spyOn(fleetGithubOrgAssignmentService, 'readHostedGithubOrg')
+      .mockResolvedValue(null);
+    const fx = await makeWorkItemFixture();
+    const skippedId = await addRow(fx, 'infra', 'acme-infra');
+    await projectRepoSetService.skipRow(skippedId, fx.ctx);
+    const liveId = await addRow(fx, 'web', 'acme-web');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx, {
+      rowId: skippedId,
+    });
+
+    expect(result.rows.map((r) => [r.rowId, r.outcome])).toEqual([
+      [skippedId, 'already_settled'],
+      [liveId, 'not_attempted'],
+    ]);
+    expect(read).toHaveBeenCalled();
   });
 });
