@@ -17,7 +17,8 @@ import { projectMembersService } from '@/lib/services/projectMembersService';
 
 // ACCESS LIVES ON THE PROJECT — the browser walk (Story MOTIR-6169 · Subtask
 // MOTIR-6553), in the main e2e lane. The recipe's four steps, unpaced, then the
-// states the recorded receipt (`acceptance-project-access.spec.ts`) leaves out:
+// states the recorded receipt left out (`acceptance-project-access.spec.ts`,
+// retired by MOTIR-9411 because test 1 below asserts everything it showed):
 //
 //   1. A Manager invites a contractor as a Limited member into Atlas; the
 //      contractor accepts.
