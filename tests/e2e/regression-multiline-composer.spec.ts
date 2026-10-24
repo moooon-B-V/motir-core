@@ -48,6 +48,7 @@ import type { Page, Locator } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedPlanningAnchorTree, PLANNING_ANCHOR_PASSWORD } from './_helpers/planning-anchor-seed';
+import en from '@/messages/en.json';
 
 test.describe.configure({ timeout: 240_000 });
 
@@ -255,6 +256,10 @@ test('a request to Motir AI can be a paragraph — on the planning surface', asy
     // …and the composer is back to one row.
     await expect(composer(page)).toHaveValue('');
     expect((await measure(composer(page))).height).toBe(oneRow);
+    // The plan run that send started settles before the next one may start: the
+    // lane's jobs mock ends it with nothing proposed, which the rail says in its
+    // own line. The recording lane's holds always outlasted it (MOTIR-9411).
+    await expect(rail(page).getByText(en.planningWorkspace.conversation.error.empty)).toBeVisible();
     await beat();
   });
 

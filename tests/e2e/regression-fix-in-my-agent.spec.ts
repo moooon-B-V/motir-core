@@ -252,7 +252,11 @@ test.describe('Fix a red pull request in my own agent', () => {
       // own check (step 4), before the repair claim is asked — the unit contract is
       // `agentInstanceRunStart.test.ts`'s "the same agent pressed again is refused busy".
       expect(refused.json).toMatchObject({ code: 'agent_instance_run_active' });
-      expect(await runsOf(page, card.key)).toEqual(runs);
+      // No run is added. Compared by id: a live run's heartbeat moves between
+      // the two reads (MOTIR-9411: the recording lane's holds hid the drift).
+      expect((await runsOf(page, card.key)).map((run) => run.id)).toEqual(
+        runs.map((run) => run.id),
+      );
     });
 
     await chapter('The checks go green: the fix ends and the card is settled', async () => {

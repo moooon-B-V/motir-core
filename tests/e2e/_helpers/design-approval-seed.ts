@@ -327,7 +327,9 @@ export async function servePublishedMock(page: Page): Promise<void> {
     try {
       response = await route.fetch({ maxRedirects: 0 });
     } catch (err) {
-      if (page.isClosed()) return;
+      // The page may not report itself closed yet while its context is being
+      // torn down, so the error's own message is the reliable test.
+      if (page.isClosed() || /has been closed|Test ended/.test(String(err))) return;
       throw err;
     }
     const location = response.headers()['location'] ?? '';

@@ -228,6 +228,11 @@ test.describe('a pending approval holds the move it performs, and says so where 
         .toBe('done');
       await page.keyboard.press('Escape');
       await page.keyboard.press('Escape');
+      // Closing strips the overlay's parameters with a client navigation; a
+      // `goto` that lands inside it is aborted (MOTIR-9411: the recording
+      // lane's hold always outlasted it).
+      await expect(overlay).toHaveCount(0);
+      await page.waitForURL((url) => !url.searchParams.has('approval'));
     });
     await beat();
 

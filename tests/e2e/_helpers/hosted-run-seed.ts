@@ -120,7 +120,11 @@ export async function seedCreatedRepo(
       installationId: inst.id,
       workspaceId,
       organizationId,
-      repoId: String(700_000 + repoSeq),
+      // Unique across WORKER RESTARTS, not only within one worker: Playwright
+      // restarts the worker after a failed test, which resets `repoSeq`, while
+      // the rows it already wrote stay in the database. A bare counter then
+      // collides with them and fails every later test in the file (MOTIR-9411).
+      repoId: `${Date.now() % 1_000_000_000}${String(repoSeq).padStart(3, '0')}`,
       owner: repo.owner,
       name: repo.name,
       defaultBranch: 'main',

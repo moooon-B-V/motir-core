@@ -1009,6 +1009,8 @@ jobs:
   regression-build:
     name: Next.js build (regression)
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # Observed 5.5–6.5 min on its first runs (PR #3776) → 15, the same ceiling
+    # as the acceptance `build` it mirrors: one `pnpm build`, nothing else.
     timeout-minutes: 15
     needs: membership
     if: needs.membership.outputs.regression_run == 'true'
@@ -1059,6 +1061,10 @@ jobs:
   regression:
     name: Playwright E2E (regression) ${{ matrix.shard }}/${{ needs.membership.outputs.regression_legs }}
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # Observed 8.4–18.3 min per green leg on its first runs (PR #3776, ten legs,
+    # no pacing) → 55, the acceptance shards' ceiling. Kept that high because a
+    # leg's slice moves as the lane grows, and the build download alone has taken
+    # up to 14 min on this fleet (see the acceptance shard's note).
     timeout-minutes: 55
     needs: [membership, regression-build]
     strategy:
