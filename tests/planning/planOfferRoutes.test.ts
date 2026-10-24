@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const requireCompliantSession = vi.fn();
 const getActiveProject = vi.fn();
 const enforceAiRateLimit = vi.fn();
-const confirmPlanOffer = vi.fn();
+const confirmOffer = vi.fn();
 const declinePlanOffer = vi.fn();
 vi.mock('@/lib/auth/requireCompliantSession', () => ({
   requireCompliantSession: () => requireCompliantSession(),
@@ -18,7 +18,7 @@ vi.mock('@/lib/rateLimit/aiGuard', () => ({
   enforceAiRateLimit: (...a: unknown[]) => enforceAiRateLimit(...a),
 }));
 vi.mock('@/lib/services/planOfferStartService', () => ({
-  planOfferStartService: { confirmPlanOffer: (...a: unknown[]) => confirmPlanOffer(...a) },
+  planOfferStartService: { confirmOffer: (...a: unknown[]) => confirmOffer(...a) },
 }));
 vi.mock('@/lib/services/planOfferService', () => ({
   planOfferService: { declinePlanOffer: (...a: unknown[]) => declinePlanOffer(...a) },
@@ -47,7 +47,7 @@ function signedIn() {
 }
 
 const DOORS = [
-  ['confirm', confirm, confirmPlanOffer],
+  ['confirm', confirm, confirmOffer],
   ['decline', decline, declinePlanOffer],
 ] as const;
 
@@ -97,13 +97,13 @@ describe('POST …/offer/confirm', () => {
 
   it('calls the start once and answers its result, uncached', async () => {
     signedIn();
-    confirmPlanOffer.mockResolvedValue({ sessionId: 's2', jobId: 'j1', planId: 'p1' });
+    confirmOffer.mockResolvedValue({ sessionId: 's2', jobId: 'j1', planId: 'p1' });
     const res = await post({ sessionId: 's1', offerTurnId: 't1' });
     expect(res.status).toBe(200);
     expect(res.headers.get('Cache-Control')).toBe('private, no-store');
     expect(await res.json()).toEqual({ sessionId: 's2', jobId: 'j1', planId: 'p1' });
-    expect(confirmPlanOffer).toHaveBeenCalledTimes(1);
-    expect(confirmPlanOffer).toHaveBeenCalledWith(CTX, { conversationId: 's1', offerTurnId: 't1' });
+    expect(confirmOffer).toHaveBeenCalledTimes(1);
+    expect(confirmOffer).toHaveBeenCalledWith(CTX, { conversationId: 's1', offerTurnId: 't1' });
     expect(enforceAiRateLimit).toHaveBeenCalledWith(CTX, 'ai:generate');
   });
 
@@ -111,12 +111,12 @@ describe('POST …/offer/confirm', () => {
     signedIn();
     enforceAiRateLimit.mockResolvedValue(new Response(null, { status: 429 }));
     expect((await post({ sessionId: 's1', offerTurnId: 't1' })).status).toBe(429);
-    expect(confirmPlanOffer).not.toHaveBeenCalled();
+    expect(confirmOffer).not.toHaveBeenCalled();
   });
 
   it('a refused start is 409 with its reason', async () => {
     signedIn();
-    confirmPlanOffer.mockRejectedValue(new PlanOfferStartRefusedError('target_closed'));
+    confirmOffer.mockRejectedValue(new PlanOfferStartRefusedError('target_closed'));
     const res = await post({ sessionId: 's1', offerTurnId: 't1' });
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ reason: 'target_closed' });

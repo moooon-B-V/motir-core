@@ -1382,7 +1382,7 @@
         },
         "debug": {
           "title": "用 Motir AI 排查缺陷",
-          "description": "追查缺陷的可能原因，并记入分诊",
+          "description": "追查缺陷的可能原因，经你同意后再记录",
           "prefill": "有东西坏了。实际发生的情况： \n应该发生的情况： "
         }
       }
@@ -5907,7 +5907,7 @@
       "error": "反馈提交失败，请重试。",
       "debugOffer": {
         "action": "用 Motir AI 排查缺陷",
-        "hint": "按下<b>用 Motir AI 排查缺陷</b>即开始排查，并会消耗 Motir AI 额度。Motir AI 会阅读代码、指出可能的原因，并检查是否已有工作项覆盖这个缺陷。"
+        "hint": "按下<b>用 Motir AI 排查缺陷</b>会立即把你的报告发给 Motir AI，并消耗 Motir AI 额度。Motir AI 会阅读代码、指出可能的原因，并提议把诊断记到这个缺陷上。在你确认之前，不会写入任何内容。"
       }
     }
   },
@@ -7960,7 +7960,7 @@
       "handoff": "按计划变更理解 — 正在生成提案",
       "debug": {
         "wroteAnchor": "已把诊断写入 <chip>{key}</chip>。它仍留在分诊中，其他内容均未改动。",
-        "filed": "已在分诊中记入 <chip>{key}</chip>，并附上诊断。其他内容均未改动。",
+        "filed": "已记入 <chip>{key}</chip>，并附上诊断。其他内容均未改动。",
         "enrichedAnchor": "已把诊断补充到 <chip>{key}</chip>，它已经覆盖这个缺陷。没有新建工作项，{anchorKey} 保持原样。",
         "enriched": "已把诊断补充到 <chip>{key}</chip>，它已经覆盖这个缺陷。没有新建工作项。",
         "ungrounded": "无法把这个问题追溯到代码，因此没有写入任何内容。"
@@ -8452,6 +8452,25 @@
       "settledHeading": "你的回答确定了这些",
       "clearEnough": "已足够清楚，可以按原样规划。",
       "nothingSettled": "没有确定任何内容，所以会按请求原样规划。"
+    },
+    "logBugOffer": {
+      "label": "提议记录缺陷",
+      "writeNew": "新建一个缺陷",
+      "writeAnchored": "把诊断补充到 <chip>{key}</chip>",
+      "writeExisting": "在 <chip>{key}</chip> 上记下诊断，它已经覆盖这个缺陷",
+      "confirming": "正在记录…",
+      "confirmHelp": "确认后由 Motir 完成这一处写入。回复“是”也一样。",
+      "declineHelp": "拒绝不会写入任何内容，对话会继续。",
+      "logged": "已记录",
+      "loggedBy": "已确认 · {when}",
+      "recorded": "没有写入任何内容。",
+      "cannotStart": {
+        "planningUnavailable": "这里无法记录缺陷：本项目尚未设置 Motir AI，或者你没有使用它的权限。",
+        "targetChanged": "{key} 在提议之后被修改过，因此没有写入任何内容。请再问一次以获得最新的提议。",
+        "targetUnavailable": "你已无法打开 {key}，因此没有写入任何内容。",
+        "anchorNotTriage": "{key} 已不在分诊中，因此没有补充诊断。",
+        "generic": "无法通过这个提议记录缺陷。"
+      }
     },
     "restart": {
       "control": "规划新内容",

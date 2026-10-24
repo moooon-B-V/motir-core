@@ -1382,7 +1382,7 @@
         },
         "debug": {
           "title": "Debug with Motir AI",
-          "description": "Trace a bug to its likely cause and file it in Triage",
+          "description": "Trace a bug to its likely cause, then log it if you agree",
           "prefill": "Something is broken. What happens: \nWhat should happen instead: "
         }
       }
@@ -5907,7 +5907,7 @@
       "error": "Couldn’t submit your report. Please try again.",
       "debugOffer": {
         "action": "Debug with Motir AI",
-        "hint": "<b>Debug with Motir AI</b> starts the debug as soon as you press it and spends Motir AI credits. Motir AI reads the code, names the likely cause, and checks whether a work item already covers this bug."
+        "hint": "<b>Debug with Motir AI</b> sends your report to Motir AI as soon as you press it and spends Motir AI credits. Motir AI reads the code, names the likely cause, and offers to add the diagnosis to this bug. Nothing is written until you confirm."
       }
     }
   },
@@ -7966,7 +7966,7 @@
       "handoff": "Reading it as a plan change — working on the proposal",
       "debug": {
         "wroteAnchor": "Wrote the diagnosis onto <chip>{key}</chip>. It stays in Triage, and nothing else changed.",
-        "filed": "Filed <chip>{key}</chip> in Triage with the diagnosis. Nothing else changed.",
+        "filed": "Filed <chip>{key}</chip> with the diagnosis. Nothing else changed.",
         "enrichedAnchor": "Added the diagnosis to <chip>{key}</chip>, which already covers this bug. Nothing new was filed, and {anchorKey} is left as it is.",
         "enriched": "Added the diagnosis to <chip>{key}</chip>, which already covers this bug. Nothing new was filed.",
         "ungrounded": "Couldn't trace this to the code, so nothing was written."
@@ -8458,6 +8458,25 @@
       "settledHeading": "What your answers settled",
       "clearEnough": "Clear enough to plan as stated.",
       "nothingSettled": "Nothing was settled, so the request is planned as stated."
+    },
+    "logBugOffer": {
+      "label": "Offer to log a bug",
+      "writeNew": "File a new bug",
+      "writeAnchored": "Add the diagnosis to <chip>{key}</chip>",
+      "writeExisting": "Note the diagnosis on <chip>{key}</chip>, which already covers this",
+      "confirming": "Logging…",
+      "confirmHelp": "Confirm makes this one write, as Motir. Replying “yes” does the same.",
+      "declineHelp": "Decline writes nothing, and the conversation carries on.",
+      "logged": "Logged",
+      "loggedBy": "Confirmed · {when}",
+      "recorded": "Nothing was written.",
+      "cannotStart": {
+        "planningUnavailable": "Logging a bug isn’t available here: Motir AI isn’t set up for this project, or you don’t have permission to use it.",
+        "targetChanged": "{key} changed after this offer, so nothing was written. Ask again for an up-to-date offer.",
+        "targetUnavailable": "You can no longer open {key}, so nothing was written.",
+        "anchorNotTriage": "{key} is no longer in Triage, so the diagnosis wasn’t added.",
+        "generic": "This bug can’t be logged from this offer."
+      }
     },
     "restart": {
       "control": "Plan something new",

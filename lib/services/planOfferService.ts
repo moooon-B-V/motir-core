@@ -19,6 +19,7 @@ import {
   planOfferStateOf,
   recordedRefusalOf,
   type PlanOfferCannotStart,
+  type PlanOfferRecord,
   type PlanOfferState,
   type PlanOfferTurn,
 } from '@/lib/planChange/planOffer';
@@ -57,7 +58,7 @@ export interface PlanOfferResolution {
 
 /** What an ask submit states about the live offer (`JobContextBag.pendingPlanOffer`). */
 export interface PendingPlanOfferStatement {
-  kind: 'plan';
+  kind: 'plan' | 'log_bug';
   requestText: string;
   targetKey: string | null;
   seq: number;
@@ -67,20 +68,39 @@ function actorOf(pctx: ProjectContext) {
   return { userId: pctx.userId, workspaceId: pctx.workspaceId };
 }
 
+/** The caller's permissions in the project, or null when Motir AI is not configured
+ *  or the project is not theirs to see. Never throws for either. */
+async function heldForOffers(
+  pctx: ProjectContext,
+  tx?: Prisma.TransactionClient,
+): Promise<ReadonlySet<string> | null> {
+  if (!isMotirAiConfigured()) return null;
+  try {
+    return await projectAccessService.getPermissions(pctx.projectId, actorOf(pctx), tx);
+  } catch (err) {
+    if (err instanceof ProjectNotFoundError) return null;
+    throw err;
+  }
+}
+
 /** Whether the caller may start a plan from an offer right now. Never throws: a
  *  caller who cannot even browse the project may not plan in it. */
 async function planningAvailable(
   pctx: ProjectContext,
   tx?: Prisma.TransactionClient,
 ): Promise<boolean> {
-  if (!isMotirAiConfigured()) return false;
-  try {
-    const held = await projectAccessService.getPermissions(pctx.projectId, actorOf(pctx), tx);
-    return held.has('ai:plan') && held.has('work_item:edit');
-  } catch (err) {
-    if (err instanceof ProjectNotFoundError) return false;
-    throw err;
-  }
+  const held = await heldForOffers(pctx, tx);
+  return Boolean(held?.has('ai:plan') && held.has('work_item:edit'));
+}
+
+/** Whether the caller may confirm a `log_bug` offer right now (MOTIR-9322): `ai:plan`
+ *  and Motir AI configured. NOT `work_item:edit` — the bug is written by Motir, the
+ *  system account, not by the person. Never throws. */
+export async function bugLoggingAvailable(
+  pctx: ProjectContext,
+  tx?: Prisma.TransactionClient,
+): Promise<boolean> {
+  return (await heldForOffers(pctx, tx))?.has('ai:plan') ?? false;
 }
 
 /**
@@ -114,7 +134,20 @@ async function resolveTarget(
 }
 
 /** The thread's turns as the pure rule reads them, from the raw rows. */
-function offerTurns(rows: readonly PlanChangeTurn[]): PlanOfferTurn[] {
+/** The one line a pending `log_bug` offer is stated by: the write a yes makes. */
+export function logBugWriteLine(offer: PlanOfferRecord): string {
+  const target = offer.bug?.target;
+  if (target?.kind === 'anchored' && target.key) {
+    return `Add the diagnosis to ${target.key}: ${offer.requestMd}`;
+  }
+  if (target?.kind === 'existing' && target.key) {
+    return `Add a note on ${target.key}, which already covers it: ${offer.requestMd}`;
+  }
+  return `Log a new bug: ${offer.requestMd}`;
+}
+
+/** A thread's stored rows as the pure lifecycle reads them. */
+export function offerTurns(rows: readonly PlanChangeTurn[]): PlanOfferTurn[] {
   return rows.map((row) => {
     const dto = toPlanChangeTurnDto(row);
     return { id: dto.id, seq: dto.seq, role: dto.role, offer: dto.offer ?? null };
@@ -219,6 +252,9 @@ export const planOfferService = {
           throw new PlanOfferNotOpenError(turnId);
         }
         const row = rows.find((t) => t.id === turnId)!;
+        // A `log_bug` offer whose write is in flight (MOTIR-9323) is claimed before it
+        // is stamped confirmed: it can no longer be declined either.
+        if (row.debugLandingClaimedAt !== null) throw new PlanOfferNotOpenError(turnId);
         await planChangeTurnRepository.setAnswerOffer(
           row.id,
           pctx.workspaceId,
@@ -289,8 +325,27 @@ export const planOfferService = {
     tx?: Prisma.TransactionClient,
   ): Promise<Map<string, PlanOfferResolution>> {
     const turns = offerTurns(rows);
-    const offered = turns.filter((t) => t.role === 'assistant' && t.offer);
+    const all = turns.filter((t) => t.role === 'assistant' && t.offer);
     const out = new Map<string, PlanOfferResolution>();
+    // A `log_bug` offer (MOTIR-9322) shares the four states; its one reason is
+    // `planning_unavailable` (no `ai:plan`, or Motir AI not configured) — its target
+    // is not a plan's, so the lock and closed reads are a plan's alone.
+    const bugs = all.filter((t) => t.offer!.kind === 'log_bug');
+    if (bugs.length > 0) {
+      const bugAvailable = await bugLoggingAvailable(pctx, tx);
+      for (const turn of bugs) {
+        const raw = rows.find((r) => r.id === turn.id)!.answerOffer;
+        out.set(turn.id, {
+          state: planOfferStateOf(turns, turn.id)!,
+          cannotStart: !bugAvailable
+            ? 'planning_unavailable'
+            : recordedRefusalOf(raw) !== null
+              ? 'out_of_credits'
+              : null,
+        });
+      }
+    }
+    const offered = all.filter((t) => t.offer!.kind === 'plan');
     if (offered.length === 0) return out;
 
     const keys = [
@@ -350,7 +405,18 @@ export const planOfferService = {
    */
   statingPending(turns: readonly PlanOfferTurn[]): PendingPlanOfferStatement | undefined {
     const pending = pendingPlanOfferOf(turns);
-    if (!pending || pending.offer.kind !== 'plan') return undefined;
+    if (!pending) return undefined;
+    if (pending.offer.kind === 'log_bug') {
+      // A bug offer (MOTIR-9323) is stated by the write it would make, so a typed yes
+      // agrees to that write; motir-ai reads a blank `requestText` as no offer.
+      return {
+        kind: 'log_bug',
+        requestText: logBugWriteLine(pending.offer),
+        targetKey: pending.offer.targetKey,
+        seq: pending.seq,
+      };
+    }
+    if (pending.offer.kind !== 'plan') return undefined;
     return {
       kind: 'plan',
       requestText: pending.offer.requestMd,

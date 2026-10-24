@@ -1382,7 +1382,7 @@
         },
         "debug": {
           "title": "Esegui il debug con Motir AI",
-          "description": "Risali alla causa probabile di un bug e registralo in Smistamento",
+          "description": "Risali alla causa probabile di un bug, poi registralo se sei d’accordo",
           "prefill": "Qualcosa non funziona. Cosa succede: \nCosa dovrebbe succedere invece: "
         }
       }
@@ -5907,7 +5907,7 @@
       "error": "Impossibile inviare il tuo report. Riprova.",
       "debugOffer": {
         "action": "Esegui il debug con Motir AI",
-        "hint": "<b>Esegui il debug con Motir AI</b> avvia il debug appena lo premi e consuma crediti Motir AI. Motir AI legge il codice, individua la causa probabile e verifica se un elemento di lavoro copre già questo bug."
+        "hint": "<b>Esegui il debug con Motir AI</b> invia la tua descrizione a Motir AI appena lo premi e consuma crediti Motir AI. Motir AI legge il codice, individua la causa probabile e propone di aggiungere la diagnosi a questo bug. Non viene scritto nulla finché non confermi."
       }
     }
   },
@@ -7966,7 +7966,7 @@
       "handoff": "Interpretato come modifica al piano: elaborazione della proposta",
       "debug": {
         "wroteAnchor": "Ho scritto la diagnosi su <chip>{key}</chip>. Resta in Smistamento e non è cambiato nient’altro.",
-        "filed": "Ho registrato <chip>{key}</chip> in Smistamento con la diagnosi. Non è cambiato nient’altro.",
+        "filed": "Creato <chip>{key}</chip> con la diagnosi. Nient'altro è cambiato.",
         "enrichedAnchor": "Ho aggiunto la diagnosi a <chip>{key}</chip>, che copre già questo Bug. Non è stato registrato nulla di nuovo e {anchorKey} resta com’è.",
         "enriched": "Ho aggiunto la diagnosi a <chip>{key}</chip>, che copre già questo Bug. Non è stato registrato nulla di nuovo.",
         "ungrounded": "Non è stato possibile ricondurre il problema al codice, quindi non è stato scritto nulla."
@@ -8458,6 +8458,25 @@
       "settledHeading": "Ciò che hanno stabilito le tue risposte",
       "clearEnough": "Abbastanza chiaro da pianificare così com’è.",
       "nothingSettled": "Non è stato stabilito nulla, quindi la richiesta viene pianificata così com’è."
+    },
+    "logBugOffer": {
+      "label": "Proposta di registrare un bug",
+      "writeNew": "Crea un nuovo bug",
+      "writeAnchored": "Aggiungi la diagnosi a <chip>{key}</chip>",
+      "writeExisting": "Annota la diagnosi su <chip>{key}</chip>, che copre già questo problema",
+      "confirming": "Registrazione…",
+      "confirmHelp": "Conferma esegue questa sola scrittura, come Motir. Rispondere «sì» fa lo stesso.",
+      "declineHelp": "Rifiuta non scrive nulla e la conversazione continua.",
+      "logged": "Registrato",
+      "loggedBy": "Confermato · {when}",
+      "recorded": "Non è stato scritto nulla.",
+      "cannotStart": {
+        "planningUnavailable": "Qui non è possibile registrare bug: Motir AI non è configurato per questo progetto, oppure non hai il permesso di usarlo.",
+        "targetChanged": "{key} è stato modificato dopo questa proposta, quindi non è stato scritto nulla. Chiedi di nuovo per una proposta aggiornata.",
+        "targetUnavailable": "Non puoi più aprire {key}, quindi non è stato scritto nulla.",
+        "anchorNotTriage": "{key} non è più in Triage, quindi la diagnosi non è stata aggiunta.",
+        "generic": "Questo bug non può essere registrato da questa proposta."
+      }
     },
     "restart": {
       "control": "Pianifica qualcosa di nuovo",
