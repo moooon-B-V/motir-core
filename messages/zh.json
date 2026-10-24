@@ -1030,46 +1030,6 @@
       "renew": "在 {date} 之前续订 AI 套餐即可取消删除。在此之前，你的智能体无法创建或唤醒，其存储仍按天收费。",
       "openBilling": "续订 AI 套餐",
       "footer": "你收到这封邮件，是因为你在该组织中拥有智能体。"
-    },
-    "enterpriseRequestReceived": {
-      "subject": "{organization} 的企业版咨询",
-      "preview": "{requester} 为 {organization} 咨询了企业版",
-      "greeting": "你好，",
-      "lede": "{requester}（{email}）为 {organization} 咨询了企业版。",
-      "needsHeading": "对方提供的信息",
-      "cardsPerDay": "每天工作项：约 {count}",
-      "parallelAgents": "并行智能体：{count}",
-      "agentPath": "使用的智能体：{value}",
-      "autonomy": "自主运行：{value}",
-      "startWhen": "计划开始时间：{value}",
-      "teamSize": "团队规模：{value}",
-      "noNeeds": "对方未填写任何可选问题。",
-      "contact": "联系方式：{contact}",
-      "noteHeading": "对方的留言",
-      "openRequest": "打开咨询",
-      "footer": "你收到这封邮件，是因为你是 Motir 平台工作人员。",
-      "agentPathValue": {
-        "hosted": "Motir 托管的智能体",
-        "own": "自己的智能体",
-        "both": "两者都用"
-      },
-      "autonomyValue": {
-        "autonomous_lead": "让项目全天候自主运行",
-        "volume_only": "由自己发起大量运行",
-        "unsure": "尚未确定"
-      },
-      "startWhenValue": {
-        "now": "现在",
-        "within_month": "一个月内",
-        "within_quarter": "一个季度内",
-        "exploring": "只是了解"
-      },
-      "teamSizeValue": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      }
     }
   },
   "auth": {
@@ -1382,7 +1342,7 @@
         },
         "debug": {
           "title": "用 Motir AI 排查缺陷",
-          "description": "追查缺陷的可能原因，并记入分诊",
+          "description": "追查缺陷的可能原因，经你同意后再记录",
           "prefill": "有东西坏了。实际发生的情况： \n应该发生的情况： "
         }
       }
@@ -5907,7 +5867,7 @@
       "error": "反馈提交失败，请重试。",
       "debugOffer": {
         "action": "用 Motir AI 排查缺陷",
-        "hint": "按下<b>用 Motir AI 排查缺陷</b>即开始排查，并会消耗 Motir AI 额度。Motir AI 会阅读代码、指出可能的原因，并检查是否已有工作项覆盖这个缺陷。"
+        "hint": "按下<b>用 Motir AI 排查缺陷</b>会立即把你的报告发给 Motir AI，并消耗 Motir AI 额度。Motir AI 会阅读代码、指出可能的原因，并提议把诊断记到这个缺陷上。在你确认之前，不会写入任何内容。"
       }
     }
   },
@@ -6478,7 +6438,7 @@
       "creditsUnit": "积分",
       "rate": "机器时长按每运行一分钟 1 积分计费。存储按每个智能体每天 10 积分计费，无论是否休眠。两者都从你的 Motir AI 余额中扣除。",
       "zero": "本月没有智能体运行或存在。机器时长按每运行一分钟 1 积分计费。存储按每个智能体每天 10 积分计费，无论是否休眠。",
-      "noPlan": "智能体需要付费 AI 方案（Standard、Pro、Max 或 Enterprise）。",
+      "noPlan": "智能体需要付费 AI 方案。",
       "choosePlan": "选择 AI 方案",
       "unavailable": "智能体数据暂时无法显示。你的智能体仍在计费——这是显示问题，不是计费问题。",
       "unavailableValue": "不可用"
@@ -7971,7 +7931,7 @@
       "handoff": "按计划变更理解 — 正在生成提案",
       "debug": {
         "wroteAnchor": "已把诊断写入 <chip>{key}</chip>。它仍留在分诊中，其他内容均未改动。",
-        "filed": "已在分诊中记入 <chip>{key}</chip>，并附上诊断。其他内容均未改动。",
+        "filed": "已记入 <chip>{key}</chip>，并附上诊断。其他内容均未改动。",
         "enrichedAnchor": "已把诊断补充到 <chip>{key}</chip>，它已经覆盖这个缺陷。没有新建工作项，{anchorKey} 保持原样。",
         "enriched": "已把诊断补充到 <chip>{key}</chip>，它已经覆盖这个缺陷。没有新建工作项。",
         "ungrounded": "无法把这个问题追溯到代码，因此没有写入任何内容。"
@@ -8458,6 +8418,25 @@
         "outOfCredits": "所在组织的 AI 额度已用完，因此无法开始规划。",
         "targetUnavailable": "已无法打开 {key}，因此无法开始规划。",
         "generic": "无法从这条提议开始规划。"
+      }
+    },
+    "logBugOffer": {
+      "label": "提议记录缺陷",
+      "writeNew": "新建一个缺陷",
+      "writeAnchored": "把诊断补充到 <chip>{key}</chip>",
+      "writeExisting": "在 <chip>{key}</chip> 上记下诊断，它已经覆盖这个缺陷",
+      "confirming": "正在记录…",
+      "confirmHelp": "确认后由 Motir 完成这一处写入。回复“是”也一样。",
+      "declineHelp": "拒绝不会写入任何内容，对话会继续。",
+      "logged": "已记录",
+      "loggedBy": "已确认 · {when}",
+      "recorded": "没有写入任何内容。",
+      "cannotStart": {
+        "planningUnavailable": "这里无法记录缺陷：本项目尚未设置 Motir AI，或者你没有使用它的权限。",
+        "targetChanged": "{key} 在提议之后被修改过，因此没有写入任何内容。请再问一次以获得最新的提议。",
+        "targetUnavailable": "你已无法打开 {key}，因此没有写入任何内容。",
+        "anchorNotTriage": "{key} 已不在分诊中，因此没有补充诊断。",
+        "generic": "无法通过这个提议记录缺陷。"
       }
     },
     "restart": {
@@ -9870,7 +9849,6 @@
       "navAiPlanning": "AI 规划",
       "navPlanningLessons": "规划经验",
       "navIdeas": "创意",
-      "navEnterpriseRequests": "企业版请求",
       "navRunModels": "托管运行模型",
       "navFleetSettings": "集群设置"
     },
@@ -10057,9 +10035,6 @@
               "enable": "已开启集群 CI",
               "disable": "已关闭集群 CI"
             }
-          },
-          "enterprise_request": {
-            "transition": "变更了企业版请求的状态"
           },
           "idea": {
             "add": "添加了一个创意",
@@ -10305,34 +10280,41 @@
       "fleet": {
         "orgs": {
           "title": "容器集群 · 正在运行容器的组织",
-          "subtitle": "每个当前持有容器的组织，以及过去 {minutes} 分钟（两个扣费周期）内 CI 扣费对它做了什么。不一致的排在最前。",
+          "subtitle": "每个当前持有容器的组织，对照其套餐的各项上限，以及过去 {minutes} 分钟（两个扣费周期）内 CI 扣费对它做了什么。不一致的排在最前。",
           "mismatchedCount": "{count} 个不一致",
           "runningCount": "{count, plural, other {#}} 个组织在运行",
           "noMismatch": "无不一致",
           "stat": {
             "orgs": "正在运行容器的组织",
-            "pooled": "各组织容器池中的容器（CI · 托管 · 索引）",
-            "instances": "智能体实例 · 自有池，未计入上方",
+            "ciRunners": "CI 运行器 · 每个组织受其套餐的突发上限约束",
+            "hostedAgents": "托管智能体运行 · 每个组织受其套餐的并行运行数约束",
+            "instances": "运行中的智能体实例 · 每个组织受其套餐的上限约束",
             "mismatched": "不一致 · 运行与扣费不符"
           },
           "group": {
-            "pool": "计入 {pool} 个容器的池",
-            "own": "自有池"
+            "plan": "受套餐约束",
+            "uncapped": "无套餐上限"
           },
           "col": {
             "org": "组织",
+            "plan": "套餐",
             "ciRunner": "CI 运行器",
             "hostedAgent": "托管智能体运行",
             "index": "索引容器",
-            "poolUsed": "已用池容量",
             "agentInstance": "智能体实例",
-            "agentInstanceNote": "不计入池",
             "accrued": "CI 分钟 · 最近 {minutes} 分钟",
             "credits": "本月额度 · 已确认",
             "verdict": "判定"
           },
-          "poolOf": "{used} / {pool}",
-          "poolUnknown": "池容量无法读取",
+          "plan": {
+            "named": "{plan}<pp> · 每人 {perUser} 个</pp>",
+            "exempt": "无套餐限制",
+            "unknown": "套餐未知 · {key}",
+            "unknownNoKey": "套餐未知",
+            "unknownNote": "新容器被拒绝"
+          },
+          "usedOf": "<b>{used}</b> / {figure}",
+          "override": "覆盖值",
           "metaTag": "元组织 · isMeta",
           "unnamed": "组织 {id}",
           "accrued": {
@@ -10350,7 +10332,7 @@
           "foot": "显示第 {from}–{to} 个，共 {total} 个 · 不一致的在前，其次是容器最多的 · 只判定 CI——它是唯一在运行时扣费的工作负载",
           "empty": {
             "title": "没有组织在运行容器集群中的容器",
-            "body": "当前每个组织的容器池都是空的，因此没有可与扣费对比的内容。这是健康的读数，不是故障。"
+            "body": "当前没有组织持有 CI 运行器、托管智能体运行、智能体实例或索引容器，因此没有可与扣费对比的内容。这是健康的读数，不是故障。"
           },
           "error": {
             "title": "无法读取容器集群",
@@ -11446,12 +11428,20 @@
         "charge": {
           "ciRunner": "运行期间计费",
           "hostedAgent": "运行结束时计费",
-          "agentInstance": "按运行区间计费 · 不计入资源池",
+          "agentInstance": "按运行区间计费",
           "index": "Motir 自行承担——从不计费"
         },
+        "tile": {
+          "of": " / {figure}",
+          "override": "覆盖值"
+        },
         "facts": {
-          "pool": "资源池 <strong>{used} / {pool}</strong>",
-          "poolUnknown": "资源池 <strong>{used} / —</strong>",
+          "plan": "套餐 <strong>{plan}</strong> · 同时 {runs} 个托管运行 · 每人 {perUser} 个智能体 · {running} 个智能体运行中 · 同时 {ci} 个 CI 作业",
+          "planCiUnreadable": "套餐 <strong>{plan}</strong> · 同时 {runs} 个托管运行 · 每人 {perUser} 个智能体 · {running} 个智能体运行中 · CI 上限无法读取",
+          "planExempt": "套餐 <strong>无套餐限制</strong>",
+          "planExemptOverride": "套餐 <strong>无套餐限制</strong> · 同时 {ci} 个 CI 作业（覆盖值）",
+          "planUnknown": "套餐 <strong>未知 · {key}</strong> · 新容器被拒绝",
+          "planUnknownNoKey": "套餐 <strong>未知</strong> · 新容器被拒绝",
           "accrued": "最近 {minutes} 分钟累计 <strong>{value} 分钟</strong>",
           "debited": "本月已扣费 <strong>{credits} 积分</strong>",
           "pending": "待确认 <strong>{credits} 积分</strong>"
@@ -11640,152 +11630,6 @@
       "unavailable": {
         "title": "无法加载托管运行模型",
         "body": "motir-ai 没有响应，因此无法确定每个已列入模型是否可用，不显示列表。没有任何更改。"
-      }
-    },
-    "enterpriseRequests": {
-      "breadcrumb": "平台 · 企业版请求",
-      "title": "企业版请求",
-      "subtitle": "组织在企业版套餐上点击“联系销售”后发来的请求。在这里跟进每一条请求，直到成交或流失；每次变更都会记录操作人。",
-      "auditLead": "请求属于客户数据。",
-      "auditBody": "加载此列表和打开请求均为跨租户读取，会写入审计日志。",
-      "cardTitle": "企业版请求",
-      "count": {
-        "loading": "最新的在前。",
-        "open": "最新的在前。<b>{count} 条进行中</b>。",
-        "state": "最新的在前。<b>{count} 条{state}</b>。",
-        "all": "最新的在前。<b>共 {count} 条</b>。"
-      },
-      "filterLabel": "按状态筛选",
-      "filter": {
-        "open": "进行中",
-        "all": "全部"
-      },
-      "status": {
-        "new": "新请求",
-        "contacted": "已联系",
-        "offer_sent": "已发方案",
-        "won": "已成交",
-        "lost": "已流失"
-      },
-      "stateWord": {
-        "open": "进行中",
-        "new": "新请求",
-        "contacted": "已联系",
-        "offer_sent": "已发方案",
-        "won": "已成交",
-        "lost": "已流失"
-      },
-      "col": {
-        "organisation": "组织",
-        "requester": "请求人",
-        "sent": "发送时间",
-        "needs": "需求",
-        "state": "状态"
-      },
-      "tierWhenSent": "发送时为 {tier}",
-      "requesterGone": "账号已删除",
-      "needs": {
-        "cardsPerDay": "每天 <b>{n}</b> 个工作项",
-        "cardsPerDayNone": "每天工作项 —",
-        "agents": "<b>{n}</b> 个智能体",
-        "agentsNone": "智能体 —",
-        "agentPathNone": "智能体类型 —",
-        "autonomyNone": "自主推进 —"
-      },
-      "agentPath": {
-        "hosted": "Motir 托管",
-        "own": "自有智能体",
-        "both": "两者"
-      },
-      "autonomy": {
-        "autonomous_lead": "自主推进",
-        "volume_only": "仅需产能",
-        "unsure": "尚未确定"
-      },
-      "startWhen": {
-        "now": "立即",
-        "within_month": "一个月内",
-        "within_quarter": "一个季度内",
-        "exploring": "只是了解"
-      },
-      "teamSize": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      },
-      "notAnswered": "未填写",
-      "pager": {
-        "label": "请求分页",
-        "note": "最新的在前 · 每页 50 条",
-        "range": "第 {from}–{to} 条，共 {total} 条",
-        "newer": "较新",
-        "older": "较早"
-      },
-      "empty": {
-        "title": "还没有企业版请求",
-        "body": "组织所有者在企业版上点击“联系销售”后，请求会出现在这里，平台员工也会收到邮件。"
-      },
-      "emptyFilter": {
-        "title": "没有{state}的请求",
-        "body": "目前没有{state}的请求。",
-        "action": "查看进行中的请求",
-        "actionAll": "查看全部请求"
-      },
-      "error": {
-        "title": "无法加载请求",
-        "body": "读取请求时出错，因此没有显示任何请求。没有任何更改。",
-        "retry": "重试"
-      },
-      "detail": {
-        "back": "返回请求列表",
-        "sent": "发送于 {date}",
-        "requestTitle": "请求内容",
-        "orgLink": "在租户中打开 {org}",
-        "field": {
-          "organisation": "组织",
-          "requester": "请求人",
-          "contact": "联系方式",
-          "sent": "发送时间",
-          "cardsPerDay": "每天工作项数",
-          "parallelAgents": "并行智能体",
-          "agentPath": "使用哪种智能体",
-          "autonomy": "自主推进",
-          "startWhen": "开始时间",
-          "teamSize": "团队规模",
-          "note": "备注"
-        }
-      },
-      "move": {
-        "title": "变更为",
-        "stateTitle": "状态",
-        "contacted": "标记为已联系",
-        "offer_sent": "标记为已发方案",
-        "won": "标记为已成交",
-        "lost": "标记为已流失",
-        "hint": {
-          "new": "下一步：你已联系请求人。",
-          "contacted": "下一步：你已发送方案。",
-          "offer_sent": "下一步：对方接受，或已流失。",
-          "closes": "成交和流失会关闭请求。"
-        },
-        "failed": "无法变更请求。没有任何更改，请重试。"
-      },
-      "closed": "<b>已于 {date} 以{state}关闭。</b>关闭的请求不能再变更。该组织可以在其账单页面重新发送请求。",
-      "readOnly": "<b>支持人员只读。</b>变更请求需由运维人员或超级管理员操作；你可以查看这里和历史中的全部内容。",
-      "confirm": {
-        "title": "将此请求标记为{state}？",
-        "body": "{org} 的请求将以<b>{state}</b>关闭，且不能再变更。该组织可以在其账单页面重新发送请求。",
-        "cancel": "取消"
-      },
-      "stale": "<b>未更改——其他人已先变更了此请求。</b>{who} 刚刚将其标记为<b>{state}</b>，因此你的“{action}”被拒绝，未记录任何内容。页面现在显示其当前状态，请重新选择。",
-      "staleUnknown": "<b>未更改——其他人已先变更了此请求。</b>它现在是<b>{state}</b>，因此你的“{action}”被拒绝，未记录任何内容。页面现在显示其当前状态，请重新选择。",
-      "history": {
-        "title": "历史",
-        "order": "最早的在前",
-        "sent": "以新请求发送",
-        "to": "变更为",
-        "requesterOf": "{name}（{org}）"
       }
     },
     "ideas": {
@@ -12309,12 +12153,14 @@
       "goose": "使用你自己的模型服务商密钥。使用 Claude 模型时，用你的 Anthropic API 密钥。"
     },
     "refusal": {
-      "aiPlanRequired": "智能体需要付费 AI 套餐（Standard、Pro、Max 或 Enterprise）。<link>选择 AI 套餐</link>后即可创建或唤醒智能体。",
+      "aiPlanRequired": "智能体需要付费 AI 套餐。<link>选择 AI 套餐</link>后即可创建或唤醒智能体。",
       "aiPlanUnknown": "Motir 暂时无法查询你的组织的 AI 套餐。请稍后重试。",
       "credits": "你的组织额度已用完。智能体运行时消耗额度，其存储每天也消耗额度，无论是否休眠。<link>充值额度</link>后即可创建或唤醒智能体。",
       "creditsUnknown": "Motir 暂时无法查询你的组织额度。请稍后重试。",
-      "userCap": "你已经有 {count} 个智能体。每个智能体即使休眠，每天也会收取存储费用。删除一个后才能再创建。",
-      "orgRunningLimit": "你的组织正在运行 {limit} 个智能体，已达上限 {limit} 个。休眠一个后才能启动另一个。",
+      "userCap": "你的组织的 {plan} 套餐每人最多可有 {limit, plural, other {#}} 个智能体。每个智能体即使休眠，每天也会收取存储费用。删除一个后才能再创建。",
+      "userCapNoFigure": "你拥有的智能体已达到组织套餐允许的每人上限。每个智能体即使休眠，每天也会收取存储费用。删除一个后才能再创建。",
+      "orgRunningLimit": "你的组织的 {plan} 套餐最多可同时运行 {limit, plural, other {#}} 个智能体，现已全部在运行。休眠一个后才能启动另一个。",
+      "orgRunningLimitNoFigure": "你的组织同时运行的智能体已达到套餐允许的上限。休眠一个后才能启动另一个。",
       "busy": "Motir 当前运行的机器已达上限。请几分钟后重试。",
       "notOffered": "暂不提供该编码智能体：其条款尚不允许平台托管它。请选择其他编码智能体。",
       "nameTaken": "你在这个项目上已经有一个名为 {name} 的智能体。",

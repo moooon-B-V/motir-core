@@ -5,6 +5,7 @@ import en from '@/messages/en.json';
 import type {
   FleetKillDTO,
   FleetKillsDTO,
+  FleetOrgPlanDTO,
   FleetOrgRowDTO,
   FleetRunningOrgsDTO,
   FleetVerdict,
@@ -37,6 +38,25 @@ const NOW = new Date('2026-10-02T12:00:00.000Z');
 const minAgo = (n: number) => new Date(NOW.getTime() - n * 60_000).toISOString();
 const fleet = en.platformAdmin.monitoring.fleet;
 
+const capped = (
+  planKey: string,
+  planName: string,
+  figures: [runs: number, perUser: number, running: number, ci: number],
+  ciBurstSource: 'plan' | 'override' | 'unreadable' = 'plan',
+): FleetOrgPlanDTO => ({
+  kind: 'capped',
+  planKey,
+  planName,
+  agentRunsInParallel: figures[0],
+  agentsPerUser: figures[1],
+  agentsRunningPerOrg: figures[2],
+  ciBurstCap: ciBurstSource === 'unreadable' ? null : figures[3],
+  ciBurstSource,
+});
+const MAX = capped('max', 'Max', [5, 10, 50, 25]);
+const STANDARD = capped('standard', 'Standard', [1, 1, 5, 5]);
+const PRO = capped('pro', 'Pro', [3, 5, 30, 10]);
+
 function row(overrides: Partial<FleetOrgRowDTO> = {}): FleetOrgRowDTO {
   return {
     organizationId: 'org_acme',
@@ -44,8 +64,7 @@ function row(overrides: Partial<FleetOrgRowDTO> = {}): FleetOrgRowDTO {
     isMeta: false,
     internalBilling: false,
     byWorkload: { ci_runner: 42, hosted_agent: 6, code_graph_index: 2, agent_instance: 3 },
-    poolUsed: 50,
-    pool: 500,
+    plan: MAX,
     accruedMinutesInWindow: 386,
     confirmedCreditsThisMonth: 18_420,
     pendingCredits: 0,
@@ -71,9 +90,9 @@ function orgs(
       mismatched: rows.filter((r) =>
         r.verdicts.some((v) => v !== 'ok' && v !== 'balance_unknown' && v !== 'not_charged'),
       ).length,
-      pooledContainers: rows.reduce((s, r) => s + r.poolUsed, 0),
+      ciRunners: rows.reduce((s, r) => s + r.byWorkload.ci_runner, 0),
+      hostedAgents: rows.reduce((s, r) => s + r.byWorkload.hosted_agent, 0),
       agentInstances: rows.reduce((s, r) => s + r.byWorkload.agent_instance, 0),
-      defaultPool: 500,
       page: 1,
       pageSize: 25,
       pageCount: 1,
@@ -180,7 +199,6 @@ describe('organisations card', () => {
             organizationId: 'org_globex',
             name: 'Globex',
             byWorkload: { ci_runner: 3, hosted_agent: 0, code_graph_index: 0, agent_instance: 2 },
-            poolUsed: 3,
             accruedMinutesInWindow: 0,
             latestAccrualTickAt: minAgo(22),
             confirmedCreditsThisMonth: 4_018,
@@ -202,11 +220,19 @@ describe('organisations card', () => {
             organizationId: 'org_moooon',
             name: 'moooon B.V.',
             isMeta: true,
+            plan: { kind: 'exempt', ciBurstOverride: null },
             verdicts: ['not_charged'],
           }),
           row({ organizationId: 'org_nw', name: 'Northwind', verdicts: ['balance_unknown'] }),
         ],
-        { total: 41, pageCount: 2, mismatched: 3, pooledContainers: 1_284, agentInstances: 37 },
+        {
+          total: 41,
+          pageCount: 2,
+          mismatched: 3,
+          ciRunners: 1_284,
+          hostedAgents: 96,
+          agentInstances: 37,
+        },
       ),
       kills: kills([kill()]),
     });
@@ -216,7 +242,9 @@ describe('organisations card', () => {
     expect(c.textContent).toContain('3 mismatched');
     expect(c.textContent).toContain('41 orgs running');
     expect(c.textContent).toContain('1,284');
-    expect(c.textContent).toContain('In the 500-container pool');
+    expect(c.textContent).toContain('96');
+    expect(c.textContent).toContain(fleet.orgs.group.plan);
+    expect(c.textContent).toContain(fleet.orgs.group.uncapped);
     expect(c.textContent).toContain('CI minutes · last 10 min');
 
     const rows = [...c.querySelectorAll('tbody tr')] as HTMLElement[];
@@ -247,7 +275,8 @@ describe('organisations card', () => {
     expect(rows[0]!.textContent).toContain('balance -12');
     expect(rows[1]!.textContent).toContain('+85 pending · 34 min');
     expect(rows[1]!.textContent).toContain('1,240');
-    expect(rows[2]!.textContent).toContain('50 / 500');
+    expect(rows[2]!.textContent).toContain('Max · 10 per person');
+    expect(rows[2]!.textContent).toContain('42 of 25');
     expect(rows[2]!.textContent).toContain('386 min');
     expect(rows[3]!.textContent).toContain('meta org · isMeta');
     expect(rows[3]!.textContent).toContain('not charged');
@@ -257,6 +286,84 @@ describe('organisations card', () => {
     expect(c.textContent).toContain('Showing 1–25 of 41');
     const next = c.querySelector('nav a');
     expect(next!.getAttribute('href')).toBe('?fleetPage=2');
+  });
+
+  it('each workload reads against its own plan figure, and nothing names a pool (MOTIR-9377)', async () => {
+    const root = await render({
+      orgs: orgs([
+        row({
+          organizationId: 'org_std',
+          name: 'Halcyon',
+          plan: STANDARD,
+          byWorkload: { ci_runner: 4, hosted_agent: 1, code_graph_index: 2, agent_instance: 0 },
+        }),
+        row({
+          organizationId: 'org_pro',
+          name: 'Initech',
+          plan: PRO,
+          byWorkload: { ci_runner: 2, hosted_agent: 2, code_graph_index: 0, agent_instance: 4 },
+        }),
+      ]),
+      kills: kills([]),
+    });
+    const c = card(root, 'fleet-orgs')!;
+    expect(c.textContent).not.toContain('500');
+    expect(c.textContent).not.toMatch(/pool/i);
+    const [std, pro] = [...c.querySelectorAll('tbody tr')] as HTMLElement[];
+    const cells = (r: HTMLElement) => [...r.querySelectorAll('td')].map((td) => td.textContent);
+    // Organisation · Plan · CI · hosted · agent instances · index · …
+    expect(cells(std!).slice(1, 6)).toEqual([
+      'Standard · 1 per person',
+      '4 of 5',
+      '1 of 1',
+      '0 of 5',
+      '2',
+    ]);
+    expect(cells(pro!).slice(1, 6)).toEqual([
+      'Pro · 5 per person',
+      '2 of 10',
+      '2 of 3',
+      '4 of 30',
+      '0',
+    ]);
+    // At the figure the bar is full and takes the warning fill; under it, the accent.
+    const hostedBar = std!.querySelectorAll('td')[3]!.querySelector('[data-at-figure]');
+    expect(hostedBar!.className).toContain('bg-(--el-warning)');
+    expect(std!.querySelectorAll('td')[2]!.querySelector('[data-at-figure]')).toBeNull();
+    // The index cell is a bare count, always.
+    expect(std!.querySelectorAll('td')[5]!.querySelector('[aria-hidden]')).toBeNull();
+  });
+
+  it('an exempt org reads No plan limit, an unknown plan names its key, and an override is marked', async () => {
+    const root = await render({
+      orgs: orgs([
+        row({ organizationId: 'org_meta', plan: { kind: 'exempt', ciBurstOverride: null } }),
+        row({
+          organizationId: 'org_legacy',
+          plan: { kind: 'plan_unknown', planKey: 'legacy_tier' },
+        }),
+        row({ organizationId: 'org_unread', plan: { kind: 'plan_unknown', planKey: null } }),
+        row({ organizationId: 'org_over', plan: capped('max', 'Max', [5, 10, 50, 7], 'override') }),
+      ]),
+      kills: kills([]),
+    });
+    const [meta, legacy, unread, over] = [
+      ...card(root, 'fleet-orgs')!.querySelectorAll('tbody tr'),
+    ] as HTMLElement[];
+    const cells = (r: HTMLElement) => [...r.querySelectorAll('td')].map((td) => td.textContent);
+
+    expect(cells(meta!).slice(1, 6)).toEqual([fleet.orgs.plan.exempt, '42', '6', '3', '2']);
+    expect(meta!.textContent).not.toContain(' of ');
+    for (const td of [...meta!.querySelectorAll('td')].slice(2, 6)) {
+      expect(td.querySelector('[aria-hidden]')).toBeNull();
+    }
+
+    expect(cells(legacy!)[1]).toBe(`Plan unknown · legacy_tier${fleet.orgs.plan.unknownNote}`);
+    expect(cells(legacy!).slice(2, 6)).toEqual(['42', '6', '3', '2']);
+    expect(cells(unread!)[1]).toBe(`Plan unknown${fleet.orgs.plan.unknownNote}`);
+
+    expect(cells(over!)[2]).toBe(`42 of 7${fleet.orgs.override}`);
+    expect(cells(over!)[3]).toBe('6 of 5');
   });
 
   it('nothing running: a healthy empty in words, no table, and the kills card still renders', async () => {

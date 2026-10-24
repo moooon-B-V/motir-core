@@ -14,7 +14,7 @@ import {
   type PlanOfferState,
   type PlanOfferTurn,
 } from '@/lib/planChange/planOffer';
-import { readAskOutcome } from '@/lib/planning/askResult';
+import { readAskOutcome, type AskPlanOffer } from '@/lib/planning/askResult';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
@@ -185,11 +185,21 @@ describe('readAskOutcome reads the envelope offer', () => {
       targetKey: 'PROD-1',
       immediate: false,
     });
-    expect(ask({ kind: 'plan', requestText: 'x', immediate: 'yes' })?.offer?.immediate).toBe(false);
-    expect(ask({ kind: 'plan', requestText: 'x', immediate: true })?.offer?.immediate).toBe(true);
-    expect(ask({ kind: 'plan', requestText: 'x', targetKey: 'not a key' })?.offer?.targetKey).toBe(
-      null,
-    );
+    expect(
+      (ask({ kind: 'plan', requestText: 'x', immediate: 'yes' })?.offer as AskPlanOffer | undefined)
+        ?.immediate,
+    ).toBe(false);
+    expect(
+      (ask({ kind: 'plan', requestText: 'x', immediate: true })?.offer as AskPlanOffer | undefined)
+        ?.immediate,
+    ).toBe(true);
+    expect(
+      (
+        ask({ kind: 'plan', requestText: 'x', targetKey: 'not a key' })?.offer as
+          | AskPlanOffer
+          | undefined
+      )?.targetKey,
+    ).toBe(null);
   });
 
   it('reads an unknown kind, a blank request and no offer as ABSENCE', () => {

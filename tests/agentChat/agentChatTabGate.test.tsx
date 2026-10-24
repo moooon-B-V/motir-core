@@ -393,7 +393,6 @@ async function mountChat(profile: string) {
       projectName="motir"
       initial={{ instances: listed, total: 1, planLapse: null }}
       profiles={Object.entries(PROFILE_NAMES).map(([id, name]) => ({ id, name }))}
-      maxPerUser={10}
       openAgentId="a1"
       openTab="chat"
     />,

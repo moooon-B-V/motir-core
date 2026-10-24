@@ -1,6 +1,7 @@
 import type { Prisma, PlanChangeTurn } from '@/generated/prisma/client';
 import type { ProjectContext } from '@/lib/projects';
-import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
+import type { DebugLandingDto, PlanChangeSessionDto } from '@/lib/dto/planChange';
+import { debugLandingService } from '@/lib/services/debugLandingService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { MotirAiOutOfCreditsError } from '@/lib/ai/errors';
 import { toPlanChangeTurnDto } from '@/lib/mappers/planChangeMappers';
@@ -20,6 +21,7 @@ import {
   PlanChangeTurnNotFoundError,
   PlanOfferStartRefusedError,
   PlanSessionEndedError,
+  PlanSessionNotFoundError,
 } from '@/lib/planChange/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
@@ -73,6 +75,12 @@ export interface PlanOfferStartResult {
   planId: string;
   session: PlanChangeSessionDto;
 }
+
+/** What a Confirm press answers (MOTIR-9323): a plan offer's start, or a `log_bug`
+ *  offer's one landed write and the thread after it. */
+export type OfferConfirmResult =
+  | ({ kind: 'plan' } & PlanOfferStartResult)
+  | { kind: 'log_bug'; sessionId: string; landing: DebugLandingDto; session: PlanChangeSessionDto };
 
 /** The job a stamped start recorded on its offer, beside the store card's keys. */
 interface RecordedStart {
@@ -378,6 +386,32 @@ async function stampOffer(
 
 export const planOfferStartService = {
   /**
+   * The Confirm button, whatever the offer's kind: a plan offer starts its plan
+   * ({@link confirmPlanOffer}); a `log_bug` offer makes its one write through the
+   * debug landing (MOTIR-9323), the function a typed yes reaches too.
+   */
+  async confirmOffer(
+    pctx: ProjectContext,
+    input: { conversationId: string; offerTurnId: string },
+  ): Promise<OfferConfirmResult> {
+    let kind: string | undefined;
+    try {
+      const thread = await planChangeSessionsService.getById(pctx, input.conversationId);
+      kind = thread.turns.find((t) => t.id === input.offerTurnId)?.offer?.kind;
+    } catch (err) {
+      if (err instanceof PlanSessionNotFoundError) {
+        throw new PlanChangeTurnNotFoundError(input.offerTurnId);
+      }
+      throw err;
+    }
+    if (kind === 'log_bug') {
+      const landed = await debugLandingService.confirmLogBugOffer(pctx, input);
+      return { kind: 'log_bug', sessionId: input.conversationId, ...landed };
+    }
+    return { kind: 'plan', ...(await planOfferStartService.confirmPlanOffer(pctx, input)) };
+  },
+
+  /**
    * The Confirm button and the typed yes: start the plan the offer on `offerTurnId`
    * describes, exactly once. A second door for the same offer gets the first one's
    * session and job.
@@ -472,6 +506,8 @@ async function confirm(
   const thread = await planChangeSessionsService.getById(pctx, input.conversationId);
   const offer = thread.turns.find((t) => t.id === input.offerTurnId)?.offer;
   if (!offer) throw new PlanChangeTurnNotFoundError(input.offerTurnId);
+  // A bug offer (MOTIR-9322) is never a plan to start: its confirm is its own door.
+  if (offer.kind !== 'plan') throw new PlanOfferStartRefusedError('offer_not_open');
   if (offer.state === 'declined' || offer.state === 'superseded') {
     throw new PlanOfferStartRefusedError('offer_not_open');
   }

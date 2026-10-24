@@ -1030,46 +1030,6 @@
       "renew": "Renouveler le forfait IA avant le {date} annule la suppression. D’ici là, vos agents ne peuvent être ni créés ni réveillés, et leur stockage reste facturé chaque jour.",
       "openBilling": "Renouveler le forfait IA",
       "footer": "Vous recevez cet e-mail parce que vous possédez des agents dans cette organisation."
-    },
-    "enterpriseRequestReceived": {
-      "subject": "Demande Enterprise de {organization}",
-      "preview": "{requester} s’est renseigné sur Enterprise pour {organization}",
-      "greeting": "Bonjour,",
-      "lede": "{requester} ({email}) s’est renseigné sur le forfait Enterprise pour {organization}.",
-      "needsHeading": "Ce qu’ils nous ont dit",
-      "cardsPerDay": "Éléments de travail par jour : environ {count}",
-      "parallelAgents": "Agents en parallèle : {count}",
-      "agentPath": "Quels agents : {value}",
-      "autonomy": "Fonctionnement autonome : {value}",
-      "startWhen": "Démarrage envisagé : {value}",
-      "teamSize": "Taille de l’équipe : {value}",
-      "noNeeds": "Toutes les questions facultatives ont été laissées vides.",
-      "contact": "Pour les joindre : {contact}",
-      "noteHeading": "Leur message",
-      "openRequest": "Ouvrir la demande",
-      "footer": "Vous recevez cet e-mail parce que vous faites partie de l’équipe de la plateforme Motir.",
-      "agentPathValue": {
-        "hosted": "Les agents hébergés de Motir",
-        "own": "Leurs propres agents",
-        "both": "Les deux"
-      },
-      "autonomyValue": {
-        "autonomous_lead": "Faire tourner le projet en continu, de façon autonome",
-        "volume_only": "Un grand volume d’exécutions qu’ils lancent eux-mêmes",
-        "unsure": "Pas encore sûr"
-      },
-      "startWhenValue": {
-        "now": "Maintenant",
-        "within_month": "D’ici un mois",
-        "within_quarter": "D’ici un trimestre",
-        "exploring": "Simple exploration"
-      },
-      "teamSizeValue": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      }
     }
   },
   "auth": {
@@ -1382,7 +1342,7 @@
         },
         "debug": {
           "title": "Déboguer avec Motir AI",
-          "description": "Remonter un bug jusqu’à sa cause probable et le classer dans le Tri",
+          "description": "Remonter un bug jusqu’à sa cause probable, puis l’enregistrer si vous êtes d’accord",
           "prefill": "Quelque chose ne fonctionne pas. Ce qui se passe : \nCe qui devrait se passer : "
         }
       }
@@ -5907,7 +5867,7 @@
       "error": "Impossible d’envoyer votre signalement. Veuillez réessayer.",
       "debugOffer": {
         "action": "Déboguer avec Motir AI",
-        "hint": "<b>Déboguer avec Motir AI</b> lance le débogage dès que vous appuyez dessus et consomme des crédits Motir AI. Motir AI lit le code, identifie la cause probable et vérifie si un élément de travail couvre déjà ce bug."
+        "hint": "<b>Déboguer avec Motir AI</b> envoie votre signalement à Motir AI dès que vous appuyez dessus et consomme des crédits Motir AI. Motir AI lit le code, identifie la cause probable et propose d’ajouter le diagnostic à ce bug. Rien n’est écrit tant que vous n’avez pas confirmé."
       }
     }
   },
@@ -6478,7 +6438,7 @@
       "creditsUnit": "crédits",
       "rate": "Le temps machine coûte 1 crédit par minute d'exécution. Le stockage coûte 10 crédits par agent et par jour, qu'il soit en veille ou non. Les deux sont prélevés sur votre solde Motir AI.",
       "zero": "Aucun agent n'a été exécuté ni n'a existé ce mois-ci. Le temps machine coûte 1 crédit par minute d'exécution. Le stockage coûte 10 crédits par agent et par jour, qu'il soit en veille ou non.",
-      "noPlan": "Les agents nécessitent un forfait IA payant (Standard, Pro, Max ou Enterprise).",
+      "noPlan": "Les agents nécessitent un forfait IA payant.",
       "choosePlan": "Choisir un forfait IA",
       "unavailable": "Les chiffres des agents ne sont pas disponibles pour le moment. Vos agents sont toujours facturés — seul l'affichage est concerné, pas la facturation.",
       "unavailableValue": "Indisponible"
@@ -7980,7 +7940,7 @@
       "handoff": "Interprété comme une modification du plan — travail sur la proposition",
       "debug": {
         "wroteAnchor": "Diagnostic consigné sur <chip>{key}</chip>. Il reste en Triage et rien d'autre n'a changé.",
-        "filed": "<chip>{key}</chip> créé dans Triage avec le diagnostic. Rien d'autre n'a changé.",
+        "filed": "<chip>{key}</chip> créé avec le diagnostic. Rien d’autre n’a changé.",
         "enrichedAnchor": "Diagnostic ajouté à <chip>{key}</chip>, qui couvre déjà ce bug. Rien de nouveau n'a été créé et {anchorKey} reste tel quel.",
         "enriched": "Diagnostic ajouté à <chip>{key}</chip>, qui couvre déjà ce bug. Rien de nouveau n'a été créé.",
         "ungrounded": "Impossible de relier ce problème au code, rien n'a donc été écrit."
@@ -8467,6 +8427,25 @@
         "outOfCredits": "Votre organisation n’a plus de crédits AI, la planification ne peut donc pas démarrer.",
         "targetUnavailable": "Vous ne pouvez plus ouvrir {key}, la planification ne peut donc pas démarrer.",
         "generic": "La planification ne peut pas démarrer à partir de cette offre."
+      }
+    },
+    "logBugOffer": {
+      "label": "Proposition de consigner un bug",
+      "writeNew": "Créer un nouveau bug",
+      "writeAnchored": "Ajouter le diagnostic à <chip>{key}</chip>",
+      "writeExisting": "Noter le diagnostic sur <chip>{key}</chip>, qui couvre déjà ce problème",
+      "confirming": "Enregistrement…",
+      "confirmHelp": "Confirmer effectue cette seule écriture, au nom de Motir. Répondre « oui » fait de même.",
+      "declineHelp": "Refuser n’écrit rien, et la conversation continue.",
+      "logged": "Consigné",
+      "loggedBy": "Confirmé · {when}",
+      "recorded": "Rien n’a été écrit.",
+      "cannotStart": {
+        "planningUnavailable": "Impossible de consigner un bug ici : Motir AI n’est pas configuré pour ce projet, ou vous n’avez pas l’autorisation de l’utiliser.",
+        "targetChanged": "{key} a été modifié après cette proposition, donc rien n’a été écrit. Redemandez pour obtenir une proposition à jour.",
+        "targetUnavailable": "Vous ne pouvez plus ouvrir {key}, donc rien n’a été écrit.",
+        "anchorNotTriage": "{key} n’est plus en Triage, donc le diagnostic n’a pas été ajouté.",
+        "generic": "Ce bug ne peut pas être consigné depuis cette proposition."
       }
     },
     "restart": {
@@ -9879,7 +9858,6 @@
       "navAiPlanning": "Planification par IA",
       "navPlanningLessons": "Leçons de planification",
       "navIdeas": "Idées",
-      "navEnterpriseRequests": "Demandes Enterprise",
       "navRunModels": "Modèles des exécutions hébergées",
       "navFleetSettings": "Paramètres de la flotte"
     },
@@ -10066,9 +10044,6 @@
               "enable": "A activé la CI de la flotte",
               "disable": "A désactivé la CI de la flotte"
             }
-          },
-          "enterprise_request": {
-            "transition": "A changé l’état d’une demande Enterprise"
           },
           "idea": {
             "add": "A ajouté une idée",
@@ -10314,34 +10289,41 @@
       "fleet": {
         "orgs": {
           "title": "Flotte · organisations exécutant des conteneurs",
-          "subtitle": "Chaque organisation détenant actuellement un conteneur, à côté de ce que le débit de CI a fait pour elle au cours des {minutes} dernières minutes (deux périodes de débit). Les incohérences en premier.",
+          "subtitle": "Chaque organisation détenant actuellement un conteneur, rapportée aux chiffres de son forfait, à côté de ce que le débit de CI a fait pour elle au cours des {minutes} dernières minutes (deux périodes de débit). Les incohérences en premier.",
           "mismatchedCount": "{count} incohérentes",
           "runningCount": "{count, plural, one {# organisation active} other {# organisations actives}}",
           "noMismatch": "Aucune incohérence",
           "stat": {
             "orgs": "organisations exécutant un conteneur",
-            "pooled": "conteneurs dans les pools par organisation (CI · hébergé · index)",
-            "instances": "instances d'agent · leur propre pool, non comptées ci-dessus",
+            "ciRunners": "runners de CI · chaque organisation limitée au pic de CI de son forfait",
+            "hostedAgents": "exécutions d'agent hébergé · chaque organisation limitée aux exécutions parallèles de son forfait",
+            "instances": "instances d'agent en cours · chaque organisation limitée au chiffre de son forfait",
             "mismatched": "incohérentes · exécution et débit ne concordent pas"
           },
           "group": {
-            "pool": "Dans le pool de {pool} conteneurs",
-            "own": "Pool propre"
+            "plan": "Limité par le forfait",
+            "uncapped": "Aucun chiffre du forfait"
           },
           "col": {
             "org": "Organisation",
+            "plan": "Forfait",
             "ciRunner": "Runners de CI",
             "hostedAgent": "Exécutions d'agent hébergé",
             "index": "Conteneurs d'indexation",
-            "poolUsed": "Pool utilisé",
             "agentInstance": "Instances d'agent",
-            "agentInstanceNote": "hors du pool",
             "accrued": "Minutes de CI · {minutes} dernières min",
             "credits": "Crédits ce mois-ci · confirmés",
             "verdict": "Verdict"
           },
-          "poolOf": "{used} / {pool}",
-          "poolUnknown": "pool illisible",
+          "plan": {
+            "named": "{plan}<pp> · {perUser} par personne</pp>",
+            "exempt": "Aucune limite de forfait",
+            "unknown": "Forfait inconnu · {key}",
+            "unknownNoKey": "Forfait inconnu",
+            "unknownNote": "nouveaux conteneurs refusés"
+          },
+          "usedOf": "<b>{used}</b> sur {figure}",
+          "override": "dérogation",
           "metaTag": "méta-organisation · isMeta",
           "unnamed": "Organisation {id}",
           "accrued": {
@@ -10359,7 +10341,7 @@
           "foot": "{from}–{to} sur {total} · incohérences en premier, puis le plus de conteneurs · seule la CI est évaluée — c'est la seule charge débitée pendant son exécution",
           "empty": {
             "title": "Aucune organisation n'exécute de conteneur de la flotte",
-            "body": "Tous les pools par organisation sont vides pour le moment ; il n'y a donc rien à comparer au débit. C'est un état sain, pas une anomalie."
+            "body": "Aucune organisation ne détient actuellement de runner de CI, d'exécution d'agent hébergé, d'instance d'agent ni de conteneur d'indexation ; il n'y a donc rien à comparer au débit. C'est un état sain, pas une anomalie."
           },
           "error": {
             "title": "Impossible de lire la flotte",
@@ -11455,12 +11437,20 @@
         "charge": {
           "ciRunner": "Facturé pendant l'exécution",
           "hostedAgent": "Facturé à la fin de l'exécution",
-          "agentInstance": "Facturé par intervalle d'exécution · hors du pool",
+          "agentInstance": "Facturé par intervalle d'exécution",
           "index": "Coût à la charge de Motir — jamais facturé"
         },
+        "tile": {
+          "of": " sur {figure}",
+          "override": "dérogation"
+        },
         "facts": {
-          "pool": "Pool <strong>{used} sur {pool}</strong>",
-          "poolUnknown": "Pool <strong>{used} sur —</strong>",
+          "plan": "Forfait <strong>{plan}</strong> · {runs} exécutions hébergées à la fois · {perUser} agents par personne · {running} agents en cours · {ci} tâches de CI à la fois",
+          "planCiUnreadable": "Forfait <strong>{plan}</strong> · {runs} exécutions hébergées à la fois · {perUser} agents par personne · {running} agents en cours · limite de CI illisible",
+          "planExempt": "Forfait <strong>Aucune limite de forfait</strong>",
+          "planExemptOverride": "Forfait <strong>Aucune limite de forfait</strong> · {ci} tâches de CI à la fois (dérogation)",
+          "planUnknown": "Forfait <strong>inconnu · {key}</strong> · nouveaux conteneurs refusés",
+          "planUnknownNoKey": "Forfait <strong>inconnu</strong> · nouveaux conteneurs refusés",
           "accrued": "Cumulé, dernières {minutes} min <strong>{value} min</strong>",
           "debited": "Débité ce mois-ci <strong>{credits} crédits</strong>",
           "pending": "En attente de confirmation <strong>{credits} crédits</strong>"
@@ -11649,152 +11639,6 @@
       "unavailable": {
         "title": "Impossible de charger les modèles des exécutions hébergées",
         "body": "motir-ai n'a pas répondu : on ignore donc si chaque modèle listé est proposé, et aucune liste n'est affichée. Rien n'a changé."
-      }
-    },
-    "enterpriseRequests": {
-      "breadcrumb": "Plateforme · Demandes Enterprise",
-      "title": "Demandes Enterprise",
-      "subtitle": "Ce que les organisations ont envoyé via « Contacter le service commercial » sur le forfait Enterprise. Traitez chaque demande de nouvelle à gagnée ou perdue ; chaque changement est enregistré avec son auteur.",
-      "auditLead": "Une demande est une donnée client.",
-      "auditBody": "Charger cette liste et ouvrir une demande sont des lectures inter-tenants, consignées dans le journal d’audit.",
-      "cardTitle": "Demandes",
-      "count": {
-        "loading": "Les plus récentes d’abord.",
-        "open": "Les plus récentes d’abord. <b>Ouvertes : {count}</b> — nouvelles, contactées ou offre envoyée.",
-        "state": "Les plus récentes d’abord. <b>État « {state} » : {count}</b>.",
-        "all": "Les plus récentes d’abord. <b>{count} au total</b>."
-      },
-      "filterLabel": "Filtrer les demandes par état",
-      "filter": {
-        "open": "Ouvertes",
-        "all": "Toutes"
-      },
-      "status": {
-        "new": "Nouvelle",
-        "contacted": "Contactée",
-        "offer_sent": "Offre envoyée",
-        "won": "Gagnée",
-        "lost": "Perdue"
-      },
-      "stateWord": {
-        "open": "ouverte",
-        "new": "nouvelle",
-        "contacted": "contactée",
-        "offer_sent": "offre envoyée",
-        "won": "gagnée",
-        "lost": "perdue"
-      },
-      "col": {
-        "organisation": "Organisation",
-        "requester": "Demandeur",
-        "sent": "Envoyée",
-        "needs": "Besoins",
-        "state": "État"
-      },
-      "tierWhenSent": "sur {tier} lors de l’envoi",
-      "requesterGone": "Compte supprimé",
-      "needs": {
-        "cardsPerDay": "<b>{n}</b> éléments/jour",
-        "cardsPerDayNone": "éléments/jour —",
-        "agents": "<b>{n}</b> agents",
-        "agentsNone": "agents —",
-        "agentPathNone": "quels agents —",
-        "autonomyNone": "autonome —"
-      },
-      "agentPath": {
-        "hosted": "Hébergés par Motir",
-        "own": "Les leurs",
-        "both": "Les deux"
-      },
-      "autonomy": {
-        "autonomous_lead": "Autonome",
-        "volume_only": "Volume uniquement",
-        "unsure": "Pas sûr"
-      },
-      "startWhen": {
-        "now": "Maintenant",
-        "within_month": "D’ici un mois",
-        "within_quarter": "D’ici un trimestre",
-        "exploring": "Simple exploration"
-      },
-      "teamSize": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      },
-      "notAnswered": "Sans réponse",
-      "pager": {
-        "label": "Pages de demandes",
-        "note": "Les plus récentes d’abord · 50 par page",
-        "range": "{from}–{to} sur {total}",
-        "newer": "Plus récentes",
-        "older": "Plus anciennes"
-      },
-      "empty": {
-        "title": "Aucune demande Enterprise pour l’instant",
-        "body": "Lorsque le propriétaire d’une organisation clique sur « Contacter le service commercial » sur le forfait Enterprise, la demande arrive ici et l’équipe de la plateforme est prévenue par e-mail."
-      },
-      "emptyFilter": {
-        "title": "Aucune demande à l’état « {state} »",
-        "body": "Aucune demande n’est à l’état « {state} » pour le moment.",
-        "action": "Afficher les demandes ouvertes",
-        "actionAll": "Afficher toutes les demandes"
-      },
-      "error": {
-        "title": "Impossible de charger les demandes",
-        "body": "Une erreur s’est produite lors de la lecture des demandes ; aucune n’est donc affichée. Rien n’a changé.",
-        "retry": "Réessayer"
-      },
-      "detail": {
-        "back": "Retour aux demandes",
-        "sent": "Envoyée le {date}",
-        "requestTitle": "La demande",
-        "orgLink": "Ouvrir {org} dans Tenants",
-        "field": {
-          "organisation": "Organisation",
-          "requester": "Demandeur",
-          "contact": "Contact",
-          "sent": "Envoyée",
-          "cardsPerDay": "Éléments de travail par jour",
-          "parallelAgents": "Agents en parallèle",
-          "agentPath": "Quels agents",
-          "autonomy": "Autonome",
-          "startWhen": "Démarrage",
-          "teamSize": "Taille de l’équipe",
-          "note": "Message"
-        }
-      },
-      "move": {
-        "title": "Déplacer vers",
-        "stateTitle": "État",
-        "contacted": "Marquer comme contactée",
-        "offer_sent": "Marquer comme offre envoyée",
-        "won": "Marquer comme gagnée",
-        "lost": "Marquer comme perdue",
-        "hint": {
-          "new": "Étape suivante : vous avez contacté le demandeur.",
-          "contacted": "Étape suivante : vous lui avez envoyé une offre.",
-          "offer_sent": "Étape suivante : l’offre est acceptée — ou la demande est perdue.",
-          "closes": "Gagnée et perdue clôturent la demande."
-        },
-        "failed": "Impossible de déplacer la demande. Rien n’a changé ; réessayez."
-      },
-      "closed": "<b>Clôturée comme {state} le {date}.</b> Une demande clôturée ne peut plus être déplacée. L’organisation peut en envoyer une nouvelle depuis sa page Facturation.",
-      "readOnly": "<b>Lecture seule pour l’assistance.</b> Déplacer une demande relève d’un opérateur ou d’un superadministrateur ; vous pouvez tout consulter ici et dans l’historique.",
-      "confirm": {
-        "title": "Marquer cette demande comme {state} ?",
-        "body": "La demande de {org} est clôturée comme <b>{state}</b> et ne pourra plus être déplacée. L’organisation peut envoyer une nouvelle demande depuis sa page Facturation.",
-        "cancel": "Annuler"
-      },
-      "stale": "<b>Aucun changement — quelqu’un d’autre a déplacé cette demande avant vous.</b> {who} l’a marquée <b>{state}</b> il y a un instant ; votre action « {action} » a donc été refusée et rien n’a été enregistré. La page affiche maintenant son état actuel ; choisissez à nouveau.",
-      "staleUnknown": "<b>Aucun changement — quelqu’un d’autre a déplacé cette demande avant vous.</b> Elle est maintenant <b>{state}</b> ; votre action « {action} » a donc été refusée et rien n’a été enregistré. La page affiche maintenant son état actuel ; choisissez à nouveau.",
-      "history": {
-        "title": "Historique",
-        "order": "les plus anciennes d’abord",
-        "sent": "Envoyée comme",
-        "to": "vers",
-        "requesterOf": "{name} ({org})"
       }
     },
     "ideas": {
@@ -12318,12 +12162,14 @@
       "goose": "Utilise votre propre clé de fournisseur de modèles. Pour les modèles Claude, votre clé API Anthropic."
     },
     "refusal": {
-      "aiPlanRequired": "Les agents nécessitent un forfait IA payant (Standard, Pro, Max ou Enterprise). <link>Choisissez un forfait IA</link> pour en créer ou en réveiller un.",
+      "aiPlanRequired": "Les agents nécessitent un forfait IA payant. <link>Choisissez un forfait IA</link> pour en créer ou en réveiller un.",
       "aiPlanUnknown": "Motir n'a pas pu vérifier le forfait IA de votre organisation pour le moment. Réessayez dans un instant.",
       "credits": "Votre organisation n'a plus de crédits. Les agents consomment des crédits pendant leur exécution et chaque jour pour leur stockage, en veille ou non. <link>Ajoutez des crédits</link> pour créer ou réveiller un agent.",
       "creditsUnknown": "Motir n'a pas pu vérifier les crédits de votre organisation pour le moment. Réessayez dans un instant.",
-      "userCap": "Vous avez déjà {count} agents. Chacun est facturé chaque jour pour son stockage, même en veille. Supprimez-en un pour en créer un autre.",
-      "orgRunningLimit": "Votre organisation exécute {limit} agents sur {limit} autorisés. Mettez-en un en veille pour en démarrer un autre.",
+      "userCap": "Le forfait {plan} de votre organisation autorise {limit, plural, one {# agent} other {# agents}} par personne. Chacun est facturé chaque jour pour son stockage, même en veille. Supprimez-en un pour en créer un autre.",
+      "userCapNoFigure": "Vous avez déjà autant d’agents que le forfait de votre organisation en autorise par personne. Chacun est facturé chaque jour pour son stockage, même en veille. Supprimez-en un pour en créer un autre.",
+      "orgRunningLimit": "Le forfait {plan} de votre organisation exécute {limit, plural, one {# agent} other {# agents}} à la fois, et tous sont déjà en cours d’exécution. Mettez-en un en veille pour en démarrer un autre.",
+      "orgRunningLimitNoFigure": "Votre organisation exécute déjà autant d’agents à la fois que son forfait le permet. Mettez-en un en veille pour en démarrer un autre.",
       "busy": "Motir exécute actuellement autant de machines que possible. Réessayez dans quelques minutes.",
       "notOffered": "Cet agent de code n'est pas proposé : ses conditions ne permettent pas encore à une plateforme de l'héberger. Choisissez un autre agent de code.",
       "nameTaken": "Vous avez déjà un agent nommé {name} sur ce projet.",

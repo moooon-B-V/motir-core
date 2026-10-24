@@ -646,8 +646,6 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
       'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
     'pages.embed.insertCard':
       'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
-    'email.enterpriseRequestReceived.noNeeds':
-      'question — an optional question on the Enterprise contact form, not a work item',
     'device.errors.unexpected': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'planReview.actionError': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'errors.serverError.pageBody': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
@@ -955,46 +953,6 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
       'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
     'pages.embed.insertCard':
       'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
-    'email.enterpriseRequestReceived.subject':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'email.enterpriseRequestReceived.openRequest':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.users.log.action.enterprise_request.transition':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.enterpriseRequests.subtitle':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.enterpriseRequests.auditLead':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.enterpriseRequests.auditBody':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.enterpriseRequests.empty.title':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.enterpriseRequests.empty.body':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.enterpriseRequests.emptyFilter.title':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.enterpriseRequests.emptyFilter.body':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.enterpriseRequests.detail.requestTitle':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.enterpriseRequests.move.hint.offer_sent':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.enterpriseRequests.move.hint.closes':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.enterpriseRequests.move.failed':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.enterpriseRequests.closed':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.enterpriseRequests.readOnly':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.enterpriseRequests.confirm.title':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.enterpriseRequests.confirm.body':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.enterpriseRequests.stale':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'platformAdmin.enterpriseRequests.staleUnknown':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
     'orgAdmin.seat.addSub': 'payment card — the card on file Stripe charges',
     'orgAdmin.seat.pastDueNote': 'payment card — the card on file Stripe charges',
     'billing.pastDue.banner': 'payment card — the card on file Stripe charges',

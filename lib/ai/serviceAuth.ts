@@ -1,8 +1,9 @@
 import { verifyServiceBearer } from './serviceBearer';
-import { MOTIR_SYSTEM_USER_EMAIL } from './systemPrincipal';
+import { metaProjectKey, MOTIR_SYSTEM_USER_EMAIL } from './systemPrincipal';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
-import { withUserContext } from '@/lib/workspaces/context';
+import { projectRepository } from '@/lib/repositories/projectRepository';
+import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
 import { projectsService } from '@/lib/services/projectsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { ProjectDTO } from '@/lib/dto/projects';
@@ -56,29 +57,60 @@ export interface ServiceRequestAuth {
 }
 
 /**
- * Resolve the well-known Motir system principal to the context every
- * downstream service expects: its `userId` (the create's reporter) and the
- * `workspaceId` of the META workspace it is a member of.
- *
- * The workspace is read from the principal's OWN membership (the seed enrols it
- * in exactly the meta workspace), NOT from any hardcoded id — so the resolution
- * is environment-independent and unit-testable against a throwaway fixture. The
- * membership read runs inside `withUserContext`: the workspace id isn't known
- * yet (it is what we are resolving), so only the `app.user_id` GUC can be bound,
- * and the membership-scoped RLS policy still gates the read to the principal's
- * own rows under the non-bypass app role.
- *
- * Throws `SystemPrincipalNotProvisionedError` (500) when the user or its
- * membership is absent — a seeding invariant, surfaced loudly.
+ * The Motir system account's id, or `SystemPrincipalNotProvisionedError` when the
+ * environment has no such row.
  */
-export async function resolveSystemPrincipal(): Promise<ServiceContext> {
+export async function motirSystemUserId(): Promise<string> {
   const user = await userRepository.findByEmail(MOTIR_SYSTEM_USER_EMAIL);
   if (!user) throw new SystemPrincipalNotProvisionedError();
-  const membership = await withUserContext(user.id, (tx) =>
-    workspaceMembershipRepository.findFirstByUserWithWorkspace(user.id, tx),
+  return user.id;
+}
+
+/**
+ * A context for the Motir system account BOUND TO `workspaceId` (MOTIR-9329) — the
+ * writer of everything Motir AI writes into a tenant's tree. Built from the account's
+ * id and the given workspace with NO membership read: the gates admit the account by
+ * identity (`isMotirSystemUser`), and `withWorkspaceContext` binds the workspace's
+ * GUCs for every read and write the services make with it.
+ *
+ * ⚠️ `workspaceId` must come from a TRUSTED resolution — a stored row the caller has
+ * already authorised (the person's own conversation, the project their write targets)
+ * — never from request input, exactly as `withWorkspaceServiceContext` requires.
+ */
+export async function motirSystemContext(workspaceId: string): Promise<ServiceContext> {
+  return { userId: await motirSystemUserId(), workspaceId };
+}
+
+/**
+ * Resolve the well-known Motir system principal to the context every
+ * downstream service expects: its `userId` (the create's reporter) and the
+ * `workspaceId` of the META workspace.
+ *
+ * The META workspace is the one holding the project keyed `metaProjectKey()` in an
+ * organisation flagged `isMeta` (MOTIR-9329) — read under `withSystemContext`, whose
+ * `system_admin` arm `project`, `workspace` and `organization` all carry. The isMeta
+ * filter is what keeps a CUSTOMER project that happens to be keyed `MOTIR` out of
+ * it. An environment with no flagged organisation (dev, test, preview) falls back to
+ * the principal's OWN membership, which the seed provisions — the shipped resolution,
+ * read inside `withUserContext` so the membership-scoped RLS policy still gates it to
+ * the principal's own rows.
+ *
+ * Throws `SystemPrincipalNotProvisionedError` (500) when the user is absent, or when
+ * neither the meta project nor a membership names its workspace — a seeding
+ * invariant, surfaced loudly.
+ */
+export async function resolveSystemPrincipal(): Promise<ServiceContext> {
+  const userId = await motirSystemUserId();
+  const key = metaProjectKey();
+  const meta = await withSystemContext(async (tx) =>
+    (await projectRepository.listInMetaOrganizations(tx)).find((p) => p.identifier === key),
+  );
+  if (meta) return { userId, workspaceId: meta.workspaceId };
+  const membership = await withUserContext(userId, (tx) =>
+    workspaceMembershipRepository.findFirstByUserWithWorkspace(userId, tx),
   );
   if (!membership) throw new SystemPrincipalNotProvisionedError();
-  return { userId: user.id, workspaceId: membership.workspaceId };
+  return { userId, workspaceId: membership.workspaceId };
 }
 
 /**

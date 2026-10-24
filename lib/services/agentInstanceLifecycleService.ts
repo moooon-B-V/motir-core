@@ -19,11 +19,9 @@ import {
   INSTANCE_HOME_PATH,
   INSTANCE_INLINE_UPDATE_WAIT_MS,
   INSTANCE_INLINE_STOP_WAIT_MS,
-  INSTANCE_MAX_PER_USER,
   INSTANCE_NAME_PATTERN,
   INSTANCE_SLOT_TTL_SECONDS,
   INSTANCE_VOLUME_SIZE_GB,
-  instanceMaxRunning,
   isUnlimitedAgentOrg,
 } from '@/lib/agentInstances/config';
 import {
@@ -40,6 +38,7 @@ import {
 } from '@/lib/agentInstances/errors';
 import { buildCloneCommand, installationBasicAuth } from '@/lib/agentInstances/cloneCommand';
 import { AGENT_RUN_END_DETAIL } from '@/lib/agentInstances/runEnd';
+import { planCapsService } from '@/lib/services/planCapsService';
 import {
   AGENT_IDLE_COMMAND,
   AGENT_RUN_LAUNCHER_PROBE_COMMAND,
@@ -111,6 +110,7 @@ import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { aiPlanGateService } from '@/lib/services/aiPlanGateService';
 import { deletionDateFor } from '@/lib/agentInstances/planLapse';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -291,9 +291,53 @@ async function assertPaidAiPlan(organizationId: string): Promise<void> {
   if (!answer) {
     throw new AgentInstanceStartRefusedError(
       'ai_plan_required',
-      'Agents need a paid AI plan (Standard, Pro, Max or Enterprise). Choose an AI plan to create or wake one.',
+      'Agents need a paid AI plan. Choose an AI plan to create or wake one.',
     );
   }
+}
+
+/** The two agent figures a create or wake is judged against — `null` is no cap. */
+interface AgentPlanLimits {
+  /** `agentsPerUser`: live agents one person may hold, judged at create. */
+  perUser: number | null;
+  /** `agentsRunningPerOrg`: agents the org may run at once, under the fleet lock. */
+  runningPerOrg: number | null;
+  /** The plan the refusals name, as motir-ai sends it; `null` when exempt. */
+  planName: string | null;
+}
+
+/**
+ * THE PLAN'S AGENT FIGURES (MOTIR-9374) — asked ONCE per create or wake, right
+ * after {@link assertPaidAiPlan}, and passed down: never inside the fleet lock's
+ * transaction, because the read may go to motir-ai. Motir's own organisations and
+ * a build with no billing are `exempt` (no cap). A plan whose figures could not
+ * be read — or whose key has no row — is REFUSED here, before any slot is taken:
+ * there is no default figure and no "no limit" fallback (the fleet-capacity
+ * decision record MOTIR-9357).
+ */
+async function readAgentPlanLimits(organizationId: string): Promise<AgentPlanLimits> {
+  const answer = await planCapsService.capsFor(organizationId);
+  if (answer.kind === 'exempt') return { perUser: null, runningPerOrg: null, planName: null };
+  if (answer.kind === 'plan_unknown') {
+    console.error('[agentInstanceLifecycleService] the plan has no agent figures — refusing', {
+      organizationId,
+      planKey: answer.planKey,
+    });
+    throw new AgentInstanceStartRefusedError(
+      'plan_unknown',
+      'Motir could not read the agent limits for your organization’s plan just now. Try again in a moment.',
+    );
+  }
+  return {
+    perUser: answer.caps.agentsPerUser,
+    runningPerOrg: answer.caps.agentsRunningPerOrg,
+    planName: answer.planName,
+  };
+}
+
+/** "1 agent" / "5 agents". */
+function agentsWord(n: number): string {
+  return n === 1 ? '1 agent' : `${n} agents`;
 }
 
 /**
@@ -345,8 +389,9 @@ async function assertCredits(organizationId: string): Promise<void> {
 /**
  * Take a slot in the agents' OWN pool for one machine run, with the organisation's
  * running cap decided under the fleet admission lock (§6, AMENDMENTS 2 and 3). The
- * cap is counted per ORGANISATION ({@link instanceMaxRunning}), so one org at its
- * limit never refuses another; Motir's own organisations (`unlimited`) have none.
+ * cap is the org's PLAN figure, `agentsRunningPerOrg` (MOTIR-9374), counted per
+ * ORGANISATION, so one org at its limit never refuses another; an exempt org
+ * (`runningPerOrg` null) has none.
  * The slot is keyed on the RUN (`runId`, the id of the run's first interval),
  * because the running charge splits one run into several intervals. Returns
  * whether THIS call took the slot (`reserved`) or found it held (`already_held`
@@ -358,9 +403,9 @@ async function reserveSlot(input: {
   runId: string;
   organizationId: string;
   workspaceId: string;
-  unlimited: boolean;
+  limits: AgentPlanLimits;
 }): Promise<'reserved' | 'already_held'> {
-  const maxRunning = instanceMaxRunning();
+  const maxRunning = input.limits.runningPerOrg;
   const verdict = await fleetCeilingService.reserve({
     workload: 'agent_instance',
     ref: input.instanceId,
@@ -368,12 +413,22 @@ async function reserveSlot(input: {
     organizationId: input.organizationId,
     workspaceId: input.workspaceId,
     ttlSeconds: INSTANCE_SLOT_TTL_SECONDS,
-    ...(input.unlimited
+    ...(maxRunning === null
       ? {}
       : {
-          guard: async (tx: Prisma.TransactionClient) => {
-            const running = await agentInstanceRepository.countRunning(
-              { organizationId: input.organizationId },
+          guard: async (tx: Prisma.TransactionClient, now: Date) => {
+            // Running rows, plus the slots already taken for a create or wake
+            // whose row has not moved yet, counted in one statement under this
+            // lock, so two racers one below the figure cannot both pass (MOTIR-9374).
+            const held = await fleetInFlightSlotRepository.listLiveForOrganization(
+              input.organizationId,
+              'agent_instance',
+              now,
+              tx,
+            );
+            const running = await agentInstanceRepository.countRunningOrAdmitting(
+              input.organizationId,
+              held.map((slot) => slot.ref),
               tx,
             );
             return running >= maxRunning ? ORG_RUNNING_CAP : null;
@@ -381,11 +436,17 @@ async function reserveSlot(input: {
         }),
   });
   if (verdict.outcome !== 'deferred') return verdict.outcome;
-  if (verdict.reason === 'workload_cap' && verdict.detail === ORG_RUNNING_CAP) {
+  if (
+    verdict.reason === 'workload_cap' &&
+    verdict.detail === ORG_RUNNING_CAP &&
+    maxRunning !== null
+  ) {
+    const planName = input.limits.planName ?? '';
     throw new AgentInstanceStartRefusedError(
       'org_running_cap',
-      `Your organization is running ${maxRunning} of its ${maxRunning} agents. Hibernate one to start another.`,
+      `Your organization’s ${planName} plan runs ${agentsWord(maxRunning)} at once, and ${maxRunning} ${maxRunning === 1 ? 'is' : 'are'} running. Hibernate one to start another.`,
       maxRunning,
+      planName,
     );
   }
   // The operator's kill switch, or an admission that could not be evaluated —
@@ -1091,25 +1152,29 @@ export const agentInstanceLifecycleService = {
     }
 
     await assertPaidAiPlan(project.organizationId);
+    const limits = await readAgentPlanLimits(project.organizationId);
     const unlimited = await readUnlimitedAgentOrg(project.organizationId);
-    const mine = unlimited
-      ? 0
-      : await withSystemContext((tx) =>
-          agentInstanceRepository.countLiveForOwnerEverywhere(ctx.userId, tx),
+    if (limits.perUser !== null) {
+      const perUser = limits.perUser;
+      const mine = await withSystemContext((tx) =>
+        agentInstanceRepository.countLiveForOwnerEverywhere(ctx.userId, tx),
+      );
+      if (mine >= perUser) {
+        const planName = limits.planName ?? '';
+        throw new AgentInstanceStartRefusedError(
+          'user_cap',
+          `Your organization’s ${planName} plan allows ${agentsWord(perUser)} per person, and you already have ${mine}. Each one is charged for its storage every day, even asleep. Delete one to create another.`,
+          perUser,
+          planName,
         );
-    if (mine >= INSTANCE_MAX_PER_USER) {
-      throw new AgentInstanceStartRefusedError(
-        'user_cap',
-        `You already have ${INSTANCE_MAX_PER_USER} agents. Each one is charged for its storage every day, even asleep. Delete one to create another.`,
-      );
+      }
     }
-    const clash = await inProject(project, ctx, async (tx) => {
-      const rows = await agentInstanceRepository.listLiveForOwner(
-        { ownerId: ctx.userId, projectId: project.id, take: INSTANCE_MAX_PER_USER, skip: 0 },
+    const clash = await inProject(project, ctx, (tx) =>
+      agentInstanceRepository.findLiveForOwnerByName(
+        { ownerId: ctx.userId, projectId: project.id, name },
         tx,
-      );
-      return rows.some((r) => r.name === name);
-    });
+      ),
+    );
     if (clash) throw new AgentInstanceNameTakenError(name);
 
     if (!unlimited) await assertCredits(project.organizationId);
@@ -1129,7 +1194,7 @@ export const agentInstanceLifecycleService = {
       runId: intervalId,
       organizationId: project.organizationId,
       workspaceId: project.workspaceId,
-      unlimited,
+      limits,
     });
 
     const orchestrator = getPersistentOrchestrator();
@@ -1244,6 +1309,7 @@ export const agentInstanceLifecycleService = {
     if (!handle) throw new AgentInstanceStateConflictError(row.id, row.state, 'woken');
 
     await assertPaidAiPlan(project.organizationId);
+    const limits = await readAgentPlanLimits(project.organizationId);
     const unlimited = await readUnlimitedAgentOrg(project.organizationId);
     if (!unlimited) await assertCredits(project.organizationId);
     const terminal = agentTerminalMachineConfig(row.id);
@@ -1253,7 +1319,7 @@ export const agentInstanceLifecycleService = {
       runId: intervalId,
       organizationId: project.organizationId,
       workspaceId: project.workspaceId,
-      unlimited,
+      limits,
     });
 
     const now = agentInstanceClock.now();

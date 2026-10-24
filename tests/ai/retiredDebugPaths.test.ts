@@ -8,7 +8,8 @@ import { describe, expect, it } from 'vitest';
 // lib/, app/, components/ and tests/ (comments stripped, strings kept):
 //
 //  1. no retired PRODUCER comes back — a debug_bug submit, the ask→debug claim, the
-//     client's debug narration, or a debugging / debugged / confirming settle member;
+//     client's debug narration, a debugging / debugged / confirming settle member, or
+//     (MOTIR-9327) the ungrounded debug reply and the debug_bug result parse;
 //  2. the string literals 'debug' and 'new_session' are not used as a turn intent
 //     outside the paths that READ a stored turn (the DTO vocabulary, the stale-result
 //     parser, the stored-turn rendering, the debug landing, and the tests that seed
@@ -62,6 +63,9 @@ const RETIRED: Record<string, RegExp> = {
   'a debugging settle member': /['"]debugging['"]/,
   'a debugged settle member': /['"]debugged['"]/,
   'a confirming settle member': /\boutcome\s*(?::|===|!==)\s*['"]confirming['"]/,
+  // MOTIR-9327: the landing is fed by a confirmed offer, never a debug_bug result.
+  'the ungrounded debug reply': /\bDEBUG_UNGROUNDED_REPLY\b/,
+  'the debug_bug result parse': /\bparseDebugBug\b/,
 };
 
 // Each file allowed to keep a retired name, and which, with the reason.
@@ -73,6 +77,10 @@ const RETIRED_ALLOWED: Record<string, { names: string[]; why: string }> = {
   'tests/e2e/acceptance-ask-single-read.spec.ts': {
     names: ['a debug_bug submit'],
     why: 'the story spec asserts no debug_bug job is ever submitted',
+  },
+  'tests/e2e/acceptance-debug-with-motir-ai.spec.ts': {
+    names: ['a debug_bug submit'],
+    why: 'the bug-offer receipt asserts no debug_bug job is ever submitted',
   },
   'tests/ai/debugLanding.test.ts': {
     names: ['a debugged settle member'],

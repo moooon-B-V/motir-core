@@ -15,8 +15,10 @@ import { EMAIL_TEMPLATE_CLASS } from '@/lib/services/emailService';
 // A pure scan over source strings, modelled on `tests/jobs/sendEvent.test.ts`:
 // no database, no job runner, no render.
 
-/** Staff mail, English by design: it goes to Motir's own team, not a customer. */
-const EXEMPT_STAFF_TEMPLATES = ['enterprise-request-received'] as const;
+/** Staff mail, English by design: it goes to Motir's own team, not a customer.
+ *  Empty since the Contact-sales staff email went with its feature
+ *  (MOTIR-9386), so every template must have a recognisable sender. */
+const EXEMPT_STAFF_TEMPLATES: readonly string[] = [];
 
 /** Files that hold an enqueue site AND read the request for another purpose.
  *  In these, only the payload object and the lines just above it are checked. */
@@ -115,7 +117,7 @@ interface Violation {
 function checkSource(file: string, source: string, allowRequestRead = false): Violation[] {
   const violations: Violation[] = [];
   const sites = findEnqueueSites(file, source).filter(
-    (s) => !(EXEMPT_STAFF_TEMPLATES as readonly string[]).includes(s.template),
+    (s) => !EXEMPT_STAFF_TEMPLATES.includes(s.template),
   );
   for (const site of sites) {
     if (!LOCALE_PROPERTY.test(site.payload)) {
@@ -196,7 +198,7 @@ describe('the scanner', () => {
     // vacuously green — so the real tree must yield every non-exempt template.
     const found = new Set(realSites().map((s) => s.template));
     const nonExempt = Object.keys(EMAIL_TEMPLATE_CLASS).filter(
-      (t) => !(EXEMPT_STAFF_TEMPLATES as readonly string[]).includes(t),
+      (t) => !EXEMPT_STAFF_TEMPLATES.includes(t),
     );
     expect([...found].filter((t) => nonExempt.includes(t)).length).toBe(
       Object.keys(EMAIL_TEMPLATE_CLASS).length - EXEMPT_STAFF_TEMPLATES.length,
@@ -273,7 +275,7 @@ describe('every sender in lib/ supplies the recipient’s language', () => {
   it('no template escapes the scan — each non-exempt template has a recognisable sender', () => {
     const found = new Set(realSites().map((s) => s.template));
     const missing = Object.keys(EMAIL_TEMPLATE_CLASS).filter(
-      (t) => !(EXEMPT_STAFF_TEMPLATES as readonly string[]).includes(t) && !found.has(t),
+      (t) => !EXEMPT_STAFF_TEMPLATES.includes(t) && !found.has(t),
     );
     expect(
       missing,
@@ -282,8 +284,8 @@ describe('every sender in lib/ supplies the recipient’s language', () => {
     ).toEqual([]);
   });
 
-  it('the exempt set is exactly the one staff template', () => {
-    expect([...EXEMPT_STAFF_TEMPLATES]).toEqual(['enterprise-request-received']);
+  it('the exempt set is empty — no staff-only template ships today', () => {
+    expect([...EXEMPT_STAFF_TEMPLATES]).toEqual([]);
   });
 
   it('the request-read allowlist names only files that are real enqueue sites', () => {

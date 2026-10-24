@@ -4,12 +4,10 @@ import {
   DEFAULT_CI_DOCKER_VOLUME_GB,
   DEFAULT_FLEET_SLOT_TTL_SECONDS,
   DEFAULT_INDEX_IN_FLIGHT_CAP,
-  DEFAULT_ORG_POOL_CAP,
   fleetKillSwitchEngaged,
   fleetSlotTtlSeconds,
   indexInFlightCap,
   orgIndexInFlightCap,
-  orgPoolCap,
 } from '@/lib/ciFleet/limits';
 
 // The gate's CONFIGURATION half (Story MOTIR-1916 · MOTIR-1922, re-cut by
@@ -25,40 +23,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("the ORGANISATION's pool is per ENVIRONMENT, with an enterprise override", () => {
-  it('defaults to 500 when unset (§2)', () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '');
-    expect(DEFAULT_ORG_POOL_CAP).toBe(500);
-    expect(orgPoolCap()).toBe(500);
-  });
-
-  it('takes the environment value when set', () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '40');
-    expect(orgPoolCap()).toBe(40);
-  });
-
-  it("lets the org's own number win over the environment", () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '40');
-    expect(orgPoolCap(2000)).toBe(2000);
-    // Zero is a real override: this org boots nothing.
-    expect(orgPoolCap(0)).toBe(0);
-  });
-
-  it('ignores a nonsense override and falls back to the environment', () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '40');
-    expect(orgPoolCap(-3)).toBe(40);
-    expect(orgPoolCap(2.5)).toBe(40);
-  });
-
-  it.each(['nonsense', '-1', '3.5'])('falls back to the default for %s', (raw) => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', raw);
-    expect(orgPoolCap()).toBe(DEFAULT_ORG_POOL_CAP);
-    expect(warn).toHaveBeenCalled();
-  });
-});
-
-// §6: the old fleet-wide ceiling survives ONLY as the operator's kill switch.
 describe('MOTIR_FLEET_MAX_IN_FLIGHT is the KILL SWITCH and nothing else', () => {
   it('is engaged by ZERO', () => {
     vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '0');

@@ -30,6 +30,7 @@ import {
 } from '@/lib/services/agentInstanceLifecycleService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { capAgentsAt } from '../helpers/agentPlanCaps';
 import { truncateAuthTables } from '../helpers/db';
 import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
 
@@ -57,6 +58,8 @@ let calls: Call[] = [];
 let mayRun: boolean | 'unanswerable' = true;
 /** The org's AI subscription status as motir-ai reports it; `'unanswerable'` is a 503. */
 let plan: string | null = 'active';
+/** Max ×2 — 10 per person and 50 running, the figures the flat limits had (MOTIR-9374). */
+const MAX_X2_TIER = { key: 'max_x2', name: 'Max ×2', monthlyCreditAllotment: 60_000 };
 let tokenSeq = 0;
 
 function stubFetch(): void {
@@ -81,7 +84,12 @@ function stubFetch(): void {
       }
       if (url.startsWith(`${AI}/v1/stripe/subscription?`)) {
         if (plan === 'unanswerable') return json(503, { code: 'internal_error' });
-        return json(200, { status: plan, currentPeriodEnd: null, priceId: null, planTier: null });
+        return json(200, {
+          status: plan,
+          currentPeriodEnd: null,
+          priceId: null,
+          planTier: MAX_X2_TIER,
+        });
       }
       if (/\/repos\/[^/]+\/[^/]+\/installation$/.test(url)) {
         return json(200, {
@@ -190,7 +198,6 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', PEM);
   vi.stubEnv('GITHUB_APP_ID', '222');
   vi.stubEnv('GITHUB_APP_PRIVATE_KEY', PEM);
-  vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '');
   stubFetch();
   virtualNow = new Date('2026-09-28T10:00:00.000Z').getTime();
   vi.spyOn(agentInstanceClock, 'now').mockImplementation(() => new Date(virtualNow));
@@ -334,14 +341,16 @@ describe('create', () => {
       await expectNothingStarted();
     });
 
-    it('the running cap is the ORGANISATION’s own: at MOTIR_INSTANCE_MAX_RUNNING it refuses create and wake, naming the limit', async () => {
-      vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '2');
+    it('the running cap is the ORGANISATION’s own: at its plan’s running figure it refuses create and wake, naming the plan and the limit', async () => {
+      capAgentsAt({ running: 2 });
       await create('one');
       const two = await create('two');
       await expect(create('three')).rejects.toMatchObject({
         reason: 'org_running_cap',
         limit: 2,
-        message: 'Your organization is running 2 of its 2 agents. Hibernate one to start another.',
+        planName: 'Test',
+        message:
+          'Your organization’s Test plan runs 2 agents at once, and 2 are running. Hibernate one to start another.',
       });
       expect(await instances()).toHaveLength(2);
       expect(await slots()).toHaveLength(2);
@@ -356,7 +365,7 @@ describe('create', () => {
     });
 
     it('one organisation at its limit never refuses another — in the same instant, under the admission lock', async () => {
-      vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '2');
+      capAgentsAt({ running: 2 });
       const other = await makeWorkItemFixture({ name: 'Other org', identifier: 'OTHR' });
       const createIn = (name: string, profileId = 'claude') =>
         lifecycle.create(other.projectIdentifier, { name, profileId }, other.ctx);
@@ -381,7 +390,7 @@ describe('create', () => {
     });
 
     it('no create is refused as Motir being busy because of other organisations — only the kill switch reads that way', async () => {
-      vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '1');
+      capAgentsAt({ running: 1 });
       const other = await makeWorkItemFixture({ name: 'Other org', identifier: 'OTHR' });
       await lifecycle.create(
         other.projectIdentifier,
@@ -398,8 +407,7 @@ describe('create', () => {
       expect(await instances()).toHaveLength(2);
     });
 
-    it('agents have their OWN pool: the org’s shared fleet pool neither refuses them nor counts them', async () => {
-      vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
+    it('agents are slotted and counted per workload, never in a shared total', async () => {
       await create('one');
       await create('two');
       expect(await slots()).toHaveLength(2);
@@ -592,7 +600,7 @@ describe('Motir’s own organisations have no agent limits (AMENDMENT 3, MOTIR-6
         where: { id: fx.workspace.organizationId },
         data: { [flag]: true },
       });
-      vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '1');
+      capAgentsAt({ running: 1 });
       mayRun = false;
       await seedLive(10);
       const first = await create('one');
@@ -613,7 +621,7 @@ describe('Motir’s own organisations have no agent limits (AMENDMENT 3, MOTIR-6
     mayRun = false;
     await expect(create()).rejects.toMatchObject({ reason: 'credits' });
     mayRun = true;
-    vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '1');
+    capAgentsAt({ running: 1 });
     await create('one');
     await expect(create('two')).rejects.toMatchObject({ reason: 'org_running_cap', limit: 1 });
   });

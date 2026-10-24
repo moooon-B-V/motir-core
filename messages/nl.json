@@ -1030,46 +1030,6 @@
       "renew": "Als je het AI-abonnement vóór {date} verlengt, wordt de verwijdering geannuleerd. Tot die tijd kunnen je agents niet worden aangemaakt of gewekt, en wordt hun opslag nog elke dag in rekening gebracht.",
       "openBilling": "AI-abonnement verlengen",
       "footer": "Je ontvangt dit omdat je agents in deze organisatie bezit."
-    },
-    "enterpriseRequestReceived": {
-      "subject": "Enterprise-aanvraag van {organization}",
-      "preview": "{requester} vroeg naar Enterprise voor {organization}",
-      "greeting": "Hoi,",
-      "lede": "{requester} ({email}) vroeg naar het Enterprise-abonnement voor {organization}.",
-      "needsHeading": "Wat ze ons vertelden",
-      "cardsPerDay": "Werkitems per dag: ongeveer {count}",
-      "parallelAgents": "Agents tegelijk: {count}",
-      "agentPath": "Welke agents: {value}",
-      "autonomy": "Zelfstandig draaien: {value}",
-      "startWhen": "Wanneer ze zouden beginnen: {value}",
-      "teamSize": "Teamgrootte: {value}",
-      "noNeeds": "Ze hebben alle optionele vragen leeg gelaten.",
-      "contact": "Bereik ze via: {contact}",
-      "noteHeading": "Hun bericht",
-      "openRequest": "Aanvraag openen",
-      "footer": "Je ontvangt dit omdat je platformmedewerker bent bij Motir.",
-      "agentPathValue": {
-        "hosted": "De gehoste agents van Motir",
-        "own": "Hun eigen agents",
-        "both": "Allebei"
-      },
-      "autonomyValue": {
-        "autonomous_lead": "Het project dag en nacht zelfstandig draaien",
-        "volume_only": "Een groot aantal runs die ze zelf starten",
-        "unsure": "Nog niet zeker"
-      },
-      "startWhenValue": {
-        "now": "Nu",
-        "within_month": "Binnen een maand",
-        "within_quarter": "Binnen een kwartaal",
-        "exploring": "Alleen aan het verkennen"
-      },
-      "teamSizeValue": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      }
     }
   },
   "auth": {
@@ -1382,7 +1342,7 @@
         },
         "debug": {
           "title": "Debuggen met Motir AI",
-          "description": "Een bug herleiden tot de waarschijnlijke oorzaak en hem in Triage zetten",
+          "description": "Een bug herleiden tot de waarschijnlijke oorzaak en hem vastleggen als je akkoord gaat",
           "prefill": "Er is iets kapot. Wat er gebeurt: \nWat er in plaats daarvan zou moeten gebeuren: "
         }
       }
@@ -5907,7 +5867,7 @@
       "error": "Je rapport kon niet worden verstuurd. Probeer het opnieuw.",
       "debugOffer": {
         "action": "Debuggen met Motir AI",
-        "hint": "<b>Debuggen met Motir AI</b> start het debuggen zodra je erop drukt en verbruikt Motir AI-tegoed. Motir AI leest de code, benoemt de waarschijnlijke oorzaak en controleert of er al een werkitem voor deze bug bestaat."
+        "hint": "<b>Debuggen met Motir AI</b> stuurt je beschrijving direct naar Motir AI en verbruikt Motir AI-tegoed. Motir AI leest de code, benoemt de waarschijnlijke oorzaak en biedt aan de diagnose aan deze bug toe te voegen. Er wordt niets geschreven totdat je bevestigt."
       }
     }
   },
@@ -6478,7 +6438,7 @@
       "creditsUnit": "credits",
       "rate": "Machinetijd kost 1 credit per draaiende minuut. Opslag kost 10 credits per agent per dag, of die nu slaapt of niet. Beide worden van je Motir AI-saldo afgeschreven.",
       "zero": "Er hebben deze maand geen agents gedraaid of bestaan. Machinetijd kost 1 credit per draaiende minuut. Opslag kost 10 credits per agent per dag, of die nu slaapt of niet.",
-      "noPlan": "Agents vereisen een betaald AI-abonnement (Standard, Pro, Max of Enterprise).",
+      "noPlan": "Agents vereisen een betaald AI-abonnement.",
       "choosePlan": "Een AI-abonnement kiezen",
       "unavailable": "Agentcijfers zijn nu niet beschikbaar. Je agents worden nog steeds in rekening gebracht — dit gaat om de weergave, niet om de facturering.",
       "unavailableValue": "Niet beschikbaar"
@@ -7980,7 +7940,7 @@
       "handoff": "Gelezen als planwijziging — er wordt aan het voorstel gewerkt",
       "debug": {
         "wroteAnchor": "De diagnose is op <chip>{key}</chip> gezet. Het blijft in Triage en verder is er niets gewijzigd.",
-        "filed": "<chip>{key}</chip> met de diagnose in Triage gezet. Verder is er niets gewijzigd.",
+        "filed": "<chip>{key}</chip> aangemaakt met de diagnose. Verder is er niets veranderd.",
         "enrichedAnchor": "De diagnose is toegevoegd aan <chip>{key}</chip>, dat deze bug al dekt. Er is niets nieuws aangemaakt en {anchorKey} blijft zoals het is.",
         "enriched": "De diagnose is toegevoegd aan <chip>{key}</chip>, dat deze bug al dekt. Er is niets nieuws aangemaakt.",
         "ungrounded": "Dit kon niet naar de code worden herleid, dus er is niets geschreven."
@@ -8467,6 +8427,25 @@
         "outOfCredits": "Je organisatie heeft geen AI-tegoed meer, dus de planning kan niet starten.",
         "targetUnavailable": "Je kunt {key} niet meer openen, dus de planning kan niet starten.",
         "generic": "De planning kan niet starten vanuit dit voorstel."
+      }
+    },
+    "logBugOffer": {
+      "label": "Aanbod om een bug vast te leggen",
+      "writeNew": "Een nieuwe bug aanmaken",
+      "writeAnchored": "De diagnose toevoegen aan <chip>{key}</chip>",
+      "writeExisting": "De diagnose noteren op <chip>{key}</chip>, dat dit al dekt",
+      "confirming": "Vastleggen…",
+      "confirmHelp": "Bevestigen doet deze ene schrijfactie, als Motir. Met „ja” antwoorden doet hetzelfde.",
+      "declineHelp": "Weigeren schrijft niets, en het gesprek gaat verder.",
+      "logged": "Vastgelegd",
+      "loggedBy": "Bevestigd · {when}",
+      "recorded": "Er is niets geschreven.",
+      "cannotStart": {
+        "planningUnavailable": "Bugs vastleggen kan hier niet: Motir AI is niet ingesteld voor dit project, of je hebt geen toestemming om het te gebruiken.",
+        "targetChanged": "{key} is na dit aanbod gewijzigd, dus er is niets geschreven. Vraag het opnieuw voor een actueel aanbod.",
+        "targetUnavailable": "Je kunt {key} niet meer openen, dus er is niets geschreven.",
+        "anchorNotTriage": "{key} staat niet meer in Triage, dus de diagnose is niet toegevoegd.",
+        "generic": "Deze bug kan niet vanuit dit aanbod worden vastgelegd."
       }
     },
     "restart": {
@@ -9879,7 +9858,6 @@
       "navAiPlanning": "AI-planning",
       "navPlanningLessons": "Planningslessen",
       "navIdeas": "Ideeën",
-      "navEnterpriseRequests": "Enterprise-aanvragen",
       "navRunModels": "Modellen voor gehoste runs",
       "navFleetSettings": "Vlootinstellingen"
     },
@@ -10066,9 +10044,6 @@
               "enable": "Vloot-CI ingeschakeld",
               "disable": "Vloot-CI uitgeschakeld"
             }
-          },
-          "enterprise_request": {
-            "transition": "Een Enterprise-aanvraag verplaatst"
           },
           "idea": {
             "add": "Een idee toegevoegd",
@@ -10314,34 +10289,41 @@
       "fleet": {
         "orgs": {
           "title": "Vloot · organisaties met draaiende containers",
-          "subtitle": "Elke organisatie die nu een container heeft, naast wat de CI-afschrijving er de afgelopen {minutes} minuten (twee afschrijfperiodes) voor deed. Afwijkingen eerst.",
+          "subtitle": "Elke organisatie die nu een container heeft, afgezet tegen de waarden van haar abonnement, naast wat de CI-afschrijving er de afgelopen {minutes} minuten (twee afschrijfperiodes) voor deed. Afwijkingen eerst.",
           "mismatchedCount": "{count} afwijkend",
           "runningCount": "{count, plural, one {# organisatie actief} other {# organisaties actief}}",
           "noMismatch": "Geen afwijkingen",
           "stat": {
             "orgs": "organisaties met een draaiende container",
-            "pooled": "containers in pools per organisatie (CI · gehost · index)",
-            "instances": "agentinstanties · een eigen pool, hierboven niet meegeteld",
+            "ciRunners": "CI-runners · elke organisatie begrensd op de CI-piek van haar abonnement",
+            "hostedAgents": "runs van gehoste agents · elke organisatie begrensd op de parallelle runs van haar abonnement",
+            "instances": "actieve agentinstanties · elke organisatie begrensd op de waarde van haar abonnement",
             "mismatched": "afwijkend · draaien en afschrijven komen niet overeen"
           },
           "group": {
-            "pool": "In de pool van {pool} containers",
-            "own": "Eigen pool"
+            "plan": "Begrensd door het abonnement",
+            "uncapped": "Geen abonnementswaarde"
           },
           "col": {
             "org": "Organisatie",
+            "plan": "Abonnement",
             "ciRunner": "CI-runners",
             "hostedAgent": "Runs van gehoste agents",
             "index": "Indexcontainers",
-            "poolUsed": "Pool gebruikt",
             "agentInstance": "Agentinstanties",
-            "agentInstanceNote": "niet in de pool",
             "accrued": "CI-minuten · afgelopen {minutes} min",
             "credits": "Credits deze maand · bevestigd",
             "verdict": "Oordeel"
           },
-          "poolOf": "{used} / {pool}",
-          "poolUnknown": "pool onleesbaar",
+          "plan": {
+            "named": "{plan}<pp> · {perUser} per persoon</pp>",
+            "exempt": "Geen abonnementslimiet",
+            "unknown": "Abonnement onbekend · {key}",
+            "unknownNoKey": "Abonnement onbekend",
+            "unknownNote": "nieuwe containers geweigerd"
+          },
+          "usedOf": "<b>{used}</b> van {figure}",
+          "override": "afwijking",
           "metaTag": "meta-organisatie · isMeta",
           "unnamed": "Organisatie {id}",
           "accrued": {
@@ -10359,7 +10341,7 @@
           "foot": "{from}–{to} van {total} getoond · afwijkingen eerst, dan de meeste containers · alleen CI wordt beoordeeld — dat is de enige werklast die wordt afgeschreven terwijl hij draait",
           "empty": {
             "title": "Geen enkele organisatie draait een vlootcontainer",
-            "body": "Elke pool per organisatie is nu leeg, dus er valt niets met de afschrijving te vergelijken. Dit is een gezonde stand, geen fout."
+            "body": "Geen enkele organisatie heeft nu een CI-runner, een run van een gehoste agent, een agentinstantie of een indexcontainer, dus er valt niets met de afschrijving te vergelijken. Dit is een gezonde stand, geen fout."
           },
           "error": {
             "title": "De vloot kon niet worden gelezen",
@@ -11455,12 +11437,20 @@
         "charge": {
           "ciRunner": "In rekening gebracht terwijl het draait",
           "hostedAgent": "In rekening gebracht wanneer de run eindigt",
-          "agentInstance": "In rekening gebracht per actief interval · buiten de pool",
+          "agentInstance": "In rekening gebracht per actief interval",
           "index": "Kosten van Motir — nooit in rekening gebracht"
         },
+        "tile": {
+          "of": " van {figure}",
+          "override": "afwijking"
+        },
         "facts": {
-          "pool": "Pool <strong>{used} van {pool}</strong>",
-          "poolUnknown": "Pool <strong>{used} van —</strong>",
+          "plan": "Abonnement <strong>{plan}</strong> · {runs} gehoste runs tegelijk · {perUser} agents per persoon · {running} actieve agents · {ci} CI-jobs tegelijk",
+          "planCiUnreadable": "Abonnement <strong>{plan}</strong> · {runs} gehoste runs tegelijk · {perUser} agents per persoon · {running} actieve agents · CI-limiet onleesbaar",
+          "planExempt": "Abonnement <strong>Geen abonnementslimiet</strong>",
+          "planExemptOverride": "Abonnement <strong>Geen abonnementslimiet</strong> · {ci} CI-jobs tegelijk (afwijking)",
+          "planUnknown": "Abonnement <strong>onbekend · {key}</strong> · nieuwe containers geweigerd",
+          "planUnknownNoKey": "Abonnement <strong>onbekend</strong> · nieuwe containers geweigerd",
           "accrued": "Opgebouwd, afgelopen {minutes} min <strong>{value} min</strong>",
           "debited": "Afgeschreven deze maand <strong>{credits} credits</strong>",
           "pending": "Wacht op bevestiging <strong>{credits} credits</strong>"
@@ -11649,152 +11639,6 @@
       "unavailable": {
         "title": "Kan de modellen voor gehoste runs niet laden",
         "body": "motir-ai reageerde niet, dus het is onbekend of elk model in de lijst wordt aangeboden en er wordt geen lijst getoond. Er is niets gewijzigd."
-      }
-    },
-    "enterpriseRequests": {
-      "breadcrumb": "Platform · Enterprise-aanvragen",
-      "title": "Enterprise-aanvragen",
-      "subtitle": "Wat organisaties via Contact opnemen met sales bij het Enterprise-abonnement hebben gestuurd. Werk elke aanvraag af van nieuw tot gewonnen of verloren; elke stap wordt vastgelegd met wie hem zette.",
-      "auditLead": "Een aanvraag is klantgegevens.",
-      "auditBody": "Deze lijst laden en een aanvraag openen zijn leesacties over tenants heen en worden in het auditlogboek vastgelegd.",
-      "cardTitle": "Aanvragen",
-      "count": {
-        "loading": "Nieuwste eerst.",
-        "open": "Nieuwste eerst. <b>{count} open</b> — nieuw, gecontacteerd of offerte verstuurd.",
-        "state": "Nieuwste eerst. <b>{state}: {count}</b>.",
-        "all": "Nieuwste eerst. <b>{count} in totaal</b>."
-      },
-      "filterLabel": "Aanvragen filteren op status",
-      "filter": {
-        "open": "Open",
-        "all": "Alle"
-      },
-      "status": {
-        "new": "Nieuw",
-        "contacted": "Gecontacteerd",
-        "offer_sent": "Offerte verstuurd",
-        "won": "Gewonnen",
-        "lost": "Verloren"
-      },
-      "stateWord": {
-        "open": "open",
-        "new": "nieuw",
-        "contacted": "gecontacteerd",
-        "offer_sent": "offerte verstuurd",
-        "won": "gewonnen",
-        "lost": "verloren"
-      },
-      "col": {
-        "organisation": "Organisatie",
-        "requester": "Aanvrager",
-        "sent": "Verstuurd",
-        "needs": "Behoeften",
-        "state": "Status"
-      },
-      "tierWhenSent": "op {tier} bij verzending",
-      "requesterGone": "Account verwijderd",
-      "needs": {
-        "cardsPerDay": "<b>{n}</b> items/dag",
-        "cardsPerDayNone": "items/dag —",
-        "agents": "<b>{n}</b> agents",
-        "agentsNone": "agents —",
-        "agentPathNone": "welke agents —",
-        "autonomyNone": "zelfstandig —"
-      },
-      "agentPath": {
-        "hosted": "Gehost door Motir",
-        "own": "Eigen agents",
-        "both": "Allebei"
-      },
-      "autonomy": {
-        "autonomous_lead": "Draait zelfstandig",
-        "volume_only": "Alleen volume",
-        "unsure": "Niet zeker"
-      },
-      "startWhen": {
-        "now": "Nu",
-        "within_month": "Binnen een maand",
-        "within_quarter": "Binnen een kwartaal",
-        "exploring": "Alleen aan het verkennen"
-      },
-      "teamSize": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      },
-      "notAnswered": "Niet beantwoord",
-      "pager": {
-        "label": "Pagina’s met aanvragen",
-        "note": "Nieuwste eerst · 50 per pagina",
-        "range": "{from}–{to} van {total}",
-        "newer": "Nieuwer",
-        "older": "Ouder"
-      },
-      "empty": {
-        "title": "Nog geen Enterprise-aanvragen",
-        "body": "Als de eigenaar van een organisatie bij het Enterprise-abonnement op Contact opnemen met sales drukt, komt de aanvraag hier terecht en krijgen platformmedewerkers een e-mail."
-      },
-      "emptyFilter": {
-        "title": "Geen aanvragen met status ‘{state}’",
-        "body": "Er is nu geen aanvraag met status ‘{state}’.",
-        "action": "Open aanvragen tonen",
-        "actionAll": "Alle aanvragen tonen"
-      },
-      "error": {
-        "title": "De aanvragen konden niet worden geladen",
-        "body": "Er ging iets mis bij het lezen van de aanvragen, dus er wordt er geen getoond. Er is niets gewijzigd.",
-        "retry": "Opnieuw proberen"
-      },
-      "detail": {
-        "back": "Terug naar aanvragen",
-        "sent": "Verstuurd op {date}",
-        "requestTitle": "De aanvraag",
-        "orgLink": "{org} openen in Tenants",
-        "field": {
-          "organisation": "Organisatie",
-          "requester": "Aanvrager",
-          "contact": "Contact",
-          "sent": "Verstuurd",
-          "cardsPerDay": "Werkitems per dag",
-          "parallelAgents": "Agents tegelijk",
-          "agentPath": "Welke agents",
-          "autonomy": "Draait zelfstandig",
-          "startWhen": "Start",
-          "teamSize": "Teamgrootte",
-          "note": "Bericht"
-        }
-      },
-      "move": {
-        "title": "Verplaatsen naar",
-        "stateTitle": "Status",
-        "contacted": "Markeren als gecontacteerd",
-        "offer_sent": "Markeren als offerte verstuurd",
-        "won": "Markeren als gewonnen",
-        "lost": "Markeren als verloren",
-        "hint": {
-          "new": "Volgende stap: je hebt contact opgenomen met de aanvrager.",
-          "contacted": "Volgende stap: je hebt ze een offerte gestuurd.",
-          "offer_sent": "Volgende stap: ze hebben geaccepteerd — of hij is verloren.",
-          "closes": "Gewonnen en verloren sluiten de aanvraag."
-        },
-        "failed": "De aanvraag kon niet worden verplaatst. Er is niets gewijzigd; probeer het opnieuw."
-      },
-      "closed": "<b>Gesloten als ‘{state}’ op {date}.</b> Een gesloten aanvraag gaat niet meer verder. De organisatie kan een nieuwe sturen vanaf haar Facturering-pagina.",
-      "readOnly": "<b>Alleen-lezen voor support.</b> Een aanvraag verplaatsen is een taak voor een operator of superadmin; je kunt alles hier en in de geschiedenis lezen.",
-      "confirm": {
-        "title": "Deze aanvraag markeren als ‘{state}’?",
-        "body": "De aanvraag van {org} wordt gesloten als <b>{state}</b> en kan daarna niet meer worden verplaatst. De organisatie kan een nieuwe aanvraag sturen vanaf haar Facturering-pagina.",
-        "cancel": "Annuleren"
-      },
-      "stale": "<b>Niet gewijzigd — iemand anders heeft deze aanvraag eerst verplaatst.</b> {who} heeft hem zojuist gemarkeerd als <b>{state}</b>, dus je ‘{action}’ is geweigerd en er is niets vastgelegd. De pagina toont nu de huidige status; kies opnieuw.",
-      "staleUnknown": "<b>Niet gewijzigd — iemand anders heeft deze aanvraag eerst verplaatst.</b> De status is nu <b>{state}</b>, dus je ‘{action}’ is geweigerd en er is niets vastgelegd. De pagina toont nu de huidige status; kies opnieuw.",
-      "history": {
-        "title": "Geschiedenis",
-        "order": "oudste eerst",
-        "sent": "Verstuurd als",
-        "to": "naar",
-        "requesterOf": "{name} ({org})"
       }
     },
     "ideas": {
@@ -12318,12 +12162,14 @@
       "goose": "Gebruikt je eigen sleutel van een modelaanbieder. Voor Claude-modellen je Anthropic API-sleutel."
     },
     "refusal": {
-      "aiPlanRequired": "Agents vereisen een betaald AI-abonnement (Standard, Pro, Max of Enterprise). <link>Kies een AI-abonnement</link> om er een te maken of te wekken.",
+      "aiPlanRequired": "Agents vereisen een betaald AI-abonnement. <link>Kies een AI-abonnement</link> om er een te maken of te wekken.",
       "aiPlanUnknown": "Motir kon het AI-abonnement van je organisatie nu niet controleren. Probeer het zo opnieuw.",
       "credits": "Je organisatie heeft geen credits meer. Agents gebruiken credits terwijl ze draaien en elke dag voor hun opslag, slapend of niet. <link>Voeg credits toe</link> om een agent te maken of te wekken.",
       "creditsUnknown": "Motir kon de credits van je organisatie nu niet controleren. Probeer het zo opnieuw.",
-      "userCap": "Je hebt al {count} agents. Voor elk ervan wordt elke dag opslag gerekend, ook als hij slaapt. Verwijder er een om een nieuwe te maken.",
-      "orgRunningLimit": "Je organisatie draait {limit} van haar {limit} agents. Zet er een in slaap om een andere te starten.",
+      "userCap": "Het {plan}-abonnement van je organisatie staat {limit, plural, one {# agent} other {# agents}} per persoon toe. Voor elk ervan wordt elke dag opslag gerekend, ook als hij slaapt. Verwijder er een om een nieuwe te maken.",
+      "userCapNoFigure": "Je hebt al zoveel agents als het abonnement van je organisatie per persoon toestaat. Voor elk ervan wordt elke dag opslag gerekend, ook als hij slaapt. Verwijder er een om een nieuwe te maken.",
+      "orgRunningLimit": "Het {plan}-abonnement van je organisatie draait {limit, plural, one {# agent} other {# agents}} tegelijk, en die draaien allemaal. Zet er een in slaap om een andere te starten.",
+      "orgRunningLimitNoFigure": "Je organisatie draait al zoveel agents tegelijk als haar abonnement toestaat. Zet er een in slaap om een andere te starten.",
       "busy": "Motir draait op dit moment zoveel machines als het kan. Probeer het over een paar minuten opnieuw.",
       "notOffered": "Die codeeragent wordt niet aangeboden: de voorwaarden staan nog niet toe dat een platform hem host. Kies een andere codeeragent.",
       "nameTaken": "Je hebt al een agent met de naam {name} in dit project.",

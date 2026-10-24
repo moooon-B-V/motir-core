@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleCheck,
+  CircleHelp,
   CircleMinus,
   Info,
   Pause,
@@ -18,6 +19,7 @@ import {
   isFleetMismatch,
   type FleetKillDTO,
   type FleetKillsDTO,
+  type FleetOrgPlanDTO,
   type FleetOrgRowDTO,
   type FleetRunningOrgsDTO,
 } from '@/lib/dto/platformFleetMonitor';
@@ -204,9 +206,10 @@ async function OrgsCard({
       }
     >
       <div className="flex flex-col gap-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <MiniStat value={format.number(data.total)} label={t('orgs.stat.orgs')} />
-          <MiniStat value={format.number(data.pooledContainers)} label={t('orgs.stat.pooled')} />
+          <MiniStat value={format.number(data.ciRunners)} label={t('orgs.stat.ciRunners')} />
+          <MiniStat value={format.number(data.hostedAgents)} label={t('orgs.stat.hostedAgents')} />
           <MiniStat value={format.number(data.agentInstances)} label={t('orgs.stat.instances')} />
           <MiniStat value={format.number(data.mismatched)} label={t('orgs.stat.mismatched')} />
         </div>
@@ -215,28 +218,32 @@ async function OrgsCard({
           <table className="w-full min-w-[64rem] border-collapse font-sans text-sm">
             <thead>
               <tr>
-                <th />
+                <th colSpan={2} />
+                {/* Each workload against its OWN plan figure (MOTIR-9377, the
+                    fleet-capacity decision MOTIR-9357) — no shared pool. */}
                 <th
-                  colSpan={4}
+                  scope="colgroup"
+                  colSpan={3}
                   className="border-b-2 border-(--el-border-strong) pb-1 pt-2 text-center font-sans text-xs font-medium uppercase tracking-wide text-(--el-text-secondary)"
                 >
-                  {t('orgs.group.pool', { pool: format.number(data.defaultPool) })}
+                  {t('orgs.group.plan')}
                 </th>
-                <th className="border-b-2 border-l border-dashed border-(--el-border-strong) pb-1 pl-2 pt-2 text-center font-sans text-xs font-medium uppercase tracking-wide text-(--el-text-secondary)">
-                  {t('orgs.group.own')}
+                <th
+                  scope="colgroup"
+                  className="border-b-2 border-l border-dashed border-(--el-border-strong) pb-1 pl-2 pt-2 text-center font-sans text-xs font-medium uppercase tracking-wide text-(--el-text-secondary)"
+                >
+                  {t('orgs.group.uncapped')}
                 </th>
                 <th colSpan={3} />
               </tr>
               <tr className="border-b border-(--el-border) text-left">
                 <Th>{t('orgs.col.org')}</Th>
+                <Th>{t('orgs.col.plan')}</Th>
                 <Th numeric>{t('orgs.col.ciRunner')}</Th>
                 <Th numeric>{t('orgs.col.hostedAgent')}</Th>
-                <Th numeric>{t('orgs.col.index')}</Th>
-                <Th numeric>{t('orgs.col.poolUsed')}</Th>
+                <Th numeric>{t('orgs.col.agentInstance')}</Th>
                 <Th numeric own>
-                  {t('orgs.col.agentInstance')}
-                  <br />
-                  <span className="font-normal normal-case">{t('orgs.col.agentInstanceNote')}</span>
+                  {t('orgs.col.index')}
                 </Th>
                 <Th numeric>{t('orgs.col.accrued', { minutes })}</Th>
                 <Th numeric>{t('orgs.col.credits')}</Th>
@@ -281,40 +288,24 @@ async function OrgRow({ row, now }: { row: FleetOrgRowDTO; now: Date }) {
           </span>
         </span>
       </Td>
-      <Count n={row.byWorkload.ci_runner} />
-      <Count n={row.byWorkload.hosted_agent} />
-      <Count n={row.byWorkload.code_graph_index} />
-      <Td numeric>
-        <span className="flex min-w-[6rem] flex-col items-end gap-1">
-          <span className="tabular-nums text-(--el-text)">
-            {row.pool === null ? (
-              <>
-                {format.number(row.poolUsed)}
-                <span className="block text-xs text-(--el-text-secondary)">
-                  {t('orgs.poolUnknown')}
-                </span>
-              </>
-            ) : (
-              t('orgs.poolOf', {
-                used: format.number(row.poolUsed),
-                pool: format.number(row.pool),
-              })
-            )}
-          </span>
-          {row.pool !== null && row.pool > 0 ? (
-            <span
-              aria-hidden
-              className="block h-2 w-full overflow-hidden rounded-(--radius-badge) bg-(--el-surface)"
-            >
-              <span
-                className="block h-full rounded-(--radius-badge) bg-(--el-accent)"
-                style={{ width: `${usedPct(row.poolUsed, row.pool)}%` }}
-              />
-            </span>
-          ) : null}
-        </span>
+      <Td>
+        <PlanCell plan={row.plan} />
       </Td>
-      <Count n={row.byWorkload.agent_instance} own />
+      <UsedOf
+        n={row.byWorkload.ci_runner}
+        figure={ciFigure(row.plan)}
+        override={ciOverridden(row.plan)}
+      />
+      <UsedOf
+        n={row.byWorkload.hosted_agent}
+        figure={capped(row.plan)?.agentRunsInParallel ?? null}
+      />
+      <UsedOf
+        n={row.byWorkload.agent_instance}
+        figure={capped(row.plan)?.agentsRunningPerOrg ?? null}
+      />
+      {/* Indexing is held to no plan figure: a bare count, always. */}
+      <Count n={row.byWorkload.code_graph_index} own />
       <Td numeric>
         {row.accruedMinutesInWindow === 0 ? (
           <>
@@ -372,6 +363,114 @@ async function OrgRow({ row, now }: { row: FleetOrgRowDTO; now: Date }) {
         </span>
       </Td>
     </tr>
+  );
+}
+
+// ── The plan's figures (MOTIR-9377 · design MOTIR-9382) ─────────────────────
+
+type CappedPlan = Extract<FleetOrgPlanDTO, { kind: 'capped' }>;
+
+function capped(plan: FleetOrgPlanDTO): CappedPlan | null {
+  return plan.kind === 'capped' ? plan : null;
+}
+
+/** The figure CI admission holds the org to: the plan's or the staff override.
+ *  An exempt org is held only by an override; an unknown plan by nothing shown. */
+function ciFigure(plan: FleetOrgPlanDTO): number | null {
+  switch (plan.kind) {
+    case 'capped':
+      return plan.ciBurstCap;
+    case 'exempt':
+      return plan.ciBurstOverride;
+    case 'plan_unknown':
+      return null;
+  }
+}
+
+function ciOverridden(plan: FleetOrgPlanDTO): boolean {
+  switch (plan.kind) {
+    case 'capped':
+      return plan.ciBurstSource === 'override';
+    case 'exempt':
+      return plan.ciBurstOverride !== null;
+    case 'plan_unknown':
+      return false;
+  }
+}
+
+/** The Plan column: the plan's name and its per-person figure, or the words for
+ *  an org no figure holds and one whose plan could not be read — never a figure. */
+export async function PlanCell({ plan }: { plan: FleetOrgPlanDTO }) {
+  const t = await getTranslations('platformAdmin.monitoring.fleet');
+  const format = await getFormatter();
+  switch (plan.kind) {
+    case 'capped':
+      return (
+        <span className="whitespace-nowrap font-medium text-(--el-text)">
+          {t.rich('orgs.plan.named', {
+            plan: plan.planName,
+            perUser: format.number(plan.agentsPerUser),
+            pp: (chunks) => (
+              <span className="font-normal text-(--el-text-secondary)">{chunks}</span>
+            ),
+          })}
+        </span>
+      );
+    case 'exempt':
+      return <span className="italic text-(--el-text-secondary)">{t('orgs.plan.exempt')}</span>;
+    case 'plan_unknown':
+      return (
+        <>
+          <Pill tone="awaiting" data-plan="unknown">
+            <CircleHelp aria-hidden className="h-3 w-3 shrink-0" />
+            {plan.planKey
+              ? t('orgs.plan.unknown', { key: plan.planKey })
+              : t('orgs.plan.unknownNoKey')}
+          </Pill>
+          <Sub>{t('orgs.plan.unknownNote')}</Sub>
+        </>
+      );
+  }
+}
+
+/** A capped workload: `{used} of {figure}` over the usage bar, full and in the
+ *  warning fill at the figure. With no figure it is a bare count. */
+async function UsedOf({
+  n,
+  figure,
+  override = false,
+}: {
+  n: number;
+  figure: number | null;
+  override?: boolean;
+}) {
+  if (figure === null) return <Count n={n} />;
+  const t = await getTranslations('platformAdmin.monitoring.fleet');
+  const format = await getFormatter();
+  const atFigure = n >= figure;
+  return (
+    <Td numeric>
+      <span className="flex min-w-[5rem] flex-col items-end gap-1">
+        <span className="tabular-nums text-(--el-text-secondary)">
+          {t.rich('orgs.usedOf', {
+            used: format.number(n),
+            figure: format.number(figure),
+            b: (chunks) => <span className="font-semibold text-(--el-text)">{chunks}</span>,
+          })}
+        </span>
+        <span
+          aria-hidden
+          className="block h-2 w-full overflow-hidden rounded-(--radius-badge) bg-(--el-surface)"
+        >
+          <span
+            data-at-figure={atFigure ? 'true' : undefined}
+            className={`block h-full rounded-(--radius-badge) ${atFigure ? 'bg-(--el-warning)' : 'bg-(--el-accent)'}`}
+            style={{ width: `${atFigure ? 100 : usedPct(n, figure)}%` }}
+          />
+        </span>
+        {override ? <Sub>{t('orgs.override')}</Sub> : null}
+      </span>
+    </Td>
   );
 }
 
@@ -631,9 +730,9 @@ export function ago(t: T, seconds: number): string {
   return t('ago', { age });
 }
 
-function usedPct(used: number, pool: number): number {
+function usedPct(used: number, figure: number): number {
   if (used <= 0) return 0;
-  return Math.min(100, Math.max(1, Math.round((used / pool) * 100)));
+  return Math.min(100, Math.max(1, Math.round((used / figure) * 100)));
 }
 
 function CardHead({

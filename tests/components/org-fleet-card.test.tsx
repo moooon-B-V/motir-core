@@ -46,8 +46,16 @@ function row(overrides: Partial<FleetOrgRowDTO> = {}): FleetOrgRowDTO {
     isMeta: false,
     internalBilling: false,
     byWorkload: { ci_runner: 3, hosted_agent: 1, agent_instance: 2, code_graph_index: 1 },
-    poolUsed: 5,
-    pool: 500,
+    plan: {
+      kind: 'capped',
+      planKey: 'standard',
+      planName: 'Standard',
+      agentRunsInParallel: 1,
+      agentsPerUser: 1,
+      agentsRunningPerOrg: 5,
+      ciBurstCap: 5,
+      ciBurstSource: 'plan',
+    },
     accruedMinutesInWindow: 0,
     confirmedCreditsThisMonth: 1240,
     pendingCredits: 36,
@@ -91,7 +99,15 @@ describe('OrgFleetCard', () => {
     expect(within(screen.getByTestId('org-fleet-tile-hostedAgent')).getByText('1')).toBeTruthy();
     expect(within(screen.getByTestId('org-fleet-tile-agentInstance')).getByText('2')).toBeTruthy();
     expect(within(screen.getByTestId('org-fleet-tile-index')).getByText('1')).toBeTruthy();
-    expect(screen.getByText('5 of 500')).toBeTruthy();
+    // MOTIR-9377: the plan and its four figures, each tile against its own.
+    expect(screen.getByTestId('org-fleet-plan').textContent).toBe(
+      'Plan Standard · hosted runs at once: 1 · agents per person: 1 · agents running: 5 · CI jobs at once: 5',
+    );
+    expect(screen.getByTestId('org-fleet-tile-ciRunner').textContent).toContain('3 of 5');
+    expect(screen.getByTestId('org-fleet-tile-hostedAgent').textContent).toContain('1 of 1');
+    expect(screen.getByTestId('org-fleet-tile-agentInstance').textContent).toContain('2 of 5');
+    expect(screen.getByTestId('org-fleet-tile-index').textContent).not.toContain(' of ');
+    expect(screen.getByTestId('org-fleet-card').textContent).not.toMatch(/pool|500/i);
     expect(screen.getByText('1,240 credits')).toBeTruthy();
     expect(
       within(screen.getByTestId('org-fleet-verdicts')).getByText('Running, not debited'),
@@ -192,9 +208,43 @@ describe('OrgFleetCard', () => {
 
   // ── MOTIR-7321's coverage top-up ───────────────────────────────────────────
 
-  it('an unreadable pool, and a last stop with no actor and no reason, are said in words', () => {
+  it.each([
+    [{ kind: 'exempt', ciBurstOverride: null }, 'Plan No plan limit'],
+    [{ kind: 'exempt', ciBurstOverride: 9 }, 'Plan No plan limit · CI jobs at once: 9 (override)'],
+    [
+      { kind: 'plan_unknown', planKey: 'legacy_tier' },
+      'Plan unknown · legacy_tier · new containers refused',
+    ],
+    [{ kind: 'plan_unknown', planKey: null }, 'Plan unknown · new containers refused'],
+  ] as const)('a plan with no figures is said in words, never a figure (%j)', (plan, words) => {
+    renderCard({ row: row({ plan }) });
+    expect(screen.getByTestId('org-fleet-plan').textContent).toBe(words);
+    const tiles = ['hostedAgent', 'agentInstance', 'index'];
+    for (const key of tiles) {
+      expect(screen.getByTestId(`org-fleet-tile-${key}`).textContent).not.toContain(' of ');
+    }
+    const ci = screen.getByTestId('org-fleet-tile-ciRunner').textContent;
+    if (plan.kind === 'exempt' && plan.ciBurstOverride !== null) {
+      expect(ci).toContain('3 of 9');
+      expect(ci).toContain('override');
+    } else {
+      expect(ci).not.toContain(' of ');
+    }
+  });
+
+  it('a CI override is marked on its tile; an unreadable one names no CI figure', () => {
+    const base = row().plan as Extract<FleetOrgRowDTO['plan'], { kind: 'capped' }>;
+    renderCard({ row: row({ plan: { ...base, ciBurstCap: 2, ciBurstSource: 'override' } }) });
+    expect(screen.getByTestId('org-fleet-tile-ciRunner').textContent).toContain('3 of 2');
+    expect(screen.getByTestId('org-fleet-tile-ciRunner').textContent).toContain('override');
+    cleanup();
+    renderCard({ row: row({ plan: { ...base, ciBurstCap: null, ciBurstSource: 'unreadable' } }) });
+    expect(screen.getByTestId('org-fleet-plan').textContent).toContain('CI limit unreadable');
+    expect(screen.getByTestId('org-fleet-tile-ciRunner').textContent).not.toContain(' of ');
+  });
+
+  it('a last stop with no actor and no reason is said in words', () => {
     renderCard({
-      row: row({ pool: null }),
       lastStop: {
         at: '2026-10-02T14:38:00.000Z',
         actorEmail: null,
@@ -205,7 +255,6 @@ describe('OrgFleetCard', () => {
         agentInstancesHibernated: 0,
       },
     });
-    expect(screen.getByText(/of —/)).toBeTruthy();
     const last = screen.getByTestId('org-fleet-last-stop');
     expect(last.textContent).toContain('a former operator');
     expect(last.textContent).toContain('No reason recorded');

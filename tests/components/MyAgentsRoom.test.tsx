@@ -85,7 +85,6 @@ const mount = (
       projectName="motir"
       initial={initial}
       profiles={PROFILES}
-      maxPerUser={10}
       storageCreditsPerDay={storageCreditsPerDay}
     />,
     messages ? { messages, locale: 'zh' } : {},
@@ -268,15 +267,23 @@ describe('create', () => {
       '/settings/organization/billing',
     );
 
+    // MOTIR-9376: the figure and the plan are the refusal's own, never a constant.
     fetchMock.mockResolvedValueOnce(
-      json(429, { code: 'agent_instance_start_refused', reason: 'user_cap' }),
+      json(429, {
+        code: 'agent_instance_start_refused',
+        reason: 'user_cap',
+        limit: 1,
+        planName: 'Standard',
+      }),
     );
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Create agent' }));
     });
-    expect(within(dialog).getByRole('alert').textContent).toBe(
-      'Your limitYou already have 10 agents. Each one is charged for its storage every day, even asleep. Delete one to create another.',
+    const capAlert = within(dialog).getByRole('alert');
+    expect(capAlert.textContent).toBe(
+      'Your limitYour organization’s Standard plan allows 1 agent per person. Each one is charged for its storage every day, even asleep. Delete one to create another.',
     );
+    expect(capAlert.textContent).not.toContain('10');
 
     fetchMock.mockResolvedValueOnce(json(409, { code: 'agent_instance_name_taken' }));
     await act(async () => {
@@ -310,7 +317,7 @@ describe('a paid AI plan, and storage in the words (MOTIR-6918, the MOTIR-6916 d
     const alert = await refuseCreate(402, 'ai_plan_required');
     expect(within(alert).getByText('Needs an AI plan').className).toContain('font-semibold');
     expect(alert.textContent).toContain(
-      'Agents need a paid AI plan (Standard, Pro, Max or Enterprise). Choose an AI plan to create or wake one.',
+      'Agents need a paid AI plan. Choose an AI plan to create or wake one.',
     );
     expect(
       within(alert).getByRole('link', { name: 'Choose an AI plan' }).getAttribute('href'),
@@ -354,7 +361,12 @@ describe('a paid AI plan, and storage in the words (MOTIR-6918, the MOTIR-6916 d
       target: { value: 'x' },
     });
     fetchMock.mockResolvedValueOnce(
-      json(429, { code: 'agent_instance_start_refused', reason: 'org_running_cap', limit: 50 }),
+      json(429, {
+        code: 'agent_instance_start_refused',
+        reason: 'org_running_cap',
+        limit: 50,
+        planName: 'Max',
+      }),
     );
     await act(async () => {
       fireEvent.click(
@@ -363,7 +375,7 @@ describe('a paid AI plan, and storage in the words (MOTIR-6918, the MOTIR-6916 d
     });
     const alert = within(screen.getByRole('dialog')).getByRole('alert');
     expect(alert.textContent).toBe(
-      'Your organization’s limitYour organization is running 50 of its 50 agents. Hibernate one to start another.',
+      'Your organization’s limitYour organization’s Max plan runs 50 agents at once, and all of them are running. Hibernate one to start another.',
     );
     expect(alert.className).toContain('bg-(--el-tint-rose)');
   });
@@ -442,7 +454,7 @@ describe('the plan has ended (MOTIR-6921, the MOTIR-6916 delta panel E)', () => 
     const wake = within(menu).getByRole('menuitem', { name: 'Wake' });
     expect(wake.getAttribute('aria-disabled')).toBe('true');
     expect(menu.textContent).toContain(
-      'Agents need a paid AI plan (Standard, Pro, Max or Enterprise). Choose an AI plan to create or wake one.',
+      'Agents need a paid AI plan. Choose an AI plan to create or wake one.',
     );
     expect(within(menu).getByRole('link', { name: 'Choose an AI plan' })).toBeTruthy();
     expect(
@@ -492,6 +504,63 @@ describe('the row menu', () => {
     const row = within(screen.getByRole('table')).getByTestId('agent-row');
     expect(row.getAttribute('data-state')).toBe('running');
   });
+
+  it('a Wake refused for the org’s running cap names the plan and the figure the refusal carries (MOTIR-9376)', async () => {
+    mount(page([agent({ state: 'hibernated' })]));
+    const menu = await openMenu('yue-claude');
+    fetchMock
+      .mockResolvedValueOnce(
+        json(429, {
+          code: 'agent_instance_start_refused',
+          reason: 'org_running_cap',
+          limit: 30,
+          planName: 'Pro',
+        }),
+      )
+      .mockResolvedValueOnce(json(200, page([agent({ state: 'hibernated' })])));
+    await act(async () => {
+      fireEvent.click(within(menu).getByRole('menuitem', { name: 'Wake' }));
+    });
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Your organization’s limitYour organization’s Pro plan runs 30 agents at once, and all of them are running. Hibernate one to start another.',
+    );
+  });
+
+  it.each([
+    [
+      'user_cap',
+      { limit: 1 },
+      'Your limitYou already have as many agents as your organization’s plan allows per person. Each one is charged for its storage every day, even asleep. Delete one to create another.',
+    ],
+    [
+      'user_cap',
+      { planName: 'Standard' },
+      'Your limitYou already have as many agents as your organization’s plan allows per person. Each one is charged for its storage every day, even asleep. Delete one to create another.',
+    ],
+    [
+      'org_running_cap',
+      {},
+      'Your organization’s limitYour organization is already running as many agents at once as its plan allows. Hibernate one to start another.',
+    ],
+  ])(
+    'a %s refusal missing its figure or its plan (%j) names neither — no constant, no 0 (MOTIR-9376)',
+    async (reason, extra, words) => {
+      mount(page([agent({ state: 'hibernated' })]));
+      const menu = await openMenu('yue-claude');
+      fetchMock
+        .mockResolvedValueOnce(
+          json(429, { code: 'agent_instance_start_refused', reason, ...extra }),
+        )
+        .mockResolvedValueOnce(json(200, page([agent({ state: 'hibernated' })])));
+      await act(async () => {
+        fireEvent.click(within(menu).getByRole('menuitem', { name: 'Wake' }));
+      });
+      const text = screen.getByRole('alert').textContent ?? '';
+      expect(text).toBe(words);
+      expect(text).not.toMatch(/\d/);
+      expect(text).not.toContain('Standard');
+    },
+  );
 
   it('a refused Wake shows above the list', async () => {
     mount(page([agent({ state: 'hibernated' })]));

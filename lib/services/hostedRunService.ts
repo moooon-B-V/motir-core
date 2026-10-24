@@ -30,13 +30,18 @@ import {
 import {
   HOSTED_RUN_STALL_WINDOW_MS,
   HOSTED_RUN_TIMEOUT_MS,
+  hostedRunDeadline,
   hostedRunStallWindowMs,
   latestRunCredentialExpiry,
 } from '@/lib/hostedRuns/limits';
 import { hostedRunDispatchId } from '@/lib/hostedRuns/ids';
 import type { MemoizingSteps } from '@/lib/jobs/supervision/inProcessSteps';
 import { sendEvent } from '@/lib/jobs/sendEvent';
-import type { HostedRunSuperviseData } from '@/lib/jobs/types';
+import {
+  HOSTED_RUN_ADMIT_RETRY_MS,
+  type HostedRunAdmitData,
+  type HostedRunSuperviseData,
+} from '@/lib/jobs/types';
 import { hostedAgentFleetConfig } from '@/lib/orchestrator';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
@@ -397,10 +402,12 @@ async function preflight(
 }
 
 /**
- * Stamp the legs hosted, mint the run's two credentials, boot the container and
- * hand it to the durable supervisor — for a run already OPENED (by Run hosted's
- * open, or by the continue claim's hosted opening). A failure after this starts
- * is the caller's to end.
+ * Stamp the legs hosted, then admit the run: mint its two credentials, boot the
+ * container and hand it to the durable supervisor — for a run already OPENED (by
+ * Run hosted's open, or by the continue claim's hosted opening). A run held at
+ * its org's plan figure (or an unreadable plan) is NOT ended: it stays open and
+ * claimed, and the `hosted-run/admit` job boots it once there is room
+ * (MOTIR-9381). A failure after this starts is the caller's to end.
  */
 async function launch(
   run: { id: string; startedAt: string },
@@ -414,7 +421,6 @@ async function launch(
    *  implementation provenance (`hosted-agent-run.md` §8.3 — it writes no card). */
   stampLegs = true,
 ): Promise<void> {
-  const now = options.now ?? ((): Date => new Date());
   const { identifier, legIds } = target;
   const { organizationId, repositories, fleet } = checked;
   const project = { id: target.projectId };
@@ -430,65 +436,194 @@ async function launch(
     });
   }
 
-  // ── 6 · The two credentials, each dying by the backstop ────────────────
-  const startedAt = new Date(run.startedAt);
-  const runKey = await hostedRunKeyService.mintRunKey(
-    { id: run.id, organizationId, startedAt },
-    input.model,
-    now(),
-  );
-  const runCredential = await runCredentialService.mintRunCredential(
-    {
-      dispatchRunId: run.id,
-      dispatcherUserId: ctx.userId,
-      expiresAt: latestRunCredentialExpiry(startedAt),
-    },
-    now(),
-  );
-
-  // ── 7 · Boot — the launcher's inputs, and no other credential ─────────
-  const request: HostedAgentContainerRequest = {
-    dispatchId: hostedRunDispatchId(run.id),
-    runId: run.id,
-    dispatchRunId: run.id,
-    organizationId,
+  // ── 6 · The boot's NON-SECRET inputs — what a held run is rebuilt from ──
+  const admission: HostedRunAdmitData = {
     workspaceId: ctx.workspaceId,
+    dispatchRunId: run.id,
+    dispatcherUserId: ctx.userId,
+    organizationId,
     projectId: project.id,
+    identifier,
     /* v8 ignore next -- `repositoriesForItems` refuses an empty set */
     repoFullName: repositories[0]?.repository ?? '',
+    model: input.model,
+    // The ONE prefixed spelling — the offered entry's own provider (MOTIR-7208).
+    // The key, `DispatchRun.model` and the stamped provenance stay BARE.
+    openCodeModel: toOpenCodeModel(checked.offered),
+    extraEnv,
+    idempotencyKey: hostedRunAdmitKey(run.id),
+  };
+
+  // ── 7 · Admit and boot — or, held at the plan's figure, WAIT (MOTIR-9381) ──
+  const first = await admitHostedRun(admission, { ...options, fleet });
+  if (first.kind === 'failed') throw new HostedRunBootFailedError(run.id, first.detail);
+  if (first.kind === 'waiting') {
+    // The run stays open and claimed; a durable job asks again until it boots.
+    await sendEvent('hosted-run/admit', admission, { strict: true });
+  }
+}
+
+/** One admission job per run, however often it is emitted. */
+export function hostedRunAdmitKey(dispatchRunId: string): string {
+  return `hosted-run-admit:${dispatchRunId}`;
+}
+
+/** Re-exported from the job's payload module, where the job reads it without
+ *  loading this service's import graph (MOTIR-9381). */
+export { HOSTED_RUN_ADMIT_RETRY_MS };
+
+/**
+ * The admission deferrals that clear BY THEMSELVES (MOTIR-9381): the org is at
+ * its plan's agent-run figure, or its plan could not be read. A run held for one
+ * of these waits. Every other deferral — no paid plan, the kill switch, no
+ * organisation, an unreadable count — ends the run as it always did.
+ */
+export const HOSTED_RUN_WAITING_REASONS: ReadonlySet<string> = new Set([
+  'plan_cap',
+  'plan_unknown',
+]);
+
+/** The backstop's words for a run that waited its whole life for room. */
+export const HOSTED_RUN_NEVER_ADMITTED_DETAIL = `it waited the whole ${
+  HOSTED_RUN_TIMEOUT_MS / 3_600_000
+}-hour backstop and never got room to run`;
+
+/** What one admission pass did. */
+export type HostedRunAdmitResult =
+  /** Booted and handed to the supervisor — or another pass already holds it. */
+  | { kind: 'booted' }
+  /** Held for a reason that clears by itself; the run stays open. */
+  | { kind: 'waiting'; detail: string }
+  /** The run is no longer open (cancelled, or ended): nothing was booted. */
+  | { kind: 'closed' }
+  /** The run was ended `failed` (or at its backstop) with this detail. */
+  | { kind: 'failed'; detail: string };
+
+/** A pass found the run closed after its slot was taken — the slot goes back. */
+class HostedRunClosedBeforeBootError extends Error {
+  constructor(dispatchRunId: string) {
+    super(`hosted run ${dispatchRunId} closed before it booted`);
+    this.name = 'HostedRunClosedBeforeBootError';
+  }
+}
+
+/**
+ * ONE ADMISSION PASS (MOTIR-9381) — the first try in the request, and every
+ * pass of the `hosted-run/admit` job after it. It reads the run first, so a
+ * cancel between passes wins; asks the fleet for a slot ONCE; and only once the
+ * slot is taken mints the run key and the run credential, with their lives
+ * counted from that instant, so a run that waited boots with credentials good
+ * for its whole container life.
+ *
+ * A second pass for the same run finds its slot already held and boots nothing
+ * (`already_booting`). A throw after the run opened is the caller's to end.
+ */
+async function admitHostedRun(
+  data: HostedRunAdmitData,
+  options: HostedRunStartOptions & { fleet?: ReturnType<typeof hostedAgentFleetConfig> },
+): Promise<HostedRunAdmitResult> {
+  const now = options.now ?? ((): Date => new Date());
+  const run = await withSystemContext((tx) =>
+    dispatchRunRepository.findById(data.dispatchRunId, tx),
+  );
+  if (!run || run.status !== 'running') return { kind: 'closed' };
+  if (now().getTime() >= hostedRunDeadline(new Date(run.startedAt)).getTime()) {
+    await hostedRunService.endHostedRun(
+      data.dispatchRunId,
+      'backstop',
+      HOSTED_RUN_NEVER_ADMITTED_DETAIL,
+    );
+    return { kind: 'failed', detail: HOSTED_RUN_NEVER_ADMITTED_DETAIL };
+  }
+
+  const fleet = options.fleet ?? hostedAgentFleetConfig();
+  const request: HostedAgentContainerRequest = {
+    dispatchId: hostedRunDispatchId(data.dispatchRunId),
+    runId: data.dispatchRunId,
+    dispatchRunId: data.dispatchRunId,
+    organizationId: data.organizationId,
+    workspaceId: data.workspaceId,
+    projectId: data.projectId,
+    repoFullName: data.repoFullName,
     image: fleet.image,
+    // The launcher's inputs, and no other credential. The two secrets are added
+    // at admission, below.
     env: {
-      MOTIR_DISPATCH_RUN_ID: run.id,
-      MOTIR_WORK_ITEM_KEY: identifier,
+      MOTIR_DISPATCH_RUN_ID: data.dispatchRunId,
+      MOTIR_WORK_ITEM_KEY: data.identifier,
       MOTIR_API_URL: resolveBaseUrlTrimmed(),
-      MOTIR_RUN_TOKEN: runCredential.token,
-      MOTIR_GATEWAY_URL: runKey.containerEnv.MOTIR_GATEWAY_URL,
-      MOTIR_RUN_KEY: runKey.containerEnv.MOTIR_RUN_KEY,
-      // The ONE prefixed spelling — the offered entry's own provider (MOTIR-7208).
-      // The key above, `DispatchRun.model` and the stamped provenance stay BARE.
-      MOTIR_MODEL: toOpenCodeModel(checked.offered),
-      ...extraEnv,
+      MOTIR_MODEL: data.openCodeModel,
+      ...data.extraEnv,
     },
     region: fleet.region,
     size: FLEET_CONTAINER_SIZE,
     timeoutSeconds: HOSTED_RUN_TIMEOUT_MS / 1000,
   };
-  const booted = await hostedAgentContainerService.boot(request, options.supervision);
-  if (booted.phase === 'terminal') {
-    const detail = bootFailureDetail(booted.outcome);
-    await hostedRunService.endHostedRun(run.id, 'failed', detail);
-    throw new HostedRunBootFailedError(run.id, detail);
+
+  let booted;
+  try {
+    booted = await hostedAgentContainerService.boot(request, {
+      ...options.supervision,
+      envAtAdmission: async () => {
+        // A cancel that landed while this pass waited for the slot wins: the
+        // slot goes back and nothing is minted or booted.
+        const current = await withSystemContext((tx) =>
+          dispatchRunRepository.findById(data.dispatchRunId, tx),
+        );
+        if (current?.status !== 'running') {
+          throw new HostedRunClosedBeforeBootError(data.dispatchRunId);
+        }
+        // ── The two credentials, each dying by the backstop FROM ADMISSION ──
+        const admittedAt = now();
+        const runKey = await hostedRunKeyService.mintRunKey(
+          { id: data.dispatchRunId, organizationId: data.organizationId, startedAt: admittedAt },
+          data.model,
+          admittedAt,
+        );
+        const runCredential = await runCredentialService.mintRunCredential(
+          {
+            dispatchRunId: data.dispatchRunId,
+            dispatcherUserId: data.dispatcherUserId,
+            expiresAt: latestRunCredentialExpiry(admittedAt),
+          },
+          admittedAt,
+        );
+        return {
+          MOTIR_RUN_TOKEN: runCredential.token,
+          MOTIR_GATEWAY_URL: runKey.containerEnv.MOTIR_GATEWAY_URL,
+          MOTIR_RUN_KEY: runKey.containerEnv.MOTIR_RUN_KEY,
+        };
+      },
+    });
+  } catch (err) {
+    if (err instanceof HostedRunClosedBeforeBootError) return { kind: 'closed' };
+    throw err;
   }
 
-  // ── 8 · Hand the booted session to the durable supervisor ─────────────
+  if (booted.phase === 'already_booting') return { kind: 'booted' };
+  if (booted.phase === 'terminal') {
+    const { outcome } = booted;
+    if (
+      outcome.outcome === 'admission_deferred' &&
+      HOSTED_RUN_WAITING_REASONS.has(outcome.reason)
+    ) {
+      await recordWaitingLine(run, outcome.detail);
+      return { kind: 'waiting', detail: outcome.detail };
+    }
+    const detail = bootFailureDetail(outcome);
+    await hostedRunService.endHostedRun(data.dispatchRunId, 'failed', detail);
+    return { kind: 'failed', detail };
+  }
+
+  // ── Hand the booted session to the durable supervisor ──────────────────
   try {
     await sendEvent(
       'hosted-run/supervise',
       {
-        workspaceId: ctx.workspaceId,
-        dispatchRunId: run.id,
+        workspaceId: data.workspaceId,
+        dispatchRunId: data.dispatchRunId,
         session: booted.session,
-        idempotencyKey: hostedRunDispatchId(run.id),
+        idempotencyKey: hostedRunDispatchId(data.dispatchRunId),
       },
       { strict: true },
     );
@@ -503,6 +638,39 @@ async function launch(
       failureDetail: 'its supervision could not be enqueued',
     });
     throw err;
+  }
+  return { kind: 'booted' };
+}
+
+/**
+ * The WAITING LINE (MOTIR-9381) — a `log` event on the open run carrying the
+ * deferral's own words ("a Standard organization runs 1 agent run at once, and 1
+ * is already running"), through the channel the run's closing line uses. Written
+ * only when the words changed, so a run that waits an hour is not an hour of
+ * identical lines.
+ */
+async function recordWaitingLine(
+  run: { id: string; workspaceId: string; createdById: string | null },
+  detail: string,
+): Promise<void> {
+  if (!run.createdById) return;
+  const latest = await withWorkspaceServiceContext(run.workspaceId, (tx) =>
+    dispatchRunEventRepository.findLatestOfKind(run.id, 'log', tx),
+  );
+  const previous = (latest?.data as { waiting?: unknown } | null | undefined)?.waiting;
+  if (previous === detail) return;
+  try {
+    await dispatchRunService.appendEvents(
+      run.id,
+      [{ kind: 'log', data: { waiting: detail }, body: `[motir] waiting for room: ${detail}\n` }],
+      { userId: run.createdById, workspaceId: run.workspaceId },
+    );
+  } catch (err) {
+    // The line is how a person sees why; the wait itself does not depend on it.
+    console.error('[hostedRunService] could not record the waiting line', {
+      dispatchRunId: run.id,
+      detail: detailOf(err),
+    });
   }
 }
 
@@ -1106,6 +1274,25 @@ export const hostedRunService = {
         await this.endHostedRun(run.id, 'failed', `the run could not start: ${detailOf(err)}`);
       }
       throw err;
+    }
+  },
+
+  /**
+   * ONE PASS of a HELD run's admission — the `hosted-run/admit` job's body
+   * (MOTIR-9381). `waiting` asks the job to defer and ask again; every other
+   * answer ends the job. A throw after the run opened ends the run `failed`,
+   * exactly as a start that failed after opening does. Never throws.
+   */
+  async admit(
+    data: HostedRunAdmitData,
+    options: HostedRunStartOptions = {},
+  ): Promise<HostedRunAdmitResult> {
+    try {
+      return await admitHostedRun(data, options);
+    } catch (err) {
+      const detail = `the run could not start: ${detailOf(err)}`;
+      await this.endHostedRun(data.dispatchRunId, 'failed', detail);
+      return { kind: 'failed', detail };
     }
   },
 

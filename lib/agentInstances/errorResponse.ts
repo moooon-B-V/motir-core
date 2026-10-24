@@ -143,7 +143,9 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
     const status =
       err.reason === 'credits' || err.reason === 'ai_plan_required'
         ? 402
-        : err.reason === 'credits_unknown' || err.reason === 'ai_plan_unknown'
+        : err.reason === 'credits_unknown' ||
+            err.reason === 'ai_plan_unknown' ||
+            err.reason === 'plan_unknown'
           ? 503
           : 429;
     return NextResponse.json(
@@ -152,6 +154,7 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
         error: err.message,
         reason: err.reason,
         ...(err.limit !== undefined ? { limit: err.limit } : {}),
+        ...(err.planName !== undefined ? { planName: err.planName } : {}),
       },
       { status },
     );

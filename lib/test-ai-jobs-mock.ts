@@ -45,6 +45,18 @@ import { readFixtureFileSync, writeFixtureFileSync } from '@/lib/test-fixture-fi
 import type { MockAgent } from 'undici';
 
 /** What the next `ask_project` job should settle as. */
+/** THE LOG-A-BUG OFFER (Story MOTIR-9220 · MOTIR-9328), in motir-ai's shape
+ *  (MOTIR-9321's `AskLogBugOffer`): the bug drafted from the read, and the one card
+ *  a yes writes to. Core re-checks all of it at settle. */
+export interface AskLogBugOfferFixture {
+  kind: 'log_bug';
+  title: string;
+  acceptanceCriteria: string[];
+  draft: Record<string, unknown>;
+  target: { kind: 'new' | 'anchored' | 'existing'; key: string | null };
+  contextRefs: string[];
+}
+
 export interface AskJobOutcome {
   /** `debug` / `new_session` are no longer produced by motir-ai (AMENDMENT 5 ·
    *  MOTIR-9231); a spec declares one only to model a result settled across the
@@ -75,8 +87,11 @@ export interface AskJobOutcome {
    * is passed onto `result.ask` only when declared, so every other reply is
    * byte-identical to before.
    */
-  offer?: { kind: 'plan'; requestText: string; targetKey?: string; immediate?: boolean } | null;
-  offerReply?: { seq: number; kind: 'plan'; decision: 'agree' | 'decline' } | null;
+  offer?:
+    | { kind: 'plan'; requestText: string; targetKey?: string; immediate?: boolean }
+    | AskLogBugOfferFixture
+    | null;
+  offerReply?: { seq: number; kind: 'plan' | 'log_bug'; decision: 'agree' | 'decline' } | null;
   /**
    * The code graph could not be read for this answer (Story MOTIR-8136 · MOTIR-8144):
    * the result carries motir-ai's top-level `codeUnreadable` signal beside the answer.

@@ -466,9 +466,13 @@ describe('it covers BOTH sides of the fleet', () => {
 });
 
 describe('the new intents go through the admission gate', () => {
-  it('a full pool DEFERS the reconcile intent instead of exceeding the pool', async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
+  it('an org at its CI figure DEFERS the reconcile intent instead of exceeding it', async () => {
     const fx = await seedTenant();
+    // A staff override of the CI burst cap (MOTIR-9375): one CI job at once.
+    await adminDb.organization.update({
+      where: { id: fx.organizationId },
+      data: { fleetPoolCap: 1 },
+    });
     await seedIntent(fx, { jobId: 1 });
     await seedIntent(fx, { jobId: 2, status: 'running' });
     queuedJobs[`${MOTIR_ORG}/acme-web`] = [stranded(1)];
@@ -480,7 +484,7 @@ describe('the new intents go through the admission gate', () => {
     });
     const verdict = await ciRunnerAdmissionService.admit(minted);
 
-    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'org_pool' });
+    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'plan_cap' });
     expect(
       (await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({ where: { id: minted.id } }))
         .status,

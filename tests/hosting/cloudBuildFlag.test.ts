@@ -65,8 +65,8 @@ const BILLING_SURFACES: ReadonlyArray<readonly [file: string, why: string]> = [
     "the operator's read-only Billing & plans tab (MOTIR-7289) — the tenant billing page's own reads, which exist only on a billing build",
   ],
   [
-    'lib/services/aiPlanGateService.ts',
-    'the paid-AI-plan gate on the fleet and on hosted repositories (MOTIR-6909, fleet-per-org-pool.md) — off a billing build there is no plan to hold, so every org passes',
+    'lib/services/orgPlanReader.ts',
+    'the one plan read behind the paid-AI-plan gate (MOTIR-6909) and the per-plan caps (MOTIR-9372) — off a billing build there is no plan to hold, so every org is exempt',
   ],
   ['lib/services/entitlementsService.ts', 'the §4 entitlement caps'],
   [
@@ -96,10 +96,6 @@ const BILLING_SURFACES: ReadonlyArray<readonly [file: string, why: string]> = [
   [
     'lib/services/platformFleetMonitorService.ts',
     'Monitoring · Fleet and the tenant Fleet card (MOTIR-6905) — compares running containers with the credits the fleet meter debits, which exist only on a billing build; off it the read answers `{ meter: "disabled" }`',
-  ],
-  [
-    'lib/services/enterpriseRequestService.ts',
-    'the Enterprise card’s Contact sales (MOTIR-7605) — it lives on Billing & plans, which exists only on a billing build; off it the request route answers 404',
   ],
   [
     'lib/services/platformOrgIndexCostService.ts',

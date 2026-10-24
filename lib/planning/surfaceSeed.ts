@@ -59,7 +59,7 @@ export function releaseSurfaceSeed(seed?: SurfaceSeed | null): void {
 
 /**
  * The page-level claim a widget send is made under. Keyed on the TRIAGE BUG, not
- * on the text: a bug is filed once, so its one debug turn is claimed once, and a
+ * on the text: a bug is filed once, so its one seeded turn is claimed once, and a
  * second report (a new key) is a new claim.
  */
 export function debugAutoSendKey(anchorKey: string): string {

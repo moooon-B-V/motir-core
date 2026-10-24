@@ -6,6 +6,7 @@ import type {
 import type {
   AnswerOfferKindDto,
   DebugLandingDto,
+  LogBugOfferDto,
   PlanAnswerOfferDto,
   PlanChangeRunPauseDto,
   PlanChangeSessionDto,
@@ -18,6 +19,8 @@ import type {
   PlanSessionFailureDto,
 } from '@/lib/dto/planChange';
 import { isAwaitingPerson, isFailedWaiting } from '@/lib/planChange/sessionWaitingState';
+import { InvalidAuthoredBugError, parseAuthoredBug, type AuthoredBug } from '@/lib/ai/authoredBug';
+import { LOG_BUG_TARGET_KINDS, type LogBugTargetKind } from '@/lib/ai/logBugOffer';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { readGuideTurnRecord } from '@/lib/ai/guideWorkItem';
 import { parseCodeUnsearchableRepos } from '@/lib/planning/codeUnsearchable';
@@ -50,7 +53,47 @@ function toDebugLandingDto(value: unknown): DebugLandingDto | null {
   };
 }
 
-const ANSWER_OFFER_KINDS: ReadonlySet<string> = new Set<AnswerOfferKindDto>(['plan']);
+const ANSWER_OFFER_KINDS: ReadonlySet<string> = new Set<AnswerOfferKindDto>(['plan', 'log_bug']);
+
+/** The stored bug of a `log_bug` offer → its DTO (MOTIR-9322), or null when any field
+ *  is the wrong shape. The draft is re-read through `parseAuthoredBug`: a stored row
+ *  is as untrusted as the wire it came from once a later build reads it. */
+function toLogBugOfferDto(value: unknown): LogBugOfferDto | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  const target = v.target as Record<string, unknown> | null | undefined;
+  const strings = (x: unknown): x is string[] =>
+    Array.isArray(x) && x.every((e) => typeof e === 'string');
+  if (
+    typeof v.title !== 'string' ||
+    !strings(v.acceptanceCriteria) ||
+    !strings(v.contextRefs) ||
+    !target ||
+    typeof target !== 'object' ||
+    !(LOG_BUG_TARGET_KINDS as readonly unknown[]).includes(target.kind)
+  ) {
+    return null;
+  }
+  const key = nullableString(target.key);
+  const title = nullableString(target.title);
+  const targetUpdatedAt = nullableString(v.targetUpdatedAt);
+  if (key === undefined || title === undefined || targetUpdatedAt === undefined) return null;
+  let draft: AuthoredBug;
+  try {
+    draft = parseAuthoredBug(v.draft);
+  } catch (err) {
+    if (err instanceof InvalidAuthoredBugError) return null;
+    throw err;
+  }
+  return {
+    title: v.title,
+    acceptanceCriteria: v.acceptanceCriteria,
+    draft,
+    target: { kind: target.kind as LogBugTargetKind, key, title },
+    targetUpdatedAt,
+    contextRefs: v.contextRefs,
+  };
+}
 
 /** A string, or null; `undefined` when the value is neither — the wrong type. */
 function nullableString(value: unknown): string | null | undefined {
@@ -79,10 +122,14 @@ function toAnswerOfferDto(value: unknown): PlanAnswerOfferDto | null {
     confirmedSessionId: nullableString(v.confirmedSessionId),
   };
   if (Object.values(fields).some((f) => f === undefined)) return null;
+  // A `log_bug` offer is only as good as its bug: one that does not read is no offer.
+  const bug = v.kind === 'log_bug' ? toLogBugOfferDto(v.bug) : null;
+  if (v.kind === 'log_bug' && !bug) return null;
   return {
     kind: v.kind as AnswerOfferKindDto,
     requestMd: v.requestMd,
     ...(fields as { [K in keyof typeof fields]: string | null }),
+    ...(bug ? { bug } : {}),
   };
 }
 

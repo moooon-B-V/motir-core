@@ -21,21 +21,11 @@ import { mapPlanChangeError, noActiveProject, readSessionId } from '../../plan-c
 // and guards the redirect on the turn's current intent. This route trusts
 // neither: it forwards the id and lets the service decide.
 //
-// A `debug` verdict (MOTIR-7047 · the ADR's AMENDMENT 1) answers
-// `{ outcome: 'debugging', jobId, session }` — `jobId` is the ONE `debug_bug` job
-// now running for the turn. Its gates answer here as typed errors: a caller
-// without `work_item:edit` is a 403 `PERMISSION_DENIED`, an anchor that no longer
-// resolves for them is the 404 `NOT_FOUND`, out of credits is the 402 — and in
-// every one of those no job was submitted.
-//
-// Settling THAT `debug_bug` job (MOTIR-7049) LANDS it: the ONE card the ADR's
-// A1.4 allows is written as the caller, the handler's reply is appended, and the
-// answer is `{ outcome: 'debugged', landing: { outcome, workItemKey, title,
-// createdInTriage }, session }`. Replayed, it returns the same `landing` and
-// writes nothing. Its refusals write nothing either: a malformed result is a 502
-// `INVALID_AUTHORED_BUG` naming the field, a named card that does not resolve for
-// the caller the 404 `NOT_FOUND`, a `diagnose` anchored on a card that is not a
-// triage bug a 422, and a card edited mid-write a retryable 409.
+// A turn whose answer OFFERS to log a bug (MOTIR-9322) settles like any other
+// answer: the offer is stored on the answer turn and nothing is written. The card
+// is landed only when the person confirms it — the offer confirm door, or a typed
+// yes settled here (MOTIR-9323) — through one claimed write as the Motir system
+// account. There is no separate `debug_bug` job any more.
 //
 // A MID-RUN turn (MOTIR-7996) settles to two more outcomes, shaped like the rest:
 // `{ outcome: 'forwarded', delivery, session }` — the answering session read the

@@ -74,7 +74,6 @@ function onPlan(key: string, name: string, priceId: string): Partial<BillingStat
 function stubFetch(body: BillingStatusDTO) {
   const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
     if (url.endsWith('/billing')) return new Response(JSON.stringify(body), { status: 200 });
-    if (url.endsWith('/billing/enterprise-request')) return new Response('null', { status: 200 });
     return new Response(JSON.stringify({ url: 'https://stripe.test/checkout/x' }), {
       status: 200,
     });

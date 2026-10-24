@@ -131,6 +131,17 @@ export const agentInstanceRepository = {
     });
   },
 
+  /** The owner's live instance of exactly this name in the project — create's
+   *  name-clash read, independent of how many agents the owner holds. */
+  async findLiveForOwnerByName(
+    where: { ownerId: string; projectId: string; name: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstance | null> {
+    return tx.agentInstance.findFirst({
+      where: { ownerId: where.ownerId, projectId: where.projectId, name: where.name, ...LIVE },
+    });
+  },
+
   /** The total behind {@link listLiveForOwner}, for the page's pagination. */
   async countLiveForOwner(
     page: Pick<AgentInstanceOwnerPage, 'ownerId' | 'projectId'>,
@@ -325,6 +336,33 @@ export const agentInstanceRepository = {
         ...LIVE,
       },
     });
+  },
+
+  /**
+   * The org's running cap count (MOTIR-9374): its instances in a running state,
+   * UNION the instances it holds a fleet slot for (`admittingIds`) whose row has
+   * not moved yet — a create whose row is not inserted, or a wake still
+   * `hibernated`. ONE statement, so a racer that moves its row between two reads
+   * can be neither missed nor counted twice; two wakes one below the figure
+   * cannot both pass the guard that holds the fleet admission lock.
+   */
+  async countRunningOrAdmitting(
+    organizationId: string,
+    admittingIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const states = [...RUNNING_STATES];
+    const rows = await tx.$queryRaw<Array<{ n: number }>>`
+      SELECT COUNT(*)::int AS "n" FROM (
+        SELECT "id" FROM "agent_instance"
+        WHERE "organization_id" = ${organizationId}
+          AND "deleted_at" IS NULL
+          AND "state"::text = ANY(${states}::text[])
+        UNION
+        SELECT unnest(${admittingIds}::text[])
+      ) AS "counted"
+    `;
+    return rows[0]?.n ?? 0;
   },
 
   /** Live instances a user holds in ANY project — §6's per-user cap. */

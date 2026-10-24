@@ -440,9 +440,10 @@ model User {
   contentLanguageChanges           OrganizationContentLanguageChange[] @relation("OrganizationContentLanguageChangedBy")
   autoTranslateChanges             ProjectAutoTranslateChange[]        @relation("ProjectAutoTranslateChangedBy")
   cancelledOrganizationDeletions   OrganizationDeletionRequest[]       @relation("OrganizationDeletionCancelledBy")
-  // Enterprise requests this person sent from Billing & plans (MOTIR-7605). SetNull:
-  // the request is the ORG's sales record and outlives the account that sent it.
-  enterpriseRequests               EnterpriseRequest[]
+  // SCHEMA-ONLY phase of the Contact-sales removal (MOTIR-9386): `@ignore`d with
+  // its model so the generated client stops naming the table; the CONTRACT
+  // migration drops the table and deletes this line in a later release.
+  enterpriseRequests               EnterpriseRequest[]                 @ignore
   // Personal-data export requests this person has raised (Story 8.4 ·
   // MOTIR-3698). A LIST for the same reason: each request builds its own
   // archive, and the previous ones remain as history until they expire.
@@ -1367,9 +1368,7 @@ model Organization {
 
   /// The internal dogfood org (moooon B.V.) — the META org. Resolves to the
   /// `meta` entitlement tier (every §4 cap lifted) and disables the AI paywall.
-  /// DISTINCT from the future commercial `enterprise` tier: `meta` is never
-  /// billed and is excluded from revenue (they share "unlimited" today only by
-  /// coincidence and will diverge). Set on the live moooon row by the
+  /// `meta` is never billed and is excluded from revenue. Set on the live moooon row by the
   /// add_organization_is_meta data-flip migration (WHERE slug = 'moooon'); seed
   /// sets it for dev. The §4 cap reader (entitlementsService) and the 8.1.8 AI
   /// paywall (billingService.getAiAccess) consume it; it is also propagated to
@@ -1395,13 +1394,13 @@ model Organization {
   /// unlike `isMeta`'s data-flip, classifying an org is an operator's act.
   internalBilling Boolean @default(false) @map("internal_billing")
 
-  /// THIS ORGANISATION'S OWN FLEET POOL — the enterprise override of
-  /// `MOTIR_FLEET_ORG_MAX_IN_FLIGHT` (default 500): how many shared-workload
-  /// containers (CI runners, hosted-agent runs, index containers) the org may
-  /// have in flight at once (`docs/decisions/fleet-per-org-pool.md` §2,
-  /// MOTIR-6907). NULL = the environment's number. Set by platform staff with the
-  /// org, the way its tier is, and never as a per-org env var. `0` is legal and
-  /// means the org boots nothing. Read by `lib/ciFleet/limits.ts` `orgPoolCap`.
+  /// THIS ORGANISATION'S CI BURST OVERRIDE (MOTIR-9375 · MOTIR-9377; it was the
+  /// org's own fleet pool, MOTIR-6907, until the fleet-capacity decision
+  /// MOTIR-9357 retired that pool): how many CI runners the org may have in
+  /// flight at once, in place of its plan's `ciBurstCap`. It overrides that one
+  /// figure and nothing else. NULL = the plan's figure. Set by platform staff with
+  /// the org, never as a per-org env var. `0` is legal and means the org boots no
+  /// CI runner. Read by `fleetCeilingService.resolveCiBurstCap`.
   fleetPoolCap Int? @map("fleet_pool_cap")
 
   /// The git CONNECTIONS this organisation holds, and the REPOSITORIES behind
@@ -1485,9 +1484,9 @@ model Organization {
   // one may follow it. `Restrict` on the request's side: an org row may not
   // vanish under its own deletion record (the purge deletes the requests first).
   deletionRequests      OrganizationDeletionRequest[]
-  /// Contact-sales requests this org sent (MOTIR-7605) — a LIST: at most one OPEN
-  /// at a time (the partial unique index), the closed ones stay as history.
-  enterpriseRequests    EnterpriseRequest[]
+  /// SCHEMA-ONLY phase of the Contact-sales removal (MOTIR-9386): `@ignore`d with
+  /// its model; the CONTRACT migration drops the table and this line later.
+  enterpriseRequests    EnterpriseRequest[] @ignore
   /// Per-org kill-switch OVERRIDES (MOTIR-750); absence = the registry default.
   featureFlags          OrgFeatureFlag[]
   /// Staff "View as" sessions opened inside this organization (MOTIR-749).
@@ -11802,6 +11801,16 @@ model AccountDeletionRequest {
   @@map("account_deletion_request")
 }
 
+/// ⚠️ RETIRED — SCHEMA-ONLY PHASE (Story MOTIR-9385 · MOTIR-9386). Motir has no
+/// Enterprise plan, and the feature that wrote and read this table is deleted.
+/// The model is `@@ignore`d so the generated client no longer names the table,
+/// while the table and its five enum types stay in place: `fly.toml`'s
+/// `release_command` migrates BEFORE the new image takes traffic, so dropping
+/// them in the same release would pull the table from under the still-serving
+/// image (`docs/decisions/delivery-reader-migration.md` §6a,
+/// `tests/contract-phase-guard.test.ts`). A CONTRACT migration in a LATER
+/// release drops the table and the enums and deletes these declarations.
+///
 /// A request for the ENTERPRISE plan, sent from the Enterprise card's Contact
 /// sales control on Billing & plans (Story MOTIR-7602 · Subtask MOTIR-7605).
 /// Platform staff work it in the operator console's Enterprise requests page
@@ -11857,6 +11866,7 @@ model EnterpriseRequest {
   @@index([organizationId, createdAt])
   @@index([requestedById])
   @@map("enterprise_request")
+  @@ignore
 }
 
 /// Where an {@link EnterpriseRequest} stands. `new`, `contacted` and

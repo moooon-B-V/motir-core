@@ -56,7 +56,7 @@ function stubFetch(): void {
           status: 'active',
           currentPeriodEnd: null,
           priceId: null,
-          planTier: null,
+          planTier: { key: 'max_x2', name: 'Max ×2', monthlyCreditAllotment: 60_000 },
         });
       }
       if (url === `${AI}/v1/credits/agent-machine`) {
@@ -93,7 +93,6 @@ beforeEach(async () => {
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
   vi.stubEnv('MOTIR_AI_URL', `${AI}/`);
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
-  vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '');
   stubFetch();
   virtualNow = new Date('2026-09-28T10:00:00.000Z').getTime();
   vi.spyOn(agentInstanceClock, 'now').mockImplementation(() => new Date(virtualNow));

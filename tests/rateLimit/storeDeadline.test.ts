@@ -367,6 +367,21 @@ const DEADLINE_IRRELEVANT: ReadonlyMap<string, string> = new Map([
       'No rate-limit budget is spent and no store is resolved (MOTIR-6877).',
   ],
   [
+    'tests/e2e/acceptance-plan-caps.spec.ts',
+    'Its one 429 is the agent lane’s PERSONAL LIMIT under the org’s plan ' +
+      '(`AgentInstanceStartRefusedError` `user_cap` carrying the plan’s figure, ' +
+      '`lib/agentInstances/errorResponse.ts`), decided by a count of the owner’s live agents ' +
+      'against `planCapsService.capsFor`. No rate-limit budget is spent and no store is ' +
+      'resolved (MOTIR-9379).',
+  ],
+  [
+    'tests/integration/planCapsStoryGate.test.ts',
+    'Its one 429 is `mapAgentInstanceError`’s status for a REAL `user_cap` refusal ' +
+      '(`lib/agentInstances/errorResponse.ts`), produced by the agent create gate counting ' +
+      'the owner’s live agents against the plan’s figure (MOTIR-9378). No request reaches a ' +
+      'limiter and no store is resolved.',
+  ],
+  [
     'tests/e2e/acceptance-visitor-requested-features.spec.ts',
     'Its one 429 is a refusal the SPEC hands back: `page.route` fulfils the upvote POST ' +
       'with a 429 so the Requested features row’s restore-and-say-so arm is walked ' +

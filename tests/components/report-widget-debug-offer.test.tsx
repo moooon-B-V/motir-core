@@ -95,8 +95,13 @@ describe('offered — a Bug, for an actor who may debug', () => {
     expect(filed.textContent).toContain('PROD-412');
     expect(filed.textContent).toContain(TITLE);
     expect(panel.textContent).toContain(
-      'Debug with Motir AI starts the debug as soon as you press it and spends Motir AI credits.',
+      'Debug with Motir AI sends your report to Motir AI as soon as you press it and spends Motir AI credits.',
     );
+    // MOTIR-9325 — the press starts an ordinary ask, not a separate debug run:
+    // the hint promises an offer and no write until the person confirms.
+    expect(panel.textContent).toContain('offers to add the diagnosis to this bug');
+    expect(panel.textContent).toContain('Nothing is written until you confirm.');
+    expect(panel.textContent).not.toContain('starts the debug');
 
     // The press is the go, and the helper line is its accessible description.
     const offer = screen.getByRole('button', { name: 'Debug with Motir AI' });

@@ -1030,46 +1030,6 @@
       "renew": "Rinnovando il piano AI prima del {date} annulli l’eliminazione. Fino ad allora non è possibile creare o riattivare i tuoi agenti, e il loro spazio di archiviazione continua a essere addebitato ogni giorno.",
       "openBilling": "Rinnova il piano AI",
       "footer": "Ricevi questa email perché possiedi degli agenti in questa organizzazione."
-    },
-    "enterpriseRequestReceived": {
-      "subject": "Richiesta Enterprise da {organization}",
-      "preview": "{requester} ha chiesto informazioni su Enterprise per {organization}",
-      "greeting": "Ciao,",
-      "lede": "{requester} ({email}) ha chiesto informazioni sul piano Enterprise per {organization}.",
-      "needsHeading": "Cosa ci hanno detto",
-      "cardsPerDay": "Elementi di lavoro al giorno: circa {count}",
-      "parallelAgents": "Agenti in parallelo: {count}",
-      "agentPath": "Quali agenti: {value}",
-      "autonomy": "Esecuzione autonoma: {value}",
-      "startWhen": "Quando inizierebbero: {value}",
-      "teamSize": "Dimensione del team: {value}",
-      "noNeeds": "Hanno lasciato vuote tutte le domande facoltative.",
-      "contact": "Puoi contattarli a: {contact}",
-      "noteHeading": "La loro nota",
-      "openRequest": "Apri la richiesta",
-      "footer": "Ricevi questa email perché fai parte dello staff della piattaforma Motir.",
-      "agentPathValue": {
-        "hosted": "Gli agenti ospitati di Motir",
-        "own": "I loro agenti",
-        "both": "Entrambi"
-      },
-      "autonomyValue": {
-        "autonomous_lead": "Gestire il progetto 24 ore su 24 in autonomia",
-        "volume_only": "Un grande volume di esecuzioni avviate da loro",
-        "unsure": "Non ancora deciso"
-      },
-      "startWhenValue": {
-        "now": "Subito",
-        "within_month": "Entro un mese",
-        "within_quarter": "Entro un trimestre",
-        "exploring": "Solo per esplorare"
-      },
-      "teamSizeValue": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      }
     }
   },
   "auth": {
@@ -1382,7 +1342,7 @@
         },
         "debug": {
           "title": "Esegui il debug con Motir AI",
-          "description": "Risali alla causa probabile di un bug e registralo in Smistamento",
+          "description": "Risali alla causa probabile di un bug, poi registralo se sei d’accordo",
           "prefill": "Qualcosa non funziona. Cosa succede: \nCosa dovrebbe succedere invece: "
         }
       }
@@ -5907,7 +5867,7 @@
       "error": "Impossibile inviare il tuo report. Riprova.",
       "debugOffer": {
         "action": "Esegui il debug con Motir AI",
-        "hint": "<b>Esegui il debug con Motir AI</b> avvia il debug appena lo premi e consuma crediti Motir AI. Motir AI legge il codice, individua la causa probabile e verifica se un elemento di lavoro copre già questo bug."
+        "hint": "<b>Esegui il debug con Motir AI</b> invia la tua descrizione a Motir AI appena lo premi e consuma crediti Motir AI. Motir AI legge il codice, individua la causa probabile e propone di aggiungere la diagnosi a questo bug. Non viene scritto nulla finché non confermi."
       }
     }
   },
@@ -6478,7 +6438,7 @@
       "creditsUnit": "crediti",
       "rate": "Il tempo macchina costa 1 credito per minuto di esecuzione. Lo spazio di archiviazione costa 10 crediti per agente al giorno, che sia inattivo o no. Entrambi vengono scalati dal tuo saldo Motir AI.",
       "zero": "Nessun agente è stato eseguito o è esistito questo mese. Il tempo macchina costa 1 credito per minuto di esecuzione. Lo spazio di archiviazione costa 10 crediti per agente al giorno, che sia inattivo o no.",
-      "noPlan": "Gli agenti richiedono un piano AI a pagamento (Standard, Pro, Max o Enterprise).",
+      "noPlan": "Gli agenti richiedono un piano AI a pagamento.",
       "choosePlan": "Scegli un piano AI",
       "unavailable": "I dati degli agenti non sono disponibili al momento. I tuoi agenti continuano a essere addebitati: il problema riguarda la visualizzazione, non la fatturazione.",
       "unavailableValue": "Non disponibile"
@@ -7980,7 +7940,7 @@
       "handoff": "Interpretato come modifica al piano: elaborazione della proposta",
       "debug": {
         "wroteAnchor": "Ho scritto la diagnosi su <chip>{key}</chip>. Resta in Smistamento e non è cambiato nient’altro.",
-        "filed": "Ho registrato <chip>{key}</chip> in Smistamento con la diagnosi. Non è cambiato nient’altro.",
+        "filed": "Creato <chip>{key}</chip> con la diagnosi. Nient'altro è cambiato.",
         "enrichedAnchor": "Ho aggiunto la diagnosi a <chip>{key}</chip>, che copre già questo Bug. Non è stato registrato nulla di nuovo e {anchorKey} resta com’è.",
         "enriched": "Ho aggiunto la diagnosi a <chip>{key}</chip>, che copre già questo Bug. Non è stato registrato nulla di nuovo.",
         "ungrounded": "Non è stato possibile ricondurre il problema al codice, quindi non è stato scritto nulla."
@@ -8467,6 +8427,25 @@
         "outOfCredits": "La tua organizzazione ha esaurito i crediti AI, quindi la pianificazione non può iniziare.",
         "targetUnavailable": "Non puoi più aprire {key}, quindi la pianificazione non può iniziare.",
         "generic": "La pianificazione non può iniziare da questa proposta."
+      }
+    },
+    "logBugOffer": {
+      "label": "Proposta di registrare un bug",
+      "writeNew": "Crea un nuovo bug",
+      "writeAnchored": "Aggiungi la diagnosi a <chip>{key}</chip>",
+      "writeExisting": "Annota la diagnosi su <chip>{key}</chip>, che copre già questo problema",
+      "confirming": "Registrazione…",
+      "confirmHelp": "Conferma esegue questa sola scrittura, come Motir. Rispondere «sì» fa lo stesso.",
+      "declineHelp": "Rifiuta non scrive nulla e la conversazione continua.",
+      "logged": "Registrato",
+      "loggedBy": "Confermato · {when}",
+      "recorded": "Non è stato scritto nulla.",
+      "cannotStart": {
+        "planningUnavailable": "Qui non è possibile registrare bug: Motir AI non è configurato per questo progetto, oppure non hai il permesso di usarlo.",
+        "targetChanged": "{key} è stato modificato dopo questa proposta, quindi non è stato scritto nulla. Chiedi di nuovo per una proposta aggiornata.",
+        "targetUnavailable": "Non puoi più aprire {key}, quindi non è stato scritto nulla.",
+        "anchorNotTriage": "{key} non è più in Triage, quindi la diagnosi non è stata aggiunta.",
+        "generic": "Questo bug non può essere registrato da questa proposta."
       }
     },
     "restart": {
@@ -9879,7 +9858,6 @@
       "navAiPlanning": "Pianificazione con l’AI",
       "navPlanningLessons": "Lezioni di pianificazione",
       "navIdeas": "Idee",
-      "navEnterpriseRequests": "Richieste Enterprise",
       "navRunModels": "Modelli delle esecuzioni ospitate",
       "navFleetSettings": "Impostazioni della flotta"
     },
@@ -10066,9 +10044,6 @@
               "enable": "Attivata la CI della flotta",
               "disable": "Disattivata la CI della flotta"
             }
-          },
-          "enterprise_request": {
-            "transition": "Spostata una richiesta Enterprise"
           },
           "idea": {
             "add": "Aggiunta un’idea",
@@ -10314,34 +10289,41 @@
       "fleet": {
         "orgs": {
           "title": "Flotta · organizzazioni con container in esecuzione",
-          "subtitle": "Ogni organizzazione che ha attualmente un container, accanto a ciò che l’addebito della CI ha fatto per essa negli ultimi {minutes} minuti (due periodi di addebito). Prima quelle non corrispondenti.",
+          "subtitle": "Ogni organizzazione che ha attualmente un container, rispetto ai valori del suo piano, accanto a ciò che l’addebito della CI ha fatto per essa negli ultimi {minutes} minuti (due periodi di addebito). Prima quelle non corrispondenti.",
           "mismatchedCount": "{count} non corrispondenti",
           "runningCount": "{count, plural, one {# organizzazione attiva} other {# organizzazioni attive}}",
           "noMismatch": "Nessuna discrepanza",
           "stat": {
             "orgs": "organizzazioni con un container in esecuzione",
-            "pooled": "container nei pool per organizzazione (CI · ospitati · indice)",
-            "instances": "istanze di agenti · un pool a parte, non conteggiate sopra",
+            "ciRunners": "runner di CI · ogni organizzazione limitata al picco CI del suo piano",
+            "hostedAgents": "esecuzioni dell’agente ospitato · ogni organizzazione limitata alle esecuzioni parallele del suo piano",
+            "instances": "istanze di agenti in esecuzione · ogni organizzazione limitata al valore del suo piano",
             "mismatched": "non corrispondenti · esecuzione e addebito non concordano"
           },
           "group": {
-            "pool": "Nel pool da {pool} container",
-            "own": "Pool proprio"
+            "plan": "Limitato dal piano",
+            "uncapped": "Nessun valore del piano"
           },
           "col": {
             "org": "Organizzazione",
+            "plan": "Piano",
             "ciRunner": "Runner di CI",
             "hostedAgent": "Esecuzioni dell’agente ospitato",
             "index": "Container di indicizzazione",
-            "poolUsed": "Pool usato",
             "agentInstance": "Istanze di agenti",
-            "agentInstanceNote": "non nel pool",
             "accrued": "Minuti di CI · ultimi {minutes} min",
             "credits": "Crediti di questo mese · confermati",
             "verdict": "Esito"
           },
-          "poolOf": "{used} / {pool}",
-          "poolUnknown": "pool non leggibile",
+          "plan": {
+            "named": "{plan}<pp> · {perUser} per persona</pp>",
+            "exempt": "Nessun limite di piano",
+            "unknown": "Piano sconosciuto · {key}",
+            "unknownNoKey": "Piano sconosciuto",
+            "unknownNote": "nuovi container rifiutati"
+          },
+          "usedOf": "<b>{used}</b> su {figure}",
+          "override": "deroga",
           "metaTag": "meta org · isMeta",
           "unnamed": "Organizzazione {id}",
           "accrued": {
@@ -10359,7 +10341,7 @@
           "foot": "Visualizzate {from}–{to} di {total} · prima quelle non corrispondenti, poi quelle con più container · viene valutata solo la CI, l’unico carico di lavoro addebitato durante l’esecuzione",
           "empty": {
             "title": "Nessuna organizzazione ha un container della flotta in esecuzione",
-            "body": "Al momento tutti i pool per organizzazione sono vuoti, quindi non c’è nulla da confrontare con l’addebito. È una lettura sana, non un guasto."
+            "body": "Al momento nessuna organizzazione ha un runner di CI, un’esecuzione dell’agente ospitato, un’istanza di agente o un container di indicizzazione, quindi non c’è nulla da confrontare con l’addebito. È una lettura sana, non un guasto."
           },
           "error": {
             "title": "Impossibile leggere la flotta",
@@ -11455,12 +11437,20 @@
         "charge": {
           "ciRunner": "Addebitato durante l’esecuzione",
           "hostedAgent": "Addebitato al termine dell’esecuzione",
-          "agentInstance": "Addebitato per intervallo di esecuzione · fuori dal pool",
+          "agentInstance": "Addebitato per intervallo di esecuzione",
           "index": "Costo di Motir: mai addebitato"
         },
+        "tile": {
+          "of": " su {figure}",
+          "override": "deroga"
+        },
         "facts": {
-          "pool": "Pool <strong>{used} su {pool}</strong>",
-          "poolUnknown": "Pool <strong>{used} su —</strong>",
+          "plan": "Piano <strong>{plan}</strong> · {runs} esecuzioni ospitate alla volta · {perUser} agenti per persona · {running} agenti in esecuzione · {ci} job di CI alla volta",
+          "planCiUnreadable": "Piano <strong>{plan}</strong> · {runs} esecuzioni ospitate alla volta · {perUser} agenti per persona · {running} agenti in esecuzione · limite CI illeggibile",
+          "planExempt": "Piano <strong>Nessun limite di piano</strong>",
+          "planExemptOverride": "Piano <strong>Nessun limite di piano</strong> · {ci} job di CI alla volta (deroga)",
+          "planUnknown": "Piano <strong>sconosciuto · {key}</strong> · nuovi container rifiutati",
+          "planUnknownNoKey": "Piano <strong>sconosciuto</strong> · nuovi container rifiutati",
           "accrued": "Maturati, ultimi {minutes} min <strong>{value} min</strong>",
           "debited": "Addebitati questo mese <strong>{credits} crediti</strong>",
           "pending": "In attesa di conferma <strong>{credits} crediti</strong>"
@@ -11649,152 +11639,6 @@
       "unavailable": {
         "title": "Impossibile caricare i modelli per le esecuzioni ospitate",
         "body": "motir-ai non ha risposto, quindi non si sa se ogni modello in elenco sia offerto e nessun elenco viene mostrato. Non è cambiato nulla."
-      }
-    },
-    "enterpriseRequests": {
-      "breadcrumb": "Piattaforma · Richieste Enterprise",
-      "title": "Richieste Enterprise",
-      "subtitle": "Ciò che le organizzazioni hanno inviato da «Contatta le vendite» sul piano Enterprise. Porta ogni richiesta da nuova a vinta o persa; ogni spostamento viene registrato insieme a chi l’ha fatto.",
-      "auditLead": "Una richiesta è un dato del cliente.",
-      "auditBody": "Caricare questo elenco e aprire una richiesta sono letture trasversali ai tenant, registrate nel registro di audit.",
-      "cardTitle": "Richieste",
-      "count": {
-        "loading": "Prima le più recenti.",
-        "open": "Prima le più recenti. <b>Aperte: {count}</b> (nuove, contattate o con offerta inviata).",
-        "state": "Prima le più recenti. <b>Nello stato «{state}»: {count}</b>.",
-        "all": "Prima le più recenti. <b>{count} in totale</b>."
-      },
-      "filterLabel": "Filtra le richieste per stato",
-      "filter": {
-        "open": "Aperte",
-        "all": "Tutte"
-      },
-      "status": {
-        "new": "Nuova",
-        "contacted": "Contattata",
-        "offer_sent": "Offerta inviata",
-        "won": "Vinta",
-        "lost": "Persa"
-      },
-      "stateWord": {
-        "open": "aperta",
-        "new": "nuova",
-        "contacted": "contattata",
-        "offer_sent": "offerta inviata",
-        "won": "vinta",
-        "lost": "persa"
-      },
-      "col": {
-        "organisation": "Organizzazione",
-        "requester": "Richiedente",
-        "sent": "Inviata",
-        "needs": "Esigenze",
-        "state": "Stato"
-      },
-      "tierWhenSent": "su {tier} all’invio",
-      "requesterGone": "Account eliminato",
-      "needs": {
-        "cardsPerDay": "<b>{n}</b> elementi/giorno",
-        "cardsPerDayNone": "elementi/giorno —",
-        "agents": "<b>{n}</b> agenti",
-        "agentsNone": "agenti —",
-        "agentPathNone": "quali agenti —",
-        "autonomyNone": "in autonomia —"
-      },
-      "agentPath": {
-        "hosted": "Ospitati da Motir",
-        "own": "I loro",
-        "both": "Entrambi"
-      },
-      "autonomy": {
-        "autonomous_lead": "In autonomia",
-        "volume_only": "Solo volume",
-        "unsure": "Indeciso"
-      },
-      "startWhen": {
-        "now": "Subito",
-        "within_month": "Entro un mese",
-        "within_quarter": "Entro un trimestre",
-        "exploring": "Solo per esplorare"
-      },
-      "teamSize": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      },
-      "notAnswered": "Nessuna risposta",
-      "pager": {
-        "label": "Pagine di richieste",
-        "note": "Prima le più recenti · 50 per pagina",
-        "range": "{from}–{to} di {total}",
-        "newer": "Più recenti",
-        "older": "Meno recenti"
-      },
-      "empty": {
-        "title": "Ancora nessuna richiesta Enterprise",
-        "body": "Quando il proprietario di un’organizzazione preme «Contatta le vendite» sul piano Enterprise, la richiesta arriva qui e lo staff della piattaforma riceve un’email."
-      },
-      "emptyFilter": {
-        "title": "Nessuna richiesta nello stato «{state}»",
-        "body": "Al momento nessuna richiesta è nello stato «{state}».",
-        "action": "Mostra le richieste aperte",
-        "actionAll": "Mostra tutte le richieste"
-      },
-      "error": {
-        "title": "Impossibile caricare le richieste",
-        "body": "Si è verificato un errore durante la lettura delle richieste, quindi non ne viene mostrata nessuna. Non è cambiato nulla.",
-        "retry": "Riprova"
-      },
-      "detail": {
-        "back": "Torna alle richieste",
-        "sent": "Inviata il {date}",
-        "requestTitle": "La richiesta",
-        "orgLink": "Apri {org} in Tenant",
-        "field": {
-          "organisation": "Organizzazione",
-          "requester": "Richiedente",
-          "contact": "Contatto",
-          "sent": "Inviata",
-          "cardsPerDay": "Elementi di lavoro al giorno",
-          "parallelAgents": "Agenti in parallelo",
-          "agentPath": "Quali agenti",
-          "autonomy": "In autonomia",
-          "startWhen": "Inizio",
-          "teamSize": "Dimensione del team",
-          "note": "Nota"
-        }
-      },
-      "move": {
-        "title": "Sposta in",
-        "stateTitle": "Stato",
-        "contacted": "Segna come contattata",
-        "offer_sent": "Segna come offerta inviata",
-        "won": "Segna come vinta",
-        "lost": "Segna come persa",
-        "hint": {
-          "new": "Prossimo passo: hai contattato il richiedente.",
-          "contacted": "Prossimo passo: hai inviato loro un’offerta.",
-          "offer_sent": "Prossimo passo: hanno accettato, oppure è persa.",
-          "closes": "Vinta e persa chiudono la richiesta."
-        },
-        "failed": "Impossibile spostare la richiesta. Non è cambiato nulla; riprova."
-      },
-      "closed": "<b>Chiusa come {state} il {date}.</b> Una richiesta chiusa non si sposta più. L’organizzazione può inviarne una nuova dalla sua pagina Fatturazione.",
-      "readOnly": "<b>Sola lettura per l’assistenza.</b> Spostare una richiesta spetta a un operatore o a un superamministratore; puoi leggere tutto qui e nella cronologia.",
-      "confirm": {
-        "title": "Segnare questa richiesta come {state}?",
-        "body": "La richiesta di {org} viene chiusa come <b>{state}</b> e non potrà più essere spostata. L’organizzazione può inviare una nuova richiesta dalla sua pagina Fatturazione.",
-        "cancel": "Annulla"
-      },
-      "stale": "<b>Nessuna modifica: qualcun altro ha spostato prima questa richiesta.</b> {who} l’ha segnata come <b>{state}</b> un momento fa, quindi la tua azione «{action}» è stata rifiutata e non è stato registrato nulla. La pagina ora mostra il suo stato attuale; scegli di nuovo.",
-      "staleUnknown": "<b>Nessuna modifica: qualcun altro ha spostato prima questa richiesta.</b> Ora è <b>{state}</b>, quindi la tua azione «{action}» è stata rifiutata e non è stato registrato nulla. La pagina ora mostra il suo stato attuale; scegli di nuovo.",
-      "history": {
-        "title": "Cronologia",
-        "order": "prima le meno recenti",
-        "sent": "Inviata come",
-        "to": "a",
-        "requesterOf": "{name} ({org})"
       }
     },
     "ideas": {
@@ -12318,12 +12162,14 @@
       "goose": "Usa la tua chiave del fornitore di modelli. Per i modelli Claude, la tua chiave API Anthropic."
     },
     "refusal": {
-      "aiPlanRequired": "Gli agenti richiedono un piano AI a pagamento (Standard, Pro, Max o Enterprise). <link>Scegli un piano AI</link> per crearne o risvegliarne uno.",
+      "aiPlanRequired": "Gli agenti richiedono un piano AI a pagamento. <link>Scegli un piano AI</link> per crearne o risvegliarne uno.",
       "aiPlanUnknown": "Motir non è riuscito a verificare il piano AI della tua organizzazione in questo momento. Riprova tra poco.",
       "credits": "La tua organizzazione ha esaurito i crediti. Gli agenti consumano crediti mentre sono in funzione e ogni giorno per lo spazio di archiviazione, ibernati o no. <link>Aggiungi crediti</link> per creare o risvegliare un agente.",
       "creditsUnknown": "Motir non è riuscito a verificare i crediti della tua organizzazione in questo momento. Riprova tra poco.",
-      "userCap": "Hai già {count} agenti. Ognuno viene addebitato ogni giorno per lo spazio di archiviazione, anche se ibernato. Eliminane uno per crearne un altro.",
-      "orgRunningLimit": "La tua organizzazione ha in funzione {limit} dei suoi {limit} agenti. Ibernane uno per avviarne un altro.",
+      "userCap": "Il piano {plan} della tua organizzazione consente {limit, plural, one {# agente} other {# agenti}} per persona. Ognuno viene addebitato ogni giorno per lo spazio di archiviazione, anche se ibernato. Eliminane uno per crearne un altro.",
+      "userCapNoFigure": "Hai già tanti agenti quanti ne consente per persona il piano della tua organizzazione. Ognuno viene addebitato ogni giorno per lo spazio di archiviazione, anche se ibernato. Eliminane uno per crearne un altro.",
+      "orgRunningLimit": "Il piano {plan} della tua organizzazione esegue {limit, plural, one {# agente} other {# agenti}} alla volta, e sono già tutti in funzione. Ibernane uno per avviarne un altro.",
+      "orgRunningLimitNoFigure": "La tua organizzazione ha già in funzione tanti agenti quanti ne consente il suo piano. Ibernane uno per avviarne un altro.",
       "busy": "Motir sta facendo girare tutte le macchine che può in questo momento. Riprova tra qualche minuto.",
       "notOffered": "Quell’agente di programmazione non è disponibile: i suoi termini non consentono ancora a una piattaforma di ospitarlo. Scegli un altro agente di programmazione.",
       "nameTaken": "Hai già un agente chiamato {name} in questo progetto.",

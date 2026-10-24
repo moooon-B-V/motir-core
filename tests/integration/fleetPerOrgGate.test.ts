@@ -60,6 +60,15 @@ interface Fixture {
   projectId: string;
 }
 
+/** A staff override of the org's CI burst cap (MOTIR-9375) — a small CI figure
+ *  without inventing a plan. */
+async function capCi(fx: Fixture, figure: number): Promise<void> {
+  await adminDb.organization.update({
+    where: { id: fx.organizationId },
+    data: { fleetPoolCap: figure },
+  });
+}
+
 async function seedTenant(): Promise<Fixture> {
   const suffix = randomInt(1_000_000);
   const user = await usersService.createUser({
@@ -184,7 +193,11 @@ function stubMotirAi(): void {
       if (u.pathname === '/v1/stripe/subscription') {
         const status = plans.has(org) ? plans.get(org)! : 'active';
         if (status === 'unknown') return json(500, { code: 'internal_error' });
-        return json(200, { status });
+        // The plan's figures (MOTIR-9375): Max ×2, CI burst cap 25.
+        return json(200, {
+          status,
+          planTier: { key: 'max_x2', name: 'Max ×2', monthlyCreditAllotment: 60_000 },
+        });
       }
       if (u.pathname === '/v1/credits/ci-overage') {
         const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
@@ -232,7 +245,6 @@ beforeEach(async () => {
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
   vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '');
-  vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '');
   stubMotirAi();
   // Every refusal logs; the assertions are on verdicts and rows.
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -253,11 +265,11 @@ afterAll(async () => {
 
 // ── The admission-order seam: plan, then pool, then coverage ────────────────
 
-describe('the admission ORDER — plan, then pool, then coverage (§4)', () => {
-  /** An org that fails EVERY check at once: no plan, a full pool, no credits. */
+describe('the admission ORDER — plan, then the CI figure, then coverage (§4)', () => {
+  /** An org that fails EVERY check at once: no plan, at its CI figure, no credits. */
   async function failingEverything(): Promise<Fixture> {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
     const fx = await seedTenant();
+    await capCi(fx, 1);
     await seedIntent(fx, { status: 'running', startedAt: NOW });
     await exhaustPool(fx);
     ledger.set(fx.organizationId, 0);
@@ -280,16 +292,16 @@ describe('the admission ORDER — plan, then pool, then coverage (§4)', () => {
     });
   });
 
-  it('with a plan, the full pool is the answer — not the empty balance', async () => {
+  it('with a plan, the CI figure is the answer — not the empty balance', async () => {
     const fx = await failingEverything();
     expect(await ciRunnerAdmissionService.admit(await seedIntent(fx))).toMatchObject({
-      reason: 'org_pool',
+      reason: 'plan_cap',
     });
   });
 
-  it('with a plan and room in the pool, coverage is the answer', async () => {
+  it('with a plan and room under the CI figure, coverage is the answer', async () => {
     const fx = await failingEverything();
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '5');
+    await capCi(fx, 5);
     expect(await ciRunnerAdmissionService.admit(await seedIntent(fx))).toMatchObject({
       reason: 'ci_credits_exhausted',
     });
@@ -428,9 +440,10 @@ describe('the reconciler agrees with admission and with the stop', () => {
 
 describe('GUARD: one org’s burst, stop or zero never moves another org', () => {
   it('org A at zero and bursting, org B paying — in parallel transactions', async () => {
-    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '3');
     const a = await seedTenant();
     const b = await seedTenant();
+    await capCi(a, 3);
+    await capCi(b, 3);
     await exhaustPool(a);
     await exhaustPool(b);
     ledger.set(a.organizationId, 0);
@@ -448,12 +461,12 @@ describe('GUARD: one org’s burst, stop or zero never moves another org', () =>
     ]);
 
     expect(stop).toMatchObject({ stopped: [a.organizationId] });
-    // A admits nothing: at zero it is exhausted, and its pool is its own.
+    // A admits nothing: at zero it is exhausted, and its CI figure is its own.
     expect(aVerdicts.every((v) => v.outcome === 'deferred')).toBe(true);
-    // B fills exactly its OWN pool of 3 — A's load and A's stop take nothing from it.
+    // B fills exactly its OWN CI figure of 3 — A's load and A's stop take nothing from it.
     expect(bVerdicts.filter((v) => v.outcome === 'admitted')).toHaveLength(3);
     expect(bVerdicts.filter((v) => v.outcome === 'deferred')).toEqual([
-      expect.objectContaining({ reason: 'org_pool' }),
+      expect.objectContaining({ reason: 'plan_cap' }),
     ]);
 
     // A's stop settled only A's intent; none of B's rows carry a stop.
