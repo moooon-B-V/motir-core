@@ -116,9 +116,9 @@ describe('the runs-on seam', () => {
   it('the seam names the variable and never hard-codes the fleet label', () => {
     expect(SEAM).toBe("${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}");
     for (const { name, source } of workflowFiles()) {
-      expect(source.includes(MOTIR_RUNNER_LABEL), `${name} names ${MOTIR_RUNNER_LABEL}`).toBe(
-        false,
-      );
+      // A whole token only: a path like `motir-runner-prepare.sh` is not the label.
+      const label = new RegExp(`(?<![\\w-])${MOTIR_RUNNER_LABEL}(?![\\w-])`);
+      expect(label.test(source), `${name} names ${MOTIR_RUNNER_LABEL}`).toBe(false);
     }
   });
 });
