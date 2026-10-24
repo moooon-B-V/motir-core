@@ -124,7 +124,8 @@ export async function seedCreatedRepo(
       // restarts the worker after a failed test, which resets `repoSeq`, while
       // the rows it already wrote stay in the database. A bare counter then
       // collides with them and fails every later test in the file (MOTIR-9411).
-      repoId: `${Date.now() % 1_000_000_000}${String(repoSeq).padStart(3, '0')}`,
+      // A restarted worker is a new process, so its pid keeps the ids apart.
+      repoId: `${process.pid}${String(repoSeq).padStart(4, '0')}`,
       owner: repo.owner,
       name: repo.name,
       defaultBranch: 'main',

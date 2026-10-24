@@ -237,7 +237,13 @@ test.describe('a pending approval holds the move it performs, and says so where 
     await beat();
 
     await chapter('The approval already happened, so a person can reopen it by hand', async () => {
-      await page.goto(`/items/${seed.designKey}`);
+      // The app can still be finishing its own navigation from the approval (a
+      // refresh after the decision), and a `goto` that lands inside it is
+      // aborted. Retried until the item page is the one that stays.
+      await expect(async () => {
+        await page.goto(`/items/${seed.designKey}`);
+        await expect(page).toHaveURL(new RegExp(`/items/${seed.designKey}(\\?|$)`));
+      }).toPass({ timeout: 30_000 });
       // Nothing is held any more: the approval was decided, so no held line renders.
       await expect(
         page.getByRole('main').getByRole('status').filter({ hasText: heldDone }),
