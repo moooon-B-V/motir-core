@@ -1,5 +1,5 @@
 import type { Locator, Page, Response } from '@playwright/test';
-import { expect, test } from './_helpers/acceptance-video';
+import { expect, test } from './_helpers/promoted-regression';
 import { adminDb, resetDatabase } from './_helpers/db-reset';
 import {
   freeOrgState,
