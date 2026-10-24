@@ -3193,7 +3193,8 @@ jobs:
     # Story MOTIR-9364 (Host, a regular plan of 300,000 credits) — MOTIR-9406's per-file
     # floor over the two motir-core files the story grew (`vitest.coverage.host-plan.config.ts`):
     # the catalog and the plan row, measured by their suites and the story gate against
-    # Postgres.
+    # Postgres. Locally it ran 9 files (262 tests); with no CI run measured yet, the
+    # ceiling is the 20 min its neighbours take.
     timeout-minutes: 20
     needs: changes
     if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
