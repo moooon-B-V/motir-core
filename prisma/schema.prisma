@@ -440,9 +440,10 @@ model User {
   contentLanguageChanges           OrganizationContentLanguageChange[] @relation("OrganizationContentLanguageChangedBy")
   autoTranslateChanges             ProjectAutoTranslateChange[]        @relation("ProjectAutoTranslateChangedBy")
   cancelledOrganizationDeletions   OrganizationDeletionRequest[]       @relation("OrganizationDeletionCancelledBy")
-  // Enterprise requests this person sent from Billing & plans (MOTIR-7605). SetNull:
-  // the request is the ORG's sales record and outlives the account that sent it.
-  enterpriseRequests               EnterpriseRequest[]
+  // SCHEMA-ONLY phase of the Contact-sales removal (MOTIR-9386): `@ignore`d with
+  // its model so the generated client stops naming the table; the CONTRACT
+  // migration drops the table and deletes this line in a later release.
+  enterpriseRequests               EnterpriseRequest[]                 @ignore
   // Personal-data export requests this person has raised (Story 8.4 ·
   // MOTIR-3698). A LIST for the same reason: each request builds its own
   // archive, and the previous ones remain as history until they expire.
@@ -1367,9 +1368,7 @@ model Organization {
 
   /// The internal dogfood org (moooon B.V.) — the META org. Resolves to the
   /// `meta` entitlement tier (every §4 cap lifted) and disables the AI paywall.
-  /// DISTINCT from the future commercial `enterprise` tier: `meta` is never
-  /// billed and is excluded from revenue (they share "unlimited" today only by
-  /// coincidence and will diverge). Set on the live moooon row by the
+  /// `meta` is never billed and is excluded from revenue. Set on the live moooon row by the
   /// add_organization_is_meta data-flip migration (WHERE slug = 'moooon'); seed
   /// sets it for dev. The §4 cap reader (entitlementsService) and the 8.1.8 AI
   /// paywall (billingService.getAiAccess) consume it; it is also propagated to
@@ -1403,6 +1402,16 @@ model Organization {
   /// the org, never as a per-org env var. `0` is legal and means the org boots no
   /// CI runner. Read by `fleetCeilingService.resolveCiBurstCap`.
   fleetPoolCap Int? @map("fleet_pool_cap")
+
+  /// THE MOTIR-OWNED GITHUB ORG this organisation's hosted repositories, runner
+  /// groups and `MOTIR_RUNNER` variable live in (Story MOTIR-8953 · MOTIR-8966).
+  /// Assigned once, by `fleetGithubOrgAssignmentService`, when its first hosted
+  /// repository is about to be created: the GitHub org with the most headroom
+  /// among the active fleet accounts. NULL = never assigned, so its repositories
+  /// are created in `GITHUB_FALLBACK_ORG` as before. A GitHub org, not a machine
+  /// account: admission never reads it.
+  hostedGithubOrg           String?   @map("hosted_github_org")
+  hostedGithubOrgAssignedAt DateTime? @map("hosted_github_org_assigned_at")
 
   /// The git CONNECTIONS this organisation holds, and the REPOSITORIES behind
   /// them (Story MOTIR-4669 · MOTIR-4649) — a repository is connected ONCE, to
@@ -1485,9 +1494,9 @@ model Organization {
   // one may follow it. `Restrict` on the request's side: an org row may not
   // vanish under its own deletion record (the purge deletes the requests first).
   deletionRequests      OrganizationDeletionRequest[]
-  /// Contact-sales requests this org sent (MOTIR-7605) — a LIST: at most one OPEN
-  /// at a time (the partial unique index), the closed ones stay as history.
-  enterpriseRequests    EnterpriseRequest[]
+  /// SCHEMA-ONLY phase of the Contact-sales removal (MOTIR-9386): `@ignore`d with
+  /// its model; the CONTRACT migration drops the table and this line later.
+  enterpriseRequests    EnterpriseRequest[] @ignore
   /// Per-org kill-switch OVERRIDES (MOTIR-750); absence = the registry default.
   featureFlags          OrgFeatureFlag[]
   /// Staff "View as" sessions opened inside this organization (MOTIR-749).
@@ -1538,6 +1547,7 @@ model Organization {
   /// across the organisation. Cascade.
   workItemTranslations   WorkItemTranslation[]
 
+  @@index([hostedGithubOrg])
   @@map("organization")
 }
 
@@ -10800,9 +10810,23 @@ model CiRunnerProvisioningIntent {
   /// between provision and teardown, so the handle has to survive somewhere that
   /// is not this process. Provider-agnostic by construction — a Fly Machine id
   /// and an EC2 instance id are both just `container_id` (ADR §4's rule 1).
-  containerProvider String? @map("container_provider")
-  containerId       String? @map("container_id")
-  containerRegion   String? @map("container_region")
+  containerProvider       String?               @map("container_provider")
+  containerId             String?               @map("container_id")
+  containerRegion         String?               @map("container_region")
+  /// The FLEET ACCOUNT the container was booted in (MOTIR-8964), so poll, settle,
+  /// stop and reap reach the same provider account after a restart. NULL = the
+  /// process-wide fleet — every row written before accounts existed, and every
+  /// job of a kind whose switch is Fly. Written at the CLAIM, under the admission
+  /// lock (MOTIR-8968), so the per-account count is exact. RESTRICT: an account
+  /// with a container recorded against it cannot vanish from under it.
+  fleetShardId            String?               @map("fleet_shard_id")
+  /// Why the job left the account admission first chose for it (MOTIR-8968).
+  /// NULL when it booted on its first choice, or on Fly. The headroom reading
+  /// (MOTIR-8969) counts moves from it.
+  fleetShardMoveReason    FleetShardMoveReason? @map("fleet_shard_move_reason")
+  /// The intent's FIRST `shard_capacity` deferral (MOTIR-8968), at admission or
+  /// at boot; never cleared. The headroom reading counts sustained deferral from it.
+  shardCapacityDeferredAt DateTime?             @map("shard_capacity_deferred_at")
 
   /// GitHub's numeric runner id, from the JIT-config mint. Stored because
   /// `generate-jitconfig` REGISTERS the runner before any container exists
@@ -10857,6 +10881,7 @@ model CiRunnerProvisioningIntent {
 
   workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fleetShard   FleetShard?  @relation(fields: [fleetShardId], references: [id], onDelete: Restrict)
   project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
   githubRepo   GithubRepo?  @relation(fields: [githubRepoId], references: [id], onDelete: SetNull)
 
@@ -10878,6 +10903,7 @@ model CiRunnerProvisioningIntent {
   /// intent that waited an hour at the admission gate and then booted a second
   /// ago must not be swept as an hour-old orphan.
   @@index([status, bootedAt])
+  @@index([fleetShardId])
   @@map("ci_runner_provisioning_intent")
 }
 
@@ -11471,6 +11497,133 @@ model FleetInFlightSlot {
   @@map("fleet_in_flight_slot")
 }
 
+/// The provider an account of a fleet pool runs on (MOTIR-8961). `fly` only: the
+/// AWS story adds `aws` in its own migration, with its own columns and CHECKs.
+enum FleetShardProvider {
+  fly
+
+  @@map("fleet_shard_provider")
+}
+
+/// What an account is to its fleet kind. `primary` = an account of that kind's
+/// SHARED pool. The pool-growth story adds `spare`.
+enum FleetShardRole {
+  primary
+
+  @@map("fleet_shard_role")
+}
+
+/// Why admission skips an account for a while (MOTIR-8968).
+enum FleetShardPauseReason {
+  capacity_refused
+  provider_unavailable
+
+  @@map("fleet_shard_pause_reason")
+}
+
+/// Why a CI job left the account admission first chose for it (MOTIR-8968).
+enum FleetShardMoveReason {
+  capacity_refused
+  provider_unavailable
+
+  @@map("fleet_shard_move_reason")
+}
+
+/// `provisioning` while add-shard is still setting the account up; `active` is
+/// admissible; `disabled` is kept but takes no new job.
+enum FleetShardState {
+  provisioning
+  active
+  disabled
+
+  @@map("fleet_shard_state")
+}
+
+/// ONE ACCOUNT OF ONE FLEET KIND'S POOL (Story MOTIR-8953 · MOTIR-8961) — the
+/// noun the pool layer is written against: one fleet kind, one provider
+/// location, one Motir-owned GitHub org with the App installation serving it,
+/// the REFERENCE to its provider credential, and the account's real limits with
+/// where each was read.
+///
+/// ⚠️ NOT A TENANT TABLE. An account of a shared pool is platform infrastructure
+/// many tenants share, so there is no `workspace_id` / `organization_id`, and the
+/// RLS policy is `app.system_admin` only, like `fleet_in_flight_slot`.
+///
+/// ⚠️ CREDENTIALS ARE REFERENCED, NEVER STORED. `credentialRef` names the
+/// environment variable (or prefix) the secret lives in — where every fleet
+/// credential already lives (`FLY_FLEET_API_TOKEN`). The repo has no
+/// encryption-at-rest scheme for provider secrets, and a secret in a row is a
+/// secret in every database dump.
+///
+/// ⚠️ LIMITS, NOT CEILINGS. The limit columns record what the provider or GitHub
+/// ALLOWS, and `limitsSource` says where each number came from (`provider_read` ·
+/// `documented` · `raised`, keyed by limit name). Admission ceilings are DERIVED
+/// from them and never stored here — one number per fact.
+///
+/// The database holds the invariants itself (migration `fleet_shard`): the fleet
+/// kind is one of the four `FLEET_WORKLOADS` names; a `fly` row names its
+/// org/app/region and machine limit; every limit present is > 0; one Fly
+/// location is one account.
+///
+/// Nothing reads it in production yet: boot, stop, reap and admission still read
+/// the process-wide fleet config.
+model FleetShard {
+  id   String @id @default(cuid())
+  /// A lowercase slug, e.g. `ci-runner-iad-1`.
+  name String @unique
+
+  /// The pool it belongs to — a `FLEET_WORKLOADS` name (`lib/ciFleet/workloads.ts`),
+  /// held to the four by a CHECK.
+  fleetKind String             @map("fleet_kind")
+  provider  FleetShardProvider
+  role      FleetShardRole     @default(primary)
+  state     FleetShardState    @default(provisioning)
+
+  /// The Motir-owned GitHub org, the provisioning App's installation on it (a
+  /// string, as `GithubOrgTarget.installationId` is), and which App that is.
+  githubOrg            String @map("github_org")
+  githubInstallationId String @map("github_installation_id")
+  githubAppRole        String @default("provisioning") @map("github_app_role")
+
+  /// The Fly location. Required for a `fly` row (CHECK).
+  flyOrg    String? @map("fly_org")
+  flyApp    String? @map("fly_app")
+  flyRegion String? @map("fly_region")
+
+  /// The environment variable (or prefix) holding the provider credential.
+  credentialRef String @map("credential_ref")
+
+  /// The account's REAL limits — each > 0 when present (CHECK).
+  vcpuQuota                  Int?      @map("vcpu_quota")
+  machineLimit               Int?      @map("machine_limit")
+  githubRegistrationsPer5Min Int?      @map("github_registrations_per_5_min")
+  githubApiPerHour           Int?      @map("github_api_per_hour")
+  /// Where each limit was read: `{ "<limit>": "provider_read" | "documented" | "raised" }`.
+  limitsSource               Json      @default("{}") @map("limits_source")
+  limitsVerifiedAt           DateTime? @map("limits_verified_at")
+
+  /// The platform admin's admission ceiling for this account (MOTIR-8968 reads it,
+  /// MOTIR-8972 writes it). NULL = derived from the limits
+  /// (`shardAdmissionCeiling`); > 0 when set (CHECK).
+  admissionCeilingOverride Int?                   @map("admission_ceiling_override")
+  /// Skipped by admission until then, after the account refused a provision for
+  /// capacity or was unreachable (MOTIR-8968). Expires by itself.
+  admissionPausedUntil     DateTime?              @map("admission_paused_until")
+  admissionPausedReason    FleetShardPauseReason? @map("admission_paused_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// The CI intents whose containers were booted in this account (MOTIR-8964).
+  ciRunnerIntents CiRunnerProvisioningIntent[]
+
+  /// One Fly location is one account.
+  @@unique([provider, flyOrg, flyApp])
+  /// Admission and the headroom reading list one kind's accounts by role and state.
+  @@index([fleetKind, role, state])
+  @@map("fleet_shard")
+}
+
 /// The repo-role vocabulary (`docs/decisions/project-repository-set.md` §1.1).
 /// Six values, fixed — do NOT add one without amending the ADR, and keep it in
 /// lockstep with motir-ai's proposal-schema role enum (MOTIR-1885).
@@ -11816,6 +11969,16 @@ model AccountDeletionRequest {
   @@map("account_deletion_request")
 }
 
+/// ⚠️ RETIRED — SCHEMA-ONLY PHASE (Story MOTIR-9385 · MOTIR-9386). Motir has no
+/// Enterprise plan, and the feature that wrote and read this table is deleted.
+/// The model is `@@ignore`d so the generated client no longer names the table,
+/// while the table and its five enum types stay in place: `fly.toml`'s
+/// `release_command` migrates BEFORE the new image takes traffic, so dropping
+/// them in the same release would pull the table from under the still-serving
+/// image (`docs/decisions/delivery-reader-migration.md` §6a,
+/// `tests/contract-phase-guard.test.ts`). A CONTRACT migration in a LATER
+/// release drops the table and the enums and deletes these declarations.
+///
 /// A request for the ENTERPRISE plan, sent from the Enterprise card's Contact
 /// sales control on Billing & plans (Story MOTIR-7602 · Subtask MOTIR-7605).
 /// Platform staff work it in the operator console's Enterprise requests page
@@ -11871,6 +12034,7 @@ model EnterpriseRequest {
   @@index([organizationId, createdAt])
   @@index([requestedById])
   @@map("enterprise_request")
+  @@ignore
 }
 
 /// Where an {@link EnterpriseRequest} stands. `new`, `contacted` and
@@ -14581,4 +14745,30 @@ model ProjectRunnerGroup {
   @@unique([projectId, org])
   @@index([workspaceId])
   @@map("project_runner_group")
+}
+
+/// Which GitHub runner call a ledger row records (MOTIR-8969).
+enum GithubRunnerCallKind {
+  mint
+  delete
+
+  @@map("github_runner_call_kind")
+}
+
+/// THE GITHUB RUNNER-CALL LEDGER (Story MOTIR-8953 · MOTIR-8969) — one row per
+/// runner mint or delete that reached GitHub, keyed on the RUNNER'S GitHub org
+/// (lower-cased), never the machine's account. The headroom pass counts GitHub's
+/// per-org limits from it and prunes it to about two hours. Platform bookkeeping
+/// with no workspace; RLS admits `app.system_admin` only.
+model GithubRunnerCallEvent {
+  id           String               @id @default(cuid())
+  githubOrg    String               @map("github_org")
+  kind         GithubRunnerCallKind
+  at           DateTime
+  /// The machine's account, for diagnosis only. No FK: the ledger outlives nothing.
+  fleetShardId String?              @map("fleet_shard_id")
+
+  @@index([githubOrg, at])
+  @@index([at])
+  @@map("github_runner_call_event")
 }

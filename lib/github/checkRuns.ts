@@ -1,6 +1,6 @@
 import { mintInstallationToken } from './appAuth';
 import { githubAppRoleForRepo } from '@/lib/github/appRoleForRepo';
-import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
 import { mapGithubCiConclusion } from '@/lib/git/providers/github';
 import type { CiConclusion } from '@/lib/git/types';
 
@@ -183,7 +183,7 @@ export async function writeCheckRun(spec: CheckRunSpec): Promise<CheckRunWriteOu
   // repository at all, so an unlinked pull request there carried no red check and
   // the one mechanism that catches the costliest omission a run can make was
   // silently absent on Motir's own project repositories.
-  const role = githubAppRoleForRepo({ owner: spec.owner }, provisioningOrgLogin());
+  const role = githubAppRoleForRepo({ owner: spec.owner }, await motirOwnedOrgLogins());
   try {
     ({ token } = await mintInstallationToken(spec.installationId, role));
   } catch {
@@ -253,7 +253,7 @@ export async function readPullRequestHeadSha(
   // so on a hosted repository it returned `null` for the same reason the check was
   // never written — and `null` here is indistinguishable from a pull request the
   // host does not have.
-  const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
+  const role = githubAppRoleForRepo({ owner }, await motirOwnedOrgLogins());
   try {
     ({ token } = await mintInstallationToken(installationId, role));
   } catch {
@@ -366,7 +366,7 @@ export async function readCommitCheckRuns(
   // Provenance, as above (MOTIR-5861). `null` means "no answer", not "no checks"
   // — its own header says so — so on a hosted repository the reconcile worker was
   // told to ask again for ever, which it duly did.
-  const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
+  const role = githubAppRoleForRepo({ owner }, await motirOwnedOrgLogins());
   try {
     ({ token } = await mintInstallationToken(installationId, role));
   } catch {
@@ -485,7 +485,7 @@ export async function readCommitActionsSuites(
   headSha: string,
 ): Promise<ReportedCheckRun[] | null> {
   let token: string;
-  const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
+  const role = githubAppRoleForRepo({ owner }, await motirOwnedOrgLogins());
   try {
     ({ token } = await mintInstallationToken(installationId, role));
   } catch {

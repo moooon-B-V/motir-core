@@ -290,6 +290,26 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/settings/workspace/github',
     why: 'Named as the PRE-collapse address, in a table of where things used to be and in the §3 argument for removing the row. MOTIR-4669 retired it in favour of `/settings/organization/git`. Pointing the prose at the live address would make the asset claim the collapse it documents never happened.',
   },
+  // ── A console REMOVED with its feature (MOTIR-9386, story MOTIR-9385) ─────
+  //  Motir has no Enterprise plan, so the Contact-sales Enterprise-requests
+  //  console and its routes were deleted. The assets that drew it (MOTIR-7602)
+  //  stay as the record of what was built; there is no live surface to point
+  //  them at, and redrawing a deleted console would invent one.
+  {
+    file: 'design/platform-admin/console--enterprise-requests.mock.html',
+    address: '/admin/enterprise-requests',
+    why: 'The mock of the Enterprise-requests console, deleted with the feature by MOTIR-9386 (Motir has no Enterprise plan). Kept as the record of the surface MOTIR-7602 built; no live address replaces it.',
+  },
+  {
+    file: 'design/platform-admin/design-notes.md',
+    address: '/admin/enterprise-requests',
+    why: 'The notes section that specified the Enterprise-requests console, deleted with the feature by MOTIR-9386. A record of the removed surface; no live address replaces it.',
+  },
+  {
+    file: 'design/platform-admin/design-notes.md',
+    address: '/admin/enterprise-requests/[id]',
+    why: 'The detail page of the same removed console, named in the same notes section. Deleted by MOTIR-9386; no live address replaces it.',
+  },
   // ── The RETIRED landing, which the app still answers on ──────────────────
   //  MOTIR-4782 moved the signed-in landing from `/home` to `/workbench` and
   //  kept the old address alive as a permanent 308 (`LANDING_REDIRECTS`), so

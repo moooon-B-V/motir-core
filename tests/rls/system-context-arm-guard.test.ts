@@ -145,6 +145,20 @@ const WALLED_SITES: Record<string, string> = {
     'carries the arm), and resolveDeliveredWorkItems (work_item_delivery → work_item). ' +
     'With no owner there is no actor, so every card is skipped as no_actor and no gate, ' +
     'work item or status write is reached. CLEAN.',
+  'lib/services/fleetShardControlsService.ts#change':
+    'write ∈ { the three closures setCeiling, disable and enable pass } — read in full ' +
+    '(MOTIR-8972). After lockByNameForUpdateInTx (fleet_shard), setCeiling calls ' +
+    'shardAdmissionCeiling (pure) and setAdmissionCeilingOverrideInTx; disable and enable ' +
+    'call updateState. Every statement is on fleet_shard, whose fleet_shard_system_only ' +
+    'policy IS the system arm. No tenant table. CLEAN.',
+  'lib/services/fleetShardHeadroomService.ts#readAccountHeadroom':
+    'peak ∈ PEAK_ON_SHARD = { ci_runner: ciRunnerPeak } — read in full (MOTIR-8969). ' +
+    'ciRunnerPeak reads ci_runner_provisioning_intent, whose ' +
+    'ci_runner_provisioning_intent_workspace_or_system policy carries the arm. The ' +
+    'fleet-wide read is cross-tenant by design. CLEAN.',
+  'lib/services/fleetShardHeadroomService.ts#run':
+    'peak ∈ PEAK_ON_SHARD = { ci_runner: ciRunnerPeak } — the same readAccounts walk as ' +
+    'readAccountHeadroom: ci_runner_provisioning_intent, armed. CLEAN.',
 };
 
 let rlsTables: Set<string>;

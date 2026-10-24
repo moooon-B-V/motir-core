@@ -1,4 +1,6 @@
 import {
+  createFakeOrchestrator,
+  createFlyOrchestrator,
   createUsageSink,
   fakeFleetInventory,
   flyFleetInventory,
@@ -16,6 +18,7 @@ import {
   OrchestratorNotConfiguredError,
   probeImagePull,
   type ContainerOrchestrator,
+  type FakeOrchestratorControls,
   type FleetInventory,
   type OrchestratorProvider,
   type PersistentContainerHandle,
@@ -23,6 +26,7 @@ import {
   type PersistentTerminalEndpoint,
   type RegistryCredentialResolver,
 } from '@motir/orchestrator';
+import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
 import { withPlatformMeterReport } from '@/lib/services/platformMeterReportEnqueue';
 
@@ -158,6 +162,136 @@ export function isOrchestratorConfigured(): boolean {
 // file outside `adapters/fly/` permitted to name the adapter, so the CONFIG
 // stays Fly-shaped in exactly one place and every consumer above sees a
 // provider-neutral `{ image, region }`.
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ONE ORCHESTRATOR PER FLEET ACCOUNT (Story MOTIR-8953 · MOTIR-8964)
+// ═══════════════════════════════════════════════════════════════════════════
+// The only place an account row becomes an adapter. The package stays
+// account-blind — it takes a plain `{ token, app, region }` — and nothing below
+// this seam names a vendor except the one `fly` case.
+//
+// Every other provider resolves through a REGISTRY keyed on provider: an adapter
+// registers `{ orchestrator(shard), inventory(shard) }` and is handed the WHOLE
+// account (fleet kind, provider, location, `credentialRef`). That is what lets
+// every fleet kind share this layer, and the AWS adapter (MOTIR-9276) plug into
+// one slot. This card registers none.
+
+/** What a provider adapter registers: how to reach one account's containers,
+ *  and how to list its machines (null when another inventory already covers it). */
+export interface ShardAdapter {
+  orchestrator(shard: FleetShardDTO): ContainerOrchestrator;
+  inventory(shard: FleetShardDTO): FleetInventory | null;
+}
+
+const shardAdapters = new Map<string, ShardAdapter>();
+
+/** Register (or replace) the adapter for a provider's accounts. */
+export function registerShardAdapter(provider: string, adapter: ShardAdapter): void {
+  shardAdapters.set(provider, adapter);
+}
+
+/** Forget a registration — for tests. */
+export function unregisterShardAdapter(provider: string): void {
+  shardAdapters.delete(provider);
+}
+
+function registeredAdapter(provider: string): ShardAdapter {
+  const adapter = shardAdapters.get(provider);
+  if (!adapter) throw new OrchestratorNotConfiguredError(`no ${provider} adapter is registered`);
+  return adapter;
+}
+
+/** Each account's own fake while the fake is selected, so a test can see WHICH
+ *  account received a provision. */
+const shardFakes = new Map<string, ContainerOrchestrator & FakeOrchestratorControls>();
+
+/** The fake standing in for one account — created on first use. */
+export function fakeOrchestratorForShard(
+  shardId: string,
+): ContainerOrchestrator & FakeOrchestratorControls {
+  let fake = shardFakes.get(shardId);
+  if (!fake) {
+    fake = createFakeOrchestrator({ idPrefix: `fake-${shardId}` });
+    shardFakes.set(shardId, fake);
+  }
+  return fake;
+}
+
+/** Forget every account's fake — for tests. */
+export function resetShardFakes(): void {
+  shardFakes.clear();
+}
+
+function flyOrchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
+  const token = process.env[shard.credentialRef]?.trim();
+  if (!token) throw new OrchestratorNotConfiguredError(`set ${shard.credentialRef}`);
+  if (!shard.fly) {
+    throw new OrchestratorNotConfiguredError(`fleet account ${shard.name} names no Fly location`);
+  }
+  return createFlyOrchestrator({ token, app: shard.fly.app, region: shard.fly.region });
+}
+
+/**
+ * The orchestrator for ONE account. Throws `OrchestratorNotConfiguredError` when
+ * it cannot be reached — its credential unset, or no adapter registered for its
+ * provider.
+ *
+ * The `switch` is exhaustive over the account's provider: a new member is a
+ * compile error here until it is routed (to the registry — one `case` line).
+ */
+export function orchestratorForShard(shard: FleetShardDTO): ContainerOrchestrator {
+  if (selectedOrchestratorProvider() === 'fake') return fakeOrchestratorForShard(shard.id);
+  switch (shard.provider) {
+    case 'fly':
+      return flyOrchestratorForShard(shard);
+    default: {
+      const unrouted: never = shard.provider;
+      return registeredAdapter(unrouted).orchestrator(shard);
+    }
+  }
+}
+
+/**
+ * The machine listing for ONE account, for the reconciler. Null for `fly`: the
+ * Fly ORGANISATION inventory already walks every Fly app, and a second listing
+ * would judge each machine twice.
+ */
+export function inventoryForShard(shard: FleetShardDTO): FleetInventory | null {
+  switch (shard.provider) {
+    case 'fly':
+      return null;
+    default: {
+      const unrouted: never = shard.provider;
+      return registeredAdapter(unrouted).inventory(shard);
+    }
+  }
+}
+
+/** WHERE an account's containers live, as a key two routes to one place share —
+ *  so the volume sweep runs once per place, not once per route. */
+export function shardLocationKey(shard: FleetShardDTO): string {
+  if (selectedOrchestratorProvider() === 'fake') return `fake:${shard.id}`;
+  if (shard.provider === 'fly' && shard.fly) return `fly:${shard.fly.app}`;
+  return `${shard.provider}:${shard.id}`;
+}
+
+/** The process-wide fleet's location key — see {@link shardLocationKey}. */
+export function legacyFleetLocationKey(): string {
+  if (selectedOrchestratorProvider() === 'fake') return 'fake:process';
+  return `fly:${process.env['FLY_FLEET_APP']?.trim() ?? ''}`;
+}
+
+/** The CI runner image, whichever account boots it (`MOTIR_RUNNER_IMAGE`). The
+ *  fake path has none set, and the placeholder keeps its spec well-formed. */
+export function fleetRunnerImage(): string {
+  return process.env['MOTIR_RUNNER_IMAGE']?.trim() || 'motir/ci-runner@sha256:unset';
+}
+
+/** The region a process-wide-fleet boot asks for (`FLY_FLEET_REGION`, `iad` by
+ *  default — where the fleet has always run). */
+export function fleetRunnerRegion(): string {
+  return process.env['FLY_FLEET_REGION']?.trim() || 'iad';
+}
 
 /** What an index container needs from this deployment's configuration. Neutral:
  *  no Fly type, no token, no app name — a second adapter fills the same shape. */

@@ -149,9 +149,6 @@ describe('append-only, as an application property', () => {
       // the newest `fleet.stop` on one target. A READ, added by the story and
       // missed here until its integration gate (MOTIR-7321) ran this file.
       'findLatestByTargetAndAction',
-      // MOTIR-7608's Enterprise-request History: one action's rows whose
-      // metadata names the request. A READ.
-      'listByActionAndMetadata',
       'listByActor',
       'listByOrganization',
       // MOTIR-1167's target read — Panel 9's "Support actions" log. A READ, so
@@ -243,7 +240,14 @@ describe('the reason rule', () => {
     // org's CI onto the fleet, so `superadmin` with a reason, both directions.
     'fleet.org_ci.enable': 'required',
     'fleet.org_ci.disable': 'required',
-    'enterprise_request.transition': 'required',
+    // `fleet-admin add-shard` / `refresh-limits` (Story MOTIR-8953 · MOTIR-8967):
+    // a fleet account added or its quota re-read — writes, reason by the service.
+    'fleet.shard.add': 'required',
+    'fleet.shard.limits': 'required',
+    // Its account controls (MOTIR-8972): ceiling, disable, enable — writes.
+    'fleet.shard.ceiling': 'required',
+    'fleet.shard.disable': 'required',
+    'fleet.shard.enable': 'required',
     // The idea store (Story MOTIR-7662 · MOTIR-7671): retiring and deleting say
     // why an idea left the public list; the rest carry the caller's context.
     'idea.add': 'inherited',

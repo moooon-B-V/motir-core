@@ -6,6 +6,8 @@ import {
   fakeOrchestrator,
   fakePersistentOrchestrator,
   type ContainerHandle,
+  type ContainerOrchestrator,
+  type FleetInventory,
 } from '@motir/orchestrator';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
@@ -20,6 +22,8 @@ import { indexSlotRef } from '@/lib/services/codeGraphIndexAdmissionService';
 import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { describeAge } from '@/lib/ciFleet/attributionErrors';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
+import type { FleetShardDTO } from '@/lib/dto/fleetShard';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
@@ -669,5 +673,93 @@ describe('the orphaned Docker volume sweep (MOTIR-8839)', () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+});
+
+describe('fleet accounts the organisation walk does not cover (MOTIR-8964)', () => {
+  /** One account's own listing: one stray machine in one app. */
+  function accountInventory(options: { failListing?: boolean } = {}) {
+    const destroyed: string[] = [];
+    const inventory: FleetInventory = {
+      provider: 'fake',
+      listApps: async () => {
+        if (options.failListing) throw new Error('the account refused to list');
+        return ['acct-app'];
+      },
+      listMachines: async (app) => [
+        {
+          app,
+          machineId: 'm-acct',
+          name: '',
+          region: 'ams',
+          state: 'running',
+          createdAt: new Date(),
+          metadata: {},
+        },
+      ],
+      destroyMachine: async (app, machineId) => {
+        destroyed.push(`${app}/${machineId}`);
+      },
+      stopMachine: async () => undefined,
+    };
+    return { inventory, destroyed };
+  }
+
+  it("walks an account's own listing after the organisation, and kills what nothing attributes", async () => {
+    const { inventory, destroyed } = accountInventory();
+    const result = await fleetAttributionService.reconcile({
+      now: pastGrace,
+      accounts: [],
+      accountInventories: [{ shardId: 'acct-1', name: 'aws-ci-1', inventory }],
+    });
+    expect(result).toMatchObject({
+      outcome: 'reconciled',
+      killed: [{ app: 'acct-app', machineId: 'm-acct', reason: 'no_record' }],
+    });
+    expect(destroyed).toEqual(['acct-app/m-acct']);
+  });
+
+  it('an account whose listing fails is reported by name and alerted; the rest still runs', async () => {
+    const { inventory } = accountInventory({ failListing: true });
+    fakeFleetInventory.addStray({ app: FAKE_FLEET_APP, machineId: 'm-org', createdAt: new Date() });
+    const result = await fleetAttributionService.reconcile({
+      now: pastGrace,
+      listingRetryDelayMs: 0,
+      accounts: [],
+      accountInventories: [{ shardId: 'acct-1', name: 'aws-ci-1', inventory }],
+    });
+    expect(result).toMatchObject({
+      unavailableApps: ['aws-ci-1'],
+      killed: [{ machineId: 'm-org' }],
+    });
+    expect(alerts().some((message) => message.includes('aws-ci-1'))).toBe(true);
+  });
+
+  it('sweeps volumes ONCE per place: two accounts on one app are one sweep', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', '');
+    const sweep = vi.fn(async () => 1);
+    const forShardRow = vi
+      .spyOn(fleetShardOrchestratorService, 'forShardRow')
+      .mockReturnValue({ sweepOrphanedVolumes: sweep } as unknown as ContainerOrchestrator);
+    const account = (id: string, name: string) =>
+      ({
+        id,
+        name,
+        provider: 'fly',
+        state: 'active',
+        fly: { org: 'motir', app: 'motir-ci-shared', region: 'iad' },
+      }) as unknown as FleetShardDTO;
+
+    const result = await fleetAttributionService.reconcile({
+      now: pastGrace,
+      inventory: fakeFleetInventory,
+      accounts: [account('a', 'ci-a'), account('b', 'ci-b')],
+      accountInventories: [],
+    });
+
+    expect(forShardRow).toHaveBeenCalledTimes(1);
+    expect(sweep).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ orphanedVolumesDestroyed: 1 });
   });
 });

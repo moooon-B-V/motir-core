@@ -357,14 +357,6 @@
               "evidence": ".github/workflows/ci.yml:3052"
             },
             {
-              "jobId": "story-7602-coverage",
-              "runsOn": "ubuntu-latest",
-              "triggers": ["pull_request", "merge_group", "push"],
-              "verdict": "runnable",
-              "missing": [],
-              "evidence": ".github/workflows/ci.yml:3098"
-            },
-            {
               "jobId": "story-7797-coverage",
               "runsOn": "ubuntu-latest",
               "triggers": ["pull_request", "merge_group", "push"],
@@ -678,7 +670,7 @@
           ]
         }
       ],
-      "jobCount": 70
+      "jobCount": 69
     },
     "moooon-B-V/motir-ai": {
       "repoRef": "moooon-B-V/motir-ai",

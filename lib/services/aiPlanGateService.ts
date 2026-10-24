@@ -69,7 +69,7 @@ export function _resetAiPlanCache(): void {
 
 /** The words each door's refusal carries (`fleet-per-org-pool.md` §4). */
 export const AI_PLAN_REQUIRED_ESTABLISH_MESSAGE =
-  'Motir-hosted repositories need a paid AI plan (Standard, Pro, Max or Enterprise). Upgrade your AI plan to create one here.';
+  'Motir-hosted repositories need a paid AI plan. Upgrade your AI plan to create one here.';
 export const AI_PLAN_REQUIRED_ADMISSION_DETAIL =
   "This organization has no paid AI plan, so its CI does not run on Motir's runners.";
 export const PLAN_UNKNOWN_ESTABLISH_MESSAGE =

@@ -1,4 +1,5 @@
-import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { motirOwnedOrgLogins, ownedOrgTargetFor } from '@/lib/ciMetering/ownedOrgs';
+import type { GithubOrgTarget } from '@/lib/github/orgTarget';
 import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import { appInstallationsClient } from '@/lib/github/appInstallations';
 import { repoDeletionClient } from '@/lib/github/repoDeletion';
@@ -29,7 +30,8 @@ import { withSystemContext } from '@/lib/workspaces/context';
 // REPOSITORY immediately before the delete call (bug MOTIR-4892 is why nothing
 // else is trusted: `github_repo.organization_id` answers "can this tenant dispatch
 // into it", never "whose is it"). A deployment with no provisioning org hosts
-// nothing, so on it this deletes no repository at all.
+// nothing, so on it this deletes no repository at all. The owners are the owned-org
+// SET — the provisioning org and every fleet account's (MOTIR-8974).
 //
 // ⚠️ THE PERMISSION: deleting a hosted repository runs under the provisioning App's
 // Repository "Administration: write", which MOTIR-1779 granted for repository
@@ -72,7 +74,12 @@ export interface GitOffboardingDeps {
   uninstallInstallation: typeof appInstallationsClient.uninstallInstallation;
   removeGitlabWebhook: typeof removeProjectWebhook;
   revokeGitlabToken: typeof revokeToken;
-  hostOwner: () => string | null;
+  /** Every org Motir owns (MOTIR-8974) — the provisioning org and each fleet
+   *  account's. */
+  hostOwners: () => Promise<readonly string[]>;
+  /** The installation to act on a hosted repository in its own org with —
+   *  undefined for the provisioning org, which keeps the mirror's. */
+  ownedOrgTarget: (owner: string) => Promise<GithubOrgTarget | undefined>;
 }
 
 const LIVE_DEPS: GitOffboardingDeps = {
@@ -80,7 +87,8 @@ const LIVE_DEPS: GitOffboardingDeps = {
   uninstallInstallation: (id) => appInstallationsClient.uninstallInstallation(id),
   removeGitlabWebhook: removeProjectWebhook,
   revokeGitlabToken: revokeToken,
-  hostOwner: provisioningOrgLogin,
+  hostOwners: motirOwnedOrgLogins,
+  ownedOrgTarget: ownedOrgTargetFor,
 };
 
 function zero(): GitOffboardingCounts {
@@ -115,7 +123,7 @@ export const organizationGitOffboardingService = {
     deps: GitOffboardingDeps = LIVE_DEPS,
   ): Promise<GitOffboardingCounts> {
     const counts = zero();
-    const hostOwner = deps.hostOwner();
+    const hostOwners = await deps.hostOwners();
 
     // ── 1 · Repository rows, one at a time ───────────────────────────────────
     const repos = await withSystemContext((tx) =>
@@ -128,9 +136,12 @@ export const organizationGitOffboardingService = {
         continue;
       }
       const onGithub = repo.provider === 'github';
-      if (onGithub && isMotirHostedOwner(repo.owner, hostOwner)) {
+      if (onGithub && isMotirHostedOwner(repo.owner, hostOwners)) {
+        // In the repository's own org: a fleet account's repository through that
+        // account's installation (MOTIR-8974).
+        const target = await deps.ownedOrgTarget(repo.owner);
         await deps.deleteRepo({
-          installationId: repo.installation.installationId,
+          installationId: target?.installationId ?? repo.installation.installationId,
           owner: repo.owner,
           repo: repo.name,
         });

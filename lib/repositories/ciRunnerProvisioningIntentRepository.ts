@@ -1,4 +1,8 @@
-import { type CiRunnerProvisioningIntent, type Prisma } from '@/generated/prisma/client';
+import {
+  type CiRunnerProvisioningIntent,
+  type FleetShardMoveReason,
+  type Prisma,
+} from '@/generated/prisma/client';
 
 // Data access for the runner-fleet provisioning INTENTS (Story MOTIR-1916 ·
 // MOTIR-1920). Single-op methods only (CLAUDE.md 4-layer); every write requires
@@ -35,6 +39,9 @@ export interface CiRunnerBootRecord {
   githubRunnerId: number | null;
   runnerName: string | null;
   bootedAt: Date;
+  /** The fleet account the container was booted in (MOTIR-8964); null or
+   *  absent = the process-wide fleet. */
+  fleetShardId?: string | null;
 }
 
 /** What a provisioner records once the container is gone. */
@@ -244,12 +251,62 @@ export const ciRunnerProvisioningIntentRepository = {
    * strictly harder to get wrong — no transaction has to be held open across the
    * GitHub and provider calls that follow.
    */
-  async claimPending(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
+  async claimPending(
+    id: string,
+    tx: Prisma.TransactionClient,
+    placement: { fleetShardId?: string | null } = {},
+  ): Promise<boolean> {
     const result = await tx.ciRunnerProvisioningIntent.updateMany({
       where: { id, status: CI_RUNNER_INTENT_PENDING },
-      data: { status: CI_RUNNER_INTENT_PROVISIONING },
+      // The ACCOUNT is written in the same compare-and-set (MOTIR-8968): the
+      // per-account count is read-derived, so it is exact only if the account
+      // lands in the transaction that counted it.
+      data: {
+        status: CI_RUNNER_INTENT_PROVISIONING,
+        fleetShardId: placement.fleetShardId ?? null,
+        fleetShardMoveReason: null,
+      },
     });
     return result.count === 1;
+  },
+
+  /** The CI containers in flight on one account — `provisioning` + `running`,
+   *  the same in-flight set as `FLEET_WORKLOADS.ci_runner` (MOTIR-8968). */
+  async countInFlightForShardInTx(shardId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.ciRunnerProvisioningIntent.count({
+      where: {
+        fleetShardId: shardId,
+        status: { in: [CI_RUNNER_INTENT_PROVISIONING, CI_RUNNER_INTENT_RUNNING] },
+      },
+    });
+  },
+
+  /** Move a claimed intent to another account mid-boot, with why it left its
+   *  first choice (MOTIR-8968). Guarded on `provisioning`. */
+  async reassignShardInTx(
+    id: string,
+    fleetShardId: string,
+    moveReason: FleetShardMoveReason,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.ciRunnerProvisioningIntent.updateMany({
+      where: { id, status: CI_RUNNER_INTENT_PROVISIONING },
+      data: { fleetShardId, fleetShardMoveReason: moveReason },
+    });
+    return result.count === 1;
+  },
+
+  /** Stamp the intent's FIRST `shard_capacity` deferral; a later one leaves it
+   *  (MOTIR-8968). */
+  async markShardCapacityDeferredInTx(
+    id: string,
+    at: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.ciRunnerProvisioningIntent.updateMany({
+      where: { id, shardCapacityDeferredAt: null },
+      data: { shardCapacityDeferredAt: at },
+    });
   },
 
   /**
@@ -266,7 +323,14 @@ export const ciRunnerProvisioningIntentRepository = {
   async releaseClaim(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
     const result = await tx.ciRunnerProvisioningIntent.updateMany({
       where: { id, status: CI_RUNNER_INTENT_PROVISIONING },
-      data: { status: CI_RUNNER_INTENT_PENDING, settledAt: null, teardownReason: null },
+      // The account goes with the claim, so a re-admission chooses again.
+      data: {
+        status: CI_RUNNER_INTENT_PENDING,
+        settledAt: null,
+        teardownReason: null,
+        fleetShardId: null,
+        fleetShardMoveReason: null,
+      },
     });
     return result.count === 1;
   },
@@ -283,6 +347,8 @@ export const ciRunnerProvisioningIntentRepository = {
         status: CI_RUNNER_INTENT_PENDING,
         settledAt: null,
         teardownReason: null,
+        fleetShardId: null,
+        fleetShardMoveReason: null,
         bootAttempts: { increment: 1 },
       },
     });
@@ -378,6 +444,7 @@ export const ciRunnerProvisioningIntentRepository = {
         githubRunnerId: data.githubRunnerId,
         runnerName: data.runnerName,
         bootedAt: data.bootedAt,
+        fleetShardId: data.fleetShardId ?? null,
       },
     });
   },

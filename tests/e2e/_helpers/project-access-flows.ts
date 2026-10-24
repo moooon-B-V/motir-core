@@ -5,9 +5,9 @@ import { signIn } from './shell-session';
 import { PA_PASSWORD, type ProjectAccessSeed } from './project-access-seed';
 import { INVITE_IDENTIFIER_PREFIX } from '@/lib/services/workspaceInvitesService';
 
-// The steps of Story MOTIR-6169's recipe (Subtask MOTIR-6553), shared by the
-// main-lane spec (`project-access-contractor.spec.ts`) and the paced receipt
-// (`acceptance-project-access.spec.ts`), so the two cannot drift apart.
+// The steps of Story MOTIR-6169's recipe (Subtask MOTIR-6553), used by the
+// main-lane spec (`project-access-contractor.spec.ts`). The paced receipt that
+// shared them (`acceptance-project-access.spec.ts`) was retired by MOTIR-9411.
 //
 // Every step waits on an AUTHORITATIVE signal (the coding convention § E2E): the write's own
 // response, armed BEFORE the press, and — where a later read depends on it — the

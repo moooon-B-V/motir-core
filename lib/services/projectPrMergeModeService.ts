@@ -1,5 +1,6 @@
 import type { PrMergeMode, Prisma } from '@/generated/prisma/client';
-import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
+import type { HostOwners } from '@/lib/git/hostOwnership';
 import { PR_MERGE_MODE_VALUES, type PrMergeModeValue } from '@/lib/dto/projects';
 import {
   InvalidPrMergeModeError,
@@ -96,13 +97,14 @@ export const projectPrMergeModeService = {
    * written (not established, or already decided).
    *
    * Takes the caller's `tx`: it is a step of the caller's transaction, never its
-   * own. `hostOwner` defaults to the server's provisioning org.
+   * own. `hostOwners` defaults to the owned-org set (`motirOwnedOrgLogins()`,
+   * MOTIR-8974) — the provisioning org and every fleet account's.
    */
   async seedAtEstablishment(
     projectId: string,
     workspaceId: string,
     tx: Prisma.TransactionClient,
-    hostOwner: string | null = provisioningOrgLogin(),
+    hostOwners?: HostOwners,
   ): Promise<PrMergeMode | null> {
     const locked = await projectRepository.lockById(projectId, tx);
     if (!locked) return null;
@@ -112,7 +114,7 @@ export const projectPrMergeModeService = {
     const rows = await projectRepoRepository.listByProject(projectId, workspaceId, tx);
     if (!isEstablishedSet(rows)) return null;
 
-    const mode = derivePrMergeModeDefault(rows, hostOwner);
+    const mode = derivePrMergeModeDefault(rows, hostOwners ?? (await motirOwnedOrgLogins()));
     const written = await projectRepository.seedPrMergeModeIfUndecided(
       projectId,
       mode,

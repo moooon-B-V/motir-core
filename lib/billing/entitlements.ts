@@ -16,13 +16,12 @@
 // plan never lifts a cap" is SUPERSEDED: a paid AI plan now lifts caps via its
 // included seat (the two signals stay distinct so 8.1.25 can net the included
 // seat out of billable seats). Absence of both / past_due / canceled is the
-// bounded `free` tier. (`enterprise` is a staff-set custom tier not derivable
-// from these columns in v1, but modelled here so the cap table is total.)
+// bounded `free` tier.
 
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 
 /** The PM-core scale tier an org is on (Axis B — §1/§4). */
-export type PmTier = 'free' | 'scaled' | 'enterprise' | 'meta';
+export type PmTier = 'free' | 'scaled' | 'meta';
 
 /**
  * Every kind of entitlement a create/upload can hit, as a RUNTIME list.
@@ -70,7 +69,7 @@ export interface PmEntitlements {
   /** Per-file upload size in bytes (§4.3a). Always a concrete number. */
   maxUploadBytes: number;
   /** Total org storage in bytes — SUM(Attachment.sizeBytes) (§4.3b). `null` =
-   *  unlimited (enterprise custom). */
+   *  unlimited (the `meta` tier). */
   maxTotalStorageBytes: number | null;
   /** Max CUSTOM DOMAINS across the org (`public-tenant-addresses.md` §9).
    *  `null` = unlimited. `0` is a real value and the free tier's: the assert
@@ -85,9 +84,8 @@ const GB = 1024 * MB;
 /**
  * The v1 caps, exactly the §4 numbers (tunable seed policy — a later change is a
  * one-line edit here, no schema migration). `free` is the bounded default;
- * `scaled` lifts the scale caps and raises the upload limits; `enterprise` is
- * custom (uncapped scale + storage, 100 MB/file as the v1 default until a
- * staff-set value lands).
+ * `scaled` lifts the scale caps and raises the upload limits; `meta` lifts
+ * every cap (uncapped scale + storage, 100 MB/file).
  */
 export const PM_ENTITLEMENTS: Record<PmTier, PmEntitlements> = {
   free: {
@@ -109,21 +107,11 @@ export const PM_ENTITLEMENTS: Record<PmTier, PmEntitlements> = {
     // Seed policy owned by `billing-tiering.md` §4 — the ADR's provisional value.
     maxCustomDomains: 5,
   },
-  enterprise: {
-    maxWorkItems: null,
-    maxProjects: null,
-    maxWorkspaces: null,
-    maxUploadBytes: 100 * MB,
-    maxTotalStorageBytes: null,
-    // Seed policy owned by `billing-tiering.md` §4 — the ADR's provisional value.
-    maxCustomDomains: null,
-  },
   // The INTERNAL dogfood tier (moooon B.V., the meta org) — every cap lifted.
-  // Kept as its OWN row (not an alias of `enterprise`) so the two can diverge:
-  // `enterprise` is a future COMMERCIAL custom deal (negotiated/finite caps, a
-  // real subscription, counts as revenue), whereas `meta` is never billed and
-  // permanently unlimited. They coincide today; the separate row keeps a later
-  // enterprise cap change from silently re-capping the meta org.
+  // It is never billed and never counts as revenue, and no subscription or
+  // purchase reaches it: only `isMeta` resolves to it (`pmTierForOrg`). It is
+  // the only uncapped row, kept separate from `scaled` so a paid tier's caps can
+  // change without touching it.
   meta: {
     maxWorkItems: null,
     maxProjects: null,
@@ -144,7 +132,7 @@ export function entitlementsFor(tier: PmTier): PmEntitlements {
  * Resolve an org's PM tier from its scaled-tracker subscription (§4). An ACTIVE
  * subscription is `scaled` (caps lifted); null / past_due / canceled is `free`
  * (the bounded, non-destructive-downgrade state — §4: caps re-apply on read, no
- * data deleted). `enterprise` is not derivable from this column in v1.
+ * data deleted).
  */
 export function pmTierFromScaledTracker(sub: ScaledTrackerSubscription | null): PmTier {
   return sub?.status === 'active' ? 'scaled' : 'free';

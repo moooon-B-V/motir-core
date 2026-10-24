@@ -291,7 +291,7 @@ async function assertPaidAiPlan(organizationId: string): Promise<void> {
   if (!answer) {
     throw new AgentInstanceStartRefusedError(
       'ai_plan_required',
-      'Agents need a paid AI plan (Standard, Pro, Max or Enterprise). Choose an AI plan to create or wake one.',
+      'Agents need a paid AI plan. Choose an AI plan to create or wake one.',
     );
   }
 }

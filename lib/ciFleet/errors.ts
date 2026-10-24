@@ -40,3 +40,59 @@ export class HostedAgentContainerRequestInvalidError extends Error {
     this.name = 'HostedAgentContainerRequestInvalidError';
   }
 }
+
+// ── The fleet account record (Story MOTIR-8953 · MOTIR-8961) ────────────────
+
+/** What about a fleet account input was refused — one name per invariant the
+ *  database also holds, so a caller can answer each without reading a message. */
+export type FleetShardInvalidField =
+  | 'name'
+  | 'fleetKind'
+  | 'credentialRef'
+  | 'githubOrg'
+  | 'githubInstallationId'
+  | 'flyLocation'
+  | 'machineLimit'
+  | 'limit'
+  | 'limitsSource';
+
+/** A fleet account input that breaks an invariant — refused BEFORE the write, so
+ *  the caller gets this rather than a raw constraint violation. */
+export class FleetShardInvalidError extends Error {
+  readonly code = 'FLEET_SHARD_INVALID' as const;
+  constructor(
+    readonly field: FleetShardInvalidField,
+    readonly detail: string,
+  ) {
+    super(`invalid fleet account: ${field} — ${detail}`);
+    this.name = 'FleetShardInvalidError';
+  }
+}
+
+/** No fleet account has that id. */
+export class FleetShardNotFoundError extends Error {
+  readonly code = 'FLEET_SHARD_NOT_FOUND' as const;
+  constructor(readonly shardId: string) {
+    super(`no fleet account ${shardId}`);
+    this.name = 'FleetShardNotFoundError';
+  }
+}
+
+/** The name, or the provider location, is already another account's. */
+export class FleetShardTakenError extends Error {
+  readonly code = 'FLEET_SHARD_TAKEN' as const;
+  constructor(readonly shardName: string) {
+    super(`a fleet account already holds the name or the provider location of ${shardName}`);
+    this.name = 'FleetShardTakenError';
+  }
+}
+
+/** `fleet-admin add-shard` / `refresh-limits` refused the run BEFORE its first
+ *  external call (Story MOTIR-8953 · MOTIR-8967) — every problem found, at once. */
+export class FleetShardProvisioningRefusedError extends Error {
+  readonly code = 'FLEET_SHARD_PROVISIONING_REFUSED' as const;
+  constructor(readonly problems: string[]) {
+    super(`add-shard refused: ${problems.join('; ')}`);
+    this.name = 'FleetShardProvisioningRefusedError';
+  }
+}

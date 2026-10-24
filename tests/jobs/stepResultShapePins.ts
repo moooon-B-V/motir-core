@@ -100,6 +100,12 @@ export interface RetiredStepId {
  * carries `orphans: { machines, volumes }` — a superset of what is pinned — and
  * its one reader is the job's own return value, which nothing destructures.
  *
+ * ⚠️ MOTIR-8968 KEPT `boot-runner` AND `settle-runner` ON PURPOSE, as MOTIR-6911
+ * did. Admission's deferral reason gained `shard_capacity` (every fleet account
+ * of the kind is full), which WIDENS the `gate_deferred` union. A memo written
+ * before the change carries one of the older reasons, all of which the new union
+ * still holds, so a replay reads exactly as it did.
+ *
  * ⚠️ MOTIR-8711 KEPT `boot-runner` ON PURPOSE. Its supervising `session` gained an
  * OPTIONAL `runnerTarget` (the org and installation the runner was minted in),
  * which WIDENS the shape. The step provisions, so a new id would re-provision on
@@ -174,10 +180,15 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   // MOTIR-9348 added the OPTIONAL `session.image` the same way, for the same
   // reason: a session memoised before it existed lacks it, and the never-started
   // verdict then names the image `unknown` rather than failing.
+  //
+  // MOTIR-8964 added the OPTIONAL `session.handle.shardId` (the fleet account the
+  // container was booted in) the same way, for the same reason: a session
+  // memoised before it existed lacks it, and every later step resolves it to the
+  // process-wide fleet — where every such container was booted.
   'boot-runner': {
     file: 'lib/services/ciRunnerBootService.ts',
     shape:
-      '{ outcome: { billableSeconds: number; bootLatencyMs: null | number; containerId: string; costUsd: string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "gate_deferred"; reason: "ai_plan_required" | "balance_unavailable" | "ci_credits_exhausted" | "credits_insufficient" | "fleet_ceiling" | "gate_unavailable" | "plan_cap" | "plan_unknown" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "no_runner_group" } | { detail: string; outcome: "provision_failed" } | { outcome: "already_claimed" } | { outcome: "not_configured" } | { outcome: "rate_limited"; retryAfterSeconds: null | number } | { outcome: "unknown_intent" }; phase: "terminal" } | { phase: "supervising"; session: { attribution: { orgId: string; projectId: string; repoFullName: string; workflowJobId: number; workspaceId: string }; bootedAt: string; githubRunnerId: null | number; handle: { createdAt: string; id: string; provider: "arc" | "fake" | "fly" | "runs_on"; region: string; volumeId?: string | undefined }; image?: string | undefined; intentId: string; queuedAt: string; runnerTarget?: null | undefined | { installationId: string; org: string; role: "provisioning" | "user-facing" } } }',
+      '{ outcome: { billableSeconds: number; bootLatencyMs: null | number; containerId: string; costUsd: string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "gate_deferred"; reason: "ai_plan_required" | "balance_unavailable" | "ci_credits_exhausted" | "credits_insufficient" | "fleet_ceiling" | "gate_unavailable" | "plan_cap" | "plan_unknown" | "shard_capacity" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "no_runner_group" } | { detail: string; outcome: "provision_failed" } | { outcome: "already_claimed" } | { outcome: "not_configured" } | { outcome: "rate_limited"; retryAfterSeconds: null | number } | { outcome: "unknown_intent" }; phase: "terminal" } | { phase: "supervising"; session: { attribution: { orgId: string; projectId: string; repoFullName: string; workflowJobId: number; workspaceId: string }; bootedAt: string; githubRunnerId: null | number; handle: { createdAt: string; id: string; provider: "arc" | "fake" | "fly" | "runs_on"; region: string; shardId?: string | undefined; volumeId?: string | undefined }; image?: string | undefined; intentId: string; queuedAt: string; runnerTarget?: null | undefined | { installationId: string; org: string; role: "provisioning" | "user-facing" } } }',
   },
   'build-archive': {
     file: 'lib/jobs/definitions/dataExportBuild.ts',
@@ -396,6 +407,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/jobRunReap.ts',
     shape: '{ abandoned: number; scanned: number; stillLive: number }',
   },
+  'fleet-shard-headroom': {
+    file: 'lib/jobs/definitions/fleetShardHeadroom.ts',
+    shape:
+      '{ accounts: number; alerted: number; failures: number; kinds: number; moves: { [key: string]: { capacity_refused?: number | undefined; provider_unavailable?: number | undefined } }; orgs: number; readings: Array<{ capacity: number; fraction: number; limit: string; subject: { fleetKind: string } | { githubOrg: string } | { shardId: string }; used: number }> }',
+  },
   'fleet-debit-monitor': {
     file: 'lib/jobs/definitions/fleetDebitMonitor.ts',
     shape: '{ alerted: number; failures: number; mismatched: number; orgs: number }',
@@ -564,16 +580,20 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   // kept the id for the same reason: every memo already stored carries one of
   // the older members, which is still a member, so the replay reads true.
   // MOTIR-6921 widened it by one more (`agents-deletion-scheduled`), and MOTIR-7606
-  // by `enterprise-request-received`, each for the same reason and with the same id.
+  // by its Contact-sales staff template, each for the same reason and with the same id.
+  // MOTIR-9386 NARROWED it again, removing that staff template with its
+  // feature, and KEPT the id: bumping would re-send every email of a resumed run.
+  // A memo already stored with the removed member replays a value nothing reads —
+  // `template` is surfaced on `job_run.output` only and no code branches on it.
   send: {
     file: 'lib/jobs/definitions/emailSend.ts',
     shape:
-      '{ providerMessageId: null | string; skipped?: "notification_budget_exhausted" | undefined; template: "agents-deletion-scheduled" | "automation-rule-failed" | "data-export-ready" | "email-change" | "enterprise-request-received" | "filter-subscription" | "follow-confirm" | "follow-digest" | "mention-notification" | "organization-deletion-cancelled" | "organization-deletion-reminder" | "organization-deletion-scheduled" | "organization-erased" | "ownership-transferred" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
+      '{ providerMessageId: null | string; skipped?: "notification_budget_exhausted" | undefined; template: "agents-deletion-scheduled" | "automation-rule-failed" | "data-export-ready" | "email-change" | "filter-subscription" | "follow-confirm" | "follow-digest" | "mention-notification" | "organization-deletion-cancelled" | "organization-deletion-reminder" | "organization-deletion-scheduled" | "organization-erased" | "ownership-transferred" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
   },
   'settle-runner': {
     file: 'lib/services/ciRunnerBootService.ts',
     shape:
-      '{ billableSeconds: number; bootLatencyMs: null | number; containerId: string; costUsd: string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "gate_deferred"; reason: "ai_plan_required" | "balance_unavailable" | "ci_credits_exhausted" | "credits_insufficient" | "fleet_ceiling" | "gate_unavailable" | "plan_cap" | "plan_unknown" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "no_runner_group" } | { detail: string; outcome: "provision_failed" } | { outcome: "already_claimed" } | { outcome: "not_configured" } | { outcome: "rate_limited"; retryAfterSeconds: null | number } | { outcome: "unknown_intent" }',
+      '{ billableSeconds: number; bootLatencyMs: null | number; containerId: string; costUsd: string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "gate_deferred"; reason: "ai_plan_required" | "balance_unavailable" | "ci_credits_exhausted" | "credits_insufficient" | "fleet_ceiling" | "gate_unavailable" | "plan_cap" | "plan_unknown" | "shard_capacity" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "no_runner_group" } | { detail: string; outcome: "provision_failed" } | { outcome: "already_claimed" } | { outcome: "not_configured" } | { outcome: "rate_limited"; retryAfterSeconds: null | number } | { outcome: "unknown_intent" }',
   },
   sweep: {
     file: 'lib/jobs/definitions/automationEngine.ts',
