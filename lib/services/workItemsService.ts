@@ -120,6 +120,7 @@ import {
   withWorkspaceServiceContext,
 } from '@/lib/workspaces/context';
 import { readMembership } from '@/lib/workspaces/membershipGate';
+import { isMotirSystemUser } from '@/lib/ai/systemPrincipal';
 import { readProject, readWorkItem } from '@/lib/workspaces/tenantRead';
 import { personName } from '@/lib/people/personLabel';
 import { visitorServiceContext, type VisitorReadContext } from '@/lib/visitor/context';
@@ -504,7 +505,10 @@ async function assertReporterMember(
   tx?: Prisma.TransactionClient,
 ): Promise<void> {
   const m = await readMembership(userId, workspaceId, tx);
-  if (!m) throw new ReporterNotInWorkspaceError();
+  // The Motir system account reports into any workspace by identity, with no
+  // membership row (MOTIR-9329). Called with the ACTOR only, so it never lets a
+  // person attribute their write to Motir.
+  if (!m && !(await isMotirSystemUser(userId, tx))) throw new ReporterNotInWorkspaceError();
 }
 
 async function assertAssigneeMember(

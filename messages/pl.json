@@ -1382,7 +1382,7 @@
         },
         "debug": {
           "title": "Debuguj z Motir AI",
-          "description": "Prześledź błąd do jego prawdopodobnej przyczyny i dodaj go do Selekcji",
+          "description": "Prześledź błąd do jego prawdopodobnej przyczyny, a potem zapisz go, jeśli się zgadzasz",
           "prefill": "Coś nie działa. Co się dzieje: \nCo powinno się dziać: "
         }
       }
@@ -5907,7 +5907,7 @@
       "error": "Nie udało się wysłać raportu. Spróbuj ponownie.",
       "debugOffer": {
         "action": "Debuguj z Motir AI",
-        "hint": "<b>Debuguj z Motir AI</b> rozpoczyna debugowanie od razu po naciśnięciu i zużywa kredyty Motir AI. Motir AI czyta kod, wskazuje prawdopodobną przyczynę i sprawdza, czy jakiś element roboczy już obejmuje ten błąd."
+        "hint": "<b>Debuguj z Motir AI</b> od razu po naciśnięciu wysyła Twój opis do Motir AI i zużywa kredyty Motir AI. Motir AI czyta kod, wskazuje prawdopodobną przyczynę i proponuje dodanie diagnozy do tego błędu. Nic nie zostanie zapisane, dopóki nie potwierdzisz."
       }
     }
   },
@@ -7966,7 +7966,7 @@
       "handoff": "Odczytuję to jako zmianę planu — praca nad propozycją",
       "debug": {
         "wroteAnchor": "Zapisano diagnozę w <chip>{key}</chip>. Pozostaje w Triażu, a nic więcej się nie zmieniło.",
-        "filed": "Utworzono <chip>{key}</chip> w Triażu wraz z diagnozą. Nic więcej się nie zmieniło.",
+        "filed": "Utworzono <chip>{key}</chip> z diagnozą. Nic innego się nie zmieniło.",
         "enrichedAnchor": "Dodano diagnozę do <chip>{key}</chip>, który już obejmuje ten Błąd. Nie utworzono nic nowego, a {anchorKey} pozostaje bez zmian.",
         "enriched": "Dodano diagnozę do <chip>{key}</chip>, który już obejmuje ten Błąd. Nie utworzono nic nowego.",
         "ungrounded": "Nie udało się powiązać tego z kodem, więc nic nie zostało zapisane."
@@ -8453,6 +8453,25 @@
         "outOfCredits": "Twoja organizacja nie ma już kredytów AI, więc planowanie nie może się rozpocząć.",
         "targetUnavailable": "Nie możesz już otworzyć {key}, więc planowanie nie może się rozpocząć.",
         "generic": "Planowanie nie może się rozpocząć z tej propozycji."
+      }
+    },
+    "logBugOffer": {
+      "label": "Propozycja zgłoszenia błędu",
+      "writeNew": "Utwórz nowy błąd",
+      "writeAnchored": "Dodaj diagnozę do <chip>{key}</chip>",
+      "writeExisting": "Zapisz diagnozę w <chip>{key}</chip>, który już to obejmuje",
+      "confirming": "Zgłaszanie…",
+      "confirmHelp": "Potwierdzenie wykonuje ten jeden zapis jako Motir. Odpowiedź „tak” działa tak samo.",
+      "declineHelp": "Odrzucenie niczego nie zapisuje, a rozmowa toczy się dalej.",
+      "logged": "Zgłoszono",
+      "loggedBy": "Potwierdzono · {when}",
+      "recorded": "Nic nie zostało zapisane.",
+      "cannotStart": {
+        "planningUnavailable": "Nie można tu zgłaszać błędów: Motir AI nie jest skonfigurowany dla tego projektu albo nie masz uprawnień do korzystania z niego.",
+        "targetChanged": "{key} zmienił się po tej propozycji, więc nic nie zostało zapisane. Zapytaj ponownie, aby dostać aktualną propozycję.",
+        "targetUnavailable": "Nie możesz już otworzyć {key}, więc nic nie zostało zapisane.",
+        "anchorNotTriage": "{key} nie jest już w Triage, więc diagnoza nie została dodana.",
+        "generic": "Z tej propozycji nie można zgłosić tego błędu."
       }
     },
     "restart": {

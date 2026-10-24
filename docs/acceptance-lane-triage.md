@@ -391,6 +391,14 @@ Story MOTIR-9216's own receipt joins the lane. It needs the motir-ai jobs mock (
 | ------------------------------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `acceptance-ask-single-read.spec.ts` | MOTIR-9216 | **NEW.** A question, a defect report and "plan something else" each read and answered with citations; the report widget's anchored send cited; both code-unreadable reasons and a readable graph; a question and a change typed into a running plan; stored debug and new-session turns rendering; zh. |
 
+## MOTIR-9328 — 2026-10-23
+
+The bug-offer story (MOTIR-9220) rewrites the receipt MOTIR-9231 retired, against its offer. The mock's ask outcome now types a `log_bug` offer and a `log_bug` typed reply; it already passed both through.
+
+| Spec                                     | Story      | Disposition                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `acceptance-debug-with-motir-ai.spec.ts` | MOTIR-9220 | **RESTORED, rewritten.** One offer naming its write; Decline writes nothing; a typed yes files one bug outside Triage; a covering card gets one note; a card edited in another tab is refused; the report widget's press opens the anchored conversation and its Confirm adds the diagnosis below the report; the orb pre-fills and sends nothing; no code, no offer; a reopen keeps the offer; a member who cannot edit gets Motir's write; zh. |
+
 ## MOTIR-9411 — 2026-10-24
 
 Every spec in the lane belonged to a story that is done, so every one owed a disposition (`docs/decisions/acceptance-receipt-lifecycle.md` AMENDMENT 2). Four are retired by their own pull request, each citing the spec that still covers it. The rest are **MOVED** into the regression lane (`playwright.regression.config.ts`): renamed `regression-*.spec.ts`, swapped to `_helpers/promoted-regression`, every assertion kept, run on the acceptance lane's triggers without pacing or recording.
@@ -423,6 +431,7 @@ Every spec in the lane belonged to a story that is done, so every one owed a dis
 | `acceptance-content-language.spec.ts`                         | MOTIR-7731 | **MOVED** → `regression-content-language.spec.ts`                         |
 | `acceptance-continue-hosted.spec.ts`                          | MOTIR-6527 | **MOVED** → `regression-continue-hosted.spec.ts`                          |
 | `acceptance-covered-cross-parent-edges.spec.ts`               | MOTIR-6352 | **MOVED** → `regression-covered-cross-parent-edges.spec.ts`               |
+| `acceptance-debug-with-motir-ai.spec.ts`                      | MOTIR-9220 | **MOVED** → `regression-debug-with-motir-ai.spec.ts`                      |
 | `acceptance-decision-gate.spec.ts`                            | MOTIR-4907 | **MOVED** → `regression-decision-gate.spec.ts`                            |
 | `acceptance-decision-page.spec.ts`                            | MOTIR-5761 | **MOVED** → `regression-decision-page.spec.ts`                            |
 | `acceptance-decision-waiting-marker.spec.ts`                  | MOTIR-4908 | **MOVED** → `regression-decision-waiting-marker.spec.ts`                  |

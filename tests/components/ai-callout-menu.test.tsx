@@ -149,7 +149,9 @@ describe('the callout menu', () => {
 
     const row = screen.getByRole('link', { name: /Debug with Motir AI/ });
     expect(row.getAttribute('data-action')).toBe('debug');
-    expect(screen.getByText('Trace a bug to its likely cause and file it in Triage')).toBeTruthy();
+    expect(
+      screen.getByText('Trace a bug to its likely cause, then log it if you agree'),
+    ).toBeTruthy();
     const panel = screen.getByRole('dialog', { name: 'Motir AI' });
     expect([...panel.querySelectorAll('a[data-action]')].indexOf(row)).toBe(2);
     // The lucide `Bug` glyph, on the accent-tint tile — only position 1 is filled.
