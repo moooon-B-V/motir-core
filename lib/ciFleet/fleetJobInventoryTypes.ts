@@ -36,6 +36,8 @@ export interface FleetInventoryRepo {
 export interface FleetJobInventory {
   schemaVersion: number;
   imageDockerfileBlob?: string;
-  /** Keyed by `owner/name`, as GitHub spells it. */
+  /** Keyed by `owner/name`, as GitHub spells it. Readiness falls back to the
+   *  name alone within the org it reads, so an org rename does not orphan an
+   *  entry (MOTIR-9410). */
   repos: Record<string, FleetInventoryRepo>;
 }

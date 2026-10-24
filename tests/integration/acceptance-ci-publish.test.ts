@@ -434,8 +434,9 @@ describe('the restored uploader → the real publish routes, over OIDC (MOTIR-72
 // hands the GitHub OIDC identity to a workflow that has no business with it, goes
 // red here. ⚠️ `id-token: write` is NOT unique to the acceptance lane and the card
 // that commissioned this guard assumed it was: the three npm release lanes hold it
-// for npm Trusted Publishing (provenance). So the guard PINS the set — the
-// acceptance lane plus those three — and a fifth workflow fails it.
+// for npm Trusted Publishing (provenance), and the AWS runner AMI lane holds it to
+// assume its build role (MOTIR-9272). So the guard PINS the set — the acceptance
+// lane plus those four — and a sixth workflow fails it.
 describe('the acceptance identity stays where it belongs (MOTIR-7256)', () => {
   const ROOT = process.cwd();
   const codeOf = (text: string) =>
@@ -474,6 +475,7 @@ describe('the acceptance identity stays where it belongs (MOTIR-7256)', () => {
     expect(granting).toEqual([
       '.github/workflows/acceptance-tests.yml', // the receipt publish (MOTIR-7253)
       '.github/workflows/release-brand.yml', // npm Trusted Publishing
+      '.github/workflows/release-ci-runner-ami.yml', // the AMI build's AWS role (MOTIR-9272)
       '.github/workflows/release-cli.yml', // npm Trusted Publishing
       '.github/workflows/release-design-system.yml', // npm Trusted Publishing
     ]);
