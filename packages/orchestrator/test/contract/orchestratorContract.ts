@@ -315,8 +315,6 @@ export function describeOrchestratorContract(
     });
 
     describe('14 · a capacity refusal', () => {
-      // An adapter that declares no reason yet still lists the case, skipped.
-      if (harness.capacityReasons.length === 0) it.skip('no capacity reason declared', () => {});
       for (const reason of harness.capacityReasons) {
         it(`${reason} throws OrchestratorCapacityError and leaves no container, nor its volume`, async () => {
           harness.refuseNextProvisionForCapacity(reason);

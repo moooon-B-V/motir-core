@@ -52,6 +52,12 @@ function matches(filters: readonly Ec2Filter[], tags: readonly Ec2Tag[], attrs: 
   });
 }
 
+/** The HTTP status EC2 answers each arranged code with. */
+const STATUS_BY_CODE: Record<string, number> = {
+  InsufficientInstanceCapacity: 500,
+  RequestLimitExceeded: 503,
+};
+
 export class AwsEc2Fake implements Ec2Api {
   readonly calls: FakeCall[] = [];
   zones: Ec2AvailabilityZone[] = [
@@ -73,6 +79,12 @@ export class AwsEc2Fake implements Ec2Api {
   /** The next RunInstances creates its instance and THEN fails — an ambiguous
    *  timeout. */
   private failNextAfterCreate: string | null = null;
+  /** Every RunInstances the fake refused for capacity: where, with which token. */
+  readonly refusals: Array<{ zone: string; clientToken: string; code: string }> = [];
+  /** Arranged RunInstances refusals, each consumed by the first call it matches. */
+  private readonly arrangedRefusals: Array<{ code: string; zone?: string }> = [];
+  /** Zones refusing every launch with InsufficientInstanceCapacity until cleared. */
+  private readonly outOfStockZones = new Set<string>();
   private seq = 0;
   private readonly failures = new Map<string, string>();
 
@@ -98,6 +110,9 @@ export class AwsEc2Fake implements Ec2Api {
     this.failures.clear();
     this.leaveNextPending = false;
     this.failNextAfterCreate = null;
+    this.arrangedRefusals.length = 0;
+    this.outOfStockZones.clear();
+    this.refusals.length = 0;
     this.seq = 0;
   }
 
@@ -130,6 +145,21 @@ export class AwsEc2Fake implements Ec2Api {
       tags,
     });
     return { vpcId, groupId, subnetIds: zones.map((z) => `subnet-${shardTag}-${z}`) };
+  }
+
+  /**
+   * Refuse the next RunInstances with an AWS error `code` — in `zone` only, when
+   * named. Each call queues one refusal; the HTTP status is the one EC2 sends for
+   * that code (InsufficientInstanceCapacity 500, RequestLimitExceeded 503).
+   */
+  failNextRunInstances(refusal: { code: string; zone?: string }): void {
+    this.arrangedRefusals.push(refusal);
+  }
+
+  /** Every launch in `zone` is InsufficientInstanceCapacity until cleared. */
+  setZoneOutOfStock(zone: string, outOfStock = true): void {
+    if (outOfStock) this.outOfStockZones.add(zone);
+    else this.outOfStockZones.delete(zone);
   }
 
   /** The next RunInstances makes its instance, then answers `code` as a 5xx. */
@@ -378,8 +408,21 @@ export class AwsEc2Fake implements Ec2Api {
     if (!this.subnets.has(input.subnetId)) {
       throw new Ec2ApiError('InvalidSubnetID.NotFound', 400, false);
     }
-    const instanceId = this.nextId('i');
     const subnet = this.subnets.get(input.subnetId)!;
+    const zone = subnet.availabilityZone;
+    const arranged = this.arrangedRefusals.findIndex((r) => !r.zone || r.zone === zone);
+    const code =
+      arranged >= 0
+        ? this.arrangedRefusals.splice(arranged, 1)[0]!.code
+        : this.outOfStockZones.has(zone)
+          ? 'InsufficientInstanceCapacity'
+          : null;
+    if (code) {
+      this.refusals.push({ zone, clientToken: input.clientToken, code });
+      const status = STATUS_BY_CODE[code] ?? 400;
+      throw new Ec2ApiError(code, status, status >= 500);
+    }
+    const instanceId = this.nextId('i');
     this.instances.set(instanceId, {
       instanceId,
       state: this.leaveNextPending ? 'pending' : 'running',

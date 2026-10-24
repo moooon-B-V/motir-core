@@ -12,10 +12,12 @@ import type { OrchestratorContractHarness } from './orchestratorContract';
 //
 // No `liveVolumeIds`: the Docker disk is a `DeleteOnTermination` mapping of the
 // instance, so there is no separate volume to leak, and the volume cases skip.
-// No capacity reasons yet: typing EC2's capacity codes is MOTIR-9277's.
+// All three capacity reasons are declared (MOTIR-9277).
 
 export const AWS_SHARD_TAG = 'ci-runner-use1-1';
 export const AWS_AMI_ID = 'ami-0123456789abcdef0';
+/** The zones `reset()` seeds the shard's network in. */
+export const AWS_ZONES = ['us-east-1a', 'us-east-1b'];
 
 /** The env `buildSpec` puts on a CI spec — the four keys plus the dropped flag. */
 export const AWS_SPEC_ENV: Readonly<Record<string, string>> = {
@@ -63,15 +65,26 @@ export function awsHarness(): OrchestratorContractHarness {
     orchestrator,
     reset() {
       ec2.clear();
-      ec2.seedShardNetwork(AWS_SHARD_TAG);
+      ec2.seedShardNetwork(AWS_SHARD_TAG, AWS_ZONES);
     },
     spec: (overrides = {}) => ({ ...AWS_SPEC, ...overrides }),
     attribution: (overrides = {}) => ({ ...AWS_ATTRIBUTION, ...overrides }),
     // A 4xx: refused outright, not retried.
     failNextProvision: () => ec2.failNext('runInstances', 'InvalidParameterValue', 400),
-    capacityReasons: [],
-    refuseNextProvisionForCapacity: () => {
-      throw new Error('the aws harness declares no capacity reason yet (MOTIR-9277)');
+    capacityReasons: ['quota_exceeded', 'out_of_stock', 'throttled'],
+    // Every zone of the seeded network answers the matching code for the next
+    // provision. Quota and throttling stop the walk after one call; out of stock
+    // is answered in each zone the walk tries.
+    refuseNextProvisionForCapacity: (reason) => {
+      if (reason === 'out_of_stock') {
+        for (const zone of AWS_ZONES) {
+          ec2.failNextRunInstances({ code: 'InsufficientInstanceCapacity', zone });
+        }
+      } else {
+        ec2.failNextRunInstances({
+          code: reason === 'quota_exceeded' ? 'VcpuLimitExceeded' : 'RequestLimitExceeded',
+        });
+      }
     },
     failNextTeardown: () => ec2.failNext('terminateInstances', 'InternalError', 500),
     neverStart: () => {

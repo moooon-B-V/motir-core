@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { OrchestratorApiError, OrchestratorNotConfiguredError } from '../../errors';
+import {
+  OrchestratorApiError,
+  OrchestratorCapacityError,
+  OrchestratorNotConfiguredError,
+} from '../../errors';
 import { sparedByCaller } from '../../reap';
 import { buildContainerUsage } from '../../usage';
 import { FLEET_METADATA_INTENT_KEY, FLEET_METADATA_KEY, FLEET_METADATA_VALUES } from '../fly';
@@ -15,10 +19,16 @@ import type {
   UsageAttributionResolver,
 } from '../../types';
 import { Ec2ApiError, type Ec2Api, type Ec2Instance, type Ec2Tag } from './ec2Client';
+import {
+  awsApiError as apiError,
+  awsCapacityReason,
+  classifyAwsLaunchError,
+} from './capacityErrors';
 import { AWS_SHARD_TAG_KEY } from './network';
 import { buildRunnerUserData, encodeUserData } from './userData';
 
 export * from './userData';
+export * from './capacityErrors';
 
 // The AWS adapter (Story MOTIR-9270 · MOTIR-9276) — `ContainerOrchestrator` on
 // EC2, one VM per job, booted from the runner AMI into the shard's tagged network
@@ -119,16 +129,10 @@ export interface AwsOrchestratorConfig {
 
 /** The tagged network one launch goes into. */
 interface ShardNetwork {
-  readonly subnetIds: readonly string[];
+  /** Sorted by zone name: the rotation's order. */
+  readonly subnets: ReadonlyArray<{ readonly subnetId: string; readonly zone: string }>;
   readonly securityGroupId: string;
   readonly readAt: number;
-}
-
-/** Any EC2 failure as the port's typed error: the provider, the status and the
- *  AWS error CODE — never AWS's message, which can echo user-data. */
-function apiError(err: unknown): OrchestratorApiError {
-  if (err instanceof Ec2ApiError) return new OrchestratorApiError('aws', err.httpStatus, err.code);
-  return new OrchestratorApiError('aws', null, 'UnknownError');
 }
 
 function isGone(err: unknown): boolean {
@@ -208,9 +212,9 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
       );
     }
     network = {
-      subnetIds: [...subnets]
+      subnets: [...subnets]
         .sort((a, b) => a.availabilityZone.localeCompare(b.availabilityZone))
-        .map((s) => s.subnetId),
+        .map((s) => ({ subnetId: s.subnetId, zone: s.availabilityZone })),
       securityGroupId: groups[0]!.groupId,
       readAt: now().getTime(),
     };
@@ -220,13 +224,15 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
   /**
    * ONE RunInstances into ONE subnet, retried with the SAME token on a transport
    * error or 5xx: EC2 answers a repeated ClientToken with the instance it already
-   * made, so an ambiguous timeout cannot make two. Kept to one subnet so the
-   * capacity card (MOTIR-9277) can loop it over the rotation.
+   * made, so an ambiguous timeout cannot make two. A capacity refusal is never
+   * resent here — it is the zone walk's (`provision`) — even when EC2 marks it
+   * retryable (InsufficientInstanceCapacity is a 500, RequestLimitExceeded a 503).
+   * A refusal throws classified, naming the zone.
    */
   async function launchInSubnet(
     spec: ContainerSpec,
     userData: string,
-    subnetId: string,
+    { subnetId, zone }: { subnetId: string; zone: string },
     securityGroupId: string,
   ): Promise<Ec2Instance> {
     const token = clientToken();
@@ -262,10 +268,10 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
           tags: tagsFor(spec, shardTag),
         });
       } catch (err) {
-        const retryable = err instanceof Ec2ApiError && err.retryable;
+        const retryable = err instanceof Ec2ApiError && err.retryable && !awsCapacityReason(err);
         if (!retryable || attempt >= AWS_LAUNCH_ATTEMPTS) {
           if (err instanceof Ec2ApiError && STALE_NETWORK_CODES.has(err.code)) network = null;
-          throw apiError(err);
+          throw classifyAwsLaunchError(err, zone);
         }
       }
     }
@@ -354,10 +360,30 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
       }
       const userData = encodeUserData(buildRunnerUserData(spec.env));
 
-      const { subnetIds, securityGroupId } = await shardNetwork();
-      const subnetId = subnetIds[rotation % subnetIds.length]!;
+      // THE ZONE WALK (MOTIR-9277): from this call's rotation index around the
+      // list once, one RunInstances per zone, each with its own token (a refused
+      // call created nothing). Only `out_of_stock` is zone-local and moves on;
+      // quota and throttling are account-wide, so they — and any other refusal —
+      // stop the walk at once. No zone is remembered as out of stock between
+      // calls: capacity recovers in minutes, and a stale blacklist would hide it.
+      const { subnets, securityGroupId } = await shardNetwork();
+      const start = rotation;
       rotation += 1;
-      return toHandle(await launchInSubnet(spec, userData, subnetId, securityGroupId));
+      const tried = new Set<string>();
+      let outOfStock: OrchestratorCapacityError | null = null;
+      for (let i = 0; i < subnets.length; i += 1) {
+        const subnet = subnets[(start + i) % subnets.length]!;
+        if (tried.has(subnet.zone)) continue;
+        tried.add(subnet.zone);
+        try {
+          return toHandle(await launchInSubnet(spec, userData, subnet, securityGroupId));
+        } catch (err) {
+          if (!(err instanceof OrchestratorCapacityError) || err.reason !== 'out_of_stock')
+            throw err;
+          outOfStock = err;
+        }
+      }
+      throw outOfStock!;
     },
 
     async describe(handle: ContainerHandle): Promise<ContainerStatus> {
