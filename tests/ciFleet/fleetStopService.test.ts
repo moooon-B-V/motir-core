@@ -5,6 +5,8 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { fleetStopService } from '@/lib/services/fleetStopService';
+import { fleetShardService } from '@/lib/services/fleetShardService';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { runnerJitConfigClient } from '@/lib/github/runnerJitConfig';
 import { actionsRunsClient } from '@/lib/github/actionsRuns';
 import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
@@ -497,5 +499,65 @@ describe('the FIRST settle wins', () => {
       status: 'failed',
       teardownReason: 'credits_exhausted',
     });
+  });
+});
+
+describe('each container is stopped in the account it was booted in (MOTIR-8964)', () => {
+  afterEach(async () => {
+    await adminDb.ciRunnerProvisioningIntent.deleteMany({});
+    await adminDb.fleetShard.deleteMany({});
+    orchestrator.resetShardFakes();
+    fleetShardOrchestratorService.resetCache();
+  });
+
+  it("tears down account B's container through account B, and a legacy one through the process-wide fleet", async () => {
+    const fx = await seedTenant();
+    const accountB = await fleetShardService.createShard({
+      name: 'ci-runner-b',
+      fleetKind: 'ci_runner',
+      provider: 'fly',
+      githubOrg: MOTIR_ORG,
+      githubInstallationId: '556677',
+      flyOrg: 'motir',
+      flyApp: 'motir-ci-b',
+      flyRegion: 'ams',
+      credentialRef: 'FLEET_SHARD_B_TOKEN',
+      limits: { machineLimit: 50 },
+    });
+    const fakeB = orchestrator.fakeOrchestratorForShard(accountB.id);
+    const handle = await fakeB.provision({ region: 'ams' } as ContainerSpec);
+    jobSeq += 1;
+    await adminDb.ciRunnerProvisioningIntent.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        organizationId: fx.organizationId,
+        projectId: fx.projectId,
+        installationId: '556677',
+        runId: String(7000 + jobSeq),
+        runAttempt: 1,
+        jobId: String(80_000 + jobSeq),
+        jobName: 'build',
+        workflowName: 'CI',
+        repoOwner: MOTIR_ORG,
+        repoName: 'acme-web',
+        requestedLabels: [MOTIR_RUNNER_LABEL],
+        queuedAt: new Date(),
+        status: 'running',
+        containerProvider: handle.provider,
+        containerId: handle.id,
+        containerRegion: handle.region,
+        bootedAt: handle.createdAt,
+        fleetShardId: accountB.id,
+      },
+    });
+    const legacy = await seedIntent(fx);
+
+    const result = await fleetStopService.stopOrganization(fx.organizationId, 'admin_stop');
+
+    expect(result).toMatchObject({ containersStopped: 2, failures: 0 });
+    expect(fakeB.teardowns).toEqual([{ handleId: handle.id, reason: 'gate_revoked' }]);
+    expect(fakeOrchestrator.teardowns).toEqual([
+      { handleId: legacy.containerId, reason: 'gate_revoked' },
+    ]);
   });
 });

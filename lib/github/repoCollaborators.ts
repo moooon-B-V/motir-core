@@ -1,4 +1,6 @@
-import { provisioningAuth, RepoProvisioningError } from '@/lib/github/repoProvisioning';
+import { ownedOrgTargetFor } from '@/lib/ciMetering/ownedOrgs';
+import { resolveOrgAuth } from '@/lib/github/orgTarget';
+import { RepoProvisioningError } from '@/lib/github/repoProvisioning';
 
 // The COLLABORATOR boundary (Story MOTIR-1775 · MOTIR-1900) — the one module that
 // talks to GitHub about who may reach a repository Motir owns.
@@ -6,9 +8,12 @@ import { provisioningAuth, RepoProvisioningError } from '@/lib/github/repoProvis
 // It is the sibling of `repoProvisioning.ts` and follows its shape exactly:
 // everything above it (`projectRepoAccessService`) is plain orchestration over the
 // set's rows, everything below it is `fetch`, and that line is where the tests
-// fake. It authenticates through `provisioningAuth()` rather than re-deriving the
-// org / installation / token, so an invite can never be sent against a different
-// org than the repository was created in.
+// fake. It authenticates in the REPOSITORY'S OWN org (MOTIR-8974): a repository in
+// a fleet account's org through that account's installation, one in the
+// provisioning org through `provisioningAuth()` exactly as before — so an invite
+// can never be sent against a different org than the repository was created in.
+// A fleet account whose token cannot be minted raises `OrgTargetAuthError`; it is
+// never retried against the provisioning org.
 //
 // ⚠️ NO NEW PERMISSION IS REQUIRED. Collaborator management is part of
 // `Administration: write`, which the provisioning credential (MOTIR-1779) already
@@ -128,6 +133,11 @@ async function errorDetail(res: Response): Promise<string> {
   }
 }
 
+/** The provisioning credential in the repository's own org. */
+async function authFor(target: CollaboratorTarget): Promise<{ token: string }> {
+  return resolveOrgAuth(await ownedOrgTargetFor(target.owner));
+}
+
 function path(target: CollaboratorTarget): string {
   return (
     `${GITHUB_API}/repos/${encodeURIComponent(target.owner)}/${encodeURIComponent(target.repo)}` +
@@ -149,7 +159,7 @@ export const repoCollaboratorClient = {
    * one — which is what makes a role change safe to re-apply.
    */
   async invite(target: CollaboratorInvite): Promise<CollaboratorInviteResult> {
-    const { token } = await provisioningAuth();
+    const { token } = await authFor(target);
     const res = await request(path(target), {
       method: 'PUT',
       token,
@@ -189,7 +199,7 @@ export const repoCollaboratorClient = {
    * accepted" — the caller keeps the state it already had.
    */
   async hasAccepted(target: CollaboratorTarget): Promise<boolean> {
-    const { token } = await provisioningAuth();
+    const { token } = await authFor(target);
     const res = await request(path(target), { method: 'GET', token });
     if (res.status === 204) return true;
     if (res.status === 404) return false;

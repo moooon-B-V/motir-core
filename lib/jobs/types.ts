@@ -668,6 +668,10 @@ export interface JobEventDataMap {
   /** The fleet debit monitor (Story MOTIR-6905 · MOTIR-7318): an alert per
    *  organisation whose running and debited disagree. Cross-tenant by design. */
   'system.fleet-debit-monitor': SystemScheduledData;
+  /** The fleet headroom pass (Story MOTIR-8953 · MOTIR-8969) — each fleet account,
+   *  GitHub org and fleet kind against 70% of its limits, one alert per (subject,
+   *  limit). Cross-tenant by design: the limits are Motir's, not a tenant's. */
+  'system.fleet-shard-headroom': SystemScheduledData;
   'system.billing-seat-sync': BillingSeatSyncData;
   /** A settled fleet container's usage-and-cost report to motir-ai (MOTIR-5286). */
   'system.platform-meter-report': PlatformMeterReportData;

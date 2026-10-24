@@ -12,8 +12,11 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { fleetRunnerVariableService } from '@/lib/services/fleetRunnerVariableService';
+import { fleetGithubOrgAssignmentService } from '@/lib/services/fleetGithubOrgAssignmentService';
+import type { GithubOrgTarget } from '@/lib/github/orgTarget';
 import { enqueueCodeGraphIndex } from '@/lib/github/indexEnqueue';
 import {
+  RepoHostOrgUnavailableError,
   RepoNameTakenOnHostError,
   RepoProvisioningError,
   repoProvisioningClient,
@@ -129,6 +132,14 @@ export interface EstablishSetResult {
  *  else is either settled or claimed by a concurrent run. */
 const UNRESOLVED_STATES: readonly ProjectRepoStateDto[] = ['proposed', 'failed'];
 
+/** Where this run creates repositories (MOTIR-8966). No `target` = the fallback
+ *  org, as before. `unavailableOrg` = the organisation is assigned an org no
+ *  account row names any more: every row fails rather than land elsewhere. */
+interface HostingPlan {
+  target?: GithubOrgTarget;
+  unavailableOrg?: string;
+}
+
 export const projectRepoProvisioningService = {
   /**
    * Establish every unresolved row of a project's repository set: create the
@@ -161,7 +172,20 @@ export const projectRepoProvisioningService = {
     // on Motir's fleet, and the fleet is paid-AI-plan only — so an org without a
     // plan gets no repository to run it for. An unreadable plan refuses too: a
     // guessed yes would hand a free fleet to whoever motir-ai cannot see.
-    await assertPaidAiPlan(ctx);
+    const organizationId = await assertPaidAiPlan(ctx);
+
+    // THE TENANT'S GITHUB ORG, BEFORE THE GROUP AND THE VARIABLE (MOTIR-8966 ·
+    // `docs/decisions/fleet-per-org-pool.md` AMENDMENT 1). An organisation's first
+    // hosted repository is where it is assigned a Motir-owned GitHub org; the
+    // group and the variable below are then made THERE, before the repository
+    // exists, for the reason each of them gives. Assigned only when this run will
+    // try to create something; otherwise the existing assignment is read.
+    const willAttempt = rows.some(
+      (row) =>
+        (options.rowId === undefined || row.id === options.rowId) &&
+        UNRESOLVED_STATES.includes(row.state),
+    );
+    const hosting = await planHosting(organizationId, willAttempt);
 
     // THE RUNNER GROUP FIRST, BEFORE ANY REPOSITORY EXISTS (MOTIR-1972 ·
     // `docs/decisions/ci-runner-fleet.md` §7.3).
@@ -177,7 +201,10 @@ export const projectRepoProvisioningService = {
     //
     // Quiet by contract — a group Motir could not create must not stop the project
     // from getting its repositories; the next sync retries.
-    await projectRunnerGroupService.syncQuietly({ projectId, workspaceId: ctx.workspaceId });
+    await projectRunnerGroupService.syncQuietly(
+      { projectId, workspaceId: ctx.workspaceId },
+      { hostedOrg: hosting.target },
+    );
 
     // AND THE RUNNER VARIABLE, FOR THE SAME REASON AND IN THE SAME WINDOW
     // (MOTIR-2015 · `docs/decisions/ci-runner-fleet.md` §N.1).
@@ -196,7 +223,7 @@ export const projectRepoProvisioningService = {
     // band. Quiet by the same contract as the group: a repository whose variable
     // could not be written is a working repository whose CI runs GitHub-hosted,
     // which is exactly what the `|| 'ubuntu-latest'` fallback is for.
-    await fleetRunnerVariableService.ensureQuietly();
+    await fleetRunnerVariableService.ensureQuietly(hosting.target);
 
     const results: EstablishRowResult[] = [];
     // SEQUENTIAL on purpose — see the module header.
@@ -220,14 +247,15 @@ export const projectRepoProvisioningService = {
         });
         continue;
       }
-      results.push(await establishRow(row, projectName, ctx));
+      results.push(await establishRow(row, projectName, hosting, ctx));
     }
 
     return { projectId, rows: results };
   },
 };
 
-async function assertPaidAiPlan(ctx: ServiceContext): Promise<void> {
+/** The workspace's organisation id, once its paid AI plan is confirmed. */
+async function assertPaidAiPlan(ctx: ServiceContext): Promise<string> {
   const workspace = await withWorkspaceContext(
     { userId: ctx.userId, workspaceId: ctx.workspaceId },
     (tx) => workspaceRepository.findByIdInTx(ctx.workspaceId, tx),
@@ -237,6 +265,25 @@ async function assertPaidAiPlan(ctx: ServiceContext): Promise<void> {
     : ('unknown' as const);
   if (answer === 'unknown') throw new AiPlanUnknownError(PLAN_UNKNOWN_ESTABLISH_MESSAGE);
   if (!answer) throw new AiPlanRequiredError(AI_PLAN_REQUIRED_ESTABLISH_MESSAGE);
+  // `answer` is true only for a workspace that was read.
+  return workspace!.organizationId;
+}
+
+/** Where this run's repositories go — see {@link HostingPlan}. */
+async function planHosting(organizationId: string, willAttempt: boolean): Promise<HostingPlan> {
+  if (!willAttempt) {
+    const current = await fleetGithubOrgAssignmentService.readHostedGithubOrg(organizationId);
+    if (!current) return {};
+    return current.target ? { target: current.target } : { unavailableOrg: current.githubOrg };
+  }
+  const assignment = await fleetGithubOrgAssignmentService.ensureHostedGithubOrg(organizationId);
+  if (assignment.outcome === 'assigned') return { target: assignment.target };
+  if (assignment.outcome === 'already_assigned') {
+    return assignment.target
+      ? { target: assignment.target }
+      : { unavailableOrg: assignment.githubOrg };
+  }
+  return {};
 }
 
 /** The project's display name — it goes into the repository description, which
@@ -258,6 +305,7 @@ async function readProjectName(projectId: string, ctx: ServiceContext): Promise<
 async function establishRow(
   row: ProjectRepoDto,
   projectName: string,
+  hosting: HostingPlan,
   ctx: ServiceContext,
 ): Promise<EstablishRowResult> {
   // CLAIM the row first (`proposed | failed → creating`). This is the concurrency
@@ -286,12 +334,17 @@ async function establishRow(
 
   let provisioned: ProvisionedRepo;
   try {
-    provisioned = await repoProvisioningClient.provisionRepository({
-      name: row.name,
-      role: row.role,
-      seedSource: row.seedSource,
-      projectName,
-    });
+    // Never the fallback org for an organisation assigned another (MOTIR-8966).
+    if (hosting.unavailableOrg) throw new RepoHostOrgUnavailableError(hosting.unavailableOrg, null);
+    provisioned = await repoProvisioningClient.provisionRepository(
+      {
+        name: row.name,
+        role: row.role,
+        seedSource: row.seedSource,
+        projectName,
+      },
+      hosting.target,
+    );
   } catch (err) {
     return failRow(row, err, ctx);
   }

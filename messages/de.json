@@ -10029,6 +10029,13 @@
             "org_ci": {
               "enable": "Flotten-CI eingeschaltet",
               "disable": "Flotten-CI ausgeschaltet"
+            },
+            "shard": {
+              "add": "Flottenkonto hinzugefügt",
+              "limits": "Limits eines Flottenkontos aktualisiert",
+              "ceiling": "Obergrenze eines Flottenkontos geändert",
+              "disable": "Flottenkonto deaktiviert",
+              "enable": "Flottenkonto wieder aktiviert"
             }
           },
           "idea": {

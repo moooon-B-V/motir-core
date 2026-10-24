@@ -412,7 +412,11 @@ export interface ContainerOrchestrator {
   provision(spec: ContainerSpec): Promise<ContainerHandle>;
 
   /** Destroy it and RETURN what it cost. IDEMPOTENT: a second call on a destroyed
-   *  container returns the same usage, never throws. Idempotence is load-bearing
+   *  container resolves without throwing, returns a row for the same `handleId`,
+   *  and leaves nothing live. It does NOT promise the identical row — Fly builds
+   *  a fresh one; "exactly one row per handle" is the meter's to keep
+   *  (`ciFleetCostMeterService.recordContainerUsage` settles a second write as a
+   *  duplicate). Idempotence is load-bearing
    *  — the `finally` path and the reaper can both reach the same container, and a
    *  throw from the second one would turn a tidy-up into an incident. */
   teardown(

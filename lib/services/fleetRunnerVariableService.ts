@@ -4,6 +4,7 @@ import {
   actionsVariableClient,
   type EnsureOrgVariableOutcome,
 } from '@/lib/github/actionsVariables';
+import type { GithubOrgTarget } from '@/lib/github/orgTarget';
 
 // THE WRITER FOR `vars.MOTIR_RUNNER` (Story MOTIR-1916 · MOTIR-2015) — the half of
 // the runner-selection seam that had a reader and nothing else.
@@ -58,7 +59,8 @@ export type FleetRunnerVariableOutcome =
 export const fleetRunnerVariableService = {
   /**
    * Make Motir's provisioning org carry `MOTIR_RUNNER = <the fleet label>`, so
-   * every repository Motir hosts selects the fleet.
+   * every repository Motir hosts selects the fleet. With a `target` (MOTIR-8966)
+   * the variable is ensured in the tenant's assigned GitHub org instead.
    *
    * ORG-WIDE, SO IT IS NOT PER-REPOSITORY WORK. It is nonetheless called from the
    * establish flow rather than from a one-time bootstrap, and that is deliberate:
@@ -69,12 +71,13 @@ export const fleetRunnerVariableService = {
    * is self-healing — a variable deleted or edited by hand comes back on the next
    * establishment instead of at the next incident.
    */
-  async ensureForFleet(): Promise<FleetRunnerVariableOutcome> {
+  async ensureForFleet(target?: GithubOrgTarget): Promise<FleetRunnerVariableOutcome> {
     if (!isRepoProvisioningConfigured()) return { outcome: 'not_configured' };
     try {
       const result = await actionsVariableClient.ensureOrgVariable(
         MOTIR_RUNNER_VARIABLE,
         MOTIR_RUNNER_LABEL,
+        target,
       );
       return { outcome: 'ensured', result };
     } catch (err) {
@@ -85,7 +88,7 @@ export const fleetRunnerVariableService = {
       console.error(
         '[fleetRunnerVariableService] could not ensure the fleet runner variable — ' +
           'repositories still establish and their CI runs GitHub-hosted',
-        { variable: MOTIR_RUNNER_VARIABLE, detail },
+        { variable: MOTIR_RUNNER_VARIABLE, org: target?.org ?? null, detail },
       );
       return { outcome: 'ensure_failed', detail };
     }
@@ -101,9 +104,9 @@ export const fleetRunnerVariableService = {
    * recreated, so the contract is enforced here rather than re-remembered at each
    * call site — the same shape as `projectRunnerGroupService.syncQuietly`.
    */
-  async ensureQuietly(): Promise<void> {
+  async ensureQuietly(target?: GithubOrgTarget): Promise<void> {
     try {
-      await this.ensureForFleet();
+      await this.ensureForFleet(target);
     } catch (err) {
       console.error('[fleetRunnerVariableService] could not ensure the fleet runner variable', {
         err,
