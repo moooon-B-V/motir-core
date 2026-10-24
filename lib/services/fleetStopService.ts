@@ -9,13 +9,16 @@ import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
 import { actionsRunsClient, type ActionsRepoRef } from '@/lib/github/actionsRuns';
 import { runnerJitConfigClient } from '@/lib/github/runnerJitConfig';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
+import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
-import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
+import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import {
-  getOrchestrator,
-  isOrchestratorConfigured,
-  recordContainerUsage,
-} from '@/lib/orchestrator';
+  githubRunnerCallLedgerService as runnerCallLedger,
+  runnerCallReachedGithub,
+} from '@/lib/services/githubRunnerCallLedgerService';
+import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
+import { isOrchestratorConfigured, recordContainerUsage } from '@/lib/orchestrator';
 import {
   FLEET_CONTAINER_SIZE,
   type ContainerHandle,
@@ -110,20 +113,26 @@ export const fleetStopService = {
     );
     if (inFlight.length === 0) return result;
 
-    let orchestrator: ContainerOrchestrator | null = null;
-    if (isOrchestratorConfigured()) {
+    // Each container is torn down through the account it was booted in
+    // (MOTIR-8964); a legacy intent through the process-wide fleet.
+    const orchestratorFor = async (
+      intent: CiRunnerProvisioningIntent,
+    ): Promise<ContainerOrchestrator | null> => {
+      if (intent.fleetShardId === null && !isOrchestratorConfigured()) return null;
       try {
-        orchestrator = getOrchestrator();
+        return await fleetShardOrchestratorService.forIntent(intent);
       } catch (err) {
-        console.error('[fleetStopService] no orchestrator — containers left for the reaper', {
+        console.error('[fleetStopService] no orchestrator — container left for the reaper', {
           organizationId,
+          intentId: intent.id,
           detail: detailOf(err),
         });
+        return null;
       }
-    }
+    };
 
     for (const intent of inFlight) {
-      const stopped = await stopIntent(intent, reason, orchestrator, now);
+      const stopped = await stopIntent(intent, reason, await orchestratorFor(intent), now);
       if (stopped === 'stopped') result.containersStopped += 1;
       if (stopped === 'failed') result.failures += 1;
     }
@@ -139,9 +148,10 @@ export const fleetStopService = {
    * repository handed off out of Motir's org is the user's.
    */
   async listHostedRepos(organizationId: string): Promise<ActionsRepoRef[]> {
-    const owner = provisioningOrgLogin();
-    if (!owner) return [];
-    const workspaceIds = await ciActionsGateService.listOwnedWorkspaceIds(organizationId, owner);
+    if (!provisioningOrgLogin()) return [];
+    // Every org Motir owns — a fleet account's too (MOTIR-8974).
+    const owners = await motirOwnedOrgLogins();
+    const workspaceIds = await ciActionsGateService.listOwnedWorkspaceIds(organizationId, owners);
     const repos: ActionsRepoRef[] = [];
     for (const workspaceId of workspaceIds) {
       const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
@@ -149,7 +159,7 @@ export const fleetStopService = {
       );
       for (const row of rows) {
         const repo = row.githubRepo;
-        if (!repo || repo.owner.trim().toLowerCase() !== owner.trim().toLowerCase()) continue;
+        if (!repo || !isMotirHostedOwner(repo.owner, owners)) continue;
         repos.push({ installationId: repo.installationId, owner: repo.owner, repo: repo.name });
       }
     }
@@ -212,7 +222,19 @@ async function stopIntent(
     try {
       // In the org that owns the job's repository (MOTIR-8711).
       await runnerJitConfigClient.deleteRunner(intent.githubRunnerId, fleetRunnerTargetFor(intent));
+      await runnerCallLedger.recordForTargetQuietly(
+        fleetRunnerTargetFor(intent),
+        'delete',
+        intent.fleetShardId,
+      );
     } catch (err) {
+      if (runnerCallReachedGithub(err)) {
+        await runnerCallLedger.recordForTargetQuietly(
+          fleetRunnerTargetFor(intent),
+          'delete',
+          intent.fleetShardId,
+        );
+      }
       console.error('[fleetStopService] could not de-register a runner', {
         intentId: intent.id,
         runnerId: intent.githubRunnerId,

@@ -70,11 +70,15 @@ export const SUB_HOURLY_CADENCE = '*/5 * * * *';
 
 /**
  * Sub-hourly jobs allowed a cadence other than `SUB_HOURLY_CADENCE`, each with a
- * one-line reason. Empty: every sub-hourly job today runs every 5 minutes. A job
+ * one-line reason. One today: the fleet headroom pass. A job
  * joins only when its own decision derives a different cadence — never to make a
  * test pass.
  */
-export const SUB_HOURLY_CADENCE_EXCEPTIONS: Readonly<Record<string, string>> = {};
+export const SUB_HOURLY_CADENCE_EXCEPTIONS: Readonly<Record<string, string>> = {
+  // MOTIR-8969 · `fleet-per-org-pool.md` AMENDMENT 1 §A1.10.
+  'system.fleet-shard-headroom':
+    'a 5-minute registration window must be read inside its own window',
+};
 
 /**
  * True when `cron` can fire more than once in some hour — i.e. its MINUTE field

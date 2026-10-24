@@ -9,6 +9,12 @@ import {
 import { RepoDeletionError, repoDeletionClient } from '@/lib/github/repoDeletion';
 import { AppUninstallError, appInstallationsClient } from '@/lib/github/appInstallations';
 import { revokeToken } from '@/lib/gitlab/gitlabOAuth';
+import {
+  motirOwnedOrgLogins,
+  ownedOrgTargetFor,
+  resetOwnedOrgCache,
+} from '@/lib/ciMetering/ownedOrgs';
+import { fleetShardService } from '@/lib/services/fleetShardService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -47,7 +53,8 @@ function stubDeps(overrides: Partial<GitOffboardingDeps> = {}): {
       calls.revoked.push(token);
       return true;
     },
-    hostOwner: () => HOST,
+    hostOwners: async () => [HOST],
+    ownedOrgTarget: async () => undefined,
     ...overrides,
   };
   return { deps, calls };
@@ -224,7 +231,7 @@ describe('offboardGit', () => {
     const org = await makeOrg('selfhost');
     const inst = await makeInstallation(org);
     await makeRepo(org, inst.id, HOST, 'looks-hosted');
-    const { deps, calls } = stubDeps({ hostOwner: () => null });
+    const { deps, calls } = stubDeps({ hostOwners: async () => [] });
     const counts = await organizationGitOffboardingService.offboardGit(org.organizationId, deps);
     expect(calls.deleted).toEqual([]);
     expect(counts.customerRepoRowsRemoved).toBe(1);
@@ -383,5 +390,59 @@ describe('the host clients', () => {
     expect(await revokeToken('tok')).toBe(false);
     vi.stubEnv('GITLAB_APP_CLIENT_ID', '');
     expect(await revokeToken('tok')).toBe(false);
+  });
+});
+
+describe("offboardGit — hosted repositories in a fleet account's org (MOTIR-8974)", () => {
+  const SHARD_ORG = 'motir-shard-1';
+  const SHARD_INSTALLATION = '77001';
+
+  beforeEach(async () => {
+    vi.stubEnv('GITHUB_FALLBACK_ORG', HOST);
+    await adminDb.fleetShard.deleteMany({});
+    resetOwnedOrgCache();
+    await fleetShardService.createShard({
+      name: 'ci-runner-shard-1',
+      fleetKind: 'ci_runner',
+      provider: 'fly',
+      state: 'active',
+      githubOrg: SHARD_ORG,
+      githubInstallationId: SHARD_INSTALLATION,
+      flyOrg: 'motir',
+      flyApp: 'motir-ci-shard-1',
+      flyRegion: 'iad',
+      credentialRef: 'FLEET_SHARD_TEST_TOKEN',
+      limits: { machineLimit: 50 },
+    });
+  });
+
+  afterEach(async () => {
+    await adminDb.fleetShard.deleteMany({});
+    resetOwnedOrgCache();
+  });
+
+  it("deletes a shard-org repository through the ACCOUNT's installation, and never the org's own", async () => {
+    const org = await makeOrg('gone-shard');
+    const mirrorInstallation = await makeInstallation({ organizationId: null, workspaceId: null });
+    const own = await makeInstallation(org);
+    await makeRepo(org, mirrorInstallation.id, SHARD_ORG, 'site-a');
+    await makeRepo(org, mirrorInstallation.id, HOST, 'site-b');
+    await makeRepo(org, own.id, 'acme', 'product');
+    // The real set and target lookup; only the hosts are stubbed.
+    const { deps, calls } = stubDeps({
+      hostOwners: motirOwnedOrgLogins,
+      ownedOrgTarget: ownedOrgTargetFor,
+    });
+
+    const counts = await organizationGitOffboardingService.offboardGit(org.organizationId, deps);
+
+    expect(counts).toMatchObject({ hostedReposDeleted: 2, customerRepoRowsRemoved: 1 });
+    expect(calls.deleted).toEqual(
+      expect.arrayContaining([
+        { installationId: SHARD_INSTALLATION, owner: SHARD_ORG, repo: 'site-a' },
+        { installationId: mirrorInstallation.installationId, owner: HOST, repo: 'site-b' },
+      ]),
+    );
+    expect(calls.deleted.some((call) => call.owner === 'acme')).toBe(false);
   });
 });

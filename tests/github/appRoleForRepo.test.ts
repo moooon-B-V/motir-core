@@ -53,8 +53,10 @@ describe('githubAppRoleForRepo', () => {
       .filter((line) => !line.trimStart().startsWith('//') && !line.trimStart().startsWith('*'))
       .join('\n');
 
-    expect(code).toMatch(/import \{ isMotirHostedOwner \} from '@\/lib\/git\/hostOwnership'/);
-    expect(code).toMatch(/isMotirHostedOwner\(repo\.owner, hostOwner\)/);
+    expect(code).toMatch(
+      /import \{ isMotirHostedOwner, type HostOwners \} from '@\/lib\/git\/hostOwnership'/,
+    );
+    expect(code).toMatch(/isMotirHostedOwner\(repo\.owner, hostOwners\)/);
     expect(code).not.toMatch(/toLowerCase|toUpperCase|localeCompare/);
     expect(code).not.toMatch(/===|!==/);
     expect(code).not.toMatch(/process\.env|provisioningOrgLogin/);

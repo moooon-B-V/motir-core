@@ -91,11 +91,11 @@ afterAll(async () => {
 });
 
 describe('motirOwnedOrgLogins', () => {
-  it('is the provisioning org as a set of one, and empty when it is unset', () => {
+  it('is the provisioning org as a set of one, and empty when it is unset', async () => {
     vi.stubEnv('GITHUB_FALLBACK_ORG', 'Motir-Projects');
-    expect(motirOwnedOrgLogins()).toEqual(['motir-projects']);
+    expect(await motirOwnedOrgLogins()).toEqual(['motir-projects']);
     vi.stubEnv('GITHUB_FALLBACK_ORG', '');
-    expect(motirOwnedOrgLogins()).toEqual([]);
+    expect(await motirOwnedOrgLogins()).toEqual([]);
   });
 });
 

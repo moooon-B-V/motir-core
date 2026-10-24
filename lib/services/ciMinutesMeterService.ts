@@ -123,7 +123,7 @@ export const ciMinutesMeterService = {
     // could drift from it, and reading it from the RUN rather than the mirror is
     // what makes the transfer edge (§5.5, MOTIR-711) need no special handling:
     // the owner changes at the transfer, so the next run simply falls outside.
-    if (!isMotirOwnedRepo(event.repoOwner)) {
+    if (!(await isMotirOwnedRepo(event.repoOwner))) {
       return { outcome: 'not_metered', reason: 'foreign_owner' };
     }
 
