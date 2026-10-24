@@ -216,7 +216,7 @@ export interface PlanChangeRailProps {
   /**
    * THE WIDGET'S SEEDED SEND JOINS THE THREAD THAT IS OPEN (MOTIR-7050). A pick's
    * turn starts a conversation, so it is sent only into an EMPTY one; the report
-   * widget's debug turn lands on the person's project conversation whatever it
+   * widget's seeded turn lands on the person's project conversation whatever it
    * already holds, so it is sent as soon as that thread is ready — idle, or
    * holding an undecided proposal — with no user-turn condition.
    */
@@ -606,7 +606,7 @@ export function PlanChangeRail({
   // session this gate already seeded. A refused send puts the turn back in the
   // composer through the failed-send restore above.
   //
-  // The WIDGET'S debug turn (MOTIR-7050) rides the same seam with two changes:
+  // The WIDGET'S seeded turn (MOTIR-7050 · MOTIR-9325) is an ordinary ask and rides the same seam with two changes:
   // it joins whatever the open thread holds (`autoSendIntoThread`), and it is
   // sent through `onAutoSend`, which carries its triage bug as the ask's anchor.
   // Its claim is the triage bug's key (`debugAutoSendKey`), so the three layers
@@ -816,7 +816,6 @@ export function PlanChangeRail({
   // item header and nothing in the composer's tray — the turn is about the bug,
   // the conversation is still the project's.
   const turnAnchors = state.turnAnchors ?? {};
-  const debugLandings = state.debugLandings ?? {};
 
   // THE RAIL FOLLOWS THE NEWEST ACT — while the reader has not scrolled away
   // (MOTIR-4069; `design/ai-chat/plan-change-run-live.mock.html` sheet 5).
@@ -1107,7 +1106,7 @@ export function PlanChangeRail({
                 turnTargetKeys.length > 0 ? turnTargetKeys : anchorKeysOf(turn, turnAnchors)
               }
               workItemRefs={state.session?.workItemRefs ?? {}}
-              debugOutcome={debugOutcomeFor(turn, turns, debugLandings, turnAnchors)}
+              debugOutcome={debugOutcomeFor(turn, turns, turnAnchors)}
               disposition={dispositionMarkerFor(turns, i)}
               isPending={question?.id === turn.id}
               // Keyed on the ASSISTANT turn that carries it — `correction.turnId`
@@ -1126,7 +1125,8 @@ export function PlanChangeRail({
                   : null
               }
               planOffer={
-                turn.role === 'assistant' && turn.offer
+                turn.role === 'assistant' &&
+                (turn.offer?.kind === 'plan' || turn.offer?.kind === 'log_bug')
                   ? {
                       answerable: offerAnswerable(turns, i, {
                         canContinue: !ended && !state.readOnly,
@@ -1856,24 +1856,22 @@ function anchorKeysOf(
 }
 
 /**
- * What a DEBUG turn landed, for the assistant turn that carries its diagnosis
- * (MOTIR-7050) — or null for every other turn.
+ * What a confirmed log-a-bug offer landed, for the answer turn that carries it
+ * (MOTIR-7050 · MOTIR-9323) — or null for every other turn.
  *
- * The landing is read off the reply turn itself (`debugLanding`, persisted with
- * it — MOTIR-7064), so a reloaded thread draws the same line; the settle's
- * in-memory landing, joined by the `debug_bug` job id the reply carries, is only
- * the fallback. The anchor is read off the USER turn the reply came out of
- * (joined by the same job id, `originatingUserTurn`), because the
+ * The landing is read off the answer turn itself (`debugLanding`, recorded with
+ * the confirm — MOTIR-7064), so a reloaded thread draws the same line. The
+ * anchor is read off the USER turn the answer came out of (joined by the job id,
+ * `originatingUserTurn`), because the
  * enriched-anchor copy names that triage bug as the card left as it is.
  */
 function debugOutcomeFor(
   turn: PlanChangeTurnDto,
   turns: readonly PlanChangeTurnDto[],
-  landings: Readonly<Record<string, DebugLandingDto>>,
   anchors: Readonly<Record<string, string>>,
 ): DebugOutcome | null {
   if (turn.role !== 'assistant' || !turn.jobId) return null;
-  const landing = turn.debugLanding ?? landings[turn.jobId];
+  const landing = turn.debugLanding;
   if (!landing) return null;
   const origin = originatingUserTurn(turns, turn);
   return { landing, anchorKey: origin ? anchorOf(origin, anchors) : null };
@@ -2299,7 +2297,7 @@ interface DebugOutcome {
  * One sentence per A1.4 row, chosen from the landing — never from the prose:
  *
  *  · `diagnose` onto the anchored bug → `wroteAnchor` ("It stays in Triage");
- *  · `diagnose` with no anchor (the orb) → `filed`, the bug it filed;
+ *  · `diagnose` onto any other card (a new bug) → `filed`, the bug it filed;
  *  · `enrich_existing` → `enrichedAnchor` / `enriched`, the card that already
  *    covers it — and, on the widget path, the anchor named as left as it is, in
  *    plain text, because the turn did not touch it;
@@ -2335,9 +2333,11 @@ function DebugOutcomeLine({
         ? anchorKey && anchorKey.toUpperCase() !== key.toUpperCase()
           ? 'debug.enrichedAnchor'
           : 'debug.enriched'
-        : landing.createdInTriage || !anchorKey
-          ? 'debug.filed'
-          : 'debug.wroteAnchor';
+        : // Onto the anchor only when the card written IS the anchor: a confirmed
+          // log-a-bug offer can file a new bug from an anchored turn (MOTIR-9323).
+          !landing.createdInTriage && anchorKey && anchorKey.toUpperCase() === key.toUpperCase()
+          ? 'debug.wroteAnchor'
+          : 'debug.filed';
     body = tc.rich(messageKey, { key, anchorKey: anchorKey ?? '', chip });
   }
 

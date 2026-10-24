@@ -1,6 +1,10 @@
+import type { Prisma } from '@/generated/prisma/client';
+import { userRepository } from '@/lib/repositories/userRepository';
+
 // The Motir SYSTEM PRINCIPAL — the service identity the AI self-learning loop
 // writes AS when it files a `kind: bug` into the Motir meta project (MOTIR-1451,
-// the foundation MOTIR-1450's route consumes).
+// the foundation MOTIR-1450's route consumes), and, since MOTIR-9329, the ONE
+// account everything Motir AI writes into any workspace is written by.
 //
 // It is a real `User` row so it can be a genuine workspace member (satisfying
 // `assertReporterMember` + the 6.4 project gate + the work_item reporter FK) —
@@ -30,4 +34,37 @@ export const MOTIR_SYSTEM_USER_NAME = 'Motir';
  */
 export function metaProjectKey(): string {
   return process.env['MOTIR_META_PROJECT_KEY'] ?? 'MOTIR';
+}
+
+// ⚠️ THE ACCOUNT ENTERS ANY WORKSPACE BY IDENTITY, NOT BY MEMBERSHIP (MOTIR-9329).
+// What Motir AI writes is Motir's own, recorded under its own name — never the
+// person's — so the account must reach a customer workspace it is no member of.
+// It is given NO role row anywhere: the gates that decide "may this actor act here"
+// (`composeOwnerReach`, which the project gate composes, and `assertReporterMember`)
+// ask {@link isMotirSystemUser} on their NON-member branch and admit it as a
+// Manager. With no membership it is in no member list, seat count, assignee picker
+// or mention suggestion.
+//
+// The question is asked of the ACTOR'S OWN resolved user id (a session's, or the
+// service bearer's system principal), never of anything a caller sends, and the
+// answer is the stored row's email — the reserved, non-routable
+// `MOTIR_SYSTEM_USER_EMAIL`, unique on `user` — so no other user gains anything.
+// A positive answer is remembered (user ids are never reused); a negative one is
+// not, so an environment that provisions the account after the first ask still
+// admits it.
+const knownSystemUserIds = new Set<string>();
+
+/** Whether `userId` is the Motir system account. One primary-key read on a
+ *  non-member branch; free after the first positive answer. A caller holding a
+ *  transaction passes it: a second pooled connection taken while one is held
+ *  starves the pool under parallel reads (every non-member page read asks). */
+export async function isMotirSystemUser(
+  userId: string,
+  tx?: Prisma.TransactionClient,
+): Promise<boolean> {
+  if (knownSystemUserIds.has(userId)) return true;
+  const user = await userRepository.findById(userId, tx);
+  if (user?.email !== MOTIR_SYSTEM_USER_EMAIL) return false;
+  knownSystemUserIds.add(userId);
+  return true;
 }

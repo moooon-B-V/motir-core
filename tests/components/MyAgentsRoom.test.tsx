@@ -317,7 +317,7 @@ describe('a paid AI plan, and storage in the words (MOTIR-6918, the MOTIR-6916 d
     const alert = await refuseCreate(402, 'ai_plan_required');
     expect(within(alert).getByText('Needs an AI plan').className).toContain('font-semibold');
     expect(alert.textContent).toContain(
-      'Agents need a paid AI plan (Standard, Pro, Max or Enterprise). Choose an AI plan to create or wake one.',
+      'Agents need a paid AI plan. Choose an AI plan to create or wake one.',
     );
     expect(
       within(alert).getByRole('link', { name: 'Choose an AI plan' }).getAttribute('href'),
@@ -454,7 +454,7 @@ describe('the plan has ended (MOTIR-6921, the MOTIR-6916 delta panel E)', () => 
     const wake = within(menu).getByRole('menuitem', { name: 'Wake' });
     expect(wake.getAttribute('aria-disabled')).toBe('true');
     expect(menu.textContent).toContain(
-      'Agents need a paid AI plan (Standard, Pro, Max or Enterprise). Choose an AI plan to create or wake one.',
+      'Agents need a paid AI plan. Choose an AI plan to create or wake one.',
     );
     expect(within(menu).getByRole('link', { name: 'Choose an AI plan' })).toBeTruthy();
     expect(

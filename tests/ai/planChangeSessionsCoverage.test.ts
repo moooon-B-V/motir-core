@@ -11,6 +11,8 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { adminDb } from '../helpers/adminDb';
 import { addressOf, openTestSession } from '../helpers/planSession';
 import { truncateAuthTables } from '../helpers/db';
+import { parseAuthoredBug } from '@/lib/ai/authoredBug';
+import { BUG_REF, bugDraft } from '../fixtures/logBugOfferFixtures';
 
 // The story-level COVERAGE GATE's residual for the conversation's persistence
 // layer (MOTIR-1732). MOTIR-1728 shipped its own comprehensive suite
@@ -60,7 +62,7 @@ async function openCurrent(pctx: ProjectContext, scope?: PlanChangeScope) {
   current = addressOf(session);
   return session;
 }
-const { PlanChangeTurnConflictError, PlanChangeSessionNotFoundError } =
+const { PlanChangeTurnConflictError, PlanChangeSessionNotFoundError, PlanChangeTurnNotFoundError } =
   await import('@/lib/planChange/errors');
 
 let fx: WorkItemFixture;
@@ -360,20 +362,42 @@ describe('planChangeMappers — no Prisma row crosses the boundary', () => {
   });
 });
 
-describe('planChangeSessionsService — the debug-landing claim (MOTIR-7049)', () => {
-  // The landing's one-card guarantee rests on this compare-and-set. The landing
-  // suite drives the CLAIM; RELEASE runs only when a write is refused inside its
-  // own transaction, which nothing there provokes — so its contract is pinned
-  // here directly: a released claim can be taken again, a held one cannot.
-  it('claims once, refuses a second claim, and can be claimed again only after a release', async () => {
+describe('planChangeSessionsService — the landing claim (MOTIR-7049 · MOTIR-9323)', () => {
+  // The landing's one-write guarantee rests on this compare-and-set, taken on the
+  // `log_bug` offer's own answer turn. The landing suite drives the CLAIM; a RELEASE is
+  // pinned here directly: a released claim can be taken again, a held one cannot.
+  async function offerTurn() {
     await openCurrent(ctx(fx));
-    const appended = await planChangeSessionsService.appendTurn(
-      'saving a comment drops the mention',
+    await planChangeSessionsService.appendTurn('mentions vanish', ctx(fx), current, {
+      intent: 'ask',
+    });
+    const answered = await planChangeSessionsService.appendAnswerTurn(
+      {
+        jobId: 'job-ask-1',
+        body: 'Saving strips the mention.',
+        citations: [],
+        answerOffer: {
+          kind: 'log_bug',
+          requestMd: 'Saving drops the mention',
+          targetKey: null,
+          bug: {
+            title: 'Saving drops the mention',
+            acceptanceCriteria: ['A saved comment keeps its mention'],
+            draft: parseAuthoredBug(bugDraft()),
+            target: { kind: 'new', key: null, title: null },
+            targetUpdatedAt: null,
+            contextRefs: [BUG_REF],
+          },
+        },
+      },
       ctx(fx),
       current,
-      { intent: 'debug' },
     );
-    const turn = appended.turns.at(-1)!;
+    return answered.turns.at(-1)!;
+  }
+
+  it('claims once, refuses a second claim, and can be claimed again only after a release', async () => {
+    const turn = await offerTurn();
 
     expect(await planChangeSessionsService.claimDebugLanding(turn.id, ctx(fx), current)).toBe(true);
     expect(await planChangeSessionsService.claimDebugLanding(turn.id, ctx(fx), current)).toBe(
@@ -387,7 +411,7 @@ describe('planChangeSessionsService — the debug-landing claim (MOTIR-7049)', (
     expect(await planChangeSessionsService.claimDebugLanding(turn.id, ctx(fx), current)).toBe(true);
   });
 
-  it('never claims a turn that did not run as debug', async () => {
+  it('never claims a turn that holds no log_bug offer', async () => {
     await openCurrent(ctx(fx));
     const appended = await planChangeSessionsService.appendTurn(
       'what is left in the sprint?',
@@ -397,10 +421,46 @@ describe('planChangeSessionsService — the debug-landing claim (MOTIR-7049)', (
     );
     const turn = appended.turns.at(-1)!;
 
-    expect(await planChangeSessionsService.claimDebugLanding(turn.id, ctx(fx), current)).toBe(
-      false,
-    );
+    await expect(
+      planChangeSessionsService.claimDebugLanding(turn.id, ctx(fx), current),
+    ).rejects.toBeInstanceOf(PlanChangeTurnNotFoundError);
     const row = await adminDb.planChangeTurn.findUnique({ where: { id: turn.id } });
     expect(row?.debugLandingClaimedAt).toBeNull();
+  });
+
+  it('refuses an offer a newer answer replaced', async () => {
+    const turn = await offerTurn();
+    await planChangeSessionsService.appendAnswerTurn(
+      { jobId: 'job-ask-2', body: 'Something else.', citations: [] },
+      ctx(fx),
+      current,
+    );
+    await expect(
+      planChangeSessionsService.claimDebugLanding(turn.id, ctx(fx), current),
+    ).rejects.toMatchObject({ reason: 'offer_not_open' });
+  });
+
+  it('stamps the landing and the confirmation together, and refuses an unclaimed stamp', async () => {
+    const turn = await offerTurn();
+    const landing = {
+      outcome: 'diagnose' as const,
+      workItemKey: 'PROD-1',
+      title: 'Saving drops the mention',
+      createdInTriage: false,
+    };
+    await expect(
+      planChangeSessionsService.recordDebugLanding(turn.id, landing, ctx(fx), current),
+    ).rejects.toBeInstanceOf(PlanChangeTurnNotFoundError);
+
+    await planChangeSessionsService.claimDebugLanding(turn.id, ctx(fx), current);
+    const session = await planChangeSessionsService.recordDebugLanding(
+      turn.id,
+      landing,
+      ctx(fx),
+      current,
+    );
+    const stamped = session.turns.find((t) => t.id === turn.id)!;
+    expect(stamped.debugLanding).toEqual(landing);
+    expect(stamped.offer?.state).toBe('confirmed');
   });
 });

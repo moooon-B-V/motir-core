@@ -1030,46 +1030,6 @@
       "renew": "Odnowienie planu AI przed {date} anuluje usunięcie. Do tego czasu nie można tworzyć ani wybudzać Twoich agentów, a za ich przestrzeń dyskową nadal naliczane są codzienne opłaty.",
       "openBilling": "Odnów plan AI",
       "footer": "Otrzymujesz tę wiadomość, ponieważ jesteś właścicielem agentów w tej organizacji."
-    },
-    "enterpriseRequestReceived": {
-      "subject": "Zapytanie o Enterprise od {organization}",
-      "preview": "{requester} pyta o Enterprise dla {organization}",
-      "greeting": "Cześć,",
-      "lede": "{requester} ({email}) pyta o plan Enterprise dla {organization}.",
-      "needsHeading": "Co nam przekazano",
-      "cardsPerDay": "Elementy robocze dziennie: około {count}",
-      "parallelAgents": "Agenci równolegle: {count}",
-      "agentPath": "Którzy agenci: {value}",
-      "autonomy": "Samodzielna praca: {value}",
-      "startWhen": "Kiedy chcą zacząć: {value}",
-      "teamSize": "Wielkość zespołu: {value}",
-      "noNeeds": "Wszystkie pytania opcjonalne zostały bez odpowiedzi.",
-      "contact": "Kontakt: {contact}",
-      "noteHeading": "Ich wiadomość",
-      "openRequest": "Otwórz zapytanie",
-      "footer": "Otrzymujesz tę wiadomość, ponieważ należysz do personelu platformy Motir.",
-      "agentPathValue": {
-        "hosted": "Hostowani agenci Motir",
-        "own": "Własni agenci",
-        "both": "Jedno i drugie"
-      },
-      "autonomyValue": {
-        "autonomous_lead": "Samodzielne prowadzenie projektu przez całą dobę",
-        "volume_only": "Duża liczba uruchomień, które startują sami",
-        "unsure": "Jeszcze nie wiedzą"
-      },
-      "startWhenValue": {
-        "now": "Teraz",
-        "within_month": "W ciągu miesiąca",
-        "within_quarter": "W ciągu kwartału",
-        "exploring": "Na razie się rozglądają"
-      },
-      "teamSizeValue": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      }
     }
   },
   "auth": {
@@ -1382,7 +1342,7 @@
         },
         "debug": {
           "title": "Debuguj z Motir AI",
-          "description": "Prześledź błąd do jego prawdopodobnej przyczyny i dodaj go do Selekcji",
+          "description": "Prześledź błąd do jego prawdopodobnej przyczyny, a potem zapisz go, jeśli się zgadzasz",
           "prefill": "Coś nie działa. Co się dzieje: \nCo powinno się dziać: "
         }
       }
@@ -5907,7 +5867,7 @@
       "error": "Nie udało się wysłać raportu. Spróbuj ponownie.",
       "debugOffer": {
         "action": "Debuguj z Motir AI",
-        "hint": "<b>Debuguj z Motir AI</b> rozpoczyna debugowanie od razu po naciśnięciu i zużywa kredyty Motir AI. Motir AI czyta kod, wskazuje prawdopodobną przyczynę i sprawdza, czy jakiś element roboczy już obejmuje ten błąd."
+        "hint": "<b>Debuguj z Motir AI</b> od razu po naciśnięciu wysyła Twój opis do Motir AI i zużywa kredyty Motir AI. Motir AI czyta kod, wskazuje prawdopodobną przyczynę i proponuje dodanie diagnozy do tego błędu. Nic nie zostanie zapisane, dopóki nie potwierdzisz."
       }
     }
   },
@@ -6478,7 +6438,7 @@
       "creditsUnit": "kredytów",
       "rate": "Czas maszynowy to 1 kredyt za minutę działania. Miejsce na dane to 10 kredytów na agenta dziennie, niezależnie od tego, czy jest uśpiony. Oba koszty są pobierane z salda Motir AI.",
       "zero": "W tym miesiącu żaden agent nie działał ani nie istniał. Czas maszynowy to 1 kredyt za minutę działania. Miejsce na dane to 10 kredytów na agenta dziennie, niezależnie od tego, czy jest uśpiony.",
-      "noPlan": "Agenci wymagają płatnego planu AI (Standard, Pro, Max lub Enterprise).",
+      "noPlan": "Agenci wymagają płatnego planu AI.",
       "choosePlan": "Wybierz plan AI",
       "unavailable": "Dane o agentach są teraz niedostępne. Agenci są nadal rozliczani — dotyczy to wyświetlania, a nie rozliczeń.",
       "unavailableValue": "Niedostępne"
@@ -7966,7 +7926,7 @@
       "handoff": "Odczytuję to jako zmianę planu — praca nad propozycją",
       "debug": {
         "wroteAnchor": "Zapisano diagnozę w <chip>{key}</chip>. Pozostaje w Triażu, a nic więcej się nie zmieniło.",
-        "filed": "Utworzono <chip>{key}</chip> w Triażu wraz z diagnozą. Nic więcej się nie zmieniło.",
+        "filed": "Utworzono <chip>{key}</chip> z diagnozą. Nic innego się nie zmieniło.",
         "enrichedAnchor": "Dodano diagnozę do <chip>{key}</chip>, który już obejmuje ten Błąd. Nie utworzono nic nowego, a {anchorKey} pozostaje bez zmian.",
         "enriched": "Dodano diagnozę do <chip>{key}</chip>, który już obejmuje ten Błąd. Nie utworzono nic nowego.",
         "ungrounded": "Nie udało się powiązać tego z kodem, więc nic nie zostało zapisane."
@@ -8453,6 +8413,25 @@
         "outOfCredits": "Twoja organizacja nie ma już kredytów AI, więc planowanie nie może się rozpocząć.",
         "targetUnavailable": "Nie możesz już otworzyć {key}, więc planowanie nie może się rozpocząć.",
         "generic": "Planowanie nie może się rozpocząć z tej propozycji."
+      }
+    },
+    "logBugOffer": {
+      "label": "Propozycja zgłoszenia błędu",
+      "writeNew": "Utwórz nowy błąd",
+      "writeAnchored": "Dodaj diagnozę do <chip>{key}</chip>",
+      "writeExisting": "Zapisz diagnozę w <chip>{key}</chip>, który już to obejmuje",
+      "confirming": "Zgłaszanie…",
+      "confirmHelp": "Potwierdzenie wykonuje ten jeden zapis jako Motir. Odpowiedź „tak” działa tak samo.",
+      "declineHelp": "Odrzucenie niczego nie zapisuje, a rozmowa toczy się dalej.",
+      "logged": "Zgłoszono",
+      "loggedBy": "Potwierdzono · {when}",
+      "recorded": "Nic nie zostało zapisane.",
+      "cannotStart": {
+        "planningUnavailable": "Nie można tu zgłaszać błędów: Motir AI nie jest skonfigurowany dla tego projektu albo nie masz uprawnień do korzystania z niego.",
+        "targetChanged": "{key} zmienił się po tej propozycji, więc nic nie zostało zapisane. Zapytaj ponownie, aby dostać aktualną propozycję.",
+        "targetUnavailable": "Nie możesz już otworzyć {key}, więc nic nie zostało zapisane.",
+        "anchorNotTriage": "{key} nie jest już w Triage, więc diagnoza nie została dodana.",
+        "generic": "Z tej propozycji nie można zgłosić tego błędu."
       }
     },
     "restart": {
@@ -9865,7 +9844,6 @@
       "navAiPlanning": "Planowanie z AI",
       "navPlanningLessons": "Lekcje planowania",
       "navIdeas": "Pomysły",
-      "navEnterpriseRequests": "Zapytania Enterprise",
       "navRunModels": "Modele hostowanych uruchomień",
       "navFleetSettings": "Ustawienia floty"
     },
@@ -10059,9 +10037,6 @@
               "disable": "Wyłączono konto floty",
               "enable": "Ponownie włączono konto floty"
             }
-          },
-          "enterprise_request": {
-            "transition": "Przeniesiono zapytanie Enterprise"
           },
           "idea": {
             "add": "Dodano pomysł",
@@ -11659,152 +11634,6 @@
         "body": "motir-ai nie odpowiedział, więc nie wiadomo, czy modele z listy są oferowane, i lista nie jest wyświetlana. Nic się nie zmieniło."
       }
     },
-    "enterpriseRequests": {
-      "breadcrumb": "Platforma · Zapytania Enterprise",
-      "title": "Zapytania Enterprise",
-      "subtitle": "Co organizacje wysłały przyciskiem Skontaktuj się z działem sprzedaży w planie Enterprise. Prowadź każde zapytanie od nowego do wygranego lub przegranego; każda zmiana jest zapisywana wraz z jej autorem.",
-      "auditLead": "Zapytanie to dane klienta.",
-      "auditBody": "Wczytanie tej listy i otwarcie zapytania to odczyty między dzierżawcami, zapisywane w dzienniku audytu.",
-      "cardTitle": "Zapytania",
-      "count": {
-        "loading": "Od najnowszych.",
-        "open": "Od najnowszych. <b>Otwarte: {count}</b> — nowe, z nawiązanym kontaktem lub z wysłaną ofertą.",
-        "state": "Od najnowszych. <b>{state}: {count}</b>.",
-        "all": "Od najnowszych. <b>Łącznie: {count}</b>."
-      },
-      "filterLabel": "Filtruj zapytania według stanu",
-      "filter": {
-        "open": "Otwarte",
-        "all": "Wszystkie"
-      },
-      "status": {
-        "new": "Nowe",
-        "contacted": "Nawiązano kontakt",
-        "offer_sent": "Wysłano ofertę",
-        "won": "Wygrane",
-        "lost": "Przegrane"
-      },
-      "stateWord": {
-        "open": "otwarte",
-        "new": "nowe",
-        "contacted": "nawiązano kontakt",
-        "offer_sent": "wysłano ofertę",
-        "won": "wygrane",
-        "lost": "przegrane"
-      },
-      "col": {
-        "organisation": "Organizacja",
-        "requester": "Zgłaszający",
-        "sent": "Wysłano",
-        "needs": "Potrzeby",
-        "state": "Stan"
-      },
-      "tierWhenSent": "plan {tier} w chwili wysłania",
-      "requesterGone": "Konto usunięte",
-      "needs": {
-        "cardsPerDay": "<b>{n}</b> elem./dzień",
-        "cardsPerDayNone": "elem./dzień —",
-        "agents": "agenci: <b>{n}</b>",
-        "agentsNone": "agenci —",
-        "agentPathNone": "którzy agenci —",
-        "autonomyNone": "samodzielnie —"
-      },
-      "agentPath": {
-        "hosted": "Hostowani przez Motir",
-        "own": "Własni",
-        "both": "Jedno i drugie"
-      },
-      "autonomy": {
-        "autonomous_lead": "Działa samodzielnie",
-        "volume_only": "Tylko wolumen",
-        "unsure": "Nie wiadomo"
-      },
-      "startWhen": {
-        "now": "Teraz",
-        "within_month": "W ciągu miesiąca",
-        "within_quarter": "W ciągu kwartału",
-        "exploring": "Tylko się rozglądają"
-      },
-      "teamSize": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      },
-      "notAnswered": "Bez odpowiedzi",
-      "pager": {
-        "label": "Strony zapytań",
-        "note": "Od najnowszych · 50 na stronę",
-        "range": "{from}–{to} z {total}",
-        "newer": "Nowsze",
-        "older": "Starsze"
-      },
-      "empty": {
-        "title": "Nie ma jeszcze zapytań Enterprise",
-        "body": "Gdy właściciel organizacji kliknie Skontaktuj się z działem sprzedaży w planie Enterprise, zapytanie trafi tutaj, a personel platformy dostanie wiadomość e-mail."
-      },
-      "emptyFilter": {
-        "title": "Brak zapytań o stanie „{state}”",
-        "body": "Obecnie żadne zapytanie nie ma stanu „{state}”.",
-        "action": "Pokaż otwarte zapytania",
-        "actionAll": "Pokaż wszystkie zapytania"
-      },
-      "error": {
-        "title": "Nie udało się wczytać zapytań",
-        "body": "Coś poszło nie tak podczas odczytu zapytań, więc żadne nie jest wyświetlane. Nic się nie zmieniło.",
-        "retry": "Spróbuj ponownie"
-      },
-      "detail": {
-        "back": "Wróć do zapytań",
-        "sent": "Wysłano {date}",
-        "requestTitle": "Zapytanie",
-        "orgLink": "Otwórz {org} w sekcji Dzierżawcy",
-        "field": {
-          "organisation": "Organizacja",
-          "requester": "Zgłaszający",
-          "contact": "Kontakt",
-          "sent": "Wysłano",
-          "cardsPerDay": "Elementy robocze dziennie",
-          "parallelAgents": "Agenci równolegle",
-          "agentPath": "Którzy agenci",
-          "autonomy": "Działa samodzielnie",
-          "startWhen": "Start",
-          "teamSize": "Wielkość zespołu",
-          "note": "Wiadomość"
-        }
-      },
-      "move": {
-        "title": "Przenieś do",
-        "stateTitle": "Stan",
-        "contacted": "Oznacz: nawiązano kontakt",
-        "offer_sent": "Oznacz: wysłano ofertę",
-        "won": "Oznacz jako wygrane",
-        "lost": "Oznacz jako przegrane",
-        "hint": {
-          "new": "Dalej: nawiązano kontakt ze zgłaszającym.",
-          "contacted": "Dalej: wysłano ofertę.",
-          "offer_sent": "Dalej: oferta przyjęta — albo zapytanie przegrane.",
-          "closes": "Wygrane i przegrane zamykają zapytanie."
-        },
-        "failed": "Nie udało się przenieść zapytania. Nic się nie zmieniło; spróbuj ponownie."
-      },
-      "closed": "<b>Zamknięte ze stanem „{state}” {date}.</b> Zamkniętego zapytania nie można już przenieść. Organizacja może wysłać nowe ze strony Rozliczenia.",
-      "readOnly": "<b>Tylko do odczytu dla wsparcia.</b> Przenoszenie zapytań należy do operatora lub superadministratora; możesz czytać wszystko tutaj i w historii.",
-      "confirm": {
-        "title": "Oznaczyć to zapytanie jako „{state}”?",
-        "body": "Zapytanie organizacji {org} zostanie zamknięte ze stanem <b>{state}</b> i nie będzie można go ponownie przenieść. Organizacja może wysłać nowe zapytanie ze strony Rozliczenia.",
-        "cancel": "Anuluj"
-      },
-      "stale": "<b>Bez zmian — ktoś inny przeniósł to zapytanie wcześniej.</b> {who} przed chwilą ustawił(a) stan <b>{state}</b>, więc Twoja akcja „{action}” została odrzucona i nic nie zapisano. Strona pokazuje teraz bieżący stan; wybierz ponownie.",
-      "staleUnknown": "<b>Bez zmian — ktoś inny przeniósł to zapytanie wcześniej.</b> Jego stan to teraz <b>{state}</b>, więc Twoja akcja „{action}” została odrzucona i nic nie zapisano. Strona pokazuje teraz bieżący stan; wybierz ponownie.",
-      "history": {
-        "title": "Historia",
-        "order": "od najstarszych",
-        "sent": "Wysłano jako",
-        "to": "na",
-        "requesterOf": "{name} ({org})"
-      }
-    },
     "ideas": {
       "breadcrumb": "Operacje · Pomysły",
       "title": "Pomysły",
@@ -12326,7 +12155,7 @@
       "goose": "Używa Twojego własnego klucza dostawcy modeli. Dla modeli Claude — Twojego klucza API Anthropic."
     },
     "refusal": {
-      "aiPlanRequired": "Agenci wymagają płatnego planu AI (Standard, Pro, Max lub Enterprise). <link>Wybierz plan AI</link>, aby utworzyć lub wybudzić agenta.",
+      "aiPlanRequired": "Agenci wymagają płatnego planu AI. <link>Wybierz plan AI</link>, aby utworzyć lub wybudzić agenta.",
       "aiPlanUnknown": "Motir nie mógł teraz sprawdzić planu AI Twojej organizacji. Spróbuj ponownie za chwilę.",
       "credits": "Twojej organizacji skończyły się kredyty. Agenci zużywają kredyty podczas działania oraz codziennie za przestrzeń dyskową, także w uśpieniu. <link>Dodaj kredyty</link>, aby utworzyć lub wybudzić agenta.",
       "creditsUnknown": "Motir nie mógł teraz sprawdzić kredytów Twojej organizacji. Spróbuj ponownie za chwilę.",

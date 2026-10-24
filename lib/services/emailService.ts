@@ -66,10 +66,6 @@ import {
   type OrganizationDeletionReminderEmailProps,
 } from '@/lib/emailTemplates/organizationDeletionReminder';
 import {
-  enterpriseRequestReceivedEmail,
-  type EnterpriseRequestReceivedEmailProps,
-} from '@/lib/emailTemplates/enterpriseRequestReceived';
-import {
   organizationErasedEmail,
   type OrganizationErasedEmailProps,
 } from '@/lib/emailTemplates/organizationErased';
@@ -150,11 +146,6 @@ export type TransactionalEmail =
       to: string;
       template: 'agents-deletion-scheduled';
       data: AgentsDeletionScheduledEmailProps;
-    }
-  | {
-      to: string;
-      template: 'enterprise-request-received';
-      data: EnterpriseRequestReceivedEmailProps;
     };
 
 /** Every template discriminant — handy for exhaustiveness + tests. */
@@ -217,9 +208,6 @@ export const EMAIL_TEMPLATE_CLASS: Record<EmailTemplate, EmailTemplateClass> = {
   // An org's AI plan ended (MOTIR-6921): the reader loses their agents' homes on
   // the date unless the plan is renewed — never budgeted away.
   'agents-deletion-scheduled': 'essential',
-  // Staff mail about a buyer who asked — a handful a week, and acting on it
-  // promptly is the point, so it never yields to the notification budget.
-  'enterprise-request-received': 'essential',
   'mention-notification': 'notification',
   'watcher-comment-notification': 'notification',
   'watcher-transition-notification': 'notification',
@@ -360,8 +348,6 @@ async function renderTemplate(message: TransactionalEmail) {
       return organizationErasedEmail(message.data);
     case 'agents-deletion-scheduled':
       return agentsDeletionScheduledEmail(message.data);
-    case 'enterprise-request-received':
-      return enterpriseRequestReceivedEmail(message.data);
     default: {
       // Exhaustiveness guard: a new template arm without a case here is a
       // compile error, not a silent fall-through.
