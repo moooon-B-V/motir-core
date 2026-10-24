@@ -87,7 +87,7 @@ const billingRead = (page: Page, seed: BillingSeed): Promise<Response> =>
     { timeout: 45_000 },
   );
 
-/** The plan cards' row and its card headers, as `acceptance-billing-plan-ladder.spec.ts` reads them. */
+/** The plan cards' row and its card headers, as `regression-billing-plan-ladder.spec.ts` reads them. */
 const cardRow = (page: Page): Locator => page.getByRole('main').locator('div.snap-x');
 const cardNames = (page: Page): Locator =>
   cardRow(page).locator(':scope > div > div > span.font-semibold');
