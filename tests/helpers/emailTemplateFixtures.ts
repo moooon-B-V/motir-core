@@ -2,7 +2,6 @@ import { agentsDeletionScheduledEmail } from '@/lib/emailTemplates/agentsDeletio
 import { automationRuleFailedEmail } from '@/lib/emailTemplates/automationRuleFailed';
 import { dataExportReadyEmail } from '@/lib/emailTemplates/dataExportReady';
 import { emailChangeEmail } from '@/lib/emailTemplates/emailChange';
-import { enterpriseRequestReceivedEmail } from '@/lib/emailTemplates/enterpriseRequestReceived';
 import { filterSubscriptionEmail } from '@/lib/emailTemplates/filterSubscription';
 import { followConfirmEmail } from '@/lib/emailTemplates/followConfirm';
 import { followDigestEmail } from '@/lib/emailTemplates/followDigest';
@@ -144,20 +143,6 @@ export const EMAIL_TEMPLATE_FIXTURES: { [K in EmailTemplate]: TemplateData<K> } 
     agentNames: ['Builder'],
     billingUrl: `${URL}/settings/organization/billing`,
   },
-  'enterprise-request-received': {
-    organizationName: 'Acme',
-    requesterName: 'Sam',
-    requesterEmail: 'sam@example.com',
-    cardsPerDay: null,
-    parallelAgents: null,
-    agentPath: null,
-    autonomy: null,
-    startWhen: null,
-    teamSize: null,
-    contact: 'sam@example.com',
-    note: 'Hello',
-    requestUrl: `${URL}/admin/enterprise-requests/abc`,
-  },
 };
 
 export const EMAIL_TEMPLATE_RENDERERS: {
@@ -181,7 +166,6 @@ export const EMAIL_TEMPLATE_RENDERERS: {
   'organization-deletion-reminder': organizationDeletionReminderEmail,
   'organization-erased': organizationErasedEmail,
   'agents-deletion-scheduled': agentsDeletionScheduledEmail,
-  'enterprise-request-received': enterpriseRequestReceivedEmail,
 };
 
 /** Render one template from its fixture, in `locale` when one is given. */

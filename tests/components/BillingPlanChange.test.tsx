@@ -108,7 +108,6 @@ function stubFetch(statuses: BillingStatusDTO[], routes: Record<string, Route | 
       const body = statuses[Math.min(reads++, statuses.length - 1)];
       return new Response(JSON.stringify(body), { status: 200 });
     }
-    if (url.endsWith('/billing/enterprise-request')) return new Response('null', { status: 200 });
     const path = url.split('/billing/')[1]!;
     const route = routes[path];
     if (!route) return new Response('{}', { status: 500 });

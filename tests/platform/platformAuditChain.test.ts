@@ -396,6 +396,27 @@ describe('searchEntries', () => {
     expect(past.entries).toEqual([]);
   });
 
+  it('returns a stored row whose action has LEFT the vocabulary — raw, a write, no throw', async () => {
+    // MOTIR-9386 removed `enterprise_request.transition` with the Contact-sales
+    // feature; rows already written with it stay as history. A row an older build
+    // wrote is made the way it would sit in the table: written through the
+    // service with a live action, then its action set on the owner client
+    // (`record` itself refuses a key the vocabulary no longer has).
+    await recordWrites(currentPrincipal!, 1);
+    await adminDb.$executeRaw`UPDATE "platform_audit_log" SET "action" = 'enterprise_request.transition' WHERE "seq" = 1`;
+
+    const writes = await platformAuditService.searchEntries(currentPrincipal!);
+    expect(writes.entries).toHaveLength(1);
+    expect(writes.entries[0]).toMatchObject({
+      seq: 1,
+      action: 'enterprise_request.transition',
+      isWrite: true,
+    });
+
+    const all = await platformAuditService.searchEntries(currentPrincipal!, { writesOnly: false });
+    expect(all.entries.map((e) => e.action)).toContain('enterprise_request.transition');
+  });
+
   it('carries what the open row draws — entry #, hash, the entry it chains to', async () => {
     await recordWrites(currentPrincipal!, 2);
     const { entries } = await platformAuditService.searchEntries(currentPrincipal!);

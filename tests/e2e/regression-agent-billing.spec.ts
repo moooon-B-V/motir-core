@@ -283,9 +283,7 @@ test.describe('Agents are an AI-plan feature, paid in credits', () => {
     expect(await res.json()).toMatchObject({ reason: 'ai_plan_required' });
     const alert = dialog.getByRole('alert');
     await expect(alert).toContainText(copy.refusalTitle.aiPlanRequired);
-    await expect(alert).toContainText(
-      'Agents need a paid AI plan (Standard, Pro, Max or Enterprise).',
-    );
+    await expect(alert).toContainText('Agents need a paid AI plan.');
     await expect(alert.getByRole('link', { name: 'Choose an AI plan' })).toHaveAttribute(
       'href',
       '/settings/organization/billing',

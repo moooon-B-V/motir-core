@@ -564,11 +564,15 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   // kept the id for the same reason: every memo already stored carries one of
   // the older members, which is still a member, so the replay reads true.
   // MOTIR-6921 widened it by one more (`agents-deletion-scheduled`), and MOTIR-7606
-  // by `enterprise-request-received`, each for the same reason and with the same id.
+  // by its Contact-sales staff template, each for the same reason and with the same id.
+  // MOTIR-9386 NARROWED it again, removing that staff template with its
+  // feature, and KEPT the id: bumping would re-send every email of a resumed run.
+  // A memo already stored with the removed member replays a value nothing reads —
+  // `template` is surfaced on `job_run.output` only and no code branches on it.
   send: {
     file: 'lib/jobs/definitions/emailSend.ts',
     shape:
-      '{ providerMessageId: null | string; skipped?: "notification_budget_exhausted" | undefined; template: "agents-deletion-scheduled" | "automation-rule-failed" | "data-export-ready" | "email-change" | "enterprise-request-received" | "filter-subscription" | "follow-confirm" | "follow-digest" | "mention-notification" | "organization-deletion-cancelled" | "organization-deletion-reminder" | "organization-deletion-scheduled" | "organization-erased" | "ownership-transferred" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
+      '{ providerMessageId: null | string; skipped?: "notification_budget_exhausted" | undefined; template: "agents-deletion-scheduled" | "automation-rule-failed" | "data-export-ready" | "email-change" | "filter-subscription" | "follow-confirm" | "follow-digest" | "mention-notification" | "organization-deletion-cancelled" | "organization-deletion-reminder" | "organization-deletion-scheduled" | "organization-erased" | "ownership-transferred" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
   },
   'settle-runner': {
     file: 'lib/services/ciRunnerBootService.ts',
